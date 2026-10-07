@@ -1,0 +1,7 @@
+{
+  "name": "st-pocket-phone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test tests/config.test.js", "build:preview": "python3 tools/build_preview.py" }
+}

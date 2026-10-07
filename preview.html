@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>小手机 · 界面预览</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
+</style></head><body><main><small>POCKET PHONE · 0.1.0</small><h1>小手机，先从这里开始。</h1><p>这是首阶段界面预览。可以打开、收起、拖动入口，调整桌面与设置。App 目前是空页面，不生成剧情内容。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「小手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
+const VERSION = '0.1.0';
+const APPS = [
+    { id: 'phone', name: '电话', color: '#25ad75', dock: true },
+    { id: 'messages', name: '短信', color: '#3289d9', dock: true },
+    { id: 'snapchat', name: 'Snapchat', color: '#ffe34d' },
+    { id: 'x', name: 'X', color: '#252733' },
+    { id: 'amazon', name: 'Amazon', color: '#e89947' },
+];
+const PROMPTS = {
+    general: { name: '通用', text: '这是 user 的个人手机，所有互动均为文字扮演。继承酒馆当前角色卡、相关世界书、有效剧情与预设中的内容语言要求。界面标签使用中文。不得替 user 编造消息或决定。仅使用对应角色有依据获知的信息；未获知的私人内容不得跨角色、跨平台传播。' },
+    phone: { name: '电话', text: '通过文字表现电话交流，只描写对白、可听见的语气、停顿和背景声音。不得描写通话另一端不可见的表情、动作、服装或内心活动。电话对应真实身份。user 仅能拨打在有效剧情中已获得的号码。char 发起来电必须有获取 user 号码的有效途径和依据。' },
+    messages: { name: '短信', text: '以短信内容进行交流，继承角色的表达习惯及酒馆预设的语言要求。短信号码与真实身份绑定。仅依据有效剧情中获取的联系方式互动，不凭空补全号码。不得替 user 发送短信。' },
+    snapchat: { name: 'Snapchat', text: '生成 Snapchat 内的文字互动，区分好友邀请、私聊、Snap 与 Stories。遵守好友及内容可见范围。知道账号不代表知道真实身份；不得因为后台存在对应关系而认出匿名 user。已在有效剧情中确认的身份不会因改名而遗忘。' },
+    x: { name: 'X', text: '生成 X 的帖子、回复或私信，遵循角色设定和酒馆预设的内容语言。char 默认使用真名账号。公开帖子可以被发现并互动，发现账号不等于知道账号背后的真实身份。私信遵守联系与可见范围。禁止把私人谈话直接当作公众已知信息。' },
+    amazon: { name: 'Amazon', text: '生成故事世界中的虚拟商品及订单内容，使用已确定的剧情背景、商品和货币信息。所有订单均为故事内模拟，不进行真实购买。订单和地址是私人信息，未获知的角色不得自动知晓。' },
+};
+
+const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const numeric = (value, min, max, fallback) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+
+function normalizeSettings(value) {
+    const raw = isRecord(value) ? value : {};
+    const oldApps = isRecord(raw.apps) ? raw.apps : {};
+    const oldPrompts = isRecord(raw.prompts) ? raw.prompts : {};
+    return {
+        ...raw,
+        schemaVersion: 1,
+        launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
+        position: isRecord(raw.position) ? { x: numeric(raw.position.x, 0, 1, 1), y: numeric(raw.position.y, 0, 1, 0.8) } : null,
+        theme: ['dark', 'light'].includes(raw.theme) ? raw.theme : 'dark',
+        wallpaper: ['violet', 'ocean', 'sand', 'graphite'].includes(raw.wallpaper) ? raw.wallpaper : 'violet',
+        fontSize: Math.round(numeric(raw.fontSize, 14, 20, 15)),
+        phoneWidth: Math.round(numeric(raw.phoneWidth, 300, 420, 360)),
+        retries: Math.round(numeric(raw.retries, 0, 15, 2)),
+        apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
+        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' ? oldPrompts[id] : prompt.text])),
+    };
+}
+
+function clampPosition(position, viewport, size = 52) {
+    const margin = 8;
+    const maxX = Math.max(margin, viewport.width - size - margin);
+    const maxY = Math.max(margin, viewport.height - size - margin);
+    return {
+        x: Math.min(maxX, Math.max(margin, position?.x ?? maxX)),
+        y: Math.min(maxY, Math.max(margin, position?.y ?? Math.max(margin, maxY * 0.8))),
+    };
+}
+
+const paths = {
+    phone: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a15 15 0 0 1-7-7l2-2-2-5Z"/>',
+    messages: '<path d="M4 4h16v12H9l-5 4V4Z"/><path d="M8 8h8M8 12h5"/>',
+    snapchat: '<path d="M8 10V8a4 4 0 0 1 8 0v2l2 1-2 2c0 2 2 3 3 3-1 2-3 1-3 3-2-1-2-1-4 0-2-1-2-1-4 0 0-2-2-1-3-3 1 0 3-1 3-3l-2-2 2-1Z"/>',
+    x: '<path d="m5 4 14 16h-4L1 4h4Zm14 0L5 20" transform="translate(2 0) scale(.9 1)"/>',
+    amazon: '<path d="M5 8h14l1 13H4L5 8ZM8 8V6a4 4 0 0 1 8 0v2M8 15c2 2 6 2 8 0"/>',
+    settings: '<path d="m9 3-.7 2.3-2 .9L4 5.7 2 9l1.7 1.8v2.4L2 15l2 3.3 2.3-.5 2 .9L9 21h6l.7-2.3 2-.9 2.3.5 2-3.3-1.7-1.8v-2.4L22 9l-2-3.3-2.3.5-2-.9L15 3H9Z"/><circle cx="12" cy="12" r="3"/>',
+    back: '<path d="m14 5-7 7 7 7"/>',
+    close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    home: '<path d="m3 11 9-8 9 8v10h-6v-7H9v7H3V11Z"/>',
+    chevron: '<path d="m9 5 7 7-7 7"/>',
+    person: '<circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/>',
+    history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/>',
+    display: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 3v18"/>',
+    api: '<path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18"/>',
+    apps: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+    prompts: '<path d="M5 3h14v18H5V3Zm3 5h8M8 12h8M8 16h5"/>',
+    retry: '<path d="M4 9a8 8 0 1 1 1 9M4 3v6h6"/>',
+};
+
+function icon(name) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || paths.phone) + '</svg>';
+}
+
+
+const SECTIONS = [
+    { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
+    { id: 'api', name: 'API', icon: 'api', note: '模型连接' },
+    { id: 'apps', name: 'App 管理', icon: 'apps', note: '选择桌面上显示的应用' },
+    { id: 'prompts', name: '提示词', icon: 'prompts', note: '按功能分别编辑' },
+    { id: 'retry', name: '失败重试', icon: 'retry', note: '设置自动重试次数' },
+];
+
+function esc(value) {
+    return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
+function mountPhone({ adapter, styles, container = document.body }) {
+    let settings = normalizeSettings(adapter.load());
+    let route = 'home';
+    let history = [];
+    let promptId = 'general';
+    let phoneTab = 'history';
+    let opened = false;
+    let lastFocused = null;
+    let dragging = null;
+    let suppressClick = false;
+    let destroyed = false;
+    let noticeTimeout;
+    const lifetime = new AbortController();
+    const host = document.createElement('div');
+    host.id = 'personal-pocket-phone-root';
+    const shadow = host.attachShadow({ mode: 'open' });
+    const style = document.createElement('style');
+    style.textContent = styles;
+    shadow.append(style);
+    const layer = document.createElement('div');
+    layer.className = 'pp-layer';
+    layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开小手机" title="打开小手机 · 拖动可移动" aria-expanded="false">' + icon('phone') + '</button>' +
+        '<section class="pp-phone" role="dialog" aria-label="小手机" hidden>' +
+        '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span><span class="pp-device-label">文字手机</span></div>' +
+        '<header class="pp-header"><button type="button" data-action="back" class="pp-icon-button" aria-label="返回">' + icon('back') + '</button><span class="pp-title"></span><button type="button" data-action="close" class="pp-icon-button" aria-label="收起手机">' + icon('close') + '</button></header>' +
+        '<main class="pp-content"></main><div class="pp-toast" role="status" aria-live="polite" hidden></div>' +
+        '<footer class="pp-footer"><button type="button" data-action="home" aria-label="回到桌面"><span></span></button></footer></section>';
+    shadow.append(layer);
+    container.append(host);
+    const launcher = shadow.querySelector('.pp-launcher');
+    const phone = shadow.querySelector('.pp-phone');
+    const content = shadow.querySelector('.pp-content');
+    const title = shadow.querySelector('.pp-title');
+    const noticeElement = shadow.querySelector('.pp-toast');
+
+    function notice(message) {
+        noticeElement.textContent = message;
+        noticeElement.hidden = false;
+        clearTimeout(noticeTimeout);
+        noticeTimeout = setTimeout(() => { noticeElement.hidden = true; }, 2600);
+    }
+
+    function persist(patch) {
+        const previous = settings;
+        settings = normalizeSettings({ ...settings, ...patch });
+        try {
+            adapter.save(settings);
+        } catch (error) {
+            settings = previous;
+            applyAppearance();
+            notice('设置保存失败，请检查储存空间后重试。');
+            console.error('[小手机] 无法保存设置', error);
+            return false;
+        }
+        applyAppearance();
+        adapter.onChange?.(settings);
+        return true;
+    }
+
+    function applyAppearance() {
+        layer.dataset.theme = settings.theme;
+        layer.dataset.wallpaper = settings.wallpaper;
+        layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
+        layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
+        launcher.hidden = !settings.launcherVisible;
+    }
+
+    function viewport() { return { width: window.innerWidth, height: window.innerHeight }; }
+
+    function placeLauncher() {
+        const view = viewport();
+        const saved = settings.position;
+        const point = clampPosition(saved ? { x: saved.x * (view.width - 52), y: saved.y * (view.height - 52) } : null, view);
+        launcher.style.left = point.x + 'px';
+        launcher.style.top = point.y + 'px';
+    }
+
+    function appButton(app) {
+        return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span class="pp-app-name">' + app.name + '</span></button>';
+    }
+
+    function renderHome() {
+        const enabled = APPS.filter(app => settings.apps[app.id]);
+        content.innerHTML = '<div class="pp-home"><div class="pp-home-clock"><div class="pp-date"></div><div class="pp-big-time"></div><span class="pp-time-label">设备时间</span></div>' +
+            '<div class="pp-app-grid">' + enabled.filter(app => !app.dock).map(appButton).join('') + '</div>' +
+            '<div class="pp-dock">' + enabled.filter(app => app.dock).map(appButton).join('') + appButton({ id: 'settings', name: '设置', color: '#778298' }) + '</div></div>';
+        updateClock();
+    }
+
+    function renderSettings() {
+        content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card">' +
+            SECTIONS.map(section => '<button type="button" class="pp-setting-row" data-section="' + section.id + '"><span class="pp-section-icon">' + icon(section.icon) + '</span><span><strong>' + section.name + '</strong><small>' + section.note + '</small></span><span class="pp-row-chevron">' + icon('chevron') + '</span></button>').join('') +
+            '</div><p class="pp-footnote">小手机 ' + VERSION + ' · 界面测试版</p></div>';
+    }
+
+    function selectField(id, label, entries, selected) {
+        return '<label class="pp-field"><span>' + label + '</span><select data-setting="' + id + '">' + entries.map(([value, text]) => '<option value="' + value + '"' + (selected === value ? ' selected' : '') + '>' + text + '</option>').join('') + '</select></label>';
+    }
+
+    function renderAppearance() {
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
+            selectField('theme', '主题', [['dark', '深色'], ['light', '浅色']], settings.theme) +
+            '<div class="pp-field pp-wallpaper-field"><span>壁纸</span><div class="pp-swatches">' + [['violet', '暮紫'], ['ocean', '海蓝'], ['sand', '暖砂'], ['graphite', '石墨']].map(([value, name]) => '<button type="button" class="pp-swatch" data-wallpaper="' + value + '" aria-label="' + name + '壁纸" aria-pressed="' + (settings.wallpaper === value) + '"><span></span><small>' + name + '</small></button>').join('') + '</div></div>' +
+            '<label class="pp-field"><span>字号 <output data-output="fontSize">' + settings.fontSize + '</output></span><input type="range" min="14" max="20" step="1" data-setting="fontSize" value="' + settings.fontSize + '"></label>' +
+            '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="420" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度。</p></div>';
+    }
+
+    function renderAPI() {
+        const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">本阶段不发送模型请求。通信模块接入后，将使用这里的连接；独立 API 设置将在该阶段加入。</p></div>';
+    }
+
+    function renderApps() {
+        content.innerHTML = '<div class="pp-page"><div class="pp-card">' + APPS.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p></div>';
+    }
+
+    function renderPrompts() {
+        content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。这些提示词将在对应通信模块接入后使用。</p></div>';
+        content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
+    }
+
+    function renderRetry() {
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form"><label class="pp-field"><span>失败后自动重试次数</span><input class="pp-number" type="number" inputmode="numeric" min="0" max="15" step="1" data-setting="retries" value="' + settings.retries + '" aria-describedby="pp-retry-help"></label></div><p id="pp-retry-help" class="pp-footnote">填写 0—15 的整数。0 表示不自动重试；次数不包含首次请求，成功后立即停止。</p><p class="pp-footnote">本阶段保存该设置，接入模型后生效。</p></div>';
+    }
+
+    function renderEmptyApp(id) {
+        const app = APPS.find(item => item.id === id);
+        const words = {
+            phone: phoneTab === 'contacts' ? ['暂无联系人', '通讯模块接入后，在正文中获得号码的人物会出现在这里。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
+            messages: ['暂无短信', '短信功能将在后续阶段接入。'],
+            snapchat: ['Snapchat', '好友邀请、私聊与 Stories 将在后续阶段接入。'],
+            x: ['X', '个人主页、搜索与动态将在后续阶段接入。'],
+            amazon: ['Amazon', '商品与虚拟订单将在后续阶段接入。'],
+        };
+        const [heading, detail] = words[id];
+        content.innerHTML = '<div class="pp-empty-app"><div class="pp-empty"><span class="pp-empty-icon">' + icon(id === 'phone' && phoneTab === 'contacts' ? 'person' : app.id) + '</span><h2>' + heading + '</h2><p>' + detail + '</p><span class="pp-stage-label">页面预留</span></div>' +
+            (id === 'phone' ? '<nav class="pp-phone-tabs" aria-label="电话页面"><button type="button" data-phone-tab="history" aria-pressed="' + (phoneTab === 'history') + '">' + icon('phone') + '<span>电话</span></button><button type="button" data-phone-tab="contacts" aria-pressed="' + (phoneTab === 'contacts') + '">' + icon('person') + '<span>联系人</span></button></nav>' : '') + '</div>';
+    }
+
+    function render() {
+        if (destroyed) return;
+        phone.dataset.home = String(route === 'home');
+        shadow.querySelector('[data-action="back"]').hidden = route === 'home';
+        const app = APPS.find(item => route === 'app:' + item.id);
+        title.textContent = route === 'home' ? '' : route === 'settings' ? '设置' : app ? app.name : SECTIONS.find(section => section.id === route)?.name || '';
+        if (route === 'home') renderHome();
+        else if (route === 'settings') renderSettings();
+        else if (route === 'appearance') renderAppearance();
+        else if (route === 'api') renderAPI();
+        else if (route === 'apps') renderApps();
+        else if (route === 'prompts') renderPrompts();
+        else if (route === 'retry') renderRetry();
+        else if (app) renderEmptyApp(app.id);
+        content.scrollTop = 0;
+    }
+
+    function navigate(next) {
+        if (next === route) return;
+        history.push(route);
+        route = next;
+        render();
+        shadow.querySelector('[data-action="back"]').focus({ preventScroll: true });
+    }
+
+    function open() {
+        if (opened) return;
+        lastFocused = document.activeElement;
+        opened = true;
+        phone.hidden = false;
+        launcher.setAttribute('aria-expanded', 'true');
+        launcher.setAttribute('aria-label', '收起小手机');
+        render();
+        shadow.querySelector('[data-action="close"]').focus({ preventScroll: true });
+    }
+
+    function close() {
+        opened = false;
+        phone.hidden = true;
+        launcher.setAttribute('aria-expanded', 'false');
+        launcher.setAttribute('aria-label', '打开小手机');
+        if (settings.launcherVisible) launcher.focus({ preventScroll: true });
+        else if (lastFocused?.isConnected && lastFocused !== host) lastFocused.focus?.({ preventScroll: true });
+    }
+
+    function updateClock() {
+        if (!opened) return;
+        const now = new Date();
+        const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+        shadow.querySelector('.pp-status-time').textContent = time;
+        const clock = content.querySelector('.pp-big-time');
+        if (clock) clock.textContent = time;
+        const date = content.querySelector('.pp-date');
+        if (date) date.textContent = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(now);
+    }
+
+    shadow.addEventListener('click', event => {
+        const target = event.target.closest('button');
+        if (!target) return;
+        const action = target.dataset.action;
+        if (action === 'close') close();
+        if (action === 'home') { route = 'home'; history = []; render(); }
+        if (action === 'back') { route = history.pop() || 'home'; render(); }
+        if (target.dataset.app) navigate(target.dataset.app === 'settings' ? 'settings' : 'app:' + target.dataset.app);
+        if (target.dataset.section) navigate(target.dataset.section);
+        if (target.dataset.wallpaper && persist({ wallpaper: target.dataset.wallpaper })) {
+            shadow.querySelectorAll('[data-wallpaper]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.wallpaper === settings.wallpaper)));
+        }
+        if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; renderEmptyApp('phone'); }
+        if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
+    }, { signal: lifetime.signal });
+
+    shadow.addEventListener('change', event => {
+        const target = event.target;
+        if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
+        if (target.hasAttribute('data-prompt-selector')) { promptId = target.value; renderPrompts(); }
+        if (target.dataset.setting) {
+            const key = target.dataset.setting;
+            let value = target.value;
+            if (['fontSize', 'phoneWidth', 'retries'].includes(key)) {
+                value = Number(value);
+                if (target.value.trim() === '' || !Number.isInteger(value) || !target.checkValidity()) {
+                    target.value = settings[key];
+                    notice(key === 'retries' ? '请填写 0—15 的整数' : '请填写有效数值');
+                    return;
+                }
+            }
+            if (persist({ [key]: value })) {
+                const output = shadow.querySelector('[data-output="' + key + '"]');
+                if (output) output.textContent = settings[key];
+            }
+        }
+    }, { signal: lifetime.signal });
+
+    shadow.addEventListener('input', event => {
+        if (event.target.hasAttribute('data-prompt-editor')) {
+            const saved = persist({ prompts: { ...settings.prompts, [promptId]: event.target.value } });
+            content.querySelector('.pp-save-status').textContent = saved ? '已更新' : '保存失败';
+        }
+        if (event.target.type === 'range') {
+            const key = event.target.dataset.setting;
+            const output = shadow.querySelector('[data-output="' + key + '"]');
+            if (output) output.textContent = event.target.value;
+        }
+    }, { signal: lifetime.signal });
+
+    launcher.addEventListener('click', event => {
+        if (suppressClick && event.detail !== 0) { suppressClick = false; return; }
+        opened ? close() : open();
+    }, { signal: lifetime.signal });
+
+    launcher.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || !event.isPrimary) return;
+        const rect = launcher.getBoundingClientRect();
+        dragging = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+        suppressClick = false;
+        launcher.setPointerCapture(event.pointerId);
+    }, { signal: lifetime.signal });
+
+    launcher.addEventListener('pointermove', event => {
+        if (!dragging || event.pointerId !== dragging.id) return;
+        const dx = event.clientX - dragging.x;
+        const dy = event.clientY - dragging.y;
+        if (Math.hypot(dx, dy) > 5) dragging.moved = true;
+        if (!dragging.moved) return;
+        const point = clampPosition({ x: dragging.left + dx, y: dragging.top + dy }, viewport());
+        launcher.style.left = point.x + 'px';
+        launcher.style.top = point.y + 'px';
+    }, { signal: lifetime.signal });
+
+    function endDrag(event) {
+        if (!dragging || event.pointerId !== dragging.id) return;
+        if (dragging.moved) {
+            const rect = launcher.getBoundingClientRect();
+            persist({ position: { x: rect.left / Math.max(1, window.innerWidth - 52), y: rect.top / Math.max(1, window.innerHeight - 52) } });
+            suppressClick = true;
+        }
+        if (launcher.hasPointerCapture(event.pointerId)) launcher.releasePointerCapture(event.pointerId);
+        dragging = null;
+    }
+    launcher.addEventListener('pointerup', endDrag, { signal: lifetime.signal });
+    launcher.addEventListener('pointercancel', endDrag, { signal: lifetime.signal });
+    window.addEventListener('resize', placeLauncher, { signal: lifetime.signal });
+    shadow.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && opened) { event.preventDefault(); event.stopPropagation(); close(); }
+    }, { signal: lifetime.signal });
+
+    const clockInterval = setInterval(updateClock, 15000);
+    applyAppearance();
+    placeLauncher();
+    return {
+        open,
+        close,
+        openSettings() { open(); history = ['home']; route = 'settings'; render(); },
+        setLauncherVisible(visible) { persist({ launcherVisible: Boolean(visible) }); },
+        resetPosition() { persist({ position: null }); placeLauncher(); },
+        getSettings() { return structuredClone(settings); },
+        destroy() {
+            destroyed = true;
+            lifetime.abort();
+            clearInterval(clockInterval);
+            clearTimeout(noticeTimeout);
+            host.remove();
+        },
+    };
+}
+
+const PREVIEW_STYLES = ":host { all: initial; position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 2147483000; }\n* { box-sizing: border-box; }\n[hidden] { display: none !important; }\n.pp-layer { --pp-font-size: 15px; --pp-phone-width: 360px; --pp-bg: #151722; --pp-card: #202330; --pp-text: #f2f3f9; --pp-muted: #a2a7be; --pp-line: #343847; --pp-accent: #c3b3f9; --pp-input: #131621; --pp-wallpaper: radial-gradient(ellipse at 5% 30%, #775d9b 0%, transparent 60%), radial-gradient(ellipse at 100% 80%, #524a77 0%, transparent 60%), linear-gradient(145deg, #2a2a48, #141622); font: 400 var(--pp-font-size)/1.5 -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Microsoft YaHei\", sans-serif; color: var(--pp-text); text-align: left; letter-spacing: normal; }\n.pp-layer[data-theme=\"light\"] { --pp-bg: #f3f3f7; --pp-card: #ffffff; --pp-text: #24263b; --pp-muted: #666b81; --pp-line: #e3e3ec; --pp-accent: #6c52ab; --pp-input: #f3f3f8; }\n.pp-layer[data-wallpaper=\"ocean\"] { --pp-wallpaper: radial-gradient(ellipse at 10% 20%, #49888f 0%, transparent 65%), radial-gradient(ellipse at 100% 90%, #2c6979 0%, transparent 55%), linear-gradient(135deg, #284c63, #112638); }\n.pp-layer[data-wallpaper=\"sand\"] { --pp-wallpaper: radial-gradient(ellipse at 0% 30%, #b78573 0%, transparent 60%), radial-gradient(ellipse at 100% 90%, #856475 0%, transparent 60%), linear-gradient(145deg, #80696b, #382d43); }\n.pp-layer[data-wallpaper=\"graphite\"] { --pp-wallpaper: radial-gradient(ellipse at 15% 20%, #596675 0%, transparent 65%), linear-gradient(145deg, #353c46, #10131c); }\nbutton, input, select, textarea { font: inherit; color: inherit; }\nbutton { cursor: pointer; border: 0; padding: 0; margin: 0; background: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }\nbutton:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--pp-accent); outline-offset: 3px; }\nbutton:disabled { cursor: default; opacity: .5; }\nsvg { display: block; width: 24px; height: 24px; flex: 0 0 auto; }\nh2, p { margin: 0; }\n.pp-launcher { position: fixed; width: 52px; height: 52px; border-radius: 18px; border: 1px solid #ffffff55; background: linear-gradient(145deg, #b5a2df, #70619a); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 24px #0005; touch-action: none; user-select: none; -webkit-user-select: none; }\n.pp-launcher:hover { filter: brightness(1.1); }\n.pp-launcher svg { width: 25px; height: 25px; }\n.pp-phone { position: fixed; right: 24px; top: max(12px, calc((100dvh - 740px) / 2)); width: min(var(--pp-phone-width), calc(100vw - 24px)); height: min(740px, calc(100dvh - 24px)); background: var(--pp-bg); border: 1px solid #ffffff30; border-radius: 36px; box-shadow: 0 24px 90px #0007, inset 0 0 0 5px #ffffff04; overflow: hidden; display: flex; flex-direction: column; isolation: isolate; }\n.pp-phone[data-home=\"true\"] { background: var(--pp-wallpaper); color: #fff; }\n.pp-topline { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 16px 24px 4px; height: 46px; min-height: 46px; font-size: 11px; font-weight: 600; }\n.pp-island { position: absolute; width: 74px; height: 20px; left: calc(50% - 37px); top: 13px; border-radius: 12px; background: #090a0d; }\n.pp-device-label { opacity: .7; font-size: 10px; letter-spacing: 1px; }\n.pp-header { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; flex: 0 0 48px; padding: 0 10px; }\n.pp-title { grid-column: 2; font-weight: 600; font-size: 1.08em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.pp-header > [data-action=\"close\"] { grid-column: 3; }\n.pp-icon-button { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; }\n.pp-icon-button:hover { background: #8882; }\n.pp-icon-button svg { width: 21px; height: 21px; }\n.pp-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #8885 transparent; }\n.pp-home { min-height: 100%; display: flex; flex-direction: column; padding: 0 23px 8px; }\n.pp-home-clock { text-align: center; padding: 10px 0 32px; }\n.pp-date { font-size: .94em; color: #fffC; letter-spacing: 1px; }\n.pp-big-time { font-size: clamp(52px, 18vw, 76px); font-weight: 250; letter-spacing: -4px; line-height: 1.25; font-variant-numeric: tabular-nums; }\n.pp-time-label { color: #fff9; font-size: 10px; letter-spacing: 2px; }\n.pp-app-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 10px; }\n.pp-app { display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 14px; min-width: 0; color: #fff; }\n.pp-app-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 17px; background: linear-gradient(#fff2, transparent), var(--app-color); color: #fff; box-shadow: inset 0 1px 0 #fff4, 0 5px 12px #0002; transition: transform .15s; }\n.pp-app:hover .pp-app-icon { transform: translateY(-2px); }\n.pp-app-icon svg { width: 29px; height: 29px; }\n.pp-app-snapchat { color: #222 !important; }\n.pp-app-name { font-size: 12px; font-weight: 500; letter-spacing: .1px; white-space: nowrap; }\n.pp-dock { margin-top: auto; padding: 18px 8px 14px; display: flex; justify-content: space-evenly; gap: 12px; border: 1px solid #ffffff18; border-radius: 25px; background: #ffffff14; backdrop-filter: blur(20px); }\n.pp-app-grid + .pp-dock { margin-top: auto; }\n.pp-home .pp-app-grid { margin-bottom: 28px; }\n.pp-footer { height: 30px; flex: 0 0 30px; display: flex; align-items: center; justify-content: center; }\n.pp-footer button { display: grid; place-items: center; width: 140px; height: 26px; border-radius: 12px; }\n.pp-footer span { height: 4px; width: 92px; border-radius: 3px; background: currentColor; opacity: .35; }\n.pp-page { padding: 10px 18px 24px; }\n.pp-page-lead { color: var(--pp-muted); margin: 0 0 18px; font-size: .9em; }\n.pp-card { background: var(--pp-card); border: 1px solid var(--pp-line); border-radius: 18px; overflow: hidden; }\n.pp-setting-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 16px 13px; border-bottom: 1px solid var(--pp-line); }\n.pp-setting-row:last-child { border-bottom: 0; }\n.pp-setting-row:hover { background: #8881; }\n.pp-setting-row strong { display: block; font-weight: 500; }\n.pp-setting-row small { display: block; color: var(--pp-muted); font-size: .76em; margin-top: 3px; }\n.pp-section-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--pp-accent); background: #9682b61a; flex: 0 0 auto; }\n.pp-section-icon svg { width: 20px; height: 20px; }\n.pp-row-chevron { margin-left: auto; color: var(--pp-muted); }\n.pp-row-chevron svg { width: 16px; height: 16px; }\n.pp-footnote { font-size: .79em; line-height: 1.8; color: var(--pp-muted); margin: 15px 3px 0; overflow-wrap: anywhere; }\n.pp-field { display: flex; flex-direction: column; gap: 10px; padding: 16px; font-size: .92em; border-bottom: 1px solid var(--pp-line); }\n.pp-field:last-child { border-bottom: 0; }\n.pp-field select, .pp-field input[type=\"number\"] { width: 100%; min-height: 42px; border-radius: 9px; padding: 8px 12px; background: var(--pp-input); border: 1px solid var(--pp-line); color-scheme: dark; }\n[data-theme=\"light\"] select, [data-theme=\"light\"] input { color-scheme: light; }\n.pp-field output { float: right; color: var(--pp-muted); font-size: .9em; font-variant-numeric: tabular-nums; }\n.pp-field input[type=\"range\"] { width: 100%; accent-color: var(--pp-accent); margin: 8px 0; }\n.pp-swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }\n.pp-swatch { border-radius: 9px; padding: 3px; }\n.pp-swatch > span { display: block; height: 56px; border-radius: 8px; margin-bottom: 6px; }\n.pp-swatch[data-wallpaper=\"violet\"] > span { background: linear-gradient(140deg, #9372b5, #252849); }\n.pp-swatch[data-wallpaper=\"ocean\"] > span { background: linear-gradient(140deg, #5aa4a5, #132b43); }\n.pp-swatch[data-wallpaper=\"sand\"] > span { background: linear-gradient(140deg, #bf917d, #483b53); }\n.pp-swatch[data-wallpaper=\"graphite\"] > span { background: linear-gradient(140deg, #71818c, #141921); }\n.pp-swatch[aria-pressed=\"true\"] { outline: 2px solid var(--pp-accent); }\n.pp-swatch small { font-size: .75em; }\n.pp-info { padding: 20px; }\n.pp-eyebrow { color: var(--pp-accent); font-size: .75em; }\n.pp-info h2 { font-size: 1.13em; font-weight: 600; margin: 12px 0; }\n.pp-info p { font-size: .9em; color: var(--pp-muted); line-height: 1.8; }\n.pp-toggle-row { position: relative; display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--pp-line); cursor: pointer; }\n.pp-toggle-row:last-child { border-bottom: 0; }\n.pp-small-app { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--app-color); color: #fff; }\n.pp-small-app svg { width: 18px; height: 18px; }\n.pp-toggle-row input { position: absolute; right: 16px; width: 44px; height: 28px; opacity: 0; cursor: pointer; }\n.pp-switch { margin-left: auto; width: 44px; height: 26px; border-radius: 20px; background: #737888; padding: 3px; pointer-events: none; flex-shrink: 0; }\n.pp-switch::before { content: ''; display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px #0002; transition: transform .15s; }\n.pp-toggle-row input:checked + .pp-switch { background: #38ae85; }\n.pp-toggle-row input:checked + .pp-switch::before { transform: translateX(18px); }\n.pp-toggle-row input:focus-visible + .pp-switch { outline: 3px solid var(--pp-accent); outline-offset: 3px; }\n.pp-prompt-select { padding: 0 0 16px; border-bottom: 0; }\n.pp-editor-label { display: block; font-size: .83em; margin-bottom: 8px; color: var(--pp-muted); }\n.pp-editor { width: 100%; min-height: 245px; resize: vertical; padding: 14px; font-size: .88em; line-height: 1.85; border: 1px solid var(--pp-line); border-radius: 12px; color: var(--pp-text); background: var(--pp-card); }\n.pp-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: .76em; }\n.pp-save-status { color: var(--pp-muted); }\n.pp-text-button { padding: 8px 0; color: var(--pp-accent); }\n.pp-toast { position: absolute; bottom: 40px; left: 18px; right: 18px; padding: 11px 14px; border: 1px solid var(--pp-line); border-radius: 12px; background: var(--pp-card); box-shadow: 0 6px 22px #0004; color: var(--pp-text); font-size: .85em; text-align: center; z-index: 2; }\n.pp-empty-app { display: flex; flex-direction: column; height: 100%; min-height: 280px; }\n.pp-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 28px 50px; text-align: center; }\n.pp-empty-icon { width: 70px; height: 70px; display: grid; place-items: center; background: #8881; border: 1px solid var(--pp-line); border-radius: 22px; color: var(--pp-muted); }\n.pp-empty-icon svg { width: 30px; height: 30px; }\n.pp-empty h2 { font-size: 1.2em; margin: 22px 0 10px; font-weight: 500; }\n.pp-empty p { font-size: .88em; line-height: 1.85; color: var(--pp-muted); }\n.pp-stage-label { font-size: .69em; margin-top: 20px; padding: 3px 10px; border: 1px solid var(--pp-line); border-radius: 12px; color: var(--pp-muted); }\n.pp-phone-tabs { display: flex; justify-content: space-around; padding: 12px 16px 2px; border-top: 1px solid var(--pp-line); }\n.pp-phone-tabs button { min-width: 74px; padding: 6px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--pp-muted); font-size: .8em; border-radius: 10px; }\n.pp-phone-tabs button[aria-pressed=\"true\"] { color: var(--pp-accent); }\n@media (max-width: 480px) { .pp-phone { right: 12px; top: max(8px, env(safe-area-inset-top)); bottom: max(12px, env(safe-area-inset-bottom)); height: auto; max-height: none; border-radius: 28px; } .pp-home-clock { padding-top: 4px; padding-bottom: 24px; } }\n@media (max-height: 590px) { .pp-home-clock { padding: 0 0 12px; } .pp-big-time { font-size: 48px; } .pp-dock { padding: 10px 5px; } .pp-home .pp-app-grid { margin-bottom: 12px; } .pp-app-icon { width: 48px; height: 48px; } }\n@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }\n";
+
+const PREVIEW_KEY = 'pocket_phone_preview_v010';
+let storageAvailable = true;
+let memory = {};
+try { localStorage.setItem(PREVIEW_KEY + '_probe', '1'); localStorage.removeItem(PREVIEW_KEY + '_probe'); }
+catch { storageAvailable = false; document.getElementById('storage-note').hidden = false; }
+const adapter = {
+    load() { try { return storageAvailable ? JSON.parse(localStorage.getItem(PREVIEW_KEY) || '{}') : memory; } catch { return {}; } },
+    save(settings) { if (storageAvailable) localStorage.setItem(PREVIEW_KEY, JSON.stringify(settings)); else memory = settings; },
+    connectionName() { return '离线预览中不连接模型。'; },
+    onChange(settings) { document.getElementById('preview-visibility').checked = settings.launcherVisible; },
+};
+const controller = mountPhone({ adapter, styles: PREVIEW_STYLES });
+document.getElementById('preview-visibility').checked = controller.getSettings().launcherVisible;
+document.getElementById('preview-visibility').addEventListener('change', event => controller.setLauncherVisible(event.target.checked));
+document.getElementById('preview-open').addEventListener('click', () => controller.open());
+document.getElementById('preview-settings').addEventListener('click', () => controller.openSettings());
+document.getElementById('preview-reset').addEventListener('click', () => controller.resetPosition());
+controller.open();
+</script></body></html>
