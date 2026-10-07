@@ -314,6 +314,14 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (event.key === 'Escape' && opened) { event.preventDefault(); event.stopPropagation(); close(); }
     }, { signal: lifetime.signal });
 
+    let lastScope;
+    const unsubscribeMemory = adapter.memory?.subscribe(({ scope }) => {
+        if (scope !== lastScope) {
+            lastScope = scope;
+            route = 'home'; history = []; phoneTab = 'history';
+            if (opened) render();
+        }
+    });
     const clockInterval = setInterval(updateClock, 15000);
     applyAppearance();
     placeLauncher();
@@ -327,6 +335,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         destroy() {
             destroyed = true;
             lifetime.abort();
+            unsubscribeMemory?.();
             clearInterval(clockInterval);
             clearTimeout(noticeTimeout);
             host.remove();
