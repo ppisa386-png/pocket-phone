@@ -25,7 +25,8 @@ ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else
 window.modelCalls=0;
 ctx.generateQuietPrompt = async options => {
  window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
- const answer = options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
+ const answer = options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
+ if(options.quietPrompt.includes('当前渠道：短信')) { if(window.smsFail) throw new Error('Test reply failure'); if(window.smsHold) await new Promise(resolve => {window.finishSMS = resolve;}); }
  await ctx.eventSource.emit('GENERATION_ENDED',ctx.chat.length); return JSON.stringify(answer);
 };
 </script><script type="module" src="/index.js"></script>`);
@@ -215,6 +216,46 @@ try {
         await p.evaluate(async () => { const c = window.SillyTavern.getContext(); c.chat[0].mes = 'Alex refuses to give his number.'; await c.eventSource.emit('MESSAGE_EDITED'); });
         await p.locator('[data-phone-dial]').waitFor({ state: 'detached' });
         check(await p.locator('.pp-contact-row').count() === 0, 'phone contacts disappear when acquisition is removed');
+        await ctx.close();
+    }
+    {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
+        await p.locator('.pp-launcher').tap(); await p.locator('[data-app="messages"]').tap();
+        await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').waitFor();
+        await p.locator('[data-sms-contact]').tap();
+        const payload = '<script>window.smsInjection=true</script> Hello';
+        await p.locator('[data-sms-draft]').fill(payload);
+        await p.getByRole('button', { name: '发送短信', exact: true }).tap();
+        await p.getByText('Text received.', { exact: true }).waitFor();
+        check(await p.locator('.pp-sms-item').count() === 2, 'SMS UI sends and receives bubbles');
+        check(await p.evaluate(() => !window.smsInjection), 'SMS content renders as text, not HTML');
+        await p.waitForFunction(() => document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('[data-sms-draft]').value === '');
+        await p.evaluate(() => { window.smsHold = true; });
+        await p.locator('[data-sms-draft]').fill('A later message');
+        await p.getByRole('button', { name: '发送短信', exact: true }).tap();
+        await p.waitForFunction(() => typeof window.finishSMS === 'function');
+        await p.getByRole('button', { name: '回到桌面', exact: true }).tap();
+        await p.evaluate(() => { window.smsHold = false; window.finishSMS(); });
+        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
+        check(await p.locator('.pp-app-badge').textContent() === '1', 'SMS reply outside thread shows one unread badge');
+        await p.reload(); await p.locator('.pp-launcher').tap();
+        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
+        await p.locator('[data-app="messages"]').tap();
+        await p.locator('[data-sms-contact]').tap();
+        check(await p.locator('.pp-sms-item').count() === 4, 'SMS thread survives refresh');
+        await p.getByRole('button', { name: '回到桌面', exact: true }).tap();
+        await p.locator('[data-app="messages"] .pp-app-badge').waitFor({ state: 'detached' });
+        check(await p.evaluate(() => window.modelCalls) === 0, 'reading restored SMS does not call API');
+        await p.locator('[data-app="messages"]').tap();
+        await p.evaluate(() => { window.smsFail = true; });
+        await p.locator('[data-sms-draft]').fill('Do not duplicate this');
+        await p.getByRole('button', { name: '发送短信', exact: true }).tap();
+        await p.locator('[data-sms-retry]').waitFor();
+        await p.evaluate(() => { window.smsFail = false; });
+        await p.locator('[data-sms-retry]').tap();
+        await p.locator('.pp-sms-item[data-role="assistant"]').nth(2).waitFor();
+        check(await p.locator('.pp-sms-item[data-role="user"]').count() === 3, 'manual SMS retry does not duplicate outgoing bubble');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

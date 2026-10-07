@@ -1,6 +1,8 @@
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.3.0';
-import { icon } from './icons.js?v=0.3.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.3.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.4.0';
+import { icon } from './icons.js?v=0.4.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.4.0';
+import { unreadMessages } from './messages.js?v=0.4.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.4.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -24,6 +26,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let selectedCallId = null;
     let callDraft = '';
     let previousActiveCallId = null;
+    let selectedSMSContactId = null;
+    let pickingSMSContact = false;
+    let smsDrafts = Object.create(null);
+    let smsRenderKey = '';
     let opened = false;
     let lastFocused = null;
     let dragging = null;
@@ -105,7 +111,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function appButton(app) {
-        return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span class="pp-app-name">' + app.name + '</span></button>';
+        const unread = app.id === 'messages' ? unreadMessages(phoneView.messages) : 0;
+        const badge = unread ? '<span class="pp-app-badge" aria-label="' + unread + ' 条未读短信">' + (unread > 99 ? '99+' : unread) + '</span>' : '';
+        return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + badge + '</span><span class="pp-app-name">' + app.name + '</span></button>';
     }
 
     function renderHome() {
@@ -136,7 +144,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderAPI() {
         const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话使用酒馆当前连接、角色卡和预设。打开电话时识别新增联系方式，拨号和通话回应时调用模型。独立 API 设置尚未加入。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p></div>';
     }
 
     function renderApps() {
@@ -145,12 +153,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别和电话提示词现已生效；其余用于后续功能。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话和短信提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 
     function renderRetry() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form"><label class="pp-field"><span>失败后自动重试次数</span><input class="pp-number" type="number" inputmode="numeric" min="0" max="15" step="1" data-setting="retries" value="' + settings.retries + '" aria-describedby="pp-retry-help"></label></div><p id="pp-retry-help" class="pp-footnote">填写 0—15 的整数。0 表示不自动重试；次数不包含首次请求，成功后立即停止。</p><p class="pp-footnote">此设置用于联系人识别和电话回应的请求失败重试。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form"><label class="pp-field"><span>失败后自动重试次数</span><input class="pp-number" type="number" inputmode="numeric" min="0" max="15" step="1" data-setting="retries" value="' + settings.retries + '" aria-describedby="pp-retry-help"></label></div><p id="pp-retry-help" class="pp-footnote">填写 0—15 的整数。0 表示不自动重试；次数不包含首次请求，成功后立即停止。</p><p class="pp-footnote">此设置用于联系人识别、电话和短信回应的请求失败重试。</p></div>';
     }
 
     function renderPhone() {
@@ -163,8 +171,24 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const next = shadow.querySelector('[data-phone-draft]');
         if (focused && next) { next.focus({ preventScroll: true }); next.setSelectionRange(...selection); }
     }
+    function renderMessages() {
+        const input = shadow.querySelector('[data-sms-draft]');
+        const focused = input && shadow.activeElement === input;
+        const selection = input ? [input.selectionStart, input.selectionEnd] : null;
+        const scroll = content.scrollTop;
+        const count = Object.values(phoneView.messages || {}).filter(item => item.contactId === selectedSMSContactId).length;
+        const key = selectedSMSContactId + ':' + count;
+        content.innerHTML = renderMessagesScreen(phoneView, selectedSMSContactId, pickingSMSContact, smsDrafts);
+        content.scrollTop = key === smsRenderKey ? scroll : content.scrollHeight;
+        smsRenderKey = key;
+        const next = shadow.querySelector('[data-sms-draft]');
+        if (focused && next && !next.disabled) { next.focus({ preventScroll: true }); next.setSelectionRange(...selection); }
+        if (opened && selectedSMSContactId && unreadMessages(phoneView.messages, selectedSMSContactId)) {
+            phoneAction(() => adapter.phone.markMessagesRead(selectedSMSContactId));
+        }
+    }
     function phoneAction(action) {
-        if (!adapter.phone) { notice('请在酒馆中连接 API 后使用电话。'); return; }
+        if (!adapter.phone) { notice('请在酒馆中连接 API 后使用通信功能。'); return; }
         Promise.resolve().then(action).catch(error => notice(error.message));
     }
 
@@ -196,8 +220,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (route === 'prompts') renderPrompts();
         else if (route === 'retry') renderRetry();
         else if (app?.id === 'phone') renderPhone();
+        else if (app?.id === 'messages') renderMessages();
         else if (app) renderEmptyApp(app.id);
-        content.scrollTop = 0;
+        content.scrollTop = route === 'app:messages' && selectedSMSContactId ? content.scrollHeight : 0;
     }
 
     function navigate(next) {
@@ -207,6 +232,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         render();
         shadow.querySelector('[data-action="back"]').focus({ preventScroll: true });
         if (next === 'app:phone') phoneAction(() => adapter.phone.open());
+        if (next === 'app:messages') phoneAction(() => adapter.phone.openMessages());
     }
 
     function open() {
@@ -259,10 +285,26 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.hasAttribute('data-phone-list')) { selectedCallId = null; phoneTab = 'history'; renderPhone(); }
         if (target.hasAttribute('data-phone-hangup')) phoneAction(async () => { await adapter.phone.hangup(); selectedCallId = null; phoneTab = 'history'; callDraft = ''; renderPhone(); });
         if (target.hasAttribute('data-phone-retry')) phoneAction(() => adapter.phone.retry());
+        if (target.hasAttribute('data-sms-new')) { pickingSMSContact = true; selectedSMSContactId = null; renderMessages(); }
+        if (target.hasAttribute('data-sms-back')) { pickingSMSContact = false; selectedSMSContactId = null; renderMessages(); }
+        if (target.dataset.smsContact) { selectedSMSContactId = target.dataset.smsContact; pickingSMSContact = false; renderMessages(); }
+        if (target.hasAttribute('data-sms-sync')) phoneAction(() => adapter.phone.scan());
+        if (target.dataset.smsRetry) phoneAction(() => adapter.phone.retryMessage(target.dataset.smsRetry));
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('submit', event => {
+        if (event.target.hasAttribute('data-sms-form')) {
+            event.preventDefault();
+            const contactId = selectedSMSContactId;
+            const draft = smsDrafts[contactId] || '';
+            if (draft.trim()) phoneAction(async () => {
+                const result = await adapter.phone.sendMessage(contactId, draft);
+                if (result?.value?.saved && smsDrafts[contactId] === draft) delete smsDrafts[contactId];
+                if (opened && route === 'app:messages') renderMessages();
+            });
+            return;
+        }
         if (!event.target.hasAttribute('data-phone-form')) return;
         event.preventDefault();
         const text = callDraft.trim();
@@ -292,6 +334,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('input', event => {
+        if (event.target.hasAttribute('data-sms-draft') && selectedSMSContactId) smsDrafts[selectedSMSContactId] = event.target.value;
         if (event.target.hasAttribute('data-phone-draft')) callDraft = event.target.value;
         if (event.target.hasAttribute('data-prompt-editor')) {
             const saved = persist({ prompts: { ...settings.prompts, [promptId]: event.target.value } });
@@ -355,6 +398,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (scope !== lastScope) {
             lastScope = scope;
             route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
+            selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }
     });
@@ -363,7 +407,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (view.activeCallId && view.activeCallId !== previousActiveCallId) { selectedCallId = view.activeCallId; callDraft = ''; }
         previousActiveCallId = view.activeCallId;
         if (selectedCallId && !view.calls[selectedCallId]) selectedCallId = null;
+        if (selectedSMSContactId && !view.contacts[selectedSMSContactId]) selectedSMSContactId = null;
         if (opened && route === 'app:phone') renderPhone();
+        if (opened && route === 'app:messages') renderMessages();
+        if (opened && route === 'home') renderHome();
     });
     const clockInterval = setInterval(updateClock, 15000);
     applyAppearance();
