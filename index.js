@@ -15,7 +15,7 @@ async function start() {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
         const response = await fetch(new URL('./style.css', import.meta.url));
-        if (!response.ok) throw new Error('无法读取小手机样式，请检查安装包是否完整。');
+        if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         const adapter = {
             load: () => globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY],
@@ -43,9 +43,19 @@ async function start() {
             extensionPanel = document.createElement('div');
             extensionPanel.id = 'personal-pocket-phone-extension-settings';
             extensionPanel.className = 'extension_container';
-            extensionPanel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>小手机</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>' +
-                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.1.0 · 界面测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
+            extensionPanel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>榴莲手机</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>' +
+                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.1.1 · 界面测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="menu_button" data-pp-open>打开手机设置</button><button type="button" class="menu_button" data-pp-reset>重置悬浮位置</button></div></div></div>';
+            // Host themes may give .menu_button an icon-sized/min-content width.
+            // Keep these two text controls horizontal without changing host CSS.
+            for (const button of extensionPanel.querySelectorAll('button')) {
+                for (const [property, value] of Object.entries({
+                    width: 'auto', 'min-width': 'max-content', flex: '0 0 auto',
+                    'white-space': 'nowrap', 'word-break': 'normal',
+                    'writing-mode': 'horizontal-tb', display: 'inline-flex',
+                    'align-items': 'center', 'justify-content': 'center', padding: '8px 12px',
+                })) button.style.setProperty(property, value, 'important');
+            }
             const visibility = extensionPanel.querySelector('[data-pp-visibility]');
             visibility.checked = controller.getSettings().launcherVisible;
             visibility.addEventListener('change', () => controller.setLauncherVisible(visibility.checked));
@@ -59,10 +69,10 @@ async function start() {
             observer.observe(document.body, { childList: true, subtree: true });
         }
         // Save no chat data and make no generation calls in this first-stage build.
-        console.info('[小手机] v0.1.0 已加载');
+        console.info('[榴莲手机] v0.1.1 已加载');
     } catch (error) {
-        console.error('[小手机] 初始化失败', error);
-        globalThis.toastr?.error?.(error.message, '小手机');
+        console.error('[榴莲手机] 初始化失败', error);
+        globalThis.toastr?.error?.(error.message, '榴莲手机');
     } finally {
         starting = false;
     }

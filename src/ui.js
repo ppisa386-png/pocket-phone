@@ -22,7 +22,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let opened = false;
     let lastFocused = null;
     let dragging = null;
-    let suppressClick = false;
+    let suppressClickUntil = 0;
     let destroyed = false;
     let noticeTimeout;
     const lifetime = new AbortController();
@@ -34,8 +34,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.append(style);
     const layer = document.createElement('div');
     layer.className = 'pp-layer';
-    layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开小手机" title="打开小手机 · 拖动可移动" aria-expanded="false">' + icon('phone') + '</button>' +
-        '<section class="pp-phone" role="dialog" aria-label="小手机" hidden>' +
+    layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + '</button>' +
+        '<section class="pp-phone" role="dialog" aria-label="榴莲手机" hidden>' +
         '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span><span class="pp-device-label">文字手机</span></div>' +
         '<header class="pp-header"><button type="button" data-action="back" class="pp-icon-button" aria-label="返回">' + icon('back') + '</button><span class="pp-title"></span><button type="button" data-action="close" class="pp-icon-button" aria-label="收起手机">' + icon('close') + '</button></header>' +
         '<main class="pp-content"></main><div class="pp-toast" role="status" aria-live="polite" hidden></div>' +
@@ -64,7 +64,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             settings = previous;
             applyAppearance();
             notice('设置保存失败，请检查储存空间后重试。');
-            console.error('[小手机] 无法保存设置', error);
+            console.error('[榴莲手机] 无法保存设置', error);
             return false;
         }
         applyAppearance();
@@ -105,7 +105,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderSettings() {
         content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card">' +
             SECTIONS.map(section => '<button type="button" class="pp-setting-row" data-section="' + section.id + '"><span class="pp-section-icon">' + icon(section.icon) + '</span><span><strong>' + section.name + '</strong><small>' + section.note + '</small></span><span class="pp-row-chevron">' + icon('chevron') + '</span></button>').join('') +
-            '</div><p class="pp-footnote">小手机 ' + VERSION + ' · 界面测试版</p></div>';
+            '</div><p class="pp-footnote">榴莲手机 ' + VERSION + ' · 界面测试版</p></div>';
     }
 
     function selectField(id, label, entries, selected) {
@@ -184,7 +184,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         opened = true;
         phone.hidden = false;
         launcher.setAttribute('aria-expanded', 'true');
-        launcher.setAttribute('aria-label', '收起小手机');
+        launcher.setAttribute('aria-label', '收起榴莲手机');
         render();
         shadow.querySelector('[data-action="close"]').focus({ preventScroll: true });
     }
@@ -193,7 +193,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         opened = false;
         phone.hidden = true;
         launcher.setAttribute('aria-expanded', 'false');
-        launcher.setAttribute('aria-label', '打开小手机');
+        launcher.setAttribute('aria-label', '打开榴莲手机');
         if (settings.launcherVisible) launcher.focus({ preventScroll: true });
         else if (lastFocused?.isConnected && lastFocused !== host) lastFocused.focus?.({ preventScroll: true });
     }
@@ -260,23 +260,24 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     launcher.addEventListener('click', event => {
-        if (suppressClick && event.detail !== 0) { suppressClick = false; return; }
+        event.stopPropagation();
+        if (Date.now() < suppressClickUntil) return;
         opened ? close() : open();
     }, { signal: lifetime.signal });
 
     launcher.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || !event.isPrimary) return;
+        if (event.button !== 0 || event.isPrimary === false) return;
+        event.stopPropagation();
         const rect = launcher.getBoundingClientRect();
-        dragging = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
-        suppressClick = false;
-        launcher.setPointerCapture(event.pointerId);
+        dragging = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false, threshold: event.pointerType === 'touch' ? 12 : 6 };
+        try { launcher.setPointerCapture(event.pointerId); } catch { /* Some embedded browsers reject capture. */ }
     }, { signal: lifetime.signal });
 
     launcher.addEventListener('pointermove', event => {
         if (!dragging || event.pointerId !== dragging.id) return;
         const dx = event.clientX - dragging.x;
         const dy = event.clientY - dragging.y;
-        if (Math.hypot(dx, dy) > 5) dragging.moved = true;
+        if (Math.hypot(dx, dy) > dragging.threshold) dragging.moved = true;
         if (!dragging.moved) return;
         const point = clampPosition({ x: dragging.left + dx, y: dragging.top + dy }, viewport());
         launcher.style.left = point.x + 'px';
@@ -288,8 +289,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (dragging.moved) {
             const rect = launcher.getBoundingClientRect();
             persist({ position: { x: rect.left / Math.max(1, window.innerWidth - 52), y: rect.top / Math.max(1, window.innerHeight - 52) } });
-            suppressClick = true;
+        } else if (event.type === 'pointerup') {
+            // Handle a tap here: Android browsers may omit the later click.
+            opened ? close() : open();
         }
+        suppressClickUntil = Date.now() + 750;
+        event.stopPropagation();
         if (launcher.hasPointerCapture(event.pointerId)) launcher.releasePointerCapture(event.pointerId);
         dragging = null;
     }

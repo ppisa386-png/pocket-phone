@@ -12,7 +12,7 @@ const { chromium } = process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
     ? createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + '/')('playwright') : require('playwright');
 const screenshotDir = resolve(project, '..', 'qa-results');
 await mkdir(screenshotDir, { recursive: true });
-const fixture = legacy => '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#ddd;font-family:sans-serif;color:#c00}button{border:10px solid red;background:red;font-size:30px}#extensions_settings{max-width:300px}</style></head><body><div id="extensions_settings"></div><p id="chat">正文不应被修改</p><script>window.saved=0;const extensionSettings=JSON.parse(localStorage.getItem("fixture-settings")||"{}");const context={extensionSettings,mainApi:"openai",saveSettingsDebounced(){window.saved++;localStorage.setItem("fixture-settings",JSON.stringify(extensionSettings));}}' + (legacy ? '' : ';context.event_types={APP_READY:"ready"};context.eventSource={on(type,fn){queueMicrotask(fn)}}') + ';window.SillyTavern={getContext(){return context}}</script><script type="module" src="/index.js"></script></body></html>';
+const fixture = legacy => '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#ddd;font-family:sans-serif;color:#c00}button{border:10px solid red;background:red;font-size:30px}#extensions_settings{max-width:300px}.menu_button{width:min-content!important;white-space:normal!important}</style></head><body><div id="extensions_settings"></div><p id="chat">正文不应被修改</p><script>window.saved=0;const extensionSettings=JSON.parse(localStorage.getItem("fixture-settings")||"{}");const context={extensionSettings,mainApi:"openai",saveSettingsDebounced(){window.saved++;localStorage.setItem("fixture-settings",JSON.stringify(extensionSettings));}}' + (legacy ? '' : ';context.event_types={APP_READY:"ready"};context.eventSource={on(type,fn){queueMicrotask(fn)}}') + ';window.SillyTavern={getContext(){return context}}</script><script type="module" src="/index.js"></script></body></html>';
 const server = createServer(async (req, res) => {
     try {
         const url = new URL(req.url, 'http://localhost');
@@ -120,6 +120,16 @@ try {
         const integrated = await browser.newContext({ viewport: { width: 1100, height: 850 } });
         const p = await integrated.newPage(); track(p); await p.goto(origin + path);
         await p.locator('#personal-pocket-phone-extension-settings').waitFor();
+        check(await p.locator('[data-pp-open]').evaluate(el => getComputedStyle(el).whiteSpace === 'nowrap' && el.getBoundingClientRect().width > 100), 'text buttons stay horizontal under host theme ' + path);
+        check(await p.locator('.pp-launcher .icon-tabler-device-mobile-star').count() === 1, 'user supplied mobile-star SVG ' + path);
+        // Reproduce a mobile browser that sends pointerup but omits click.
+        await p.locator('.pp-launcher svg').dispatchEvent('pointerdown', { pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 });
+        await p.locator('.pp-launcher svg').dispatchEvent('pointermove', { pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: 28, clientY: 20 });
+        await p.locator('.pp-launcher svg').dispatchEvent('pointerup', { pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, clientX: 28, clientY: 20 });
+        check(await p.locator('.pp-phone').isVisible(), 'touch tap with slight movement opens without click ' + path);
+        await p.locator('.pp-launcher').dispatchEvent('click', { detail: 1 });
+        check(await p.locator('.pp-phone').isVisible(), 'follow-up click does not close phone ' + path);
+
         await p.locator('[data-pp-open]').click();
         await p.locator('[data-section="apps"]').click();
         await p.getByRole('switch', { name: '启用Amazon', exact: true }).uncheck();

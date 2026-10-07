@@ -1,5 +1,5 @@
 export const MODULE_KEY = 'personal_pocket_phone';
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
