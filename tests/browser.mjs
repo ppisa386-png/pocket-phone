@@ -144,6 +144,34 @@ try {
         check(await p.locator('.pp-launcher').isHidden(), 'extension drawer hides launcher ' + path);
         await integrated.close();
     }
+    // Real browser touch hit-testing, including host transforms and an overlay
+    // above the old widget z-index. Synthetic dispatchEvent cannot catch this.
+    for (const fallback of [false, true]) {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 760 }, isMobile: true, hasTouch: true });
+        if (fallback) await ctx.addInitScript(() => { HTMLElement.prototype.showPopover = undefined; });
+        const p = await ctx.newPage(); track(p);
+        await p.goto(origin + '/fixture');
+        const launcher = p.locator('.pp-launcher');
+        await launcher.waitFor();
+        await p.addStyleTag({ content: 'html { transform: translateZ(0); } body { height:100dvh; overflow:hidden; } #personal-pocket-phone-root { transform:translateZ(0); overflow:hidden; }' });
+        if (!fallback) await p.evaluate(() => {
+            const cover = document.createElement('div');
+            cover.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:transparent';
+            cover.id = 'test-overlay'; document.body.append(cover);
+        });
+        const box = await launcher.boundingBox();
+        check(box.width === 36 && box.height === 36, 'compact 36px launcher, fallback=' + fallback);
+        await launcher.tap({ timeout: 5000 });
+        check(await p.locator('.pp-phone').isVisible(), 'actual touch opens above theme layers, fallback=' + fallback);
+        await p.locator('[data-app="settings"]').tap();
+        check(await p.locator('[data-section="appearance"]').isVisible(), 'phone content receives touch');
+        await p.getByRole('button', { name: '收起手机', exact: true }).tap();
+        check(await p.locator('.pp-phone').isHidden(), 'touch closes phone');
+        await p.evaluate(() => document.getElementById('test-overlay')?.remove());
+        await p.locator('[data-pp-visibility]').uncheck();
+        check(await launcher.isHidden(), 'top layer does not block underlying host controls');
+        await ctx.close();
+    }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
 } catch (error) {

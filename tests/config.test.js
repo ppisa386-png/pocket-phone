@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSettings, clampPosition, PROMPTS } from '../src/config.js';
+import { normalizeSettings, clampPosition, LAUNCHER_SIZE, PROMPTS } from '../src/config.js';
 
 test('malformed or old saved settings do not prevent startup', () => {
     for (const value of [null, undefined, [], 'bad', 3]) {
@@ -28,8 +28,8 @@ test('disabled apps, zero retries and user prompt edits survive settings migrati
 test('launcher stays inside small screens and after orientation changes', () => {
     for (const view of [{ width: 320, height: 568 }, { width: 844, height: 390 }, { width: 1280, height: 720 }]) {
         const point = clampPosition({ x: 20000, y: -500 }, view);
-        assert.ok(point.x + 52 <= view.width - 8);
+        assert.ok(point.x + LAUNCHER_SIZE <= view.width - 8);
         assert.ok(point.y >= 8);
-        assert.ok(clampPosition(null, view).y + 52 <= view.height - 8);
+        assert.ok(clampPosition(null, view).y + LAUNCHER_SIZE <= view.height - 8);
     }
 });

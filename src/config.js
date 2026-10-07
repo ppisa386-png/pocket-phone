@@ -1,5 +1,6 @@
 export const MODULE_KEY = 'personal_pocket_phone';
-export const VERSION = '0.1.1';
+export const LAUNCHER_SIZE = 36;
+export const VERSION = '0.1.2';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -38,7 +39,7 @@ export function normalizeSettings(value) {
     };
 }
 
-export function clampPosition(position, viewport, size = 52) {
+export function clampPosition(position, viewport, size = LAUNCHER_SIZE) {
     const margin = 8;
     const maxX = Math.max(margin, viewport.width - size - margin);
     const maxY = Math.max(margin, viewport.height - size - margin);

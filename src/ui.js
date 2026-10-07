@@ -1,4 +1,4 @@
-import { APPS, PROMPTS, VERSION, normalizeSettings, clampPosition } from './config.js';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js';
 import { icon } from './icons.js';
 
 const SECTIONS = [
@@ -28,12 +28,17 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const lifetime = new AbortController();
     const host = document.createElement('div');
     host.id = 'personal-pocket-phone-root';
+    // Keep the widget out of theme stacking/transform contexts when supported.
+    // A manual popover is non-modal: the rest of SillyTavern remains usable.
+    const topLayerAvailable = typeof host.showPopover === 'function';
+    if (topLayerAvailable) host.setAttribute('popover', 'manual');
     const shadow = host.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = styles;
     shadow.append(style);
     const layer = document.createElement('div');
     layer.className = 'pp-layer';
+    layer.style.setProperty('--pp-launcher-size', LAUNCHER_SIZE + 'px');
     layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + '</button>' +
         '<section class="pp-phone" role="dialog" aria-label="榴莲手机" hidden>' +
         '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span><span class="pp-device-label">文字手机</span></div>' +
@@ -42,6 +47,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         '<footer class="pp-footer"><button type="button" data-action="home" aria-label="回到桌面"><span></span></button></footer></section>';
     shadow.append(layer);
     container.append(host);
+    if (topLayerAvailable) {
+        try { host.showPopover(); }
+        catch { host.removeAttribute('popover'); }
+    }
     const launcher = shadow.querySelector('.pp-launcher');
     const phone = shadow.querySelector('.pp-phone');
     const content = shadow.querySelector('.pp-content');
@@ -85,7 +94,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function placeLauncher() {
         const view = viewport();
         const saved = settings.position;
-        const point = clampPosition(saved ? { x: saved.x * (view.width - 52), y: saved.y * (view.height - 52) } : null, view);
+        const point = clampPosition(saved ? { x: saved.x * (view.width - LAUNCHER_SIZE), y: saved.y * (view.height - LAUNCHER_SIZE) } : null, view);
         launcher.style.left = point.x + 'px';
         launcher.style.top = point.y + 'px';
     }
@@ -288,7 +297,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (!dragging || event.pointerId !== dragging.id) return;
         if (dragging.moved) {
             const rect = launcher.getBoundingClientRect();
-            persist({ position: { x: rect.left / Math.max(1, window.innerWidth - 52), y: rect.top / Math.max(1, window.innerHeight - 52) } });
+            persist({ position: { x: rect.left / Math.max(1, window.innerWidth - LAUNCHER_SIZE), y: rect.top / Math.max(1, window.innerHeight - LAUNCHER_SIZE) } });
         } else if (event.type === 'pointerup') {
             // Handle a tap here: Android browsers may omit the later click.
             opened ? close() : open();
