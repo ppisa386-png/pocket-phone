@@ -1,5 +1,6 @@
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js';
-import { icon } from './icons.js';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.3.0';
+import { icon } from './icons.js?v=0.3.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.3.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -19,6 +20,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let history = [];
     let promptId = 'general';
     let phoneTab = 'history';
+    let phoneView = { contacts: {}, calls: {}, busy: false, error: '' };
+    let selectedCallId = null;
+    let callDraft = '';
+    let previousActiveCallId = null;
     let opened = false;
     let lastFocused = null;
     let dragging = null;
@@ -114,7 +119,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderSettings() {
         content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card">' +
             SECTIONS.map(section => '<button type="button" class="pp-setting-row" data-section="' + section.id + '"><span class="pp-section-icon">' + icon(section.icon) + '</span><span><strong>' + section.name + '</strong><small>' + section.note + '</small></span><span class="pp-row-chevron">' + icon('chevron') + '</span></button>').join('') +
-            '</div><p class="pp-footnote">榴莲手机 ' + VERSION + ' · 界面测试版</p></div>';
+            '</div><p class="pp-footnote">榴莲手机 ' + VERSION + ' · 开发测试版</p></div>';
     }
 
     function selectField(id, label, entries, selected) {
@@ -131,7 +136,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderAPI() {
         const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">本阶段不发送模型请求。通信模块接入后，将使用这里的连接；独立 API 设置将在该阶段加入。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话使用酒馆当前连接、角色卡和预设。打开电话时识别新增联系方式，拨号和通话回应时调用模型。独立 API 设置尚未加入。</p></div>';
     }
 
     function renderApps() {
@@ -140,12 +145,27 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。这些提示词将在对应通信模块接入后使用。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别和电话提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 
     function renderRetry() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form"><label class="pp-field"><span>失败后自动重试次数</span><input class="pp-number" type="number" inputmode="numeric" min="0" max="15" step="1" data-setting="retries" value="' + settings.retries + '" aria-describedby="pp-retry-help"></label></div><p id="pp-retry-help" class="pp-footnote">填写 0—15 的整数。0 表示不自动重试；次数不包含首次请求，成功后立即停止。</p><p class="pp-footnote">本阶段保存该设置，接入模型后生效。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form"><label class="pp-field"><span>失败后自动重试次数</span><input class="pp-number" type="number" inputmode="numeric" min="0" max="15" step="1" data-setting="retries" value="' + settings.retries + '" aria-describedby="pp-retry-help"></label></div><p id="pp-retry-help" class="pp-footnote">填写 0—15 的整数。0 表示不自动重试；次数不包含首次请求，成功后立即停止。</p><p class="pp-footnote">此设置用于联系人识别和电话回应的请求失败重试。</p></div>';
+    }
+
+    function renderPhone() {
+        const input = shadow.querySelector('[data-phone-draft]');
+        const focused = input && shadow.activeElement === input;
+        const selection = input ? [input.selectionStart, input.selectionEnd] : null;
+        const scroll = content.scrollTop;
+        content.innerHTML = renderPhoneScreen(phoneView, phoneTab, selectedCallId, callDraft);
+        content.scrollTop = scroll;
+        const next = shadow.querySelector('[data-phone-draft]');
+        if (focused && next) { next.focus({ preventScroll: true }); next.setSelectionRange(...selection); }
+    }
+    function phoneAction(action) {
+        if (!adapter.phone) { notice('请在酒馆中连接 API 后使用电话。'); return; }
+        Promise.resolve().then(action).catch(error => notice(error.message));
     }
 
     function renderEmptyApp(id) {
@@ -175,6 +195,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (route === 'apps') renderApps();
         else if (route === 'prompts') renderPrompts();
         else if (route === 'retry') renderRetry();
+        else if (app?.id === 'phone') renderPhone();
         else if (app) renderEmptyApp(app.id);
         content.scrollTop = 0;
     }
@@ -185,6 +206,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         route = next;
         render();
         shadow.querySelector('[data-action="back"]').focus({ preventScroll: true });
+        if (next === 'app:phone') phoneAction(() => adapter.phone.open());
     }
 
     function open() {
@@ -230,8 +252,21 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.wallpaper && persist({ wallpaper: target.dataset.wallpaper })) {
             shadow.querySelectorAll('[data-wallpaper]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.wallpaper === settings.wallpaper)));
         }
-        if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; renderEmptyApp('phone'); }
+        if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; selectedCallId = null; renderPhone(); }
+        if (target.hasAttribute('data-phone-sync')) phoneAction(() => adapter.phone.scan());
+        if (target.dataset.phoneDial) phoneAction(() => adapter.phone.dial(target.dataset.phoneDial));
+        if (target.dataset.phoneRecord) { selectedCallId = target.dataset.phoneRecord; callDraft = ''; renderPhone(); }
+        if (target.hasAttribute('data-phone-list')) { selectedCallId = null; phoneTab = 'history'; renderPhone(); }
+        if (target.hasAttribute('data-phone-hangup')) phoneAction(async () => { await adapter.phone.hangup(); selectedCallId = null; phoneTab = 'history'; callDraft = ''; renderPhone(); });
+        if (target.hasAttribute('data-phone-retry')) phoneAction(() => adapter.phone.retry());
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
+    }, { signal: lifetime.signal });
+
+    shadow.addEventListener('submit', event => {
+        if (!event.target.hasAttribute('data-phone-form')) return;
+        event.preventDefault();
+        const text = callDraft.trim();
+        if (text) phoneAction(async () => { callDraft = ''; await adapter.phone.say(text); });
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('change', event => {
@@ -257,6 +292,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('input', event => {
+        if (event.target.hasAttribute('data-phone-draft')) callDraft = event.target.value;
         if (event.target.hasAttribute('data-prompt-editor')) {
             const saved = persist({ prompts: { ...settings.prompts, [promptId]: event.target.value } });
             content.querySelector('.pp-save-status').textContent = saved ? '已更新' : '保存失败';
@@ -318,9 +354,16 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const unsubscribeMemory = adapter.memory?.subscribe(({ scope }) => {
         if (scope !== lastScope) {
             lastScope = scope;
-            route = 'home'; history = []; phoneTab = 'history';
+            route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             if (opened) render();
         }
+    });
+    const unsubscribePhone = adapter.phone?.subscribe(view => {
+        phoneView = view;
+        if (view.activeCallId && view.activeCallId !== previousActiveCallId) { selectedCallId = view.activeCallId; callDraft = ''; }
+        previousActiveCallId = view.activeCallId;
+        if (selectedCallId && !view.calls[selectedCallId]) selectedCallId = null;
+        if (opened && route === 'app:phone') renderPhone();
     });
     const clockInterval = setInterval(updateClock, 15000);
     applyAppearance();
@@ -336,6 +379,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             destroyed = true;
             lifetime.abort();
             unsubscribeMemory?.();
+            unsubscribePhone?.();
             clearInterval(clockInterval);
             clearTimeout(noticeTimeout);
             host.remove();

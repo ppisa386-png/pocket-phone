@@ -13,9 +13,26 @@ const { chromium } = process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
 const screenshotDir = resolve(project, '..', 'qa-results');
 await mkdir(screenshotDir, { recursive: true });
 const fixture = legacy => '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#ddd;font-family:sans-serif;color:#c00}button{border:10px solid red;background:red;font-size:30px}#extensions_settings{max-width:300px}.menu_button{width:min-content!important;white-space:normal!important}</style></head><body><div id="extensions_settings"></div><p id="chat">正文不应被修改</p><script>window.saved=0;const extensionSettings=JSON.parse(localStorage.getItem("fixture-settings")||"{}");const context={extensionSettings,mainApi:"openai",saveSettingsDebounced(){window.saved++;localStorage.setItem("fixture-settings",JSON.stringify(extensionSettings));}}' + (legacy ? '' : ';context.event_types={APP_READY:"ready"};context.eventSource={on(type,fn){queueMicrotask(fn)}}') + ';window.SillyTavern={getContext(){return context}}</script><script type="module" src="/index.js"></script></body></html>';
+const phoneFixture = () => fixture(false).replace('<script type="module" src="/index.js"></script>', `<script>
+const ctx = window.SillyTavern.getContext();
+ctx.chatId = 'phone-test'; ctx.name1 = 'Sam'; ctx.name2 = 'Alex'; ctx.characterId = 0; ctx.characters = [{name:'Alex',avatar:'alex.png'}]; ctx.onlineStatus = 'connected';
+const persistedChat = JSON.parse(localStorage.getItem('phone-test-data') || 'null');
+ctx.chat = persistedChat?.chat || [{name:'Alex',mes:'Alex gives you his number: +1 212 555 0123.'}];
+ctx.chatMetadata = persistedChat?.metadata || {};
+ctx.saveMetadata = async () => localStorage.setItem('phone-test-data', JSON.stringify({chat:ctx.chat,metadata:ctx.chatMetadata}));
+const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(n => [n,n]));
+ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},async emit(type,...args) {for(const fn of handlers[type] || []) await fn(...args);}};
+window.modelCalls=0;
+ctx.generateQuietPrompt = async options => {
+ window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
+ const answer = options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
+ await ctx.eventSource.emit('GENERATION_ENDED',ctx.chat.length); return JSON.stringify(answer);
+};
+</script><script type="module" src="/index.js"></script>`);
 const server = createServer(async (req, res) => {
     try {
         const url = new URL(req.url, 'http://localhost');
+        if (url.pathname === '/phone-fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(phoneFixture()); return; }
         if (url.pathname === '/fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(fixture(url.searchParams.has('legacy'))); return; }
         const filename = url.pathname === '/preview' ? resolve(project, '..', 'deliverables/pocket-phone-preview.html') : resolve(project, '.' + url.pathname);
         if (url.pathname !== '/preview' && !filename.startsWith(project + '/')) { res.writeHead(403).end(); return; }
@@ -170,6 +187,34 @@ try {
         await p.evaluate(() => document.getElementById('test-overlay')?.remove());
         await p.locator('[data-pp-visibility]').uncheck();
         check(await launcher.isHidden(), 'top layer does not block underlying host controls');
+        await ctx.close();
+    }
+    {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
+        await p.locator('.pp-launcher').tap();
+        await p.locator('[data-app="phone"]').tap();
+        await p.locator('[data-phone-tab="contacts"]').tap();
+        await p.locator('[data-phone-dial]').waitFor();
+        check(await p.locator('.pp-contact-row').count() === 1, 'phone UI shows contact recognized from narrative');
+        await p.locator('[data-phone-dial]').tap();
+        await p.getByText('Hello?', { exact: true }).waitFor();
+        await p.locator('[data-phone-draft]').fill('Can you hear me?');
+        await p.getByRole('button', { name: '发送', exact: true }).tap();
+        await p.getByText('I can hear you.', { exact: true }).waitFor();
+        check(await p.locator('.pp-call-turn').count() === 3, 'touch phone UI supports two-way text call');
+        await p.locator('[data-phone-hangup]').tap();
+        await p.getByText('拨出 · 已结束', { exact: true }).waitFor();
+        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="phone"]').tap();
+        await p.getByText('拨出 · 已结束', { exact: true }).waitFor();
+        check(await p.evaluate(() => window.modelCalls) === 0, 'reopening unchanged chat restores history without API request');
+        await p.locator('[data-phone-record]').tap();
+        check(await p.locator('.pp-call-turn').count() === 3, 'call transcript survives reload');
+        await p.locator('[data-phone-list]').tap();
+        await p.locator('[data-phone-tab="contacts"]').tap();
+        await p.evaluate(async () => { const c = window.SillyTavern.getContext(); c.chat[0].mes = 'Alex refuses to give his number.'; await c.eventSource.emit('MESSAGE_EDITED'); });
+        await p.locator('[data-phone-dial]').waitFor({ state: 'detached' });
+        check(await p.locator('.pp-contact-row').count() === 0, 'phone contacts disappear when acquisition is removed');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

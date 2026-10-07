@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal } from './journal.js';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal } from './journal.js?v=0.3.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -95,17 +95,18 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     for (const name of EVENTS) listen(name, () => {
         // Invalidate in-flight model results even if the user later restores the
         // same text/swipe, or switches away and back before the request finishes.
-        generation++;
+        if (name !== 'GENERATION_ENDED' || generating) generation++;
         if (name === 'GENERATION_ENDED' || name === 'GENERATION_STOPPED' || name === 'CHAT_CHANGED') generating = false;
         backgroundRefresh();
     });
-    listen('GENERATION_STARTED', () => { generating = true; generation++; });
+    listen('GENERATION_STARTED', type => { if (type !== 'quiet') { generating = true; generation++; } });
     backgroundRefresh();
 
     return {
         refresh,
+        epoch: () => generation,
         subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-        read() { return schedule(async () => { const snapshot = await sync(); return { scope: snapshot?.scope ?? null, state: replayJournal(snapshot?.journal) }; }); },
+        read() { return schedule(async () => { const snapshot = await sync(); return { scope: snapshot?.scope ?? null, state: replayJournal(snapshot?.journal), revision: snapshot?.revisions.at(-1) ?? null }; }); },
         begin() {
             return schedule(async () => {
                 const snapshot = await sync();
@@ -116,6 +117,9 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
             });
         },
         commit(ticket, changes, operationId) {
+            return this.commitBatch(ticket, [{ changes, id: operationId }]);
+        },
+        commitBatch(ticket, batches) {
             return schedule(async () => {
                 const basis = tickets.get(ticket);
                 const snapshot = await sync();
@@ -123,7 +127,12 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                     basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) {
                     throw new Error('聊天已变化，本次手机操作已取消。');
                 }
-                const next = appendChange(snapshot.journal, snapshot.revisions, changes, operationId);
+                let next = snapshot.journal;
+                for (const batch of batches) {
+                    const index = batch.sourceIndex ?? snapshot.revisions.length - 1;
+                    if (!Number.isInteger(index) || index < 0 || index >= snapshot.revisions.length) throw new Error('记录来源楼层无效。');
+                    next = appendChange(next, snapshot.revisions.slice(0, index + 1), batch.changes, batch.id);
+                }
                 await save(snapshot, next);
                 tickets.delete(ticket);
                 if (sameChat(snapshot)) { active = { ...snapshot, journal: next }; notify(); }

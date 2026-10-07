@@ -110,3 +110,35 @@ h2, p { margin: 0; }
 @media (max-width: 480px) { .pp-phone { right: 12px; top: max(8px, env(safe-area-inset-top)); bottom: max(12px, env(safe-area-inset-bottom)); height: auto; max-height: none; border-radius: 28px; } .pp-home-clock { padding-top: 4px; padding-bottom: 24px; } }
 @media (max-height: 590px) { .pp-home-clock { padding: 0 0 12px; } .pp-big-time { font-size: 48px; } .pp-dock { padding: 10px 5px; } .pp-home .pp-app-grid { margin-bottom: 12px; } .pp-app-icon { width: 48px; height: 48px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* Phone app */
+.pp-phone-app { display: flex; flex-direction: column; height: 100%; min-height: 260px; }
+.pp-phone-toolbar { display:flex; align-items:center; justify-content:space-between; padding:8px 20px; }
+.pp-phone-toolbar h2 { font-size:1.35em; }
+.pp-phone-list { flex:1; overflow-y:auto; padding:0 16px; }
+.pp-phone-list > .pp-empty { min-height:220px; }
+.pp-phone-progress { padding:4px 20px 12px; color:var(--pp-muted); font-size:.82em; }
+.pp-contact-row, .pp-call-row { display:flex; align-items:center; gap:12px; width:100%; padding:16px 0; border-bottom:1px solid var(--pp-line); text-align:left; }
+.pp-contact-row > div, .pp-call-row > span:nth-child(2) { flex:1; min-width:0; overflow-wrap:anywhere; }
+.pp-contact-row strong, .pp-call-row strong { display:block; font-weight:500; }
+.pp-contact-row small, .pp-call-row small { display:block; color:var(--pp-muted); font-size:.76em; margin-top:3px; }
+.pp-contact-avatar { flex-shrink:0; width:38px; height:38px; border-radius:50%; background:#8882; color:var(--pp-muted); display:grid; place-items:center; }
+.pp-dial-contact { flex-shrink:0; width:42px; height:42px; border-radius:50%; color:#36be8b; display:grid; place-items:center; }
+.pp-call-row time { color:var(--pp-muted); font-size:.7em; white-space:nowrap; }
+.pp-call-row > svg { width:14px; }
+.pp-call-error { margin:8px 16px; padding:10px 12px; border-radius:10px; background:#db61421c; color:var(--pp-text); border:1px solid #db614266; font-size:.82em; overflow-wrap:anywhere; }
+.pp-call-page { padding:0 18px 24px; }
+.pp-call-heading { text-align:center; padding:12px 0 20px; }
+.pp-call-heading .pp-contact-avatar { margin:0 auto 12px; width:54px; height:54px; }
+.pp-call-heading h2 { font-weight:500; font-size:1.5em; }
+.pp-call-heading p, .pp-call-heading small { color:var(--pp-muted); font-size:.8em; margin-top:5px; }
+.pp-call-turn { margin:0 24px 16px 0; padding:12px; background:var(--pp-card); border:1px solid var(--pp-line); border-radius:14px; }
+.pp-call-turn[data-role="user"] { margin:0 0 16px 24px; background:#7d69b32b; }
+.pp-call-turn small { color:var(--pp-muted); font-size:.7em; }
+.pp-call-turn p { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.75; margin-top:4px; }
+.pp-call-compose { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:end; }
+.pp-call-compose label { grid-column:1/-1; font-size:.8em; color:var(--pp-muted); }
+.pp-call-compose textarea { resize:vertical; width:100%; min-height:64px; border:1px solid var(--pp-line); border-radius:10px; background:var(--pp-input); padding:10px; }
+.pp-call-compose button, .pp-call-retry { padding:12px; border-radius:10px; background:#7d69b338; color:var(--pp-accent); }
+.pp-call-retry { margin:8px 0 16px; }
+.pp-hangup { display:flex; flex-direction:column; gap:5px; align-items:center; justify-content:center; width:64px; height:64px; margin:24px auto 0; border-radius:50%; background:#ca4655; color:white; font-size:11px; }
+.pp-hangup svg { transform:rotate(135deg); width:23px; height:23px; }
