@@ -1,5 +1,5 @@
-import { icon } from './icons.js?v=0.5.0';
-import { threadMessages, unreadMessages } from './messages.js?v=0.5.0';
+import { icon } from './icons.js?v=0.6.0';
+import { threadMessages, unreadMessages } from './messages.js?v=0.6.0';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = value => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const replyLabels = { pending: '等待回复…', received: '已发送', failed: '回复获取失败', no_reply: '已发送 · 暂无回复' };

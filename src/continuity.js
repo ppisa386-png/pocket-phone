@@ -1,9 +1,9 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal } from './journal.js?v=0.5.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal } from './journal.js?v=0.6.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
 const serialize = value => JSON.stringify(value).replace(/\{\{/g, '\\u007b\\u007b');
-const callLabels = { dialing: '拨号中', connected: '通话中', ended: '已结束', interrupted: '已中断', declined: '拒接', no_answer: '无人接听' };
+const callLabels = { dialing: '拨号中', connected: '通话中', ended: '已结束', interrupted: '已中断', ringing: '来电中', answering: '正在接听', missed: '未接来电', declined: '拒接', no_answer: '无人接听' };
 
 export function resolveSpeaker(context) {
     const chatId = context?.getCurrentChatId?.() ?? context?.chatId;
@@ -41,7 +41,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         } });
     }
     for (const call of Object.values(state.calls)) {
-        if (!allowed.has(call.contactId) || !Array.isArray(call.turns)) continue;
+        if (!(allowed.has(call.contactId) || (call.direction === 'incoming' && call.participant && belongsTo(call.participant, speaker))) || !Array.isArray(call.turns)) continue;
         const turns = call.turns.filter(turn => ['user', 'assistant'].includes(turn.role) && typeof turn.text === 'string')
             .map(turn => ({ speaker: turn.role === 'user' ? userName : speaker.name, text: turn.text }));
         // A failed or unanswered call cannot create a conversation that never happened.

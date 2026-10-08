@@ -168,3 +168,8 @@ h2, p { margin: 0; }
 .pp-sms-compose label { grid-column:1/-1; font-size:.76em; color:var(--pp-muted); }
 .pp-sms-compose textarea { width:100%; min-height:60px; resize:vertical; padding:10px 12px; border:1px solid var(--pp-line); border-radius:16px; background:var(--pp-input); }
 .pp-sms-compose button { min-height:44px; padding:8px 12px; border-radius:14px; background:#296845; color:white; }
+
+.pp-incoming-actions { display: flex; gap: 20px; justify-content: center; align-items: center; margin: 24px 0; }
+.pp-answer { border: 0; border-radius: 24px; background: #228b60; color: #fff; padding: 14px 24px; cursor: pointer; }
+.pp-incoming-actions .pp-hangup { margin: 0; padding: 14px 24px; width: auto; }
+.pp-launcher-badge { position: absolute; right: -4px; top: -4px; border-radius: 12px; padding: 1px 5px; min-width: 16px; font: 11px/16px sans-serif; color: white; background: #d62e4a; }

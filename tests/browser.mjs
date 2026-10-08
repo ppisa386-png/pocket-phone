@@ -27,7 +27,7 @@ ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.ex
 window.modelCalls=0;
 ctx.generateQuietPrompt = async options => {
  window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
- const answer = options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
+ const answer = options.quietPrompt.includes('当前任务：主动来电判断') ? (window.allowIncoming ? {status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:'Sam gave Alex their phone number.',reason:'Confirm the meeting.'} : {status:'none'}) : options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
  if(options.quietPrompt.includes('当前渠道：短信')) { if(window.smsFail) throw new Error('Test reply failure'); if(window.smsHold) await new Promise(resolve => {window.finishSMS = resolve;}); }
  await ctx.eventSource.emit('GENERATION_ENDED',ctx.chat.length); return JSON.stringify(answer);
 };
@@ -279,6 +279,47 @@ try {
         check(syncResult.callsUnchanged && syncResult.floorsUnchanged, 'continuity adds no model request or visible chat floor');
         check(syncResult.cleared && syncResult.rollbackCleared, 'continuity context clears after generation and invalidated source');
 
+        await ctx.close();
+    }
+    {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
+        await p.locator('#personal-pocket-phone-extension-settings').waitFor();
+        async function generateIncoming(text) {
+            await p.evaluate(async text => {
+                const c = window.SillyTavern.getContext(); window.allowIncoming = true;
+                await c.eventSource.emit('GENERATION_STARTED', 'normal');
+                c.chat.push({name:'Alex',mes:text,is_user:false});
+                await c.eventSource.emit('GENERATION_ENDED');
+            }, text);
+        }
+        await generateIncoming('Sam gave Alex their phone number. Alex leaves to go home.');
+        await p.locator('.pp-launcher-badge').waitFor({ state: 'visible' });
+        check(await p.locator('.pp-phone').isHidden(), 'incoming call adds badge without forcing the phone open');
+        await p.locator('.pp-launcher').tap();
+        await p.locator('[data-phone-answer]').waitFor();
+        check(await p.locator('.pp-call-turn').count() === 0, 'ringing screen has no speech before acceptance');
+        check(await p.evaluate(() => window.modelCalls) === 1, 'one foreground reply triggers exactly one incoming check');
+        await p.locator('[data-phone-decline]').tap();
+        await p.getByText('已拒接', {exact:true}).waitFor();
+        check(await p.evaluate(() => window.modelCalls) === 1, 'declining makes no API request');
+        await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
+        check(await p.locator('[data-app="phone"] .pp-app-badge').count() === 0, 'declined incoming badge clears');
+        await generateIncoming('Alex has an urgent question about the meeting.');
+        await p.locator('[data-app="phone"] .pp-app-badge').waitFor();
+        await p.locator('[data-app="phone"]').tap();
+        await p.locator('[data-phone-answer]').tap();
+        await p.getByText('Hello?', {exact:true}).waitFor();
+        await p.locator('[data-phone-draft]').fill('Can you hear me?');
+        await p.getByRole('button', {name:'发送',exact:true}).tap();
+        await p.getByText('I can hear you.', {exact:true}).waitFor();
+        await p.locator('[data-phone-hangup]').tap();
+        await p.getByText('来电 · 已结束', {exact:true}).waitFor();
+        check(await p.getByText('来电 · 已拒接', {exact:true}).count() === 1, 'incoming history distinguishes completed and declined calls');
+        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="phone"]').tap();
+        await p.getByText('来电 · 已结束', {exact:true}).waitFor();
+        check(await p.evaluate(() => window.modelCalls) <= 1, 'reload restores incoming history without re-ringing');
+        check(await p.locator('.pp-content').evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'incoming UI fits mobile width');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
