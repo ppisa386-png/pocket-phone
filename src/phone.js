@@ -1,10 +1,9 @@
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.8.0';
-import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.8.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.8.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.8.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.9.0';
+import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.9.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.9.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.9.0';
 
-// Telephone and SMS share one request queue: the host's quiet generation preserves the selected preset,
-// character and world information. No keys, extra endpoint or real calls.
+// Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
     const cleaned = String(text ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
     let data;
@@ -44,7 +43,7 @@ export function validateCall(data) {
     return { status: data.status, text: data.text.trim() };
 }
 
-export function createPhoneService({ memory, getContext, getSettings }) {
+export function createPhoneService({ memory, getContext, getSettings, modelClient = null }) {
     const listeners = new Set();
     let state = { contacts: {}, calls: {}, profiles: {}, messages: {} };
     let scope;
@@ -82,8 +81,10 @@ export function createPhoneService({ memory, getContext, getSettings }) {
     async function request(prompt, validate, isCurrent, contact = null) {
         const context = getContext();
         requestContactId = contact?.id ?? null;
-        if (typeof context.generateQuietPrompt !== 'function') throw new Error('当前酒馆不支持模型调用，请先更新酒馆。');
-        if (context.onlineStatus === 'no_connection') throw new Error('请先在酒馆连接 API，再试一次。');
+        const independent = getSettings().api?.mode === 'independent';
+        if (independent && !modelClient) throw new Error('独立 API 尚未初始化，请刷新页面。');
+        if (!independent && typeof context.generateQuietPrompt !== 'function') throw new Error('当前酒馆不支持模型调用，请先更新酒馆。');
+        if (!independent && context.onlineStatus === 'no_connection') throw new Error('请先在酒馆连接 API，再试一次。');
         if (contact?.id?.startsWith('card:')) {
             const characterId = context.characters?.findIndex(character => 'card:' + character.avatar === contact.id) ?? -1;
             if (characterId < 0) throw new Error('通信角色已不可用。');
@@ -93,12 +94,12 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         for (let attempt = 0; attempt <= retries; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
             try {
-                const text = await context.generateQuietPrompt({ quietPrompt: prompt, quietToLoud: false, skipWIAN: false,
+                const text = independent ? await modelClient.generate(prompt, contact, isCurrent) : await context.generateQuietPrompt({ quietPrompt: prompt, quietToLoud: false, skipWIAN: false,
                     forceChId: context.groupId != null ? contact?.characterId ?? null : null });
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 return validate(parseJSON(text));
             } catch (failure) {
-                if (!isCurrent() || attempt === retries) throw failure;
+                if (!isCurrent() || failure.retryable === false || attempt === retries) throw failure;
             }
         }
     }
@@ -112,7 +113,8 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             if (!view.scope) throw new Error('请先打开角色聊天，并等待正文生成结束。');
             const id = ++operation; taskId = id;
             const epoch = memory.epoch();
-            const current = () => !destroyed && id === operation && epoch === memory.epoch();
+            const apiConfig = JSON.stringify(getSettings().api);
+            const current = () => !destroyed && id === operation && epoch === memory.epoch() && apiConfig === JSON.stringify(getSettings().api);
             const value = await work(view, current);
             return { ok: true, value };
         } catch (failure) { if (taskId === null || taskId === operation) error = failure.message || '请求失败，请重试。'; return { ok: false, error: failure.message }; }
@@ -218,7 +220,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             options ??= error && errorKind === 'incoming' && retryIncomingOptions ? retryIncomingOptions : {};
             const settings = getSettings();
             const enabled = channels(settings);
-            if (!settings.proactiveEnabled || (!enabled.phone && !enabled.messages) || getContext().onlineStatus === 'no_connection') return Promise.resolve({ ok: false, skipped: true });
+            if (!settings.proactiveEnabled || (!enabled.phone && !enabled.messages) || (settings.api?.mode !== 'independent' && getContext().onlineStatus === 'no_connection')) return Promise.resolve({ ok: false, skipped: true });
             return task(async (initialView, current) => {
                 let view = initialView;
                 const context = getContext();

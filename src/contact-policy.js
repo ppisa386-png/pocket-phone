@@ -1,4 +1,4 @@
-import { eventDirective } from './contact-events.js?v=0.8.0';
+import { eventDirective } from './contact-events.js?v=0.9.0';
 // Cooldowns count user narrative turns, never wall-clock time or group speakers.
 export const narrativeTurn = chat => chat.filter(message => message.is_user && !message.is_system).length;
 

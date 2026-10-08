@@ -1,8 +1,9 @@
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.8.0';
-import { icon } from './icons.js?v=0.8.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.8.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.8.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.8.0';
+import { createApiPanel } from './api-view.js?v=0.9.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.9.0';
+import { icon } from './icons.js?v=0.9.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.9.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.9.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.9.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -68,6 +69,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const content = shadow.querySelector('.pp-content');
     const title = shadow.querySelector('.pp-title');
     const noticeElement = shadow.querySelector('.pp-toast');
+    const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
 
     function notice(message) {
         noticeElement.textContent = message;
@@ -146,10 +148,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="420" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度。</p></div>';
     }
 
-    function renderAPI() {
-        const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">开启事件反应时，每次正文完成会判断是否出现或继续事件；事件内拒接、挂断或选择暂不回复后也判断一步，不后台循环。电话与短信共用一次判断，短信同次生成；接听再生成对白。关闭事件反应后，日常联系按设定间隔检查。可在「主动联系」页整体关闭，或清空相应提示词分别暂停。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
-    }
+    function renderAPI() { content.innerHTML = apiPanel.html(); }
 
     function renderApps() {
         content.innerHTML = '<div class="pp-page"><div class="pp-card">' + APPS.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p></div>';
@@ -286,6 +285,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
+        if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
         const action = target.dataset.action;
         if (action === 'close') close();
         if (action === 'home') { route = 'home'; history = []; render(); }
@@ -336,6 +336,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
+        if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
         if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
         if (target.hasAttribute('data-prompt-selector')) { promptId = target.value; renderPrompts(); }
         if (target.dataset.setting) {
@@ -358,6 +359,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('input', event => {
+        if (event.target.dataset.apiField && event.target.tagName !== 'SELECT') {
+            apiPanel.input(event.target.dataset.apiField, event.target.value);
+            if (event.target.dataset.apiField === 'baseUrl') { const keyInput = shadow.querySelector('[data-api-field="key"]'); if (keyInput) keyInput.value = apiPanel.keyValue(); }
+            const status = shadow.querySelector('[data-api-status]'); if (status) status.textContent = '尚未保存。';
+            return;
+        }
         if (event.target.hasAttribute('data-sms-draft') && selectedSMSContactId) smsDrafts[selectedSMSContactId] = event.target.value;
         if (event.target.hasAttribute('data-phone-draft')) callDraft = event.target.value;
         if (event.target.hasAttribute('data-prompt-editor')) {
@@ -452,6 +459,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         getSettings() { return structuredClone(settings); },
         destroy() {
             destroyed = true;
+            apiPanel.destroy();
             lifetime.abort();
             unsubscribeMemory?.();
             unsubscribePhone?.();

@@ -24,6 +24,7 @@ const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHA
 ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},async emit(type,...args) {for(const fn of handlers[type] || []) await fn(...args);}};
 ctx.extensionPrompts = {};
 ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.extensionPrompts[key] = {value,position,depth,scan,role,filter}; };
+ctx.getRequestHeaders=()=>({'Content-Type':'application/json'});
 window.modelCalls=0;
 ctx.generateQuietPrompt = async options => {
  window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
@@ -32,9 +33,19 @@ ctx.generateQuietPrompt = async options => {
  await ctx.eventSource.emit('GENERATION_ENDED',ctx.chat.length); return JSON.stringify(answer);
 };
 </script><script type="module" src="/index.js"></script>`);
+const independentRequests = [];
 const server = createServer(async (req, res) => {
     try {
         const url = new URL(req.url, 'http://localhost');
+        if (url.pathname.startsWith('/api/backends/chat-completions/')) {
+            let body = ''; for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body); independentRequests.push(data);
+            res.setHeader('Content-Type', 'application/json');
+            if (url.pathname.endsWith('/status')) { res.end(JSON.stringify({data:[{id:'fixture-model'}]})); return; }
+            const task = data.messages.at(-1).content;
+            const text = task.includes('Connection test.') ? 'OK' : JSON.stringify(task.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : task.includes('当前渠道：短信') ? {status:'reply',text:'Independent SMS received.'} : {status:'answered',text:'Independent hello.'});
+            res.end(JSON.stringify({choices:[{message:{content:text}}]})); return;
+        }
         if (url.pathname === '/phone-fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(phoneFixture()); return; }
         if (url.pathname === '/fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(fixture(url.searchParams.has('legacy'))); return; }
         const filename = url.pathname === '/preview' ? resolve(project, '..', 'deliverables/pocket-phone-preview.html') : resolve(project, '.' + url.pathname);
@@ -398,6 +409,51 @@ try {
         check(await p.getByText('已屏蔽短信',{exact:true}).count()===1,'SMS blacklist has its own management page');
         await p.locator('[data-block-channel="messages"]').tap();await p.getByText('黑名单为空',{exact:true}).waitFor();
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'blacklist and reaction controls fit mobile width');
+        await ctx.close();
+    }
+    {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
+        await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
+        await p.locator('[data-section="api"]').tap();
+        const countBefore = independentRequests.length;
+        await p.locator('[data-api-field="mode"]').selectOption('independent');
+        await p.locator('[data-api-field="baseUrl"]').fill('https://fixture.example/v1');
+        await p.locator('[data-api-field="key"]').fill('test-browser-key');
+        check(independentRequests.length === countBefore, 'editing API settings does not send requests');
+        await p.locator('[data-api-action="models"]').tap();
+        await p.locator('[data-api-field="modelChoice"]').selectOption('fixture-model');
+        await p.locator('[data-api-action="test"]').tap();
+        await p.getByText('连接成功，模型已返回文字。请保存设置后使用。',{exact:true}).waitFor();
+        check(independentRequests.at(-1).messages.length === 1, 'UI connection test sends no character or chat data');
+        await p.locator('[data-api-action="tab:parameters"]').tap();
+        await p.locator('[data-api-field="historyLimit"]').fill('50');
+        await p.locator('[data-api-action="save"]').tap();
+        await p.getByText('已保存，手机将使用独立 API。',{exact:true}).waitFor();
+        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
+        await p.locator('[data-section="api"]').tap();
+        check(await p.locator('[data-api-field="key"]').inputValue() === 'test-browser-key', 'API key restores from local browser storage');
+        check(await p.locator('[data-api-field="model"]').inputValue() === 'fixture-model', 'selected model survives reload');
+        await p.locator('[data-api-field="baseUrl"]').fill('https://another.example/v1');
+        check(await p.locator('[data-api-field="key"]').inputValue() === '', 'switching providers clears the previous provider key');
+        await p.locator('[data-api-field="baseUrl"]').fill('https://fixture.example/v1');
+        check(await p.locator('[data-api-field="key"]').inputValue() === 'test-browser-key', 'returning to the saved provider restores only its key');
+        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1), 'API settings fit mobile width');
+        await p.evaluate(()=>{window.SillyTavern.getContext().onlineStatus='no_connection';});
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="phone"]').tap();
+        await p.locator('[data-phone-tab="contacts"]').tap(); await p.locator('[data-phone-dial]').tap();
+        await p.getByText('Independent hello.',{exact:true}).waitFor(); await p.locator('[data-phone-hangup]').tap();
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="messages"]').tap();
+        await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').tap();
+        await p.locator('[data-sms-draft]').fill('API test'); await p.getByRole('button',{name:'发送短信',exact:true}).tap();
+        await p.getByText('Independent SMS received.',{exact:true}).waitFor();
+        check(await p.evaluate(()=>window.modelCalls) === 0, 'independent phone and SMS do not use the host model');
+        check(await p.evaluate(()=>!JSON.stringify(window.SillyTavern.getContext().extensionSettings).includes('test-browser-key') && !JSON.stringify(window.SillyTavern.getContext().chatMetadata).includes('test-browser-key')), 'key is absent from extension settings and chat metadata');
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="api"]').tap();
+        await p.locator('[data-api-action="clear-key"]').tap();
+        check(await p.locator('[data-api-field="key"]').inputValue() === '', 'clear key updates password field');
+        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="api"]').tap();
+        check(await p.locator('[data-api-field="key"]').inputValue() === '', 'cleared key stays deleted after reload');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

@@ -1,6 +1,6 @@
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -28,10 +28,12 @@ const numeric = (value, min, max, fallback) => typeof value === 'number' && Numb
 export function normalizeSettings(value) {
     const raw = isRecord(value) ? value : {};
     const oldApps = isRecord(raw.apps) ? raw.apps : {};
+    const api = isRecord(raw.api) ? raw.api : {};
     const oldPrompts = isRecord(raw.prompts) ? raw.prompts : {};
     return {
         ...raw,
         schemaVersion: 1,
+        api: { mode: api.mode === 'independent' ? 'independent' : 'host', baseUrl: typeof api.baseUrl === 'string' ? api.baseUrl : '', model: typeof api.model === 'string' ? api.model : '', maxTokens: Math.round(numeric(api.maxTokens, 128, 32768, 2048)), timeout: Math.round(numeric(api.timeout, 15, 300, 90)), historyLimit: Math.round(numeric(api.historyLimit, 1, 500, 80)), revision: Math.round(numeric(api.revision, 0, Number.MAX_SAFE_INTEGER, 0)) },
         launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
         position: isRecord(raw.position) ? { x: numeric(raw.position.x, 0, 1, 1), y: numeric(raw.position.y, 0, 1, 0.8) } : null,
         theme: ['dark', 'light'].includes(raw.theme) ? raw.theme : 'dark',

@@ -178,3 +178,8 @@ h2, p { margin: 0; }
 .pp-call-heading .pp-block-button { display: block; margin: 12px auto 0; }
 .pp-sms-heading > div { min-width: 0; flex: 1; }
 .pp-sms-heading strong { overflow-wrap: anywhere; }
+
+.pp-api-tabs, .pp-api-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.pp-api-tabs button[aria-pressed="true"] { font-weight: 700; border-bottom: 2px solid currentColor; }
+[data-api-field] { min-width: 0; width: 100%; box-sizing: border-box; }
+[data-api-status] { overflow-wrap: anywhere; }
