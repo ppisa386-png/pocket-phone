@@ -9,3 +9,15 @@ export function threadMessages(messages, contactId) {
 export function unreadMessages(messages, contactId = null) {
     return Object.values(messages ?? {}).filter(message => message.role === 'assistant' && !message.read && (!contactId || message.contactId === contactId)).length;
 }
+
+// A received SMS supplies a return address for this thread only. It does not
+// unlock telephone dialing or add an unearned number to the contact directory.
+export function messageParticipants(state) {
+    const participants = { ...(state.contacts ?? {}) };
+    for (const message of Object.values(state.messages ?? {})) {
+        if (message.proactive && message.role === 'assistant' && message.participant?.id === message.contactId && !participants[message.contactId]) {
+            participants[message.contactId] = { ...message.participant, number: null, receivedSMS: true };
+        }
+    }
+    return participants;
+}

@@ -8,7 +8,7 @@ import { incomingParticipant, validateIncoming, watchIncoming } from '../src/inc
 import { buildContinuityPrompt } from '../src/continuity.js';
 
 const evidence = 'Bea has Sam’s number and agrees to give it to Alex.';
-const incoming = { status: 'ringing', can_obtain_number: true, route: 'mutual_contact', channel: 'Bea', evidence, reason: 'Confirm the meeting.' };
+const incoming = { status: 'ringing', can_obtain_number: true, route: 'mutual_contact', channel: 'Bea', evidence, reason: 'Confirm the meeting.', reason_kind: 'commitment', reason_evidence: evidence, requires_live_conversation: true };
 const tick = () => new Promise(resolve => setTimeout(resolve, 15));
 function setup() {
     const bus = new EventEmitter();
@@ -68,7 +68,7 @@ test('decline has no model call or dialogue and same narrative cannot ring twice
 });
 
 test('no-call results are cached; disabled app, blank prompt and offline do not request', async () => {
-    const f = setup(); f.settings.apps.phone = false; await f.phone.checkIncoming();
+    const f = setup(); f.settings.apps.phone = false; f.settings.apps.messages = false; await f.phone.checkIncoming();
     f.settings.apps.phone = true; const prompt = f.settings.prompts.incoming; f.settings.prompts.incoming = ''; await f.phone.checkIncoming();
     f.settings.prompts.incoming = prompt; f.context.onlineStatus = 'no_connection'; await f.phone.checkIncoming();
     assert.equal(f.requests(), 0);

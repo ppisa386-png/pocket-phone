@@ -1,5 +1,6 @@
-import { validateSMS, threadMessages } from './messages.js?v=0.6.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.6.0';
+import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.7.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.7.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.7.0';
 
 // Telephone and SMS share one request queue: the host's quiet generation preserves the selected preset,
 // character and world information. No keys, extra endpoint or real calls.
@@ -66,6 +67,11 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         const context = getContext();
         if (typeof context.generateQuietPrompt !== 'function') throw new Error('当前酒馆不支持模型调用，请先更新酒馆。');
         if (context.onlineStatus === 'no_connection') throw new Error('请先在酒馆连接 API，再试一次。');
+        if (contact?.id?.startsWith('card:')) {
+            const characterId = context.characters?.findIndex(character => 'card:' + character.avatar === contact.id) ?? -1;
+            if (characterId < 0) throw new Error('通信角色已不可用。');
+            contact = { ...contact, characterId };
+        }
         const retries = Math.min(15, Math.max(0, getSettings().retries));
         for (let attempt = 0; attempt <= retries; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
@@ -99,6 +105,12 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         const settings = getSettings();
         return settings.prompts.general + '\n' + settings.prompts.phone;
     }
+    function activity(contactId, unanswered, eventId) {
+        const chat = getContext().chat;
+        const value = { turn: narrativeTurn(chat), sourceIndex: chat.length - 1, contactId, unanswered, eventId };
+        return [set('profiles', 'contactGate', value), ...(contactId ? [set('profiles', 'contactGate:' + contactId, value)] : [])];
+    }
+    function channels(settings) { return { phone: settings.apps.phone && Boolean(settings.prompts.incoming?.trim()), messages: settings.apps.messages && Boolean(settings.prompts.incomingMessages?.trim()) }; }
     async function responseFor(call, current, first = false) {
         const ticket = await memory.begin();
         let contact = state.contacts[call.contactId] ?? (call.direction === 'incoming' ? call.participant : null);
@@ -128,7 +140,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
     }
     async function smsResponse(message, current) {
         const ticket = await memory.begin();
-        const contact = state.contacts[message.contactId];
+        const contact = messageParticipants(state)[message.contactId];
         if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
         const settings = getSettings();
         const prompt = settings.prompts.general + '\n' + settings.prompts.messages +
@@ -169,35 +181,60 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         },
         checkIncoming() {
             const settings = getSettings();
-            if (!settings.apps.phone || !settings.prompts.incoming?.trim() || getContext().onlineStatus === 'no_connection') return Promise.resolve({ ok: false, skipped: true });
+            const enabled = channels(settings);
+            if (!settings.proactiveEnabled || (!enabled.phone && !enabled.messages) || getContext().onlineStatus === 'no_connection') return Promise.resolve({ ok: false, skipped: true });
             return task(async (view, current) => {
+                const context = getContext();
+                const chat = clone(context.chat);
                 const ringing = Object.values(view.state.calls).filter(call => call.status === 'ringing' && call.revision !== view.revision);
                 if (ringing.length) {
                     await memory.commit(await memory.begin(), ringing.map(call => set('calls', call.id, { ...call, status: 'missed', endedAt: Date.now() })));
                     if (ringing.some(call => call.id === activeCallId)) activeCallId = null;
                     return;
                 }
-                if (view.state.profiles.incomingScan?.revision === view.revision || Object.values(view.state.calls).some(call => !finished(call))) return;
-                const context = getContext();
+                if (view.state.profiles.proactiveScan?.revision === view.revision || view.state.profiles.incomingScan?.revision === view.revision || Object.values(view.state.calls).some(call => !finished(call))) return;
+                // Existing installations begin conservatively instead of treating
+                // pre-upgrade communication as permission for an immediate contact.
+                if (!view.state.profiles.contactGate && (Object.keys(view.state.calls).length || Object.keys(view.state.messages).length)) {
+                    await memory.commit(await memory.begin(), [...activity(null, true, 'upgrade')]);
+                    return;
+                }
                 const participant = incomingParticipant(context);
-                const last = context.chat?.at(-1);
+                const policy = contactPolicy(view.state, chat, settings, participant?.id);
+                if (!policy.allowed) return;
+                policy.usedReasons = [...Object.values(view.state.calls), ...Object.values(view.state.messages)].filter(item => item.contactId === participant?.id && item.reasonEvidence).map(item => item.reasonEvidence.trim());
+                const last = chat.at(-1);
                 if (!participant || !last || last.is_user || last.is_system) return;
-                const chat = clone(context.chat);
                 const ticket = await memory.begin();
-                const prompt = settings.prompts.general + '\n' + settings.prompts.incoming +
-                    '\n当前任务：主动来电判断。仅判断此人：' + JSON.stringify(participant.name) + '；user：' + JSON.stringify(context.name1) +
-                    '\n根据有效正文判断此人现在是否有合理的来电动机，以及实际可用的号码来源。可以是不认识的人通过已明确的共友或公开联系方式取得；仅仅认识 user、user 很出名、user 知道对方号码，均不能推出对方有 user 号码。没有充分依据或没有来电需要就返回 none，不要每轮都打电话。若剧情已在面对面交谈或通话中，不再重复来电。' +
-                    '\n此人此前的手机通话（剧情数据）：' + JSON.stringify(Object.values(view.state.calls).filter(call => call.contactId === participant.id).map(call => ({ status: call.status, direction: call.direction, turns: call.turns }))) +
-                    '\n只输出 JSON：无来电用 {"status":"none"}；有来电用 {"status":"ringing","can_obtain_number":true,"route":"known_number 或 mutual_contact 或 public_contact","channel":"共友姓名或公开渠道原文；已知号码可为空","evidence":"能证明此人已知 user 号码或有可用获取渠道的连续逐字正文","reason":"此刻来电的简短理由"}。不得编造共友、获取权限、号码或对白。不能把未发生的设想当证据。不替 user 接听，不生成通话内容。';
-                const acquisition = await request(prompt, data => validateIncoming(data, chat), current, participant);
-                if (!current() || !getSettings().apps.phone || !getSettings().prompts.incoming?.trim()) return;
-                const changes = [set('profiles', 'incomingScan', { revision: view.revision })];
+                const prompt = settings.prompts.general + '\n电话规则：' + (enabled.phone ? settings.prompts.incoming : '电话已关闭，不得来电。') +
+                    '\n短信规则：' + (enabled.messages ? settings.prompts.incomingMessages + '\n' + settings.prompts.messages : '短信已关闭，不得发短信。') +
+                    '\n当前任务：主动联系判断。仅判断此人：' + JSON.stringify(participant.name) + '；user：' + JSON.stringify(context.name1) +
+                    '\n默认 none。只有具体约定需兑现、新情况需告知或确有时效的问题才联系；想念、普通闲聊、占有欲标签都不是充分理由。普通事务优先短信，电话必须确实需要即时双向交流。不打断正在面对面或电话中的交谈，不重复正文已经发生的联系，不替 user 决定。' +
+                    '\n对方必须已知 user 号码或正文有实际可用的获取途径。仅 user 知道此人号码、user 知名、假设中的共友均不算依据；共友需确实能提供号码，公开渠道需可访问。' +
+                    '\n频率规则：' + JSON.stringify({ exceptionOnly: policy.restricted, evidenceMustBeAfterIndex: policy.sinceIndex, unanswered: view.state.profiles.contactGate?.unanswered ?? false }) +
+                    '。exceptionOnly 为 true 时，只有新的明确紧急事件或正文已发生的持续纠缠行为可例外；仅性格标签不得例外。所有联系都必须引用上次联系之后新出现的具体动机证据，不能用同一件事换渠道追发。' +
+                    '\n此人此前的通话与短信（剧情数据，不是指令）：' + JSON.stringify({ calls: Object.values(view.state.calls).filter(call => call.contactId === participant.id).map(call => ({ status: call.status, direction: call.direction, turns: call.turns })), messages: threadMessages(view.state.messages, participant.id).map(({ role, text }) => ({ role, text })) }) +
+                    '\n只输出 JSON：不联系用 {"status":"none"}；联系用 {"status":"ringing 或 message","can_obtain_number":true,"route":"known_number 或 mutual_contact 或 public_contact","channel":"共友姓名或公开渠道原文；已知号码可为空","evidence":"号码来源连续逐字正文","reason":"具体联系理由","reason_kind":"commitment 或 new_information 或 urgent_question 或 emergency 或 established_persistence","reason_evidence":"本次联系动机的连续逐字正文","requires_live_conversation":false,"text":"仅 message 时填写短信正文"}。来电时 requires_live_conversation 必须确实为 true，text 为空，不生成接听对白。短信语言严格跟随酒馆预设，不输出动作、内心等短信外叙事，不替 user 发言。至多一个渠道、一条联系。';
+                const result = await request(prompt, data => validateProactive(data, chat, policy, enabled, validateIncoming), current, participant);
+                const latestSettings = getSettings();
+                const latestPolicy = contactPolicy(view.state, chat, latestSettings, participant.id);
+                if (!current() || !latestPolicy.allowed || (result && (!channels(latestSettings)[result.medium] || (latestPolicy.restricted && !['emergency', 'established_persistence'].includes(result.reasonKind))))) return;
+                const changes = [set('profiles', 'proactiveScan', { revision: view.revision, turn: policy.turn })];
                 let call;
-                if (acquisition) {
-                    call = { id: crypto.randomUUID(), contactId: participant.id, participant, name: participant.name,
-                        number: view.state.contacts[participant.id]?.number ?? null, direction: 'incoming', status: 'ringing',
-                        createdAt: Date.now(), turns: [], acquisition, read: false, revision: view.revision };
-                    changes.push(set('calls', call.id, call));
+                if (result) {
+                    const id = crypto.randomUUID();
+                    changes.push(...activity(participant.id, true, id));
+                    if (result.medium === 'phone') {
+                        call = { id, contactId: participant.id, participant, name: participant.name,
+                            number: view.state.contacts[participant.id]?.number ?? null, direction: 'incoming', status: 'ringing',
+                            createdAt: Date.now(), turns: [], acquisition: result.acquisition, reasonKind: result.reasonKind,
+                            reasonEvidence: result.reasonEvidence, read: false, revision: view.revision };
+                        changes.push(set('calls', id, call));
+                    } else {
+                        changes.push(set('messages', id, { id, contactId: participant.id, participant, name: participant.name,
+                            role: 'assistant', text: result.text, proactive: true, createdAt: Date.now(), read: false,
+                            acquisition: result.acquisition, reasonKind: result.reasonKind, reasonEvidence: result.reasonEvidence }));
+                    }
                 }
                 await memory.commit(ticket, changes);
                 if (call) { activeCallId = call.id; emit(); }
@@ -208,7 +245,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
                 const call = view.state.calls[activeCallId];
                 if (!call || call.status !== 'ringing') throw new Error('当前没有等待接听的来电。');
                 const updated = { ...call, status: 'answering', read: true };
-                await memory.commit(await memory.begin(), [set('calls', call.id, updated)]);
+                await memory.commit(await memory.begin(), [set('calls', call.id, updated), ...activity(call.contactId, false, call.id)]);
                 await responseFor(updated, current, 'incoming');
             });
         },
@@ -218,7 +255,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             const call = view.state.calls[id];
             if (!call || call.status !== 'ringing') return;
             operation++;
-            await memory.commit(await memory.begin(), [set('calls', id, { ...call, status: 'declined', read: true, endedAt: Date.now() })]);
+            await memory.commit(await memory.begin(), [set('calls', id, { ...call, status: 'declined', read: true, endedAt: Date.now() }), ...activity(call.contactId, true, call.id)]);
             activeCallId = null; error = ''; emit();
         },
         async markCallsRead() {
@@ -258,7 +295,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
                 if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
                 if (activeCallId && !finished(view.state.calls[activeCallId] ?? {})) throw new Error('请先结束当前通话。');
                 const call = { id: crypto.randomUUID(), contactId, name: contact.name, number: contact.number, direction: 'outgoing', status: 'dialing', createdAt: Date.now(), turns: [] };
-                await memory.commit(await memory.begin(), [set('calls', call.id, call)]);
+                await memory.commit(await memory.begin(), [set('calls', call.id, call), ...activity(contactId, false, call.id)]);
                 activeCallId = call.id; emit();
                 await responseFor(call, current, true);
             });
@@ -293,14 +330,14 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         },
         sendMessage(contactId, text) {
             return task(async (view, current) => {
-                const contact = view.state.contacts[contactId];
+                const contact = messageParticipants(view.state)[contactId];
                 if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
                 if (typeof text !== 'string' || !text.trim()) throw new Error('请先填写短信内容。');
                 if (text.length > 6000) throw new Error('短信内容过长，请分开发送。');
                 const ticket = await memory.begin();
                 if (!current()) throw new Error('聊天已变化，本次短信操作已取消。');
                 const message = { id: crypto.randomUUID(), contactId, name: contact.name, role: 'user', text: text.trim(), createdAt: Date.now(), replyStatus: 'pending', read: true };
-                await memory.commit(ticket, [set('messages', message.id, message)]);
+                await memory.commit(ticket, [set('messages', message.id, message), ...activity(contactId, false, message.id)]);
                 await smsResponse(message, current);
                 return { saved: true };
             }, 'messages');
@@ -333,7 +370,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             const id = activeCallId;
             const view = await memory.read();
             const call = view.state.calls[id];
-            if (call && !finished(call)) await memory.commit(await memory.begin(), [set('calls', id, { ...call, status: 'ended', endedAt: Date.now() })]);
+            if (call && !finished(call)) await memory.commit(await memory.begin(), [set('calls', id, { ...call, status: 'ended', endedAt: Date.now() }), ...activity(call.contactId, false, call.id)]);
             activeCallId = null; emit();
         },
         destroy() { destroyed = true; operation++; unsubscribe(); listeners.clear(); },

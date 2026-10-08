@@ -1,14 +1,15 @@
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.6.0';
-import { icon } from './icons.js?v=0.6.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.6.0';
-import { unreadMessages } from './messages.js?v=0.6.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.6.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.7.0';
+import { icon } from './icons.js?v=0.7.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.7.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.7.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.7.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
     { id: 'api', name: 'API', icon: 'api', note: '模型连接' },
     { id: 'apps', name: 'App 管理', icon: 'apps', note: '选择桌面上显示的应用' },
     { id: 'prompts', name: '提示词', icon: 'prompts', note: '按功能分别编辑' },
+    { id: 'contact', name: '主动联系', icon: 'phone', note: '间隔、未回复限制与剧情例外' },
     { id: 'retry', name: '失败重试', icon: 'retry', note: '设置自动重试次数' },
 ];
 
@@ -147,7 +148,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderAPI() {
         const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">正文回复结束后，会额外调用一次模型判断是否来电，无新正文不重复检查。接听时生成通话对白，拒接不调用模型。清空「提示词 → 主动来电」或关闭电话 App 可暂停来电判断。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">正文回复结束且满足联系间隔后，电话与主动短信共用一次模型判断；没有联系时至少再隔 2 轮才检查。短信在同一次请求中生成，接听电话再生成对白。可在「主动联系」页整体关闭，或清空相应提示词分别暂停。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
     }
 
     function renderApps() {
@@ -156,8 +157,17 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、短信和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
+    }
+
+    function renderContactSettings() {
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
+            selectField('proactiveEnabled', '允许主动联系', [['true', '开启'], ['false', '关闭']], String(settings.proactiveEnabled)) +
+            '<label class="pp-field"><span>通常至少间隔（轮）</span><input class="pp-number" type="number" min="2" max="100" step="1" data-setting="contactInterval" value="' + settings.contactInterval + '"></label>' +
+            '<label class="pp-field"><span>拒接、未接或未回复后（轮）</span><input class="pp-number" type="number" min="2" max="200" step="1" data-setting="unansweredInterval" value="' + settings.unansweredInterval + '"></label>' +
+            selectField('contactExceptions', '允许有剧情依据的提前联系', [['false', '关闭（默认）'], ['true', '允许紧急事件或已发生的持续纠缠']], String(settings.contactExceptions)) +
+            '</div><p class="pp-footnote">一轮按你在正文发言一次计算，群聊多人回复只算同一轮。电话与短信、不同人物共用间隔；你的主动联系和正常回复不受限制。未回复间隔不会短于通常间隔。</p><p class="pp-footnote">间隔结束也不保证联系：仍须有新的具体事件和号码依据，普通事务优先短信。开启例外后也至少间隔 2 轮，单纯性格标签不能作为依据。看过短信不等于已回复。</p></div>';
     }
 
     function renderRetry() {
@@ -222,6 +232,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (route === 'api') renderAPI();
         else if (route === 'apps') renderApps();
         else if (route === 'prompts') renderPrompts();
+        else if (route === 'contact') renderContactSettings();
         else if (route === 'retry') renderRetry();
         else if (app?.id === 'phone') renderPhone();
         else if (app?.id === 'messages') renderMessages();
@@ -327,7 +338,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.setting) {
             const key = target.dataset.setting;
             let value = target.value;
-            if (['fontSize', 'phoneWidth', 'retries'].includes(key)) {
+            if (['fontSize', 'phoneWidth', 'retries', 'contactInterval', 'unansweredInterval'].includes(key)) {
                 value = Number(value);
                 if (target.value.trim() === '' || !Number.isInteger(value) || !target.checkValidity()) {
                     target.value = settings[key];
@@ -335,6 +346,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
                     return;
                 }
             }
+            if (['proactiveEnabled', 'contactExceptions'].includes(key)) value = value === 'true';
             if (persist({ [key]: value })) {
                 const output = shadow.querySelector('[data-output="' + key + '"]');
                 if (output) output.textContent = settings[key];
@@ -420,7 +432,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (view.activeCallId && view.activeCallId !== previousActiveCallId) { selectedCallId = view.activeCallId; callDraft = ''; }
         previousActiveCallId = view.activeCallId;
         if (selectedCallId && !view.calls[selectedCallId]) selectedCallId = null;
-        if (selectedSMSContactId && !view.contacts[selectedSMSContactId]) selectedSMSContactId = null;
+        if (selectedSMSContactId && !messageParticipants(view)[selectedSMSContactId]) selectedSMSContactId = null;
         if (opened && route === 'app:phone') renderPhone();
         if (opened && route === 'app:messages') renderMessages();
         if (opened && route === 'home') renderHome();

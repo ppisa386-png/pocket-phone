@@ -27,7 +27,7 @@ ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.ex
 window.modelCalls=0;
 ctx.generateQuietPrompt = async options => {
  window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
- const answer = options.quietPrompt.includes('当前任务：主动来电判断') ? (window.allowIncoming ? {status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:'Sam gave Alex their phone number.',reason:'Confirm the meeting.'} : {status:'none'}) : options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
+ const answer = options.quietPrompt.includes('当前任务：主动联系判断') ? (window.proactiveReply || (window.allowIncoming ? {status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:'Sam gave Alex their phone number.',reason:'Confirm the meeting.',reason_kind:'urgent_question',reason_evidence:window.contactEvidence||'Sam gave Alex their phone number.',requires_live_conversation:true} : {status:'none'})) : options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
  if(options.quietPrompt.includes('当前渠道：短信')) { if(window.smsFail) throw new Error('Test reply failure'); if(window.smsHold) await new Promise(resolve => {window.finishSMS = resolve;}); }
  await ctx.eventSource.emit('GENERATION_ENDED',ctx.chat.length); return JSON.stringify(answer);
 };
@@ -287,7 +287,7 @@ try {
         await p.locator('#personal-pocket-phone-extension-settings').waitFor();
         async function generateIncoming(text) {
             await p.evaluate(async text => {
-                const c = window.SillyTavern.getContext(); window.allowIncoming = true;
+                const c = window.SillyTavern.getContext(); window.allowIncoming = true; window.contactEvidence = text;
                 await c.eventSource.emit('GENERATION_STARTED', 'normal');
                 c.chat.push({name:'Alex',mes:text,is_user:false});
                 await c.eventSource.emit('GENERATION_ENDED');
@@ -305,6 +305,7 @@ try {
         check(await p.evaluate(() => window.modelCalls) === 1, 'declining makes no API request');
         await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
         check(await p.locator('[data-app="phone"] .pp-app-badge').count() === 0, 'declined incoming badge clears');
+        await p.evaluate(() => { const c = window.SillyTavern.getContext(); for(let i=0;i<16;i++) c.chat.push({name:'Sam',mes:'Continue '+i,is_user:true}); });
         await generateIncoming('Alex has an urgent question about the meeting.');
         await p.locator('[data-app="phone"] .pp-app-badge').waitFor();
         await p.locator('[data-app="phone"]').tap();
@@ -320,6 +321,45 @@ try {
         await p.getByText('来电 · 已结束', {exact:true}).waitFor();
         check(await p.evaluate(() => window.modelCalls) <= 1, 'reload restores incoming history without re-ringing');
         check(await p.locator('.pp-content').evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'incoming UI fits mobile width');
+        await ctx.close();
+    }
+    {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
+        await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
+        await p.locator('[data-section="contact"]').tap();
+        check(await p.locator('[data-setting="contactInterval"]').inputValue() === '8', 'proactive settings default to eight turns');
+        check(await p.locator('[data-setting="unansweredInterval"]').inputValue() === '16', 'unanswered contact defaults to sixteen turns');
+        await p.locator('[data-setting="contactInterval"]').fill('10'); await p.locator('[data-setting="contactInterval"]').press('Tab');
+        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="contact"]').tap();
+        check(await p.locator('[data-setting="contactInterval"]').inputValue() === '10', 'contact interval setting survives reload');
+        await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
+        await p.evaluate(async () => {
+            const c = window.SillyTavern.getContext();
+            await c.eventSource.emit('GENERATION_STARTED','normal');
+            c.chat[0].mes = 'Sam gave Alex their phone number.';
+            c.chat.push({mes:'Alex receives a changed meeting address to pass on.',name:'Alex',is_user:false});
+            window.proactiveReply = {status:'message',can_obtain_number:true,route:'known_number',channel:'',evidence:c.chat[0].mes,reason:'Changed address',reason_kind:'new_information',reason_evidence:c.chat[1].mes,text:'Meet at the library instead.'};
+            await c.eventSource.emit('GENERATION_ENDED');
+        });
+        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
+        check(await p.evaluate(() => window.modelCalls) === 1, 'one shared request produces proactive SMS');
+        await p.locator('[data-app="messages"]').tap(); await p.locator('[data-sms-contact]').tap();
+        await p.getByText('Meet at the library instead.', {exact:true}).waitFor();
+        check(await p.getByText('短信发件人', {exact:true}).count() === 1, 'received SMS opens a thread without inventing a phone contact');
+        await p.locator('[data-sms-draft]').fill('Got it.'); await p.getByRole('button', {name:'发送短信',exact:true}).tap();
+        await p.getByText('Text received.', {exact:true}).waitFor();
+        check(await p.locator('.pp-sms-item').count() === 3, 'user can reply in the incoming SMS thread');
+        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="messages"]').tap(); await p.locator('[data-sms-contact]').tap();
+        check(await p.locator('.pp-sms-item').count() === 3, 'proactive SMS conversation survives reload');
+        const before = await p.evaluate(() => window.modelCalls);
+        await p.evaluate(async () => {
+            const c = window.SillyTavern.getContext(); await c.eventSource.emit('GENERATION_STARTED','normal');
+            c.chat.push({mes:'Continue',name:'Sam',is_user:true},{mes:'The story continues.',name:'Alex',is_user:false});
+            await c.eventSource.emit('GENERATION_ENDED');
+        });
+        await p.waitForTimeout(100);
+        check(await p.evaluate(() => window.modelCalls) === before, 'cooldown prevents another model request after refresh');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

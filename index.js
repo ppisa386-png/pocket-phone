@@ -1,11 +1,11 @@
-import { MODULE_KEY } from './src/config.js?v=0.6.0';
-import { mountPhone } from './src/ui.js?v=0.6.0';
-import { createPhoneMemory } from './src/memory.js?v=0.6.0';
-import { createPhoneService } from './src/phone.js?v=0.6.0';
-import { createContinuityBridge } from './src/continuity.js?v=0.6.0';
-import { normalizeSettings } from './src/config.js?v=0.6.0';
+import { MODULE_KEY } from './src/config.js?v=0.7.0';
+import { mountPhone } from './src/ui.js?v=0.7.0';
+import { createPhoneMemory } from './src/memory.js?v=0.7.0';
+import { createPhoneService } from './src/phone.js?v=0.7.0';
+import { createContinuityBridge } from './src/continuity.js?v=0.7.0';
+import { normalizeSettings } from './src/config.js?v=0.7.0';
 
-import { watchIncoming } from './src/incoming.js?v=0.6.0';
+import { watchIncoming } from './src/incoming.js?v=0.7.0';
 
 let incomingWatcher;
 let controller;
@@ -24,7 +24,7 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=0.6.0', import.meta.url), { cache: 'no-cache' });
+        const response = await fetch(new URL('./style.css?v=0.7.0', import.meta.url), { cache: 'no-cache' });
         if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         memory = createPhoneMemory({
@@ -71,7 +71,7 @@ async function start() {
             extensionPanel.id = 'personal-pocket-phone-extension-settings';
             extensionPanel.className = 'extension_container';
             extensionPanel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>榴莲手机</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>' +
-                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.6.0 · 开发测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
+                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.7.0 · 开发测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="menu_button" data-pp-open>打开手机设置</button><button type="button" class="menu_button" data-pp-reset>重置悬浮位置</button></div></div></div>';
             // Host themes may give .menu_button an icon-sized/min-content width.
             // Keep these two text controls horizontal without changing host CSS.
@@ -96,7 +96,7 @@ async function start() {
             observer.observe(document.body, { childList: true, subtree: true });
         }
         // Phone actions use the current host model connection; other apps remain reserved.
-        console.info('[榴莲手机] v0.6.0 已加载');
+        console.info('[榴莲手机] v0.7.0 已加载');
     } catch (error) {
         incomingWatcher?.destroy();
         continuityBridge?.destroy();

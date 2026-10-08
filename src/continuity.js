@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal } from './journal.js?v=0.6.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal } from './journal.js?v=0.7.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -33,6 +33,9 @@ function belongsTo(contact, speaker) {
 export function buildContinuityPrompt(state, speaker, { instruction, userName = 'user', budget = 8000 } = {}) {
     if (!speaker || !instruction?.trim()) return '';
     const allowed = new Set(Object.values(state.contacts).filter(contact => belongsTo(contact, speaker)).map(contact => contact.id));
+    for (const message of Object.values(state.messages)) {
+        if (message.proactive && message.participant && belongsTo(message.participant, speaker)) allowed.add(message.contactId);
+    }
     const entries = [];
     for (const message of Object.values(state.messages)) {
         if (!allowed.has(message.contactId) || !['user', 'assistant'].includes(message.role) || typeof message.text !== 'string') continue;
