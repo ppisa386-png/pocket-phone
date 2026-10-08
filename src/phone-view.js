@@ -1,4 +1,4 @@
-import { icon } from './icons.js?v=0.4.0';
+import { icon } from './icons.js?v=0.5.0';
 const phoneEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const statuses = { dialing: '正在拨号', connected: '通话中', ended: '已结束', interrupted: '已中断', declined: '对方拒接', no_answer: '无人接听' };
 export function renderPhoneScreen(view, tab, selectedCallId, draft) {

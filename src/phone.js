@@ -1,4 +1,4 @@
-import { validateSMS, threadMessages } from './messages.js?v=0.4.0';
+import { validateSMS, threadMessages } from './messages.js?v=0.5.0';
 
 // Telephone and SMS share one request queue: the host's quiet generation preserves the selected preset,
 // character and world information. No keys, extra endpoint or real calls.

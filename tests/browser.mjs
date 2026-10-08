@@ -20,8 +20,10 @@ const persistedChat = JSON.parse(localStorage.getItem('phone-test-data') || 'nul
 ctx.chat = persistedChat?.chat || [{name:'Alex',mes:'Alex gives you his number: +1 212 555 0123.'}];
 ctx.chatMetadata = persistedChat?.metadata || {};
 ctx.saveMetadata = async () => localStorage.setItem('phone-test-data', JSON.stringify({chat:ctx.chat,metadata:ctx.chatMetadata}));
-const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(n => [n,n]));
+const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED'].map(n => [n,n]));
 ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},async emit(type,...args) {for(const fn of handlers[type] || []) await fn(...args);}};
+ctx.extensionPrompts = {};
+ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.extensionPrompts[key] = {value,position,depth,scan,role,filter}; };
 window.modelCalls=0;
 ctx.generateQuietPrompt = async options => {
  window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
@@ -256,6 +258,27 @@ try {
         await p.locator('[data-sms-retry]').tap();
         await p.locator('.pp-sms-item[data-role="assistant"]').nth(2).waitFor();
         check(await p.locator('.pp-sms-item[data-role="user"]').count() === 3, 'manual SMS retry does not duplicate outgoing bubble');
+        const syncResult = await p.evaluate(async () => {
+            const c = window.SillyTavern.getContext();
+            const callsBefore = window.modelCalls; const floorsBefore = c.chat.length;
+            await c.eventSource.emit('GENERATION_STARTED', 'normal');
+            await c.eventSource.emit('GENERATION_AFTER_COMMANDS', 'normal');
+            const prompt = c.extensionPrompts.durian_phone_continuity;
+            const result = { text: prompt.value, allowed: prompt.filter?.(), callsUnchanged: callsBefore === window.modelCalls, floorsUnchanged: floorsBefore === c.chat.length };
+            await c.eventSource.emit('GENERATION_ENDED');
+            result.cleared = c.extensionPrompts.durian_phone_continuity.value === '';
+            c.chat[0].mes = 'No phone numbers were exchanged.';
+            await c.eventSource.emit('MESSAGE_EDITED');
+            await c.eventSource.emit('GENERATION_STARTED', 'normal');
+            await c.eventSource.emit('GENERATION_AFTER_COMMANDS', 'normal');
+            result.rollbackCleared = c.extensionPrompts.durian_phone_continuity.value === '';
+            await c.eventSource.emit('GENERATION_ENDED');
+            return result;
+        });
+        check(syncResult.text.includes('Text received.') && syncResult.allowed, 'actual SMS history enters the next narrative prompt');
+        check(syncResult.callsUnchanged && syncResult.floorsUnchanged, 'continuity adds no model request or visible chat floor');
+        check(syncResult.cleared && syncResult.rollbackCleared, 'continuity context clears after generation and invalidated source');
+
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

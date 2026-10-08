@@ -2,9 +2,9 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.4.0</small><h1>榴莲手机，先从这里开始。</h1><p>这是首阶段界面预览。可以打开、收起、拖动入口，调整桌面与设置。App 目前是空页面，不生成剧情内容。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
+</style></head><body><main><small>POCKET PHONE · 0.5.0</small><h1>榴莲手机，先从这里开始。</h1><p>这是首阶段界面预览。可以打开、收起、拖动入口，调整桌面与设置。App 目前是空页面，不生成剧情内容。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -13,6 +13,7 @@ const APPS = [
     { id: 'amazon', name: 'Amazon', color: '#e89947' },
 ];
 const PROMPTS = {
+    continuity: { name: '通信与正文衔接', text: '以下是当前角色已经亲自参与的手机通信，作为有效剧情记忆供后续正文参考。继续当前剧情，不重演整段通信，不把记录原样贴回正文，不强行让角色提起。保持通信中的约定、已交换的信息和人物关系；措辞、叙事与语言仍遵循酒馆预设和角色设定。短信和电话绑定真实身份；其他角色没有自动获知这些私人交流。不要把电话中未见的画面补成已知事实。' },
     contacts: { name: '联系方式识别', text: '仅记录正文中 user 已实际获得的电话号码或明确完成的交换号码事件。只有索取意图、尚未给出的请求、他人的私密号码、char 单方面得知 user 号码均不符合。给出连续的逐字正文证据，证据应同时指明对方身份和号码归属，不得仅摘一个号码。不同人物各只有一个电话号码，不编造获取渠道。' },
     general: { name: '通用', text: '这是 user 的个人手机，所有互动均为文字扮演。继承酒馆当前角色卡、相关世界书、有效剧情与预设中的内容语言要求。界面标签使用中文。不得替 user 编造消息或决定。仅使用对应角色有依据获知的信息；未获知的私人内容不得跨角色、跨平台传播。' },
     phone: { name: '电话', text: '通过文字表现电话交流，只描写对白、可听见的语气、停顿和背景声音。不得描写通话另一端不可见的表情、动作、服装或内心活动。电话对应真实身份。user 仅能拨打在有效剧情中已获得的号码。char 发起来电必须有获取 user 号码的有效途径和依据。' },
@@ -288,7 +289,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderAPI() {
         const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
     }
 
     function renderApps() {
@@ -297,7 +298,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话和短信提示词现已生效；其余用于后续功能。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、短信和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 

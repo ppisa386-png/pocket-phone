@@ -1,8 +1,8 @@
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.4.0';
-import { icon } from './icons.js?v=0.4.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.4.0';
-import { unreadMessages } from './messages.js?v=0.4.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.4.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.5.0';
+import { icon } from './icons.js?v=0.5.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.5.0';
+import { unreadMessages } from './messages.js?v=0.5.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.5.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -144,7 +144,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderAPI() {
         const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
     }
 
     function renderApps() {
@@ -153,7 +153,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话和短信提示词现已生效；其余用于后续功能。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、短信和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 
