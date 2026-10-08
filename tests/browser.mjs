@@ -359,7 +359,45 @@ try {
             await c.eventSource.emit('GENERATION_ENDED');
         });
         await p.waitForTimeout(100);
-        check(await p.evaluate(() => window.modelCalls) === before, 'cooldown prevents another model request after refresh');
+        check(await p.evaluate(() => window.modelCalls) === before + 1, 'new narrative checks for an event during routine cooldown');
+        check(await p.locator('.pp-sms-item').count() === 3, 'routine contact stays blocked without a qualifying event');
+        await ctx.close();
+    }
+    {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
+        await p.locator('#personal-pocket-phone-extension-settings').waitFor();
+        await p.evaluate(async () => {
+            const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');
+            c.chat=[{mes:'Sam gave Alex their phone number.',is_user:true},{mes:'Sam tells Alex the relationship is over and leaves.',is_user:false,name:'Alex'}];
+            window.proactiveReply={status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:c.chat[0].mes,reason:'Respond to the breakup',reason_kind:'urgent_question',reason_evidence:c.chat[1].mes,requires_live_conversation:true,event_action:'start',event_requires_response:true,event_evidence:c.chat[1].mes,event_reason:'An unresolved breakup.'};
+            await c.eventSource.emit('GENERATION_ENDED');
+        });
+        await p.locator('.pp-launcher-badge').waitFor({state:'visible'});await p.locator('.pp-launcher').tap();
+        await p.locator('[data-phone-decline]').waitFor();
+        await p.evaluate(()=>{window.proactiveReply={...window.proactiveReply,event_action:'continue'};});
+        await p.locator('[data-phone-decline]').tap();
+        await p.waitForFunction(()=>window.modelCalls===2);
+        await p.locator('[data-phone-decline]').waitFor();
+        check(await p.getByText('来电中',{exact:true}).count()===1,'decline can lead to one more event call without waiting eight turns');
+        await p.locator('[data-block-channel="phone"]').tap();
+        await p.getByRole('button',{name:'取消拉黑',exact:true}).waitFor();
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-list]').tap();
+        await p.locator('[data-phone-tab="blocked"]').tap();
+        check(await p.getByText('已屏蔽电话',{exact:true}).count()===1,'telephone blacklist is inside phone app');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();window.proactiveReply={...window.proactiveReply,status:'message',text:'Can we talk about this?'};await c.eventSource.emit('GENERATION_STARTED','normal');c.chat.push({mes:'Sam continues walking.',is_user:false,name:'Alex'});await c.eventSource.emit('GENERATION_ENDED');});
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"] .pp-app-badge').waitFor();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
+        await p.getByText('Can we talk about this?',{exact:true}).waitFor();
+        await p.evaluate(()=>{window.proactiveReply={status:'none',event_action:'wait'};});
+        await p.locator('[data-sms-ignore]').tap();await p.locator('[data-sms-ignore]').waitFor({state:'detached'});
+        await p.waitForFunction(()=>window.modelCalls>=4);
+        await p.locator('[data-block-channel="messages"]').tap();
+        await p.getByText('此人的短信已被拉黑，取消后才能继续交流。',{exact:true}).waitFor();
+        check(await p.locator('[data-sms-draft]').isDisabled(),'SMS blacklist prevents sending into the blocked thread');
+        await p.locator('[data-sms-back]').tap();await p.locator('[data-sms-blocklist]').tap();
+        check(await p.getByText('已屏蔽短信',{exact:true}).count()===1,'SMS blacklist has its own management page');
+        await p.locator('[data-block-channel="messages"]').tap();await p.getByText('黑名单为空',{exact:true}).waitFor();
+        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'blacklist and reaction controls fit mobile width');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

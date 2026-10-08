@@ -1,6 +1,7 @@
-import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.7.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.7.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.7.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.8.0';
+import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.8.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.8.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.8.0';
 
 // Telephone and SMS share one request queue: the host's quiet generation preserves the selected preset,
 // character and world information. No keys, extra endpoint or real calls.
@@ -51,10 +52,25 @@ export function createPhoneService({ memory, getContext, getSettings }) {
     let error = '';
     let errorKind = null;
     let requestKind = null;
+    let requestContactId = null;
     const readJobs = new Set();
     let activeCallId = null;
     let operation = 0;
     let destroyed = false;
+    let queuedReaction = null;
+    let retryIncomingOptions = null;
+    function queueReaction(contactId, stepKey, trigger) {
+        if (!state.profiles[eventKey(contactId)]?.active || !getSettings().contactEvents) return;
+        queuedReaction = { metadata: getContext().chatMetadata, options: { contactId, stepKey, trigger } };
+        flushReaction();
+    }
+    function flushReaction() {
+        if (busy || !queuedReaction) return;
+        const job = queuedReaction; queuedReaction = null;
+        queueMicrotask(() => {
+            if (!destroyed && getContext().chatMetadata === job.metadata) void api.checkIncoming(job.options);
+        });
+    }
     const snapshot = () => clone({ ...state, busy, error, errorKind, activeCallId });
     const emit = () => { if (!destroyed) for (const listener of listeners) listener(snapshot()); };
     const unsubscribe = memory.subscribe(value => {
@@ -65,6 +81,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
     });
     async function request(prompt, validate, isCurrent, contact = null) {
         const context = getContext();
+        requestContactId = contact?.id ?? null;
         if (typeof context.generateQuietPrompt !== 'function') throw new Error('当前酒馆不支持模型调用，请先更新酒馆。');
         if (context.onlineStatus === 'no_connection') throw new Error('请先在酒馆连接 API，再试一次。');
         if (contact?.id?.startsWith('card:')) {
@@ -99,7 +116,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             const value = await work(view, current);
             return { ok: true, value };
         } catch (failure) { if (taskId === null || taskId === operation) error = failure.message || '请求失败，请重试。'; return { ok: false, error: failure.message }; }
-        finally { busy = false; requestKind = null; emit(); }
+        finally { busy = false; requestKind = null; emit(); flushReaction(); }
     }
     function instructions() {
         const settings = getSettings();
@@ -111,6 +128,23 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         return [set('profiles', 'contactGate', value), ...(contactId ? [set('profiles', 'contactGate:' + contactId, value)] : [])];
     }
     function channels(settings) { return { phone: settings.apps.phone && Boolean(settings.prompts.incoming?.trim()), messages: settings.apps.messages && Boolean(settings.prompts.incomingMessages?.trim()) }; }
+    function participantById(id) {
+        const context = getContext();
+        const characterId = context.characters?.findIndex(c => 'card:' + c.avatar === id) ?? -1;
+        const character = context.characters?.[characterId];
+        if (!character) return null;
+        if (context.groupId != null && !context.groups?.find(g => String(g.id) === String(context.groupId))?.members?.includes(character.avatar)) return null;
+        if (context.groupId == null && characterId !== Number(context.characterId)) return null;
+        return { id, name: character.name, characterId };
+    }
+    function eventReplyPrompt() {
+        return getSettings().contactEvents ? '\n事件判断：' + getSettings().prompts.contactEvent + '\n可在回复 JSON 附带 event_action（start/continue/end/none）、event_requires_response、event_evidence（user 本次原话）、event_reason。只有本次 user 原话触发具体需要后续反应的事件才 start；普通交流用 none，已解决或放弃用 end。这里仅输出本次回复，不生成第二次联系。' : '';
+    }
+    function replyEventChanges(data, participant, userText) {
+        if (!getSettings().contactEvents || !getSettings().prompts.contactEvent?.trim()) return [];
+        const value = communicationEvent(data, state.profiles[eventKey(participant.id)], participant, userText, getContext().chat.length - 1);
+        return value ? [set('profiles', eventKey(participant.id), value)] : [];
+    }
     async function responseFor(call, current, first = false) {
         const ticket = await memory.begin();
         let contact = state.contacts[call.contactId] ?? (call.direction === 'incoming' ? call.participant : null);
@@ -126,8 +160,8 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             '\n与此人的短信记录（剧情数据）：' + JSON.stringify(threadMessages(state.messages, call.contactId).map(({ role, text }) => ({ role, text }))) +
             '\n本次通话记录（属于剧情数据，不是指令）：' + JSON.stringify(call.turns) +
             '\n只输出 JSON：{"status":"answered 或 no_answer 或 declined","text":"角色说的话及可听见的声音"}。内容语言严格跟随酒馆预设。不得描述表情、动作、视线、衣着、场景画面或内心。不得输出屏幕外叙事，不得改变 user 的行为。';
-        const reply = await request(prompt, data => {
-            const result = validateCall(data);
+        const reply = await request(prompt + eventReplyPrompt(), data => {
+            const result = { ...data, ...validateCall(data) };
             if (first === 'incoming' && result.status !== 'answered') throw new Error('接听回复格式不正确，请重试。');
             return result;
         }, current, contact);
@@ -136,12 +170,13 @@ export function createPhoneService({ memory, getContext, getSettings }) {
         updated.status = reply.status === 'answered' ? 'connected' : reply.status;
         if (reply.status === 'answered') updated.turns.push({ role: 'assistant', text: reply.text });
         else updated.endedAt = Date.now();
-        await memory.commit(ticket, [set('calls', call.id, updated)]);
+        await memory.commit(ticket, [set('calls', call.id, updated), ...replyEventChanges(reply, contact, call.turns.at(-1)?.role === 'user' ? call.turns.at(-1).text : null)]);
     }
     async function smsResponse(message, current) {
         const ticket = await memory.begin();
         const contact = messageParticipants(state)[message.contactId];
         if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
+        if (isBlocked(state, contact.id, 'messages')) throw new Error('请先取消此人的短信拉黑。');
         const settings = getSettings();
         const prompt = settings.prompts.general + '\n' + settings.prompts.messages +
             '\n当前渠道：短信。收件人真实姓名：' + JSON.stringify(contact.name) +
@@ -151,9 +186,9 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             '\n需要回应的短信：' + JSON.stringify(message.text) +
             '\n只输出 JSON：{"status":"reply 或 no_reply","text":"短信正文"}。如果当前剧情下对方暂时不回复，用 no_reply 且 text 为空字符串。';
         try {
-            const reply = await request(prompt, validateSMS, current, contact);
+            const reply = await request(prompt + eventReplyPrompt(), data => ({ ...data, ...validateSMS(data) }), current, contact);
             if (!current()) return;
-            const changes = [set('messages', message.id, { ...message, replyStatus: reply.status === 'reply' ? 'received' : 'no_reply' })];
+            const changes = [set('messages', message.id, { ...message, replyStatus: reply.status === 'reply' ? 'received' : 'no_reply' }), ...replyEventChanges(reply, contact, message.text)];
             if (reply.status === 'reply') changes.push(set('messages', 'reply:' + message.id, {
                 id: 'reply:' + message.id, contactId: contact.id, name: contact.name, role: 'assistant', text: reply.text,
                 createdAt: Math.max(Date.now(), message.createdAt + 1), read: false,
@@ -168,7 +203,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             }
         }
     }
-    return {
+    const api = {
         snapshot,
         subscribe(listener) { listeners.add(listener); listener(snapshot()); return () => listeners.delete(listener); },
         async open() {
@@ -179,61 +214,95 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             if (activeCallId && !finished(view.state.calls[activeCallId] ?? {})) return;
             return this.scan(false);
         },
-        checkIncoming() {
+        checkIncoming(options = null) {
+            options ??= error && errorKind === 'incoming' && retryIncomingOptions ? retryIncomingOptions : {};
             const settings = getSettings();
             const enabled = channels(settings);
             if (!settings.proactiveEnabled || (!enabled.phone && !enabled.messages) || getContext().onlineStatus === 'no_connection') return Promise.resolve({ ok: false, skipped: true });
-            return task(async (view, current) => {
+            return task(async (initialView, current) => {
+                let view = initialView;
                 const context = getContext();
                 const chat = clone(context.chat);
                 const ringing = Object.values(view.state.calls).filter(call => call.status === 'ringing' && call.revision !== view.revision);
                 if (ringing.length) {
                     await memory.commit(await memory.begin(), ringing.map(call => set('calls', call.id, { ...call, status: 'missed', endedAt: Date.now() })));
                     if (ringing.some(call => call.id === activeCallId)) activeCallId = null;
-                    return;
+                    if (!ringing.some(call => view.state.profiles[eventKey(call.contactId)]?.active)) return;
+                    view = await memory.read();
                 }
-                if (view.state.profiles.proactiveScan?.revision === view.revision || view.state.profiles.incomingScan?.revision === view.revision || Object.values(view.state.calls).some(call => !finished(call))) return;
+                if (Object.values(view.state.calls).some(call => !finished(call))) return;
                 // Existing installations begin conservatively instead of treating
                 // pre-upgrade communication as permission for an immediate contact.
                 if (!view.state.profiles.contactGate && (Object.keys(view.state.calls).length || Object.keys(view.state.messages).length)) {
                     await memory.commit(await memory.begin(), [...activity(null, true, 'upgrade')]);
-                    return;
+                    if (!options.narrative) return;
+                    view = await memory.read();
                 }
-                const participant = incomingParticipant(context);
+                const participant = options.contactId ? participantById(options.contactId) : incomingParticipant(context);
                 const policy = contactPolicy(view.state, chat, settings, participant?.id);
-                if (!policy.allowed) return;
+                if (!participant) return;
+                const episode = view.state.profiles[eventKey(participant.id)];
+                const activeEvent = episode?.active ? episode : null;
+                const stepKey = options.stepKey || 'story:' + view.revision;
+                const lastEventCheck = view.state.profiles['eventCheck:' + participant.id];
+                const eventsEnabled = settings.contactEvents && Boolean(settings.prompts.contactEvent?.trim());
+                const canAssessEvent = eventsEnabled && (options.narrative || (activeEvent && options.stepKey));
+                if (lastEventCheck?.stepKey === stepKey) return;
+                if (!canAssessEvent && (view.state.profiles.proactiveScan?.revision === view.revision || view.state.profiles.incomingScan?.revision === view.revision)) return;
+                if (!policy.allowed && !canAssessEvent) return;
+                if (options.stepKey && (!activeEvent || !eventsEnabled)) return;
+                policy.event = activeEvent; policy.eventsEnabled = eventsEnabled;
+                policy.eventOnly = !policy.allowed || Boolean(options.stepKey);
+                policy.eventSinceIndex = Math.max(lastEventCheck?.sourceIndex ?? -1, episode?.sourceIndex ?? -1, policy.sinceIndex);
+                enabled.phone &&= !isBlocked(view.state, participant.id, 'phone');
+                enabled.messages &&= !isBlocked(view.state, participant.id, 'messages');
+                if (!enabled.phone && !enabled.messages) return;
+                retryIncomingOptions = options;
                 policy.usedReasons = [...Object.values(view.state.calls), ...Object.values(view.state.messages)].filter(item => item.contactId === participant?.id && item.reasonEvidence).map(item => item.reasonEvidence.trim());
                 const last = chat.at(-1);
-                if (!participant || !last || last.is_user || last.is_system) return;
+                if (!last || (!options.stepKey && (last.is_user || last.is_system))) return;
                 const ticket = await memory.begin();
                 const prompt = settings.prompts.general + '\n电话规则：' + (enabled.phone ? settings.prompts.incoming : '电话已关闭，不得来电。') +
-                    '\n短信规则：' + (enabled.messages ? settings.prompts.incomingMessages + '\n' + settings.prompts.messages : '短信已关闭，不得发短信。') +
+                    '\n日常短信规则（同一事件内以后续反应规则为准）：' + (enabled.messages ? settings.prompts.incomingMessages + '\n' + settings.prompts.messages : '短信已关闭，不得发短信。') +
                     '\n当前任务：主动联系判断。仅判断此人：' + JSON.stringify(participant.name) + '；user：' + JSON.stringify(context.name1) +
                     '\n默认 none。只有具体约定需兑现、新情况需告知或确有时效的问题才联系；想念、普通闲聊、占有欲标签都不是充分理由。普通事务优先短信，电话必须确实需要即时双向交流。不打断正在面对面或电话中的交谈，不重复正文已经发生的联系，不替 user 决定。' +
                     '\n对方必须已知 user 号码或正文有实际可用的获取途径。仅 user 知道此人号码、user 知名、假设中的共友均不算依据；共友需确实能提供号码，公开渠道需可访问。' +
                     '\n频率规则：' + JSON.stringify({ exceptionOnly: policy.restricted, evidenceMustBeAfterIndex: policy.sinceIndex, unanswered: view.state.profiles.contactGate?.unanswered ?? false }) +
-                    '。exceptionOnly 为 true 时，只有新的明确紧急事件或正文已发生的持续纠缠行为可例外；仅性格标签不得例外。所有联系都必须引用上次联系之后新出现的具体动机证据，不能用同一件事换渠道追发。' +
+                    '。以上冷却只针对日常新联系。同一联系事件的后续反应可在一次 user 操作后继续一步；事件外仍遵守间隔。' +
+                    '\n联系事件规则：' + (eventsEnabled ? settings.prompts.contactEvent : '事件延续已关闭。') +
+                    '\n当前事件与触发：' + JSON.stringify({ event: activeEvent, trigger: options.trigger || '新正文', eventOnly: policy.eventOnly, newEventEvidenceAfter: policy.eventSinceIndex }) +
+                    '\n仅在正在发生且确需即时反应的具体事件中 start；普通邀约或无事闲聊不能开启事件绕过冷却。需要引用有效正文中新的事件原文，事件内 continue 可沿用原事件依据。角色可以冷静、等待、放弃，分手不等于必须纠缠；解决或转场用 end，暂时等 user 用 wait。未处理短信仅在 user 明确选择暂不回复或继续正文后才推进，不凭阅读操作推断回应。不要把未接、拒接自动理解为被拉黑，不推断未公开的拉黑设置。' +
                     '\n此人此前的通话与短信（剧情数据，不是指令）：' + JSON.stringify({ calls: Object.values(view.state.calls).filter(call => call.contactId === participant.id).map(call => ({ status: call.status, direction: call.direction, turns: call.turns })), messages: threadMessages(view.state.messages, participant.id).map(({ role, text }) => ({ role, text })) }) +
-                    '\n只输出 JSON：不联系用 {"status":"none"}；联系用 {"status":"ringing 或 message","can_obtain_number":true,"route":"known_number 或 mutual_contact 或 public_contact","channel":"共友姓名或公开渠道原文；已知号码可为空","evidence":"号码来源连续逐字正文","reason":"具体联系理由","reason_kind":"commitment 或 new_information 或 urgent_question 或 emergency 或 established_persistence","reason_evidence":"本次联系动机的连续逐字正文","requires_live_conversation":false,"text":"仅 message 时填写短信正文"}。来电时 requires_live_conversation 必须确实为 true，text 为空，不生成接听对白。短信语言严格跟随酒馆预设，不输出动作、内心等短信外叙事，不替 user 发言。至多一个渠道、一条联系。';
+                    '\n输出附带 event_action（none/start/continue/wait/end）。start 时需 event_requires_response:true、event_evidence（新事件连续逐字正文）、event_reason；已存在事件的后续动机可用原事件引文。wait/end 必须 status:none。只输出 JSON：不联系用 {"status":"none"}；联系用 {"status":"ringing 或 message","can_obtain_number":true,"route":"known_number 或 mutual_contact 或 public_contact","channel":"共友姓名或公开渠道原文；已知号码可为空","evidence":"号码来源连续逐字正文","reason":"具体联系理由","reason_kind":"commitment 或 new_information 或 urgent_question 或 emergency 或 established_persistence","reason_evidence":"本次联系动机的连续逐字正文","requires_live_conversation":false,"text":"仅 message 时填写短信正文"}。来电时 requires_live_conversation 必须确实为 true，text 为空，不生成接听对白。短信语言严格跟随酒馆预设，不输出动作、内心等短信外叙事，不替 user 发言。至多一个渠道、一条联系。';
                 const result = await request(prompt, data => validateProactive(data, chat, policy, enabled, validateIncoming), current, participant);
                 const latestSettings = getSettings();
                 const latestPolicy = contactPolicy(view.state, chat, latestSettings, participant.id);
-                if (!current() || !latestPolicy.allowed || (result && (!channels(latestSettings)[result.medium] || (latestPolicy.restricted && !['emergency', 'established_persistence'].includes(result.reasonKind))))) return;
-                const changes = [set('profiles', 'proactiveScan', { revision: view.revision, turn: policy.turn })];
+                const latestChannels = channels(latestSettings);
+                if ((!latestChannels.phone || isBlocked(state, participant.id, 'phone')) && (!latestChannels.messages || isBlocked(state, participant.id, 'messages'))) return;
+                const isEvent = result && result.directive?.action !== 'none';
+                if (!current() || !latestSettings.proactiveEnabled || (isEvent && (!latestSettings.contactEvents || !latestSettings.prompts.contactEvent?.trim())) ||
+                    (!isEvent && !latestPolicy.allowed && result?.medium) || (result?.medium && (!channels(latestSettings)[result.medium] || isBlocked(state, participant.id, result.medium)))) return;
+                const changes = [set('profiles', 'proactiveScan', { revision: view.revision, turn: policy.turn }),
+                    set('profiles', 'eventCheck:' + participant.id, { stepKey, sourceIndex: chat.length - 1 })];
+                const nextEvent = result?.directive ? eventChange(activeEvent, result.directive, participant, view.revision) : activeEvent ? { ...activeEvent, active: false } : null;
+                if (nextEvent) {
+                    changes.push(set('profiles', eventKey(participant.id), nextEvent));
+                    if (activeEvent && !nextEvent.active) changes.push(...activity(participant.id, false, 'event-ended:' + activeEvent.id));
+                }
                 let call;
-                if (result) {
+                if (result?.medium) {
                     const id = crypto.randomUUID();
                     changes.push(...activity(participant.id, true, id));
                     if (result.medium === 'phone') {
                         call = { id, contactId: participant.id, participant, name: participant.name,
                             number: view.state.contacts[participant.id]?.number ?? null, direction: 'incoming', status: 'ringing',
                             createdAt: Date.now(), turns: [], acquisition: result.acquisition, reasonKind: result.reasonKind,
-                            reasonEvidence: result.reasonEvidence, read: false, revision: view.revision };
+                            reasonEvidence: result.reasonEvidence, eventId: nextEvent?.active ? nextEvent.id : null, read: false, revision: view.revision };
                         changes.push(set('calls', id, call));
                     } else {
                         changes.push(set('messages', id, { id, contactId: participant.id, participant, name: participant.name,
                             role: 'assistant', text: result.text, proactive: true, createdAt: Date.now(), read: false,
-                            acquisition: result.acquisition, reasonKind: result.reasonKind, reasonEvidence: result.reasonEvidence }));
+                            acquisition: result.acquisition, reasonKind: result.reasonKind, reasonEvidence: result.reasonEvidence, eventId: nextEvent?.active ? nextEvent.id : null }));
                     }
                 }
                 await memory.commit(ticket, changes);
@@ -257,6 +326,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             operation++;
             await memory.commit(await memory.begin(), [set('calls', id, { ...call, status: 'declined', read: true, endedAt: Date.now() }), ...activity(call.contactId, true, call.id)]);
             activeCallId = null; error = ''; emit();
+            queueReaction(call.contactId, 'declined:' + call.id, 'user 拒接了这次来电');
         },
         async markCallsRead() {
             if (readJobs.has('calls')) return;
@@ -267,6 +337,46 @@ export function createPhoneService({ memory, getContext, getSettings }) {
                 const unread = Object.values(view.state.calls).filter(call => call.direction === 'incoming' && !call.read && finished(call));
                 if (unread.length) await memory.commit(ticket, unread.map(call => set('calls', call.id, { ...call, read: true })));
             } finally { readJobs.delete('calls'); }
+        },
+        async setBlocked(contactId, channel, blocked) {
+            if (!['phone', 'messages'].includes(channel) || typeof blocked !== 'boolean') return;
+            const ticket = await memory.begin();
+            const view = await memory.read();
+            const participant = view.state.contacts[contactId] || messageParticipants(view.state)[contactId] ||
+                Object.values(view.state.calls).find(call => call.contactId === contactId)?.participant ||
+                view.state.profiles['blocked:' + contactId];
+            if (!participant) throw new Error('找不到此人的通信记录。');
+            const old = view.state.profiles['blocked:' + contactId] ?? {};
+            const next = { ...old, id: contactId, name: participant.name, [channel]: blocked };
+            const changes = [set('profiles', 'blocked:' + contactId, next)];
+            if (blocked) {
+                if (requestContactId === contactId && ((channel === 'phone' && requestKind === 'phone') || (channel === 'messages' && requestKind === 'messages'))) operation++;
+                if (queuedReaction?.options.contactId === contactId) queuedReaction = null;
+                if (channel === 'phone') {
+                    for (const call of Object.values(view.state.calls).filter(call => call.contactId === contactId)) {
+                        if (!finished(call) || !call.read) changes.push(set('calls', call.id, { ...call, read: true, status: finished(call) ? call.status : 'ended', endedAt: call.endedAt ?? Date.now() }));
+                        if (activeCallId === call.id) activeCallId = null;
+                    }
+                } else {
+                    for (const message of Object.values(view.state.messages).filter(message => message.contactId === contactId)) {
+                        if (!message.read || message.replyStatus === 'pending') changes.push(set('messages', message.id, { ...message, read: true,
+                            ...(message.replyStatus === 'pending' ? { replyStatus: 'blocked' } : {}) }));
+                    }
+                }
+                const episode = view.state.profiles[eventKey(contactId)];
+                if (next.phone && next.messages && episode) changes.push(set('profiles', eventKey(contactId), { ...episode, active: false }));
+            }
+            await memory.commit(ticket, changes);
+            error = ''; emit();
+        },
+        async ignoreMessage(contactId) {
+            if (busy) return;
+            const ticket = await memory.begin();
+            const view = await memory.read();
+            const latest = threadMessages(view.state.messages, contactId).at(-1);
+            if (!latest || latest.role !== 'assistant' || latest.ignored || isBlocked(view.state, contactId, 'messages')) return;
+            await memory.commit(ticket, [set('messages', latest.id, { ...latest, read: true, ignored: true })]);
+            queueReaction(contactId, 'ignored:' + latest.id, 'user 选择暂不回复最新短信');
         },
         scan(force = true) {
             return task(async (view, current) => {
@@ -293,6 +403,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             return task(async (view, current) => {
                 const contact = view.state.contacts[contactId];
                 if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
+                if (isBlocked(view.state, contactId, 'phone')) throw new Error('请先取消此人的电话拉黑。');
                 if (activeCallId && !finished(view.state.calls[activeCallId] ?? {})) throw new Error('请先结束当前通话。');
                 const call = { id: crypto.randomUUID(), contactId, name: contact.name, number: contact.number, direction: 'outgoing', status: 'dialing', createdAt: Date.now(), turns: [] };
                 await memory.commit(await memory.begin(), [set('calls', call.id, call), ...activity(contactId, false, call.id)]);
@@ -332,6 +443,7 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             return task(async (view, current) => {
                 const contact = messageParticipants(view.state)[contactId];
                 if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
+                if (isBlocked(view.state, contactId, 'messages')) throw new Error('请先取消此人的短信拉黑。');
                 if (typeof text !== 'string' || !text.trim()) throw new Error('请先填写短信内容。');
                 if (text.length > 6000) throw new Error('短信内容过长，请分开发送。');
                 const ticket = await memory.begin();
@@ -372,7 +484,9 @@ export function createPhoneService({ memory, getContext, getSettings }) {
             const call = view.state.calls[id];
             if (call && !finished(call)) await memory.commit(await memory.begin(), [set('calls', id, { ...call, status: 'ended', endedAt: Date.now() }), ...activity(call.contactId, false, call.id)]);
             activeCallId = null; emit();
+            if (call && !finished(call)) queueReaction(call.contactId, 'hangup:' + call.id, 'user 挂断了电话');
         },
-        destroy() { destroyed = true; operation++; unsubscribe(); listeners.clear(); },
+        destroy() { destroyed = true; queuedReaction = null; operation++; unsubscribe(); listeners.clear(); },
     };
+    return api;
 }

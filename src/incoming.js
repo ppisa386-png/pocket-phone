@@ -57,7 +57,7 @@ export function watchIncoming({ getContext, phone }) {
         if (current.metadata !== basis.metadata || current.chat === basis.chat || !last || last.is_user || last.is_system) return;
         timer = setTimeout(() => {
             if (disposed || getContext().chatMetadata !== current.metadata || capture().chat !== current.chat) return;
-            void phone.checkIncoming().catch(() => {});
+            void phone.checkIncoming({ narrative: true }).catch(() => {});
         }, 0);
     }
     listen('GENERATION_STARTED', (type, _options, dryRun) => {

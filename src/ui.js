@@ -1,8 +1,8 @@
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.7.0';
-import { icon } from './icons.js?v=0.7.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.7.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.7.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.7.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.8.0';
+import { icon } from './icons.js?v=0.8.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.8.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.8.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.8.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -148,7 +148,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderAPI() {
         const connection = typeof adapter.connectionName === 'function' ? adapter.connectionName() : '';
-        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">正文回复结束且满足联系间隔后，电话与主动短信共用一次模型判断；没有联系时至少再隔 2 轮才检查。短信在同一次请求中生成，接听电话再生成对白。可在「主动联系」页整体关闭，或清空相应提示词分别暂停。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card pp-info"><span class="pp-eyebrow">模型连接</span><h2>跟随酒馆当前连接</h2><p>' + esc(connection || '在酒馆的 API 连接页面配置模型。') + '</p></div><p class="pp-footnote">电话和短信使用酒馆当前连接、角色卡和预设。首次打开或正文变化时识别联系方式，拨号、通话和短信回应时调用模型。独立 API 设置尚未加入。</p><p class="pp-footnote">开启事件反应时，每次正文完成会判断是否出现或继续事件；事件内拒接、挂断或选择暂不回复后也判断一步，不后台循环。电话与短信共用一次判断，短信同次生成；接听再生成对白。关闭事件反应后，日常联系按设定间隔检查。可在「主动联系」页整体关闭，或清空相应提示词分别暂停。</p><p class="pp-footnote">' + (adapter.continuitySupported ? '有效通话与短信会随当前角色加入正文上下文，不另发模型请求。' : '当前环境未提供正文衔接接口；手机内通信仍可使用。') + '</p></div>';
     }
 
     function renderApps() {
@@ -164,10 +164,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderContactSettings() {
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
             selectField('proactiveEnabled', '允许主动联系', [['true', '开启'], ['false', '关闭']], String(settings.proactiveEnabled)) +
-            '<label class="pp-field"><span>通常至少间隔（轮）</span><input class="pp-number" type="number" min="2" max="100" step="1" data-setting="contactInterval" value="' + settings.contactInterval + '"></label>' +
-            '<label class="pp-field"><span>拒接、未接或未回复后（轮）</span><input class="pp-number" type="number" min="2" max="200" step="1" data-setting="unansweredInterval" value="' + settings.unansweredInterval + '"></label>' +
-            selectField('contactExceptions', '允许有剧情依据的提前联系', [['false', '关闭（默认）'], ['true', '允许紧急事件或已发生的持续纠缠']], String(settings.contactExceptions)) +
-            '</div><p class="pp-footnote">一轮按你在正文发言一次计算，群聊多人回复只算同一轮。电话与短信、不同人物共用间隔；你的主动联系和正常回复不受限制。未回复间隔不会短于通常间隔。</p><p class="pp-footnote">间隔结束也不保证联系：仍须有新的具体事件和号码依据，普通事务优先短信。开启例外后也至少间隔 2 轮，单纯性格标签不能作为依据。看过短信不等于已回复。</p></div>';
+            '<label class="pp-field"><span>日常主动联系间隔（轮）</span><input class="pp-number" type="number" min="2" max="100" step="1" data-setting="contactInterval" value="' + settings.contactInterval + '"></label>' +
+            '<label class="pp-field"><span>日常未获回应后间隔（轮）</span><input class="pp-number" type="number" min="2" max="200" step="1" data-setting="unansweredInterval" value="' + settings.unansweredInterval + '"></label>' +
+            selectField('contactEvents', '允许同一事件的后续反应', [['true', '开启'], ['false', '关闭']], String(settings.contactEvents)) +
+            '</div><p class="pp-footnote">一轮按你在正文发言一次计算，群聊多人回复只算同一轮。电话与短信、不同人物共用间隔；你的主动联系和正常回复不受限制。未回复间隔不会短于通常间隔。</p><p class="pp-footnote">以上间隔只管日常联系。同一事件中，角色根据拒接、挂断、回复或新正文逐步反应，每次最多一次联系；也可等待或结束。短信中的「暂不回复」表示这一步保持沉默，阅读不会自动推进。分手不自动意味着纠缠，拉黑的渠道不能继续联系。</p></div>';
     }
 
     function renderRetry() {
@@ -300,13 +300,16 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.phoneDial) phoneAction(() => adapter.phone.dial(target.dataset.phoneDial));
         if (target.dataset.phoneRecord) { selectedCallId = target.dataset.phoneRecord; callDraft = ''; renderPhone(); }
         if (target.hasAttribute('data-phone-list')) { selectedCallId = null; phoneTab = 'history'; renderPhone(); }
-        if (target.hasAttribute('data-phone-hangup')) phoneAction(async () => { await adapter.phone.hangup(); selectedCallId = null; phoneTab = 'history'; callDraft = ''; renderPhone(); });
+        if (target.hasAttribute('data-phone-hangup')) phoneAction(async () => { await adapter.phone.hangup(); selectedCallId = phoneView.activeCallId; phoneTab = 'history'; callDraft = ''; renderPhone(); });
         if (target.hasAttribute('data-phone-answer')) phoneAction(() => adapter.phone.answer());
         if (target.hasAttribute('data-phone-decline')) phoneAction(() => adapter.phone.decline());
         if (target.hasAttribute('data-phone-check-incoming')) phoneAction(() => adapter.phone.checkIncoming());
         if (target.hasAttribute('data-phone-retry')) phoneAction(() => adapter.phone.retry());
         if (target.hasAttribute('data-sms-new')) { pickingSMSContact = true; selectedSMSContactId = null; renderMessages(); }
         if (target.hasAttribute('data-sms-back')) { pickingSMSContact = false; selectedSMSContactId = null; renderMessages(); }
+        if (target.hasAttribute('data-sms-blocklist')) { pickingSMSContact = 'blocked'; selectedSMSContactId = null; renderMessages(); }
+        if (target.dataset.blockId) phoneAction(() => adapter.phone.setBlocked(target.dataset.blockId, target.dataset.blockChannel, target.dataset.blockValue === 'true'));
+        if (target.dataset.smsIgnore) phoneAction(() => adapter.phone.ignoreMessage(target.dataset.smsIgnore));
         if (target.dataset.smsContact) { selectedSMSContactId = target.dataset.smsContact; pickingSMSContact = false; renderMessages(); }
         if (target.hasAttribute('data-sms-sync')) phoneAction(() => adapter.phone.scan());
         if (target.dataset.smsRetry) phoneAction(() => adapter.phone.retryMessage(target.dataset.smsRetry));
@@ -346,7 +349,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
                     return;
                 }
             }
-            if (['proactiveEnabled', 'contactExceptions'].includes(key)) value = value === 'true';
+            if (['proactiveEnabled', 'contactEvents'].includes(key)) value = value === 'true';
             if (persist({ [key]: value })) {
                 const output = shadow.querySelector('[data-output="' + key + '"]');
                 if (output) output.textContent = settings[key];

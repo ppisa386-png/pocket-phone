@@ -173,3 +173,8 @@ h2, p { margin: 0; }
 .pp-answer { border: 0; border-radius: 24px; background: #228b60; color: #fff; padding: 14px 24px; cursor: pointer; }
 .pp-incoming-actions .pp-hangup { margin: 0; padding: 14px 24px; width: auto; }
 .pp-launcher-badge { position: absolute; right: -4px; top: -4px; border-radius: 12px; padding: 1px 5px; min-width: 16px; font: 11px/16px sans-serif; color: white; background: #d62e4a; }
+
+.pp-block-button { white-space: nowrap; flex-shrink: 0; font-size: 11px; }
+.pp-call-heading .pp-block-button { display: block; margin: 12px auto 0; }
+.pp-sms-heading > div { min-width: 0; flex: 1; }
+.pp-sms-heading strong { overflow-wrap: anywhere; }

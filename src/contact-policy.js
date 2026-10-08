@@ -1,3 +1,4 @@
+import { eventDirective } from './contact-events.js?v=0.8.0';
 // Cooldowns count user narrative turns, never wall-clock time or group speakers.
 export const narrativeTurn = chat => chat.filter(message => message.is_user && !message.is_system).length;
 
@@ -16,7 +17,11 @@ export function contactPolicy(state, chat, settings, contactId = null) {
 }
 
 export function validateProactive(data, chat, policy, channels, validateAcquisition) {
-    if (data.status === 'none') return null;
+    const directive = eventDirective(data, chat, policy);
+    const followsEvent = ['start', 'continue'].includes(directive.action);
+    if (data.status === 'none') return directive.action === 'none' ? null : { medium: null, directive };
+    if (['wait', 'end'].includes(directive.action)) throw new Error('等待或结束事件时不能同时生成联系。');
+    if (policy.eventOnly && !followsEvent) return null;
     const medium = data.status === 'ringing' ? 'phone' : data.status === 'message' ? 'messages' : null;
     if (!medium || !channels[medium]) throw new Error('主动联系渠道不可用。');
     const acquisition = validateAcquisition({ ...data, status: 'ringing' }, chat);
@@ -26,13 +31,13 @@ export function validateProactive(data, chat, policy, channels, validateAcquisit
     }
     // Each new contact needs a new, post-contact story event. Rephrasing the same
     // reason or changing channels cannot reuse old evidence to restart a barrage.
-    if (policy.usedReasons?.includes(data.reason_evidence.trim())) return null;
-    const eventIndex = chat.findIndex((message, i) => i > policy.sinceIndex && !message.is_system && String(message.mes ?? '').includes(data.reason_evidence));
-    if (eventIndex < 0) throw new Error('主动联系没有新的有效剧情依据。');
+    if (!followsEvent && policy.usedReasons?.includes(data.reason_evidence.trim())) return null;
+    const eventIndex = chat.findIndex((message, i) => (followsEvent || i > policy.sinceIndex) && !message.is_system && String(message.mes ?? '').includes(data.reason_evidence));
+    if (eventIndex < 0 && !(followsEvent && policy.event?.evidence === data.reason_evidence)) throw new Error('主动联系没有新的有效剧情依据。');
     const exception = ['emergency', 'established_persistence'].includes(data.reason_kind);
-    if (policy.restricted && !exception) return null;
+    if (!followsEvent && policy.restricted && !exception) return null;
     if (medium === 'phone' && data.requires_live_conversation !== true) return null;
     if (medium === 'messages' && (typeof data.text !== 'string' || !data.text.trim() || data.text.length > 6000)) throw new Error('主动短信内容格式不正确。');
-    return { medium, acquisition, reasonKind: data.reason_kind, reasonEvidence: data.reason_evidence, eventIndex,
+    return { medium, directive, acquisition, reasonKind: data.reason_kind, reasonEvidence: data.reason_evidence, eventIndex,
         text: medium === 'messages' ? data.text.trim() : null };
 }

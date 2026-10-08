@@ -1,6 +1,6 @@
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -9,6 +9,7 @@ export const APPS = [
     { id: 'amazon', name: 'Amazon', color: '#e89947' },
 ];
 export const PROMPTS = {
+    contactEvent: { name: '联系事件与后续反应', text: '日常联系保持低频。仅当有效剧情中的具体冲突、紧急事件或正在进行的交流确实需要角色立即反应时，判断是否开启或继续同一联系事件。完全依据角色设定及当下反应，不能看到分手就默认纠缠，不能靠偏执或占有欲标签决定行为。每步只选择一次来电、一条短信、等待或结束；根据 user 的拒接、回复、沉默判断下一步，可改渠道但不得绕过拉黑。解决、放弃或转场时结束事件。不得替 user 发言，不预生成一串后续。' },
     incomingMessages: { name: '主动短信', text: '默认不主动发短信。仅在需要兑现具体约定、告知新情况或处理确有时效的问题时，发送一条简洁短信。不以想念、闲聊、刷存在感反复打断正文。避免重复已经说过的内容；未收到回复时不要追发。消息语言与角色表达习惯遵循酒馆预设。' },
     incoming: { name: '主动来电', text: '只在剧情中有合理动机且角色有可用途径取得 user 号码时发起来电。必须核对正文依据，不能因为 user 知名就凭空知道号码，不能把 user 单方面知道角色号码当成双方交换。共友需要明确存在且确实能提供号码；公开渠道需要正文确认号码可被访问。不强行制造来电，不重复已在正文中完成的电话。' },
     continuity: { name: '通信与正文衔接', text: '以下是当前角色已经亲自参与的手机通信，作为有效剧情记忆供后续正文参考。继续当前剧情，不重演整段通信，不把记录原样贴回正文，不强行让角色提起。保持通信中的约定、已交换的信息和人物关系；措辞、叙事与语言仍遵循酒馆预设和角色设定。短信和电话绑定真实身份；其他角色没有自动获知这些私人交流。不要把电话中未见的画面补成已知事实。' },
@@ -40,7 +41,8 @@ export function normalizeSettings(value) {
         proactiveEnabled: typeof raw.proactiveEnabled === 'boolean' ? raw.proactiveEnabled : true,
         contactInterval: Math.round(numeric(raw.contactInterval, 2, 100, 8)),
         unansweredInterval: Math.round(numeric(raw.unansweredInterval, 2, 200, 16)),
-        contactExceptions: typeof raw.contactExceptions === 'boolean' ? raw.contactExceptions : false,
+        contactEvents: typeof raw.contactEvents === 'boolean' ? raw.contactEvents : true,
+        contactExceptions: false, // Legacy cooldown exceptions are replaced by contactEvents.
         retries: Math.round(numeric(raw.retries, 0, 15, 2)),
         apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
         prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' ? oldPrompts[id] : prompt.text])),
