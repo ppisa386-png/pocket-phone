@@ -191,3 +191,44 @@ h2, p { margin: 0; }
 .pp-api-status[data-kind="error"] { color: #ed7777; }
 
 .pp-contact-status { color: #42bd83; margin: 8px 18px; font-size: 12px; line-height: 1.5; }
+
+/* Snapchat: a text-roleplay shell with local history, no real media widgets. */
+.pp-snap { padding:0 14px; min-height:100%; position:relative; }
+.pp-snap-top { display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:3px solid #ffe34d; padding:5px 0 12px; }
+.pp-snap-top > b { font-size:1.3em; letter-spacing:-.04em; }
+.pp-snap-status { color:var(--pp-accent); font-size:.75em; min-height:1.5em; margin:10px 0; overflow-wrap:anywhere; }
+.pp-snap-button { padding:9px 12px; background:var(--pp-card); border:1px solid var(--pp-line); border-radius:16px; font-size:.78em; }
+.pp-snap button:disabled { opacity:.45; cursor:wait; }
+.pp-snap-primary { border-radius:18px; padding:12px; background:#ffe34d; color:#242015; font-weight:600; }
+.pp-snap-form { display:grid; gap:10px; padding:14px 0; }
+.pp-snap .pp-field { padding:0; gap:5px; }
+.pp-snap .pp-field > span { font-size:.78em; color:var(--pp-muted); }
+.pp-snap input:not([type="checkbox"]), .pp-snap textarea, .pp-snap select { background:var(--pp-input); border:1px solid var(--pp-line); border-radius:12px; padding:10px; width:100%; min-width:0; color:var(--pp-text); }
+.pp-snap textarea { resize:vertical; }
+.pp-snap-check { display:flex; align-items:center; gap:8px; font-size:.8em; }
+.pp-snap-person { display:flex; align-items:center; gap:10px; padding:12px 0; }
+.pp-snap-person > div { min-width:0; }
+.pp-snap-avatar { display:grid; place-items:center; flex-shrink:0; width:36px; height:36px; border-radius:50%; background:#ffe34d; color:#312a14; font-weight:600; }
+.pp-snap small { display:block; color:var(--pp-muted); font-size:.72em; overflow-wrap:anywhere; }
+.pp-snap strong { overflow-wrap:anywhere; }
+.pp-snap-actions { display:flex; flex-wrap:wrap; gap:7px; margin:10px 0; }
+.pp-snap-card { margin:12px 0; padding:14px; border:1px solid var(--pp-line); border-radius:18px; background:var(--pp-card); }
+.pp-snap-card .pp-snap-person { padding-top:0; }
+.pp-snap-copy { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.65; margin:8px 0; }
+.pp-snap-message { padding:8px 12px; border-left:3px solid #eb5688; margin:14px 20px 14px 0; background:var(--pp-card); border-radius:0 14px 14px 0; }
+.pp-snap-message.is-user { border-color:#4aabec; margin:14px 0 14px 20px; }
+.pp-snap-cash { padding:16px; margin:14px 0; border:1px solid #42bd8366; border-radius:16px; background:#42bd8314; }
+.pp-snap-cash > b { display:block; font-size:1.45em; margin:8px 0; overflow-wrap:anywhere; }
+.pp-snap-media { display:grid; align-content:center; padding:16px; min-height:130px; margin:14px 0; border-radius:12px; background:linear-gradient(145deg,#9d77c12a,#4ea8b51c); }
+.pp-snap-media > span { font-size:2em; color:var(--pp-muted); }
+.pp-snap-clips { max-height:57vh; max-height:57dvh; overflow-y:auto; scroll-snap-type:y proximity; overscroll-behavior:contain; }
+.pp-snap-clip { min-height:48vh; min-height:48dvh; scroll-snap-align:start; display:flex; flex-direction:column; }
+.pp-snap-clip .pp-snap-media { flex:1; }
+.pp-snap-map { padding:20px; margin:16px 0; border-radius:18px; border:1px solid #64b9a766; background:repeating-linear-gradient(30deg,transparent 0 45px,#8dc6a526 46px 50px),repeating-linear-gradient(120deg,transparent 0 55px,#73a8c326 56px 60px),#84bca214; }
+.pp-snap-map > p { font-size:.75em; color:var(--pp-muted); }
+.pp-snap-pins { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+.pp-snap-pins > span { border-radius:14px; padding:8px; font-size:.75em; background:var(--pp-input); overflow-wrap:anywhere; }
+.pp-snap-empty { padding:18px 4px; color:var(--pp-muted); font-size:.8em; line-height:1.6; }
+.pp-snap-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; position:sticky; bottom:0; z-index:2; margin:20px -14px 0; padding:10px 6px; background:var(--pp-bg); border-top:1px solid var(--pp-line); }
+.pp-snap-tabs button { padding:10px 2px; font-size:.8em; border-radius:14px; color:var(--pp-muted); }
+.pp-snap-tabs button[aria-pressed="true"] { color:#242015; background:#ffe34d; font-weight:600; }

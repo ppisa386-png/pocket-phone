@@ -491,6 +491,32 @@ try {
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'manual contact controls fit mobile width');
         await ctx.close();
     }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async options=>{window.modelCalls++;const task=options.quietPrompt;return JSON.stringify(task.includes('当前任务：Snapchat 新增联系人')?{accounts:[{name:'Alex',handle:'alex',has_account:true,invitation:'incoming'}]}:task.includes('当前任务：Snapchat 聊天')?{status:'reply',kind:'voice',text:'Hey Moon!'}:task.includes('当前任务：Snapcash')?{status:'accepted'}:task.includes('通话')&&task.includes('当前任务：Snapchat 语音')?{status:'answered',text:'I can hear you.'}:task.includes('当前任务：Snapchat spotlight')?{items:[{name:'Traveler',text:'A walk along the beach.'}]}:task.includes('当前任务：Snapchat map')?{items:[{name:'Traveler',place:'Beach',text:'Public seaside view',shared:true}]}:{items:[]});};});
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();
+        check(await p.evaluate(()=>window.modelCalls)===0,'opening Snapchat is local');
+        await p.locator('[data-snap-action="profile"]').tap();await p.locator('[data-snap-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存个人设置',exact:true}).tap();await p.getByText('已保存个人设置',{exact:true}).waitFor();
+        await p.locator('[data-snap-action="list"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-snap-action="accept"]').waitFor();await p.locator('[data-snap-action="accept"]').tap();await p.locator('[data-snap-action="thread"]').tap();
+        await p.locator('[data-snap-field="message"]').fill('Hello');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();
+        check(await p.locator('[data-snap-field="message"]').inputValue()==='','Snapchat sent draft clears');
+        check(await p.getByText('@alex · 以网名与你交流',{exact:true}).count()===1,'Snapchat preserves pseudonym');
+        await p.locator('[data-snap-action="voice"]').tap();await p.getByText('I can hear you.',{exact:false}).waitFor();await p.locator('[data-snap-action="hangup"]').tap();
+        await p.locator('[data-snap-action="cash"]').tap();await p.locator('[data-snap-field="amount"]').fill('12.30');await p.locator('[data-snap-field="memo"]').fill('Lunch');await p.getByRole('button',{name:'发送转账',exact:true}).tap();await p.getByText('已收款 · 已记入资产流水',{exact:true}).waitFor();
+        check(await p.locator('.pp-snap-cash').count()===1,'one settled Snapcash card');
+        await p.locator('[data-snap-action="tab"][data-snap-id="stories"]').tap();await p.locator('[data-snap-field="story"]').fill('<script>window.badSnap=true</script> Sunset');const before=await p.evaluate(()=>window.modelCalls);await p.getByRole('button',{name:'发布故事',exact:true}).tap();await p.locator('[data-snap-expiry]').waitFor();
+        check(await p.evaluate(()=>window.modelCalls)===before,'publishing story has no API cost');check(await p.evaluate(()=>!window.badSnap),'story text never runs HTML');
+        await p.locator('[data-snap-action="tab"][data-snap-id="spotlight"]').tap();await p.getByRole('button',{name:'加载短视频',exact:true}).tap();await p.getByText('A walk along the beach.',{exact:true}).waitFor();
+        check(await p.locator('.pp-snap-clip').count()===1,'Spotlight renders a vertical text-video card');
+        await p.locator('[data-snap-action="tab"][data-snap-id="map"]').tap();await p.getByRole('button',{name:'刷新共享位置与动态',exact:true}).tap();await p.getByText('Public seaside view',{exact:true}).waitFor();
+        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Snapchat fits mobile width');
+        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();await p.locator('[data-snap-action="thread"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('已收款 · 已记入资产流水',{exact:true}).waitFor();
+        check(true,'Snapchat conversation and cash survive reload');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='Different story';await c.eventSource.emit('MESSAGE_EDITED');});
+        await p.getByText('还没有 Snapchat 联系人。点「新增联系人」查找账号。',{exact:true}).waitFor();check(await p.locator('.pp-snap-cash').count()===0,'Snapchat UI rolls back after narrative edit');
+        await ctx.close();
+    }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
 } catch (error) {

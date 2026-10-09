@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.11.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.12.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -50,6 +50,20 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         // A failed or unanswered call cannot create a conversation that never happened.
         if (!turns.length) continue;
         entries.push({ time: Number(call.createdAt) || 0, data: { channel: '电话', status: callLabels[call.status] || '已记录', turns } });
+    }
+    // Only explicitly recognized Snapchat identities enter real-person narrative memory.
+    // Anonymous threads remain available to that account inside Snapchat, without
+    // introducing an alias -> user mapping into the main roleplay prompt.
+    const social = Object.values(state.snapchat || {});
+    const recognized = new Set(social.filter(a => a.type === 'account' && a.identityKnown &&
+        ((speaker.avatar && a.characterId === 'card:' + speaker.avatar) ||
+        (!a.characterId && speaker.nameIsUnique && normalized(a.name) === normalized(speaker.name)))).map(a => a.id));
+    for (const item of social) {
+        if (!recognized.has(item.accountId)) continue;
+        const time = Number(item.createdAt) || 0;
+        if (item.type === 'message') entries.push({time, data:{channel:'Snapchat', speaker:item.role === 'user' ? userName : speaker.name, kind:item.kind, text:item.text}});
+        if (item.type === 'call' && item.turns?.length) entries.push({time, data:{channel:'Snapchat ' + (item.mode === 'video' ? '视频通话' : '语音通话'), status:callLabels[item.status], turns:item.turns.map(t=>({speaker:t.role === 'user' ? userName : speaker.name,text:t.text}))}});
+        if (item.type === 'transfer') entries.push({time, data:{channel:'Snapcash', text:JSON.stringify({direction:item.direction,status:item.status,amount:item.amountMinor/100,currency:item.currency,memo:item.memo})}});
     }
     entries.sort((a, b) => a.time - b.time);
     const selected = [];

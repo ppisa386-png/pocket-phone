@@ -1,10 +1,10 @@
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.11.0';
-export { validateContacts } from './contacts.js?v=0.11.0';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.11.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.11.0';
-import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.11.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.11.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.11.0';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.12.0';
+export { validateContacts } from './contacts.js?v=0.12.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.12.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.12.0';
+import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.12.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.12.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.12.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -191,6 +191,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
     }
     const api = {
         snapshot,
+        appTask(work) {
+            return task((view, current) => work(view, () => current() && getSettings().apps.snapchat, request), 'snapchat');
+        },
         subscribe(listener) { listeners.add(listener); listener(snapshot()); return () => listeners.delete(listener); },
         async open() {
             const view = await memory.read();

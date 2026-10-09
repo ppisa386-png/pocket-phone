@@ -1,9 +1,11 @@
-import { createApiPanel } from './api-view.js?v=0.11.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.11.0';
-import { icon } from './icons.js?v=0.11.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.11.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.11.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.11.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.12.0';
+import { snapUnread } from './snapchat.js?v=0.12.0';
+import { createApiPanel } from './api-view.js?v=0.12.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.12.0';
+import { icon } from './icons.js?v=0.12.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.12.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.12.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.12.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -71,6 +73,19 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const noticeElement = shadow.querySelector('.pp-toast');
     const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
 
+    const snapPanel = createSnapPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:snapchat')renderSnapchat();},notice});
+
+    function renderSnapchat() {
+        const active=shadow.activeElement;const field=active?.dataset.snapField;
+        const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
+        const scroll=content.scrollTop;const clipsScroll=content.querySelector('.pp-snap-clips')?.scrollTop;
+        content.innerHTML=snapPanel.html();content.scrollTop=scroll;
+        const clips=content.querySelector('.pp-snap-clips');if(clips&&clipsScroll!=null)clips.scrollTop=clipsScroll;
+        const next=field?Array.from(content.querySelectorAll('[data-snap-field]')).find(el=>el.dataset.snapField===field):null;
+        if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
+        queueMicrotask(()=>{if(opened&&route==='app:snapchat')void snapPanel.readVisible();});
+    }
+
     function notice(message) {
         noticeElement.textContent = message;
         noticeElement.hidden = false;
@@ -117,8 +132,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function unreadCalls() { return Object.values(phoneView.calls || {}).filter(call => call.direction === 'incoming' && !call.read).length; }
     function appButton(app) {
-        const unread = app.id === 'messages' ? unreadMessages(phoneView.messages) : app.id === 'phone' ? unreadCalls() : 0;
-        const badge = unread ? '<span class="pp-app-badge" aria-label="' + unread + (app.id === 'phone' ? ' 条待处理来电' : ' 条未读短信') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '';
+        const unread = app.id === 'messages' ? unreadMessages(phoneView.messages) : app.id === 'phone' ? unreadCalls() : app.id === 'snapchat' ? snapUnread(phoneView) : 0;
+        const badge = unread ? '<span class="pp-app-badge" aria-label="' + unread + (app.id === 'phone' ? ' 条待处理来电' : ' 条未读消息') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '';
         return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + badge + '</span><span class="pp-app-name">' + app.name + '</span></button>';
     }
 
@@ -156,7 +171,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信、Snapchat 和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 
@@ -231,6 +246,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (route === 'retry') renderRetry();
         else if (app?.id === 'phone') renderPhone();
         else if (app?.id === 'messages') renderMessages();
+        else if (app?.id === 'snapchat') renderSnapchat();
         else if (app) renderEmptyApp(app.id);
         content.scrollTop = route === 'app:messages' && selectedSMSContactId ? content.scrollHeight : 0;
     }
@@ -243,6 +259,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         shadow.querySelector('[data-action="back"]').focus({ preventScroll: true });
         if (next === 'app:phone') phoneAction(() => adapter.phone.open());
         if (next === 'app:messages') phoneAction(() => adapter.phone.openMessages());
+        if (next === 'app:snapchat' && adapter.snapchat) phoneAction(() => adapter.snapchat.open());
     }
 
     function open() {
@@ -269,6 +286,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function updateClock() {
         if (!opened) return;
+        for(const el of content.querySelectorAll('[data-snap-expiry]'))el.textContent=Date.now()-Number(el.dataset.snapExpiry)>=86400000?'已过期 · 留存':'24 小时内';
         const now = new Date();
         const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
         shadow.querySelector('.pp-status-time').textContent = time;
@@ -281,6 +299,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
+        if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
         if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
         const action = target.dataset.action;
         if (action === 'close') close();
@@ -313,6 +332,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('submit', event => {
+        if(event.target.dataset.snapForm){event.preventDefault();void snapPanel.submit(event.target);return;}
         if (event.target.hasAttribute('data-sms-form')) {
             event.preventDefault();
             const contactId = selectedSMSContactId;
@@ -332,6 +352,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
+        if(target.dataset.snapField){snapPanel.input(target);return;}
         if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
         if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
         if (target.hasAttribute('data-prompt-selector')) { promptId = target.value; renderPrompts(); }
@@ -355,6 +376,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('input', event => {
+        if(event.target.dataset.snapField){snapPanel.input(event.target);return;}
         if (event.target.dataset.apiField && event.target.tagName !== 'SELECT') {
             apiPanel.input(event.target.dataset.apiField, event.target.value);
             if (event.target.dataset.apiField === 'baseUrl') { const keyInput = shadow.querySelector('[data-api-field="key"]'); if (keyInput) keyInput.value = apiPanel.keyValue(); }
@@ -425,6 +447,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (scope !== lastScope) {
             lastScope = scope;
             route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
+            snapPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }
@@ -441,6 +464,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (selectedSMSContactId && !messageParticipants(view)[selectedSMSContactId]) selectedSMSContactId = null;
         if (opened && route === 'app:phone') renderPhone();
         if (opened && route === 'app:messages') renderMessages();
+        if (opened && route === 'app:snapchat') renderSnapchat();
         if (opened && route === 'home') renderHome();
     });
     const clockInterval = setInterval(updateClock, 15000);

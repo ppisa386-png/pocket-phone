@@ -1,4 +1,4 @@
-import { isMemoryHidden } from './journal.js?v=0.11.0';
+import { isMemoryHidden } from './journal.js?v=0.12.0';
 // Only the current single-chat character or the last actual group speaker may call.
 export function incomingParticipant(context) {
     const characters = context.characters ?? [];
