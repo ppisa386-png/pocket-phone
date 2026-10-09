@@ -6,10 +6,12 @@ const EMPTY_REVISION = 'root';
 const copy = value => JSON.parse(JSON.stringify(value));
 const record = value => value && typeof value === 'object' && !Array.isArray(value);
 
-export function messageSignatures(chat) {
+export const isMemoryHidden = message => message?.extra?.qianqianjieAutoHide?.schemaVersion === 1 && typeof message.extra.qianqianjieAutoHide.chatId === 'string' && !message.extra.type;
+
+export function messageSignatures(chat, legacy = false) {
     return chat.map(message => JSON.stringify([
         String(message.mes ?? ''), String(message.name ?? ''), Boolean(message.is_user),
-        Boolean(message.is_system), message.send_date ?? null, message.swipe_id ?? null,
+        Boolean(message.is_system && (legacy || !isMemoryHidden(message))), message.send_date ?? null, message.swipe_id ?? null,
     ]));
 }
 
@@ -51,13 +53,19 @@ export function readJournal(raw) {
     return copy(raw);
 }
 
-export function reconcileJournal(raw, revisions) {
+export function reconcileJournal(raw, revisions, legacyRevisions = null) {
     const journal = readJournal(raw);
     const before = journal.events.length;
     // A chained revision binds an event to its entire narrative prefix, not just
     // its floor number. Editing an earlier floor invalidates later changes too.
+    let migrated = false;
+    for (const event of journal.events) {
+        if (!event.source.visibilityNormalized && legacyRevisions && event.source.revision === legacyRevisions[event.source.index] && revisions[event.source.index]) {
+            event.source.revision = revisions[event.source.index]; event.source.visibilityNormalized = true; migrated = true;
+        }
+    }
     journal.events = journal.events.filter(event => revisions[event.source.index] === event.source.revision);
-    return { journal, removed: before - journal.events.length };
+    return { journal, removed: before - journal.events.length, migrated };
 }
 
 export function appendChange(journal, revisions, changes, id = crypto.randomUUID()) {
@@ -65,7 +73,7 @@ export function appendChange(journal, revisions, changes, id = crypto.randomUUID
     validateChanges(changes);
     const next = readJournal(journal);
     if (next.events.some(event => event.id === id)) return next; // Safe retry of the same operation.
-    next.events.push({ id, source: { index: revisions.length - 1, revision: revisions.at(-1) }, changes: copy(changes) });
+    next.events.push({ id, source: { index: revisions.length - 1, revision: revisions.at(-1), visibilityNormalized: true }, changes: copy(changes) });
     return next;
 }
 

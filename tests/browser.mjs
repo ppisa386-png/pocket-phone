@@ -43,7 +43,7 @@ const server = createServer(async (req, res) => {
             res.setHeader('Content-Type', 'application/json');
             if (url.pathname.endsWith('/status')) { res.end(JSON.stringify({data:[{id:'fixture-model'}]})); return; }
             const task = data.messages.at(-1).content;
-            const text = task.includes('Connection test.') ? 'OK' : JSON.stringify(task.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : task.includes('当前渠道：短信') ? {status:'reply',text:'Independent SMS received.'} : {status:'answered',text:'Independent hello.'});
+            const text = task.includes('Connection test.') ? 'OK' : JSON.stringify(task.includes('当前任务：主动联系判断') ? {status:'none'} : task.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : task.includes('当前渠道：短信') ? {status:'reply',text:'Independent SMS received.'} : {status:'answered',text:'Independent hello.'});
             res.end(JSON.stringify({choices:[{message:{content:text}}]})); return;
         }
         if (url.pathname === '/phone-fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(phoneFixture()); return; }
@@ -311,12 +311,15 @@ try {
         await p.locator('[data-phone-answer]').waitFor();
         check(await p.locator('.pp-call-turn').count() === 0, 'ringing screen has no speech before acceptance');
         check(await p.evaluate(() => window.modelCalls) === 1, 'one foreground reply triggers exactly one incoming check');
+        await p.evaluate(()=>{window.proactiveReply={status:'none'};});
         await p.locator('[data-phone-decline]').tap();
         await p.getByText('已拒接', {exact:true}).waitFor();
-        check(await p.evaluate(() => window.modelCalls) === 1, 'declining makes no API request');
+        await p.waitForFunction(()=>window.modelCalls===2);
+        check(await p.evaluate(() => window.modelCalls) === 2, 'declining lets AI decide whether to contact again');
         await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
         check(await p.locator('[data-app="phone"] .pp-app-badge').count() === 0, 'declined incoming badge clears');
         await p.evaluate(() => { const c = window.SillyTavern.getContext(); for(let i=0;i<16;i++) c.chat.push({name:'Sam',mes:'Continue '+i,is_user:true}); });
+        await p.evaluate(()=>{delete window.proactiveReply;});
         await generateIncoming('Alex has an urgent question about the meeting.');
         await p.locator('[data-app="phone"] .pp-app-badge').waitFor();
         await p.locator('[data-app="phone"]').tap();
@@ -325,6 +328,7 @@ try {
         await p.locator('[data-phone-draft]').fill('Can you hear me?');
         await p.getByRole('button', {name:'发送',exact:true}).tap();
         await p.getByText('I can hear you.', {exact:true}).waitFor();
+        await p.evaluate(()=>{window.proactiveReply={status:'none'};});
         await p.locator('[data-phone-hangup]').tap();
         await p.getByText('来电 · 已结束', {exact:true}).waitFor();
         check(await p.getByText('来电 · 已拒接', {exact:true}).count() === 1, 'incoming history distinguishes completed and declined calls');
@@ -339,11 +343,12 @@ try {
         const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
         await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
         await p.locator('[data-section="contact"]').tap();
-        check(await p.locator('[data-setting="contactInterval"]').inputValue() === '8', 'proactive settings default to eight turns');
-        check(await p.locator('[data-setting="unansweredInterval"]').inputValue() === '16', 'unanswered contact defaults to sixteen turns');
-        await p.locator('[data-setting="contactInterval"]').fill('10'); await p.locator('[data-setting="contactInterval"]').press('Tab');
+        check(await p.locator('.pp-content [data-setting]').count() === 1, 'proactive settings have only the master switch');
+        check(await p.locator('.pp-content .pp-footnote').count() === 0, 'removed proactive explanatory text');
+        await p.locator('[data-setting="proactiveEnabled"]').selectOption('false');
         await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="contact"]').tap();
-        check(await p.locator('[data-setting="contactInterval"]').inputValue() === '10', 'contact interval setting survives reload');
+        check(await p.locator('[data-setting="proactiveEnabled"]').inputValue() === 'false', 'proactive switch survives reload');
+        await p.locator('[data-setting="proactiveEnabled"]').selectOption('true');
         await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
         await p.evaluate(async () => {
             const c = window.SillyTavern.getContext();
@@ -370,8 +375,10 @@ try {
             await c.eventSource.emit('GENERATION_ENDED');
         });
         await p.waitForTimeout(100);
-        check(await p.evaluate(() => window.modelCalls) === before + 1, 'new narrative checks for an event during routine cooldown');
-        check(await p.locator('.pp-sms-item').count() === 3, 'routine contact stays blocked without a qualifying event');
+        check(await p.evaluate(() => window.modelCalls) === before + 1, 'new narrative requests a fresh AI decision');
+        await p.waitForFunction(() => Object.values(window.SillyTavern.getContext().chatMetadata.durian_phone_history.events).some(e => e.changes.some(c => c.collection === 'messages' && c.value?.text === 'Meet at the library instead.')));
+        await p.waitForTimeout(100);
+        check(await p.locator('.pp-sms-item').count() === 3, 'AI may choose no contact after a fresh decision');
         await ctx.close();
     }
     {
@@ -430,6 +437,13 @@ try {
         await p.locator('[data-api-field="historyLimit"]').fill('50');
         await p.locator('[data-api-action="save"]').tap();
         await p.getByText('已保存，手机将使用独立 API。',{exact:true}).waitFor();
+        check(await p.locator('[data-api-status]').getAttribute('data-kind') === 'success', 'successful save has green success state');
+        check(await p.locator('[data-api-status]').evaluate(el => {const box=el.getBoundingClientRect();const parent=el.closest('.pp-content').getBoundingClientRect();return box.top>=parent.top && box.bottom<=parent.bottom;}), 'save feedback stays visible in the phone viewport');
+        await p.locator('[data-api-action="tab:memory"]').tap();
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();window.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},recall:{text:'Prepared memory for phone test'},prequel:{text:'Earlier scene'}})};});
+        await p.locator('[data-api-action="memory-refresh"]').tap();
+        await p.getByText('已连接千千结，当前召回与前情可读取。',{exact:true}).waitFor();
+
         await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
         await p.locator('[data-section="api"]').tap();
         check(await p.locator('[data-api-field="key"]').inputValue() === 'test-browser-key', 'API key restores from local browser storage');
@@ -439,7 +453,7 @@ try {
         await p.locator('[data-api-field="baseUrl"]').fill('https://fixture.example/v1');
         check(await p.locator('[data-api-field="key"]').inputValue() === 'test-browser-key', 'returning to the saved provider restores only its key');
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1), 'API settings fit mobile width');
-        await p.evaluate(()=>{window.SillyTavern.getContext().onlineStatus='no_connection';});
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.onlineStatus='no_connection';window.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},recall:{text:'Prepared memory for phone test'}})};});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="phone"]').tap();
         await p.locator('[data-phone-tab="contacts"]').tap(); await p.locator('[data-phone-dial]').tap();
         await p.getByText('Independent hello.',{exact:true}).waitFor(); await p.locator('[data-phone-hangup]').tap();
@@ -447,6 +461,7 @@ try {
         await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').tap();
         await p.locator('[data-sms-draft]').fill('API test'); await p.getByRole('button',{name:'发送短信',exact:true}).tap();
         await p.getByText('Independent SMS received.',{exact:true}).waitFor();
+        check(independentRequests.at(-1).messages.some(m=>m.content.includes('Prepared memory for phone test')), 'independent SMS includes current prepared memory');
         check(await p.evaluate(()=>window.modelCalls) === 0, 'independent phone and SMS do not use the host model');
         check(await p.evaluate(()=>!JSON.stringify(window.SillyTavern.getContext().extensionSettings).includes('test-browser-key') && !JSON.stringify(window.SillyTavern.getContext().chatMetadata).includes('test-browser-key')), 'key is absent from extension settings and chat metadata');
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="api"]').tap();

@@ -1,6 +1,6 @@
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '0.9.0';
+export const VERSION = '0.10.0';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -9,8 +9,8 @@ export const APPS = [
     { id: 'amazon', name: 'Amazon', color: '#e89947' },
 ];
 export const PROMPTS = {
-    contactEvent: { name: '联系事件与后续反应', text: '日常联系保持低频。仅当有效剧情中的具体冲突、紧急事件或正在进行的交流确实需要角色立即反应时，判断是否开启或继续同一联系事件。完全依据角色设定及当下反应，不能看到分手就默认纠缠，不能靠偏执或占有欲标签决定行为。每步只选择一次来电、一条短信、等待或结束；根据 user 的拒接、回复、沉默判断下一步，可改渠道但不得绕过拉黑。解决、放弃或转场时结束事件。不得替 user 发言，不预生成一串后续。' },
-    incomingMessages: { name: '主动短信', text: '默认不主动发短信。仅在需要兑现具体约定、告知新情况或处理确有时效的问题时，发送一条简洁短信。不以想念、闲聊、刷存在感反复打断正文。避免重复已经说过的内容；未收到回复时不要追发。消息语言与角色表达习惯遵循酒馆预设。' },
+    contactEvent: { name: '联系事件与后续反应', text: '依据角色设定、当前剧情与 user 的反应，自行决定是否联系、继续联系、等待或结束。没有固定联系间隔，不预设拒接或沉默后必须停止，也不预设任何性格或分手情节必然导致纠缠。每步仅选择一次来电、一条短信、等待或结束；不能绕过拉黑，不替 user 发言，不预生成一串后续。' },
+    incomingMessages: { name: '主动短信', text: '依据角色设定、双方关系、当前剧情和已有通信，自行判断是否主动发短信。可以联系，也可以等待或不联系；不设固定间隔，未回复时是否再次联系由角色当下动机决定。不得替 user 发言或绕过拉黑。消息语言与角色表达习惯遵循酒馆预设。' },
     incoming: { name: '主动来电', text: '只在剧情中有合理动机且角色有可用途径取得 user 号码时发起来电。必须核对正文依据，不能因为 user 知名就凭空知道号码，不能把 user 单方面知道角色号码当成双方交换。共友需要明确存在且确实能提供号码；公开渠道需要正文确认号码可被访问。不强行制造来电，不重复已在正文中完成的电话。' },
     continuity: { name: '通信与正文衔接', text: '以下是当前角色已经亲自参与的手机通信，作为有效剧情记忆供后续正文参考。继续当前剧情，不重演整段通信，不把记录原样贴回正文，不强行让角色提起。保持通信中的约定、已交换的信息和人物关系；措辞、叙事与语言仍遵循酒馆预设和角色设定。短信和电话绑定真实身份；其他角色没有自动获知这些私人交流。不要把电话中未见的画面补成已知事实。' },
     contacts: { name: '联系方式识别', text: '仅记录正文中 user 已实际获得的电话号码或明确完成的交换号码事件。只有索取意图、尚未给出的请求、他人的私密号码、char 单方面得知 user 号码均不符合。给出连续的逐字正文证据，证据应同时指明对方身份和号码归属，不得仅摘一个号码。不同人物各只有一个电话号码，不编造获取渠道。' },
@@ -22,18 +22,21 @@ export const PROMPTS = {
     amazon: { name: 'Amazon', text: '生成故事世界中的虚拟商品及订单内容，使用已确定的剧情背景、商品和货币信息。所有订单均为故事内模拟，不进行真实购买。订单和地址是私人信息，未获知的角色不得自动知晓。' },
 };
 
+const LEGACY_PROACTIVE_PROMPTS = {"contactEvent": "日常联系保持低频。仅当有效剧情中的具体冲突、紧急事件或正在进行的交流确实需要角色立即反应时，判断是否开启或继续同一联系事件。完全依据角色设定及当下反应，不能看到分手就默认纠缠，不能靠偏执或占有欲标签决定行为。每步只选择一次来电、一条短信、等待或结束；根据 user 的拒接、回复、沉默判断下一步，可改渠道但不得绕过拉黑。解决、放弃或转场时结束事件。不得替 user 发言，不预生成一串后续。", "incomingMessages": "默认不主动发短信。仅在需要兑现具体约定、告知新情况或处理确有时效的问题时，发送一条简洁短信。不以想念、闲聊、刷存在感反复打断正文。避免重复已经说过的内容；未收到回复时不要追发。消息语言与角色表达习惯遵循酒馆预设。"};
+
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const numeric = (value, min, max, fallback) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 
 export function normalizeSettings(value) {
     const raw = isRecord(value) ? value : {};
+    const { contactInterval, unansweredInterval, contactEvents, contactExceptions, ...current } = raw;
     const oldApps = isRecord(raw.apps) ? raw.apps : {};
     const api = isRecord(raw.api) ? raw.api : {};
     const oldPrompts = isRecord(raw.prompts) ? raw.prompts : {};
     return {
-        ...raw,
+        ...current,
         schemaVersion: 1,
-        api: { mode: api.mode === 'independent' ? 'independent' : 'host', baseUrl: typeof api.baseUrl === 'string' ? api.baseUrl : '', model: typeof api.model === 'string' ? api.model : '', maxTokens: Math.round(numeric(api.maxTokens, 128, 32768, 2048)), timeout: Math.round(numeric(api.timeout, 15, 300, 90)), historyLimit: Math.round(numeric(api.historyLimit, 1, 500, 80)), revision: Math.round(numeric(api.revision, 0, Number.MAX_SAFE_INTEGER, 0)) },
+        api: { memorySource: api.memorySource === 'none' ? 'none' : 'qqj', mode: api.mode === 'independent' ? 'independent' : 'host', baseUrl: typeof api.baseUrl === 'string' ? api.baseUrl : '', model: typeof api.model === 'string' ? api.model : '', maxTokens: Math.round(numeric(api.maxTokens, 128, 32768, 2048)), timeout: Math.round(numeric(api.timeout, 15, 300, 90)), historyLimit: Math.round(numeric(api.historyLimit, 1, 500, 80)), revision: Math.round(numeric(api.revision, 0, Number.MAX_SAFE_INTEGER, 0)) },
         launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
         position: isRecord(raw.position) ? { x: numeric(raw.position.x, 0, 1, 1), y: numeric(raw.position.y, 0, 1, 0.8) } : null,
         theme: ['dark', 'light'].includes(raw.theme) ? raw.theme : 'dark',
@@ -41,13 +44,9 @@ export function normalizeSettings(value) {
         fontSize: Math.round(numeric(raw.fontSize, 14, 20, 15)),
         phoneWidth: Math.round(numeric(raw.phoneWidth, 300, 420, 360)),
         proactiveEnabled: typeof raw.proactiveEnabled === 'boolean' ? raw.proactiveEnabled : true,
-        contactInterval: Math.round(numeric(raw.contactInterval, 2, 100, 8)),
-        unansweredInterval: Math.round(numeric(raw.unansweredInterval, 2, 200, 16)),
-        contactEvents: typeof raw.contactEvents === 'boolean' ? raw.contactEvents : true,
-        contactExceptions: false, // Legacy cooldown exceptions are replaced by contactEvents.
         retries: Math.round(numeric(raw.retries, 0, 15, 2)),
         apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
-        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' ? oldPrompts[id] : prompt.text])),
+        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] ? oldPrompts[id] : prompt.text])),
     };
 }
 

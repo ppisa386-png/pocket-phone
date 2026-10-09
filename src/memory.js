@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal } from './journal.js?v=0.9.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.10.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -62,8 +62,9 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         }
         snapshot.revisions = await revisionsFor(snapshot.signatures);
         if (!sameChat(snapshot)) return null;
-        const { journal, removed } = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions);
-        if (removed) await save(snapshot, journal);
+        const legacyRevisions = current.chat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(current.chat, true)) : null;
+        const { journal, removed, migrated } = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
+        if (removed || migrated) await save(snapshot, journal);
         if (!sameChat(snapshot)) return null;
         snapshot.journal = journal;
         active = snapshot;

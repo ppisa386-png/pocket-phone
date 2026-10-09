@@ -1,16 +1,16 @@
-import { createApiPanel } from './api-view.js?v=0.9.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.9.0';
-import { icon } from './icons.js?v=0.9.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.9.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.9.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.9.0';
+import { createApiPanel } from './api-view.js?v=0.10.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.10.0';
+import { icon } from './icons.js?v=0.10.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.10.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.10.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.10.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
     { id: 'api', name: 'API', icon: 'api', note: '模型连接' },
     { id: 'apps', name: 'App 管理', icon: 'apps', note: '选择桌面上显示的应用' },
     { id: 'prompts', name: '提示词', icon: 'prompts', note: '按功能分别编辑' },
-    { id: 'contact', name: '主动联系', icon: 'phone', note: '间隔、未回复限制与剧情例外' },
+    { id: 'contact', name: '主动联系', icon: 'phone', note: '允许角色主动联系' },
     { id: 'retry', name: '失败重试', icon: 'retry', note: '设置自动重试次数' },
 ];
 
@@ -162,11 +162,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderContactSettings() {
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
-            selectField('proactiveEnabled', '允许主动联系', [['true', '开启'], ['false', '关闭']], String(settings.proactiveEnabled)) +
-            '<label class="pp-field"><span>日常主动联系间隔（轮）</span><input class="pp-number" type="number" min="2" max="100" step="1" data-setting="contactInterval" value="' + settings.contactInterval + '"></label>' +
-            '<label class="pp-field"><span>日常未获回应后间隔（轮）</span><input class="pp-number" type="number" min="2" max="200" step="1" data-setting="unansweredInterval" value="' + settings.unansweredInterval + '"></label>' +
-            selectField('contactEvents', '允许同一事件的后续反应', [['true', '开启'], ['false', '关闭']], String(settings.contactEvents)) +
-            '</div><p class="pp-footnote">一轮按你在正文发言一次计算，群聊多人回复只算同一轮。电话与短信、不同人物共用间隔；你的主动联系和正常回复不受限制。未回复间隔不会短于通常间隔。</p><p class="pp-footnote">以上间隔只管日常联系。同一事件中，角色根据拒接、挂断、回复或新正文逐步反应，每次最多一次联系；也可等待或结束。短信中的「暂不回复」表示这一步保持沉默，阅读不会自动推进。分手不自动意味着纠缠，拉黑的渠道不能继续联系。</p></div>';
+            selectField('proactiveEnabled', '允许主动联系', [['true', '开启'], ['false', '关闭']], String(settings.proactiveEnabled)) + '</div></div>';
     }
 
     function renderRetry() {
@@ -342,7 +338,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.setting) {
             const key = target.dataset.setting;
             let value = target.value;
-            if (['fontSize', 'phoneWidth', 'retries', 'contactInterval', 'unansweredInterval'].includes(key)) {
+            if (['fontSize', 'phoneWidth', 'retries'].includes(key)) {
                 value = Number(value);
                 if (target.value.trim() === '' || !Number.isInteger(value) || !target.checkValidity()) {
                     target.value = settings[key];
@@ -350,7 +346,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
                     return;
                 }
             }
-            if (['proactiveEnabled', 'contactEvents'].includes(key)) value = value === 'true';
+            if (['proactiveEnabled'].includes(key)) value = value === 'true';
             if (persist({ [key]: value })) {
                 const output = shadow.querySelector('[data-output="' + key + '"]');
                 if (output) output.textContent = settings[key];
@@ -362,7 +358,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (event.target.dataset.apiField && event.target.tagName !== 'SELECT') {
             apiPanel.input(event.target.dataset.apiField, event.target.value);
             if (event.target.dataset.apiField === 'baseUrl') { const keyInput = shadow.querySelector('[data-api-field="key"]'); if (keyInput) keyInput.value = apiPanel.keyValue(); }
-            const status = shadow.querySelector('[data-api-status]'); if (status) status.textContent = '尚未保存。';
+            const status = shadow.querySelector('[data-api-status]'); if (status) { status.textContent = '尚未保存。'; status.dataset.kind = ''; }
             return;
         }
         if (event.target.hasAttribute('data-sms-draft') && selectedSMSContactId) smsDrafts[selectedSMSContactId] = event.target.value;

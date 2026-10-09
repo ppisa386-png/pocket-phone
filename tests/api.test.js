@@ -121,7 +121,7 @@ function phoneFixture() {
 }
 
 test('independent phone and SMS work with host disconnected and roll back together', async () => {
-    const f=phoneFixture(); try {
+    const f=phoneFixture(); f.settings.proactiveEnabled=false; try {
         await f.phone.open(); assert.ok(f.phone.snapshot().contacts['card:alex.png']);
         f.context.chat.push({mes:'Later that day.',name:'Alex'});
         f.reply(()=>'{"status":"answered","text":"Hello?"}'); await f.phone.dial('card:alex.png'); await f.phone.hangup();

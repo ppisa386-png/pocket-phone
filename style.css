@@ -183,3 +183,9 @@ h2, p { margin: 0; }
 .pp-api-tabs button[aria-pressed="true"] { font-weight: 700; border-bottom: 2px solid currentColor; }
 [data-api-field] { min-width: 0; width: 100%; box-sizing: border-box; }
 [data-api-status] { overflow-wrap: anywhere; }
+
+/* Keep save feedback beside the button even on a long mobile settings page. */
+.pp-api-savebar { position: sticky; bottom: 0; z-index: 2; padding: 12px 0 6px; background: var(--pp-bg, #171923); }
+.pp-api-status { margin: 6px 0 0; font-size: 12px; line-height: 1.5; min-height: 1.5em; overflow-wrap: anywhere; }
+.pp-api-status[data-kind="success"] { color: #42bd83; }
+.pp-api-status[data-kind="error"] { color: #ed7777; }

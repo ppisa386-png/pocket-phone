@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal } from './journal.js?v=0.9.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.10.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -111,6 +111,8 @@ export function createContinuityBridge({ getContext, getSettings, onError = () =
             const signatures = messageSignatures(effectiveChat(current.chat, type));
             const raw = structuredClone(metadata[JOURNAL_KEY]);
             const revisions = await revisionsFor(signatures);
+            const legacyChat = effectiveChat(current.chat, type);
+            const legacyRevisions = legacyChat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(legacyChat, true)) : null;
             function stillCurrent() {
                 if (disposed || generation !== token) return false;
                 const now = getContext();
@@ -121,7 +123,7 @@ export function createContinuityBridge({ getContext, getSettings, onError = () =
                 return JSON.stringify(prefix) === JSON.stringify(signatures);
             }
             if (!stillCurrent()) return;
-            const state = replayJournal(reconcileJournal(raw, revisions).journal);
+            const state = replayJournal(reconcileJournal(raw, revisions, legacyRevisions).journal);
             const maxContext = Number(current.maxContext);
             const budget = Number.isFinite(maxContext) && maxContext > 0 ? Math.min(8000, Math.max(512, Math.floor(maxContext / 4))) : 8000;
             const prompt = buildContinuityPrompt(state, speaker, { instruction: getSettings().prompts.continuity, userName: current.name1 || 'user', budget });

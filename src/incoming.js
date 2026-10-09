@@ -1,3 +1,4 @@
+import { isMemoryHidden } from './journal.js?v=0.10.0';
 // Only the current single-chat character or the last actual group speaker may call.
 export function incomingParticipant(context) {
     const characters = context.characters ?? [];
@@ -24,7 +25,7 @@ export function validateIncoming(data, chat) {
         typeof data.reason !== 'string' || !data.reason.trim() || data.reason.length > 1000) {
         throw new Error('来电判断格式不正确，请重试。');
     }
-    const sourceIndex = chat.findIndex(message => !message.is_system && String(message.mes ?? '').includes(data.evidence));
+    const sourceIndex = chat.findIndex(message => (!message.is_system || isMemoryHidden(message)) && String(message.mes ?? '').includes(data.evidence));
     if (sourceIndex < 0) throw new Error('来电缺少有效正文依据，未生成来电。');
     if (data.route !== 'known_number' && (typeof data.channel !== 'string' || data.channel.trim().length < 2 || !data.evidence.includes(data.channel))) {
         throw new Error('来电没有可核对的号码获取途径，未生成来电。');

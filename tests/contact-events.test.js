@@ -97,8 +97,8 @@ test('deleting source rolls back event, communication and blocking together',asy
     assert.equal(isBlocked(f.phone.snapshot(),'card:alex.png','phone'),false);f.close();
 });
 
-test('disabled event mode keeps routine cooldown and no reaction calls',async()=>{
-    const f=setup();f.settings.contactEvents=false;const ticket=await f.memory.begin();
+test('master switch blocks both events and routine contact',async()=>{
+    const f=setup();f.settings.proactiveEnabled=false;const ticket=await f.memory.begin();
     await f.memory.commit(ticket,[{collection:'profiles',key:'contactGate',value:{turn:1,sourceIndex:0,unanswered:true}}]);
     await f.phone.checkIncoming({narrative:true});assert.equal(f.count(),0);f.close();
 });

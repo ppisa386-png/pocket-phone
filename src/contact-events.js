@@ -1,3 +1,4 @@
+import { isMemoryHidden } from './journal.js?v=0.10.0';
 export const eventKey = id => 'contactEvent:' + id;
 export const isBlocked = (state, id, channel) => state.profiles?.['blocked:' + id]?.[channel] === true;
 
@@ -7,7 +8,7 @@ export function eventDirective(data, chat, policy) {
     if (action === 'start') {
         if (!policy.eventsEnabled || data.event_requires_response !== true || typeof data.event_evidence !== 'string' ||
             data.event_evidence.trim().length < 8 || typeof data.event_reason !== 'string' || !data.event_reason.trim()) throw new Error('联系事件缺少实际剧情依据。');
-        const index = chat.findIndex((message, i) => i > policy.eventSinceIndex && !message.is_system && String(message.mes ?? '').includes(data.event_evidence));
+        const index = chat.findIndex((message, i) => i > policy.eventSinceIndex && (!message.is_system || isMemoryHidden(message)) && String(message.mes ?? '').includes(data.event_evidence));
         if (index < 0) throw new Error('联系事件的依据不在当前有效剧情中。');
         return { action, evidence: data.event_evidence, reason: data.event_reason.slice(0, 1000), sourceIndex: index };
     }

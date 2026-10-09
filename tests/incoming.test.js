@@ -85,15 +85,17 @@ test('foreground completion triggers once, quiet requests and stopped or unchang
     for (let i = 0; i < 20 && !f.phone.snapshot().activeCallId; i++) await tick();
     assert.equal(f.requests(), 1); assert.ok(f.phone.snapshot().activeCallId);
     await tick(); assert.equal(f.requests(), 1);
-    await f.phone.decline();
+    f.reply(() => '{"status":"none"}'); await f.phone.decline();
+    for (let i=0;i<20 && (f.requests()<2 || f.phone.snapshot().busy);i++) await tick();
+    const afterDecline=f.requests();
     f.bus.emit('GENERATION_STARTED', 'normal'); f.context.chat.push({ mes: 'partial', name: 'Alex' }); f.bus.emit('GENERATION_ENDED'); f.bus.emit('GENERATION_STOPPED');
-    await tick(); assert.equal(f.requests(), 1); f.close();
+    await tick(); assert.equal(f.requests(), afterDecline); f.close();
 });
 
-test('pending ignored call becomes missed when narrative advances, without another request', async () => {
+test('pending ignored call becomes missed and AI can reassess on new narrative', async () => {
     const f = setup(); await f.phone.checkIncoming(); const id = f.phone.snapshot().activeCallId;
     f.context.chat.push({ mes: 'Later.', name: 'Alex' }); await f.phone.checkIncoming();
-    assert.equal(f.phone.snapshot().calls[id].status, 'missed'); assert.equal(f.requests(), 1);
+    assert.equal(f.phone.snapshot().calls[id].status, 'missed'); assert.equal(f.requests(), 2);
     await f.phone.markCallsRead(); assert.equal(f.phone.snapshot().calls[id].read, true); f.close();
 });
 
