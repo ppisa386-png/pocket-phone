@@ -1,4 +1,5 @@
-import { isMemoryHidden } from './journal.js?v=0.12.0';
+import { narrativeReplyCount } from './contact-policy.js?v=0.13.0';
+import { isMemoryHidden } from './journal.js?v=0.13.0';
 // Only the current single-chat character or the last actual group speaker may call.
 export function incomingParticipant(context) {
     const characters = context.characters ?? [];
@@ -44,7 +45,7 @@ export function watchIncoming({ getContext, phone }) {
     let group = null;
     let timer;
     let disposed = false;
-    const capture = () => ({ metadata: getContext().chatMetadata, chat: JSON.stringify(getContext().chat ?? []) });
+    const capture = () => ({ metadata: getContext().chatMetadata, chat: JSON.stringify(getContext().chat ?? []), replies:narrativeReplyCount(getContext().chat ?? []) });
     const validType = type => !['quiet', 'impersonate'].includes(type);
     function cancel() { pending = null; group = null; clearTimeout(timer); }
     function listen(name, handler) {
@@ -58,7 +59,7 @@ export function watchIncoming({ getContext, phone }) {
         if (current.metadata !== basis.metadata || current.chat === basis.chat || !last || last.is_user || last.is_system) return;
         timer = setTimeout(() => {
             if (disposed || getContext().chatMetadata !== current.metadata || capture().chat !== current.chat) return;
-            void phone.checkIncoming({ narrative: true }).catch(() => {});
+            void phone.checkIncoming({ narrative: true, scheduled: true, previousReplies:basis.replies }).catch(() => {});
         }, 0);
     }
     listen('GENERATION_STARTED', (type, _options, dryRun) => {

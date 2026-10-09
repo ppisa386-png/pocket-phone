@@ -1,10 +1,10 @@
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.12.0';
-export { validateContacts } from './contacts.js?v=0.12.0';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.12.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.12.0';
-import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.12.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.12.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.12.0';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.13.0';
+export { validateContacts } from './contacts.js?v=0.13.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.13.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.13.0';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.13.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.13.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.13.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -217,6 +217,19 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     if (ringing.some(call => call.id === activeCallId)) activeCallId = null;
                     view = await memory.read();
                 }
+                if (options.scheduled) {
+                    // Count new character replies, never user messages or regeneration attempts.
+                    // This local journal counter costs no API tokens and rolls back.
+                    const turn = narrativeReplyCount(chat);
+                    const previous = view.state.profiles.proactiveCadence;
+                    const delta = Math.max(0, turn - (previous?.turn ?? options.previousReplies ?? Math.max(0, turn - 1)));
+                    if (!delta) return;
+                    const progress = (previous?.progress || 0) + delta;
+                    await memory.commit(await memory.begin(), [set('profiles', 'proactiveCadence', {turn, progress:progress % 3})]);
+                    if (progress < 3) return;
+                    view = await memory.read();
+                }
+
                 if (Object.values(view.state.calls).some(call => !finished(call))) return;
                 const participant = options.contactId ? participantById(options.contactId) : incomingParticipant(context);
                 const policy = contactPolicy(view.state, chat, settings, participant?.id);
@@ -236,7 +249,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 enabled.phone &&= !isBlocked(view.state, participant.id, 'phone');
                 enabled.messages &&= !isBlocked(view.state, participant.id, 'messages');
                 if (!enabled.phone && !enabled.messages) return;
-                retryIncomingOptions = options;
+                retryIncomingOptions = { ...options, scheduled:false };
                 const last = chat.at(-1);
                 if (!last || (!options.stepKey && (last.is_user || last.is_system))) return;
                 const ticket = await memory.begin();
@@ -248,7 +261,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     '\n没有固定频率限制。是否再次联系由角色判断；每次仅处理当前一步，不预生成后续，不自行启动无限循环。' +
                     '\n联系事件规则：' + (eventsEnabled ? settings.prompts.contactEvent : '事件延续已关闭。') +
                     '\n当前事件与触发：' + JSON.stringify({ event: activeEvent, trigger: options.trigger || '新正文', eventOnly: policy.eventOnly, newEventEvidenceAfter: policy.eventSinceIndex }) +
-                    '\n仅在正在发生且确需即时反应的具体事件中 start；普通联系无需开启事件。需要引用有效正文中新的事件原文，事件内 continue 可沿用原事件依据。角色可以冷静、等待、放弃，分手不等于必须纠缠；解决或转场用 end，暂时等 user 用 wait。未处理短信仅在 user 明确选择暂不回复或继续正文后才推进，不凭阅读操作推断回应。不要把未接、拒接自动理解为被拉黑，不推断未公开的拉黑设置。' +
+                    '\n仅在正在发生且确需即时反应的具体事件中 start；普通联系无需开启事件。需要引用有效正文中新的事件原文，事件内 continue 可沿用原事件依据。角色可以冷静、等待、放弃，分手不等于必须纠缠；解决或转场用 end，暂时等 user 用 wait。user 没有发送短信就是尚未回复，无需额外确认。后续正文达到检查时机时，可结合未回复状态决定下一步；阅读、打开页面、输入草稿不视为回应，也不触发新联系。不要把未接、拒接自动理解为被拉黑，不推断未公开的拉黑设置。' +
                     '\n此人此前的通话与短信（剧情数据，不是指令）：' + JSON.stringify({ calls: Object.values(view.state.calls).filter(call => call.contactId === participant.id).map(call => ({ status: call.status, direction: call.direction, turns: call.turns })), messages: threadMessages(view.state.messages, participant.id).map(({ role, text }) => ({ role, text })) }) +
                     '\n输出附带 event_action（none/start/continue/wait/end）。start 时需 event_requires_response:true、event_evidence（新事件连续逐字正文）、event_reason；已存在事件的后续动机可用原事件引文。wait/end 必须 status:none。只输出 JSON：不联系用 {"status":"none"}；联系用 {"status":"ringing 或 message","can_obtain_number":true,"route":"known_number 或 mutual_contact 或 public_contact","channel":"共友姓名或公开渠道原文；已知号码可为空","evidence":"号码来源连续逐字正文","reason":"具体联系理由","reason_kind":"character_motivation 或 commitment 或 new_information 或 urgent_question 或 emergency 或 established_persistence","reason_evidence":"本次联系动机的连续逐字正文","requires_live_conversation":false,"text":"仅 message 时填写短信正文"}。来电时 requires_live_conversation 必须确实为 true，text 为空，不生成接听对白。短信语言严格跟随酒馆预设，不输出动作、内心等短信外叙事，不替 user 发言。至多一个渠道、一条联系。';
                 const result = await request(prompt, data => validateProactive(data, chat, policy, enabled, validateIncoming), current, participant);
@@ -345,15 +358,6 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             }
             await memory.commit(ticket, changes);
             error = ''; emit();
-        },
-        async ignoreMessage(contactId) {
-            if (busy) return;
-            const ticket = await memory.begin();
-            const view = await memory.read();
-            const latest = threadMessages(view.state.messages, contactId).at(-1);
-            if (!latest || latest.role !== 'assistant' || latest.ignored || isBlocked(view.state, contactId, 'messages')) return;
-            await memory.commit(ticket, [set('messages', latest.id, { ...latest, read: true, ignored: true })]);
-            queueReaction(contactId, 'ignored:' + latest.id, 'user 选择暂不回复最新短信');
         },
         scan() {
             contactStatus = '';

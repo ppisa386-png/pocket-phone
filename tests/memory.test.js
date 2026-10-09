@@ -168,3 +168,17 @@ test('chat state cannot leak after loading a newer unsupported journal', async (
     assert.equal(f.current().chatMetadata[JOURNAL_KEY].schema, 99);
     f.memory.destroy();
 });
+
+test('host dry-run previews do not lock phone records without an end event', async()=>{
+ const f=fixture();f.bus.emit('GENERATION_STARTED','normal',{},true);
+ await f.put('preview-safe',{});assert.ok((await f.memory.read()).scope);f.memory.destroy();
+});
+
+test('stopped, aborted, and completed-event stream objects do not cause a permanent lock',async()=>{
+ const f=fixture();f.current().streamingProcessor={isFinished:false,isStopped:true};await f.put('stopped',{});
+ f.current().streamingProcessor={isFinished:false,abortController:{signal:{aborted:true}}};await f.put('aborted',{});
+ f.current().streamingProcessor={isFinished:false,isStopped:false};await assert.rejects(f.memory.begin(),/等待正文/);
+ f.bus.emit('GENERATION_ENDED');await f.put('ended',{});
+ f.bus.emit('GENERATION_STARTED','normal');await assert.rejects(f.memory.begin(),/等待正文/);
+ f.bus.emit('GENERATION_STOPPED');await f.put('stopped-event',{});f.memory.destroy();
+});

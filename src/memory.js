@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.12.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.13.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -18,6 +18,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     let disposed = false;
     let active = null;
     let generating = false;
+    let settledProcessor = null;
     let generation = 0;
     let lastError = '';
     const listeners = new Set();
@@ -56,7 +57,10 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const snapshot = { scope, metadata: current.chatMetadata, context: current, signatures: messageSignatures(current.chat) };
         // Do not persist a transient streaming revision. Final generation events
         // reconcile it; phone actions are blocked until that point.
-        if (generating || (current.streamingProcessor && !current.streamingProcessor.isFinished)) {
+        const processor = current.streamingProcessor;
+        const streaming = processor && processor !== settledProcessor && processor.isFinished === false &&
+            processor.isStopped !== true && !processor.abortController?.signal?.aborted;
+        if (generating || streaming) {
             if (active?.scope !== scope || active?.metadata !== snapshot.metadata) { active = null; notify(); }
             return null;
         }
@@ -97,10 +101,16 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         // Invalidate in-flight model results even if the user later restores the
         // same text/swipe, or switches away and back before the request finishes.
         if (name !== 'GENERATION_ENDED' || generating) generation++;
-        if (name === 'GENERATION_ENDED' || name === 'GENERATION_STOPPED' || name === 'CHAT_CHANGED') generating = false;
+        if (name === 'GENERATION_ENDED' || name === 'GENERATION_STOPPED' || name === 'CHAT_CHANGED') {
+            generating = false;
+            settledProcessor = getContext().streamingProcessor ?? null;
+        }
         backgroundRefresh();
     });
-    listen('GENERATION_STARTED', type => { if (type !== 'quiet') { generating = true; generation++; } });
+    listen('GENERATION_STARTED', (type, _options, dryRun) => {
+        // Host prompt previews emit STARTED without a matching ENDED event.
+        if (!dryRun && type !== 'quiet') { generating = true; settledProcessor = null; generation++; }
+    });
     backgroundRefresh();
 
     return {

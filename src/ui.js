@@ -1,11 +1,11 @@
-import { createSnapPanel } from './snapchat-view.js?v=0.12.0';
-import { snapUnread } from './snapchat.js?v=0.12.0';
-import { createApiPanel } from './api-view.js?v=0.12.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.12.0';
-import { icon } from './icons.js?v=0.12.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.12.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.12.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.12.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.13.0';
+import { snapUnread } from './snapchat.js?v=0.13.0';
+import { createApiPanel } from './api-view.js?v=0.13.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.13.0';
+import { icon } from './icons.js?v=0.13.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.13.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.13.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.13.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -56,7 +56,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     layer.style.setProperty('--pp-launcher-size', LAUNCHER_SIZE + 'px');
     layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + '<span class="pp-launcher-badge" hidden></span></button>' +
         '<section class="pp-phone" role="dialog" aria-label="榴莲手机" hidden>' +
-        '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span><span class="pp-device-label">文字手机</span></div>' +
+        '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span></div>' +
         '<header class="pp-header"><button type="button" data-action="back" class="pp-icon-button" aria-label="返回">' + icon('back') + '</button><span class="pp-title"></span><button type="button" data-action="close" class="pp-icon-button" aria-label="收起手机">' + icon('close') + '</button></header>' +
         '<main class="pp-content"></main><div class="pp-toast" role="status" aria-live="polite" hidden></div>' +
         '<footer class="pp-footer"><button type="button" data-action="home" aria-label="回到桌面"><span></span></button></footer></section>';
@@ -269,6 +269,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const incoming = phoneView.calls?.[phoneView.activeCallId];
         if (settings.apps.phone && incoming?.status === 'ringing') { route = 'app:phone'; history = ['home']; selectedCallId = incoming.id; }
         phone.hidden = false;
+        if(windowPosition){const point={...windowPosition};phone.style.height='';phone.style.bottom='';phone.style.top='';movePhone(point.x,point.y);}
         launcher.setAttribute('aria-expanded', 'true');
         launcher.setAttribute('aria-label', '收起榴莲手机');
         render();
@@ -324,7 +325,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.hasAttribute('data-sms-back')) { pickingSMSContact = false; selectedSMSContactId = null; renderMessages(); }
         if (target.hasAttribute('data-sms-blocklist')) { pickingSMSContact = 'blocked'; selectedSMSContactId = null; renderMessages(); }
         if (target.dataset.blockId) phoneAction(() => adapter.phone.setBlocked(target.dataset.blockId, target.dataset.blockChannel, target.dataset.blockValue === 'true'));
-        if (target.dataset.smsIgnore) phoneAction(() => adapter.phone.ignoreMessage(target.dataset.smsIgnore));
         if (target.dataset.smsContact) { selectedSMSContactId = target.dataset.smsContact; pickingSMSContact = false; renderMessages(); }
         if (target.hasAttribute('data-sms-sync')) phoneAction(() => adapter.phone.scan());
         if (target.dataset.smsRetry) phoneAction(() => adapter.phone.retryMessage(target.dataset.smsRetry));
@@ -437,7 +437,45 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
     launcher.addEventListener('pointerup', endDrag, { signal: lifetime.signal });
     launcher.addEventListener('pointercancel', endDrag, { signal: lifetime.signal });
-    window.addEventListener('resize', placeLauncher, { signal: lifetime.signal });
+    const phoneHandle = shadow.querySelector('.pp-topline');
+    phoneHandle.title = '拖动顶部移动手机';
+    let windowDrag = null;
+    let windowPosition = null;
+    function movePhone(x, y) {
+        const rect = phone.getBoundingClientRect();
+        const point = {x:Math.max(4,Math.min(x,Math.max(4,window.innerWidth-rect.width-4))),
+            y:Math.max(4,Math.min(y,Math.max(4,window.innerHeight-rect.height-4)))};
+        phone.style.height = rect.height + 'px';
+        phone.style.bottom = 'auto'; phone.style.right = 'auto';
+        phone.style.left = point.x + 'px'; phone.style.top = point.y + 'px';
+        windowPosition = point;
+    }
+    phoneHandle.addEventListener('pointerdown', event => {
+        if(event.button !== 0 || event.isPrimary === false) return;
+        const rect=phone.getBoundingClientRect();
+        windowDrag={id:event.pointerId,x:event.clientX,y:event.clientY,left:rect.left,top:rect.top};
+        try {phoneHandle.setPointerCapture(event.pointerId);} catch { /* Embedded browser fallback. */ }
+        event.preventDefault();event.stopPropagation();
+    }, {signal:lifetime.signal});
+    phoneHandle.addEventListener('pointermove', event => {
+        if(!windowDrag || windowDrag.id!==event.pointerId)return;
+        movePhone(windowDrag.left+event.clientX-windowDrag.x,windowDrag.top+event.clientY-windowDrag.y);
+    }, {signal:lifetime.signal});
+    function finishWindowDrag(event) {
+        if(windowDrag?.id!==event.pointerId)return;
+        windowDrag=null;
+        if(phoneHandle.hasPointerCapture(event.pointerId))phoneHandle.releasePointerCapture(event.pointerId);
+    }
+    for(const event of ['pointerup','pointercancel','lostpointercapture'])phoneHandle.addEventListener(event,finishWindowDrag,{signal:lifetime.signal});
+    window.addEventListener('resize', () => {
+        placeLauncher();
+        if(windowPosition){
+            const point={...windowPosition};phone.style.height='';
+            // Reset to responsive dimensions before clamping after rotation.
+            phone.style.bottom='';phone.style.top='';
+            if(opened)movePhone(point.x,point.y);
+        }
+    }, { signal: lifetime.signal });
     shadow.addEventListener('keydown', event => {
         if (event.key === 'Escape' && opened) { event.preventDefault(); event.stopPropagation(); close(); }
     }, { signal: lifetime.signal });

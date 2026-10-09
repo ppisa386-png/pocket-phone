@@ -26,6 +26,10 @@ ctx.extensionPrompts = {};
 ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.extensionPrompts[key] = {value,position,depth,scan,role,filter}; };
 ctx.getRequestHeaders=()=>({'Content-Type':'application/json'});
 window.modelCalls=0;
+window.finishProactiveBatch=async()=>{
+ await ctx.eventSource.emit('GENERATION_ENDED');await new Promise(r=>setTimeout(r,40));
+ for(let i=0;i<2;i++){await ctx.eventSource.emit('GENERATION_STARTED','normal');ctx.chat.push({name:'Alex',is_user:false,mes:'A further character reply '+ctx.chat.length});await ctx.eventSource.emit('GENERATION_ENDED');await new Promise(r=>setTimeout(r,40));}
+};
 ctx.generateQuietPrompt = async options => {
  window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
  const answer = options.quietPrompt.includes('当前任务：主动联系判断') ? (window.proactiveReply || (window.allowIncoming ? {status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:'Sam gave Alex their phone number.',reason:'Confirm the meeting.',reason_kind:'urgent_question',reason_evidence:window.contactEvidence||'Sam gave Alex their phone number.',requires_live_conversation:true} : {status:'none'})) : options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
@@ -305,7 +309,7 @@ try {
                 const c = window.SillyTavern.getContext(); window.allowIncoming = true; window.contactEvidence = text;
                 await c.eventSource.emit('GENERATION_STARTED', 'normal');
                 c.chat.push({name:'Alex',mes:text,is_user:false});
-                await c.eventSource.emit('GENERATION_ENDED');
+                await window.finishProactiveBatch();
             }, text);
         }
         await generateIncoming('Sam gave Alex their phone number. Alex leaves to go home.');
@@ -314,7 +318,7 @@ try {
         await p.locator('.pp-launcher').tap();
         await p.locator('[data-phone-answer]').waitFor();
         check(await p.locator('.pp-call-turn').count() === 0, 'ringing screen has no speech before acceptance');
-        check(await p.evaluate(() => window.modelCalls) === 1, 'one foreground reply triggers exactly one incoming check');
+        check(await p.evaluate(() => window.modelCalls) === 1, 'three character replies trigger exactly one incoming check');
         await p.evaluate(()=>{window.proactiveReply={status:'none'};});
         await p.locator('[data-phone-decline]').tap();
         await p.getByText('已拒接', {exact:true}).waitFor();
@@ -360,7 +364,7 @@ try {
             c.chat[0].mes = 'Sam gave Alex their phone number.';
             c.chat.push({mes:'Alex receives a changed meeting address to pass on.',name:'Alex',is_user:false});
             window.proactiveReply = {status:'message',can_obtain_number:true,route:'known_number',channel:'',evidence:c.chat[0].mes,reason:'Changed address',reason_kind:'new_information',reason_evidence:c.chat[1].mes,text:'Meet at the library instead.'};
-            await c.eventSource.emit('GENERATION_ENDED');
+            await window.finishProactiveBatch();
         });
         await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
         check(await p.evaluate(() => window.modelCalls) === 1, 'one shared request produces proactive SMS');
@@ -376,10 +380,10 @@ try {
         await p.evaluate(async () => {
             const c = window.SillyTavern.getContext(); await c.eventSource.emit('GENERATION_STARTED','normal');
             c.chat.push({mes:'Continue',name:'Sam',is_user:true},{mes:'The story continues.',name:'Alex',is_user:false});
-            await c.eventSource.emit('GENERATION_ENDED');
+            await window.finishProactiveBatch();
         });
         await p.waitForTimeout(100);
-        check(await p.evaluate(() => window.modelCalls) === before + 1, 'new narrative requests a fresh AI decision');
+        check(await p.evaluate(() => window.modelCalls) === before + 1, 'three new character replies request a fresh AI decision');
         await p.waitForFunction(() => Object.values(window.SillyTavern.getContext().chatMetadata.durian_phone_history.events).some(e => e.changes.some(c => c.collection === 'messages' && c.value?.text === 'Meet at the library instead.')));
         await p.waitForTimeout(100);
         check(await p.locator('.pp-sms-item').count() === 3, 'AI may choose no contact after a fresh decision');
@@ -391,9 +395,9 @@ try {
         await p.locator('#personal-pocket-phone-extension-settings').waitFor();
         await p.evaluate(async () => {
             const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');
-            c.chat=[{mes:'Sam gave Alex their phone number.',is_user:true},{mes:'Sam tells Alex the relationship is over and leaves.',is_user:false,name:'Alex'}];
+            c.chat=[{mes:'Sam gave Alex their phone number.',is_user:true},{mes:'Sam tells Alex the relationship is over and leaves.',is_user:false,name:'Alex'},{mes:'Alex considers what happened.',is_user:false,name:'Alex'}];
             window.proactiveReply={status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:c.chat[0].mes,reason:'Respond to the breakup',reason_kind:'urgent_question',reason_evidence:c.chat[1].mes,requires_live_conversation:true,event_action:'start',event_requires_response:true,event_evidence:c.chat[1].mes,event_reason:'An unresolved breakup.'};
-            await c.eventSource.emit('GENERATION_ENDED');
+            await window.finishProactiveBatch();
         });
         await p.locator('.pp-launcher-badge').waitFor({state:'visible'});await p.locator('.pp-launcher').tap();
         await p.locator('[data-phone-decline]').waitFor();
@@ -407,12 +411,13 @@ try {
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-list]').tap();
         await p.locator('[data-phone-tab="blocked"]').tap();
         check(await p.getByText('已屏蔽电话',{exact:true}).count()===1,'telephone blacklist is inside phone app');
-        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();window.proactiveReply={...window.proactiveReply,status:'message',text:'Can we talk about this?'};await c.eventSource.emit('GENERATION_STARTED','normal');c.chat.push({mes:'Sam continues walking.',is_user:false,name:'Alex'});await c.eventSource.emit('GENERATION_ENDED');});
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();window.proactiveReply={...window.proactiveReply,status:'message',text:'Can we talk about this?'};await c.eventSource.emit('GENERATION_STARTED','normal');c.chat.push({mes:'Sam continues walking.',is_user:false,name:'Alex'});await window.finishProactiveBatch();});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"] .pp-app-badge').waitFor();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
         await p.getByText('Can we talk about this?',{exact:true}).waitFor();
         await p.evaluate(()=>{window.proactiveReply={status:'none',event_action:'wait'};});
-        await p.locator('[data-sms-ignore]').tap();await p.locator('[data-sms-ignore]').waitFor({state:'detached'});
-        await p.waitForFunction(()=>window.modelCalls>=4);
+        const unansweredCount=await p.evaluate(()=>window.modelCalls);
+        check(await p.locator('[data-sms-ignore]').count()===0,'no explicit silence button');
+        await p.waitForTimeout(100);check(await p.evaluate(()=>window.modelCalls)===unansweredCount,'leaving a message unanswered makes no API request');
         await p.locator('[data-block-channel="messages"]').tap();
         await p.getByText('此人的短信已被拉黑，取消后才能继续交流。',{exact:true}).waitFor();
         check(await p.locator('[data-sms-draft]').isDisabled(),'SMS blacklist prevents sending into the blocked thread');
@@ -515,6 +520,18 @@ try {
         check(true,'Snapchat conversation and cash survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='Different story';await c.eventSource.emit('MESSAGE_EDITED');});
         await p.getByText('还没有 Snapchat 联系人。点「新增联系人」查找账号。',{exact:true}).waitFor();check(await p.locator('.pp-snap-cash').count()===0,'Snapchat UI rolls back after narrative edit');
+        await ctx.close();
+    }
+    {
+        const ctx=await browser.newContext({viewport:{width:1000,height:900}});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.locator('.pp-launcher').click();
+        check(await p.locator('.pp-device-label').count()===0,'removed text-phone label');
+        const before=await p.locator('.pp-phone').boundingBox();const handle=await p.locator('.pp-topline').boundingBox();
+        await p.mouse.move(handle.x+handle.width/2,handle.y+20);await p.mouse.down();await p.mouse.move(handle.x+handle.width/2-180,handle.y+60,{steps:8});await p.mouse.up();
+        const after=await p.locator('.pp-phone').boundingBox();check(Math.abs(after.x-before.x+180)<2&&Math.abs(after.y-before.y-40)<2,'top bar drags the whole phone');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal',{},true);c.streamingProcessor={isFinished:false,isStopped:true};});
+        await p.locator('[data-app="phone"]').click();await p.locator('[data-phone-tab="contacts"]').click();await p.getByRole('button',{name:'新增联系人',exact:true}).click();await p.locator('[data-phone-dial]').waitFor();
+        check(true,'dry-run and stopped stream do not block an existing chat');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

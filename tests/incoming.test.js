@@ -80,8 +80,11 @@ test('no-call results are cached; disabled app, blank prompt and offline do not 
 test('foreground completion triggers once, quiet requests and stopped or unchanged runs do not loop', async () => {
     const f = setup();
     f.bus.emit('GENERATION_STARTED', 'normal'); f.bus.emit('GENERATION_ENDED'); await tick(); assert.equal(f.requests(), 0);
-    f.bus.emit('GENERATION_STARTED', 'normal'); f.context.chat.push({ mes: 'Alex decides to check the meeting.', name: 'Alex', is_user: false });
-    f.bus.emit('GENERATION_ENDED');
+    for(let i=0;i<3;i++){
+        f.bus.emit('GENERATION_STARTED', 'normal'); f.context.chat.push({ mes: 'Alex decides to check the meeting. '+i, name: 'Alex', is_user: false });
+        f.bus.emit('GENERATION_ENDED'); await tick();
+        if(i<2)assert.equal(f.requests(),0);
+    }
     for (let i = 0; i < 20 && !f.phone.snapshot().activeCallId; i++) await tick();
     assert.equal(f.requests(), 1); assert.ok(f.phone.snapshot().activeCallId);
     await tick(); assert.equal(f.requests(), 1);
@@ -139,11 +142,36 @@ test('group picks actual last member by stable identity; waits until wrapper com
     f.context.groups[0].members.push('other.png'); assert.equal(incomingParticipant(f.context), null);
     f.context.chat[0].original_avatar = 'alex.png'; assert.equal(incomingParticipant(f.context).characterId, 0);
     f.bus.emit('GROUP_WRAPPER_STARTED', { type: 'normal' }); f.bus.emit('GENERATION_STARTED', 'normal');
-    f.context.chat.push({ mes: 'Alex decides to call.', name: 'Alex', original_avatar: 'alex.png' }); f.bus.emit('GENERATION_ENDED');
+    f.context.chat.push(...Array.from({length:3},(_,i)=>({ mes: 'Alex decides to call. '+i, name: 'Alex', original_avatar: 'alex.png' }))); f.bus.emit('GENERATION_ENDED');
     await tick(); assert.equal(f.requests(), 0);
     f.context.characterId = undefined;
     f.reply(options => { assert.equal(options.forceChId, 0); return JSON.stringify(incoming); });
     f.bus.emit('GROUP_WRAPPER_FINISHED', { type: 'normal' });
     for (let i = 0; i < 20 && !f.phone.snapshot().activeCallId; i++) await tick();
     assert.equal(f.requests(), 1); assert.equal(f.phone.snapshot().calls[f.phone.snapshot().activeCallId].name, 'Alex'); f.close();
+});
+
+test('scheduled checks count three char replies, persist progress and ignore user messages or regeneration',async()=>{
+ const f=setup();f.reply(()=>'{"status":"none"}');
+ async function reply(text){f.bus.emit('GENERATION_STARTED','normal');f.context.chat.push({mes:text,is_user:false,name:'Alex'});f.bus.emit('GENERATION_ENDED');await tick();await f.memory.read();}
+ await reply('One');assert.equal(f.requests(),0);
+ f.context.chat.push({mes:'user message',is_user:true},{mes:'another user message',is_user:true});
+ await reply('Two');assert.equal(f.requests(),0);
+ // A regenerated reply occupies the same narrative floor and does not add a round.
+ f.bus.emit('GENERATION_STARTED','regenerate');f.context.chat.at(-1).mes='Two revised';f.bus.emit('GENERATION_ENDED');await tick();assert.equal(f.requests(),0);
+ await reply('Three');for(let i=0;i<20&&f.requests()<1;i++)await tick();assert.equal(f.requests(),1);
+ await reply('Four');assert.equal(f.requests(),1);
+ const reloaded=createPhoneService({memory:f.memory,getContext:()=>f.context,getSettings:()=>f.settings});
+ f.context.chat.push({mes:'Five',is_user:false});await reloaded.checkIncoming({narrative:true,scheduled:true});assert.equal(f.requests(),1);
+ f.context.chat.push({mes:'Six',is_user:false});await reloaded.checkIncoming({narrative:true,scheduled:true});assert.equal(f.requests(),2);
+ // Counter and no-contact result roll back together when their source reply is deleted.
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.phone.snapshot().profiles.proactiveCadence.progress,2);
+ reloaded.destroy();f.close();
+});
+
+test('manual retry after a scheduled check failure does not consume another three replies',async()=>{
+ const f=setup();f.reply(()=>{throw new Error('offline');});
+ for(let i=0;i<3;i++){f.context.chat.push({mes:'Reply '+i,is_user:false});await f.phone.checkIncoming({narrative:true,scheduled:true});}
+ assert.equal(f.requests(),1);assert.match(f.phone.snapshot().error,/offline/);
+ f.reply(()=>'{"status":"none"}');await f.phone.checkIncoming();assert.equal(f.requests(),2);assert.equal(f.phone.snapshot().error,'');f.close();
 });

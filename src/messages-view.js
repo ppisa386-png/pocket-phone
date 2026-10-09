@@ -1,7 +1,7 @@
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.12.0';
-import { isBlocked } from './contact-events.js?v=0.12.0';
-import { icon } from './icons.js?v=0.12.0';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.12.0';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.13.0';
+import { isBlocked } from './contact-events.js?v=0.13.0';
+import { icon } from './icons.js?v=0.13.0';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.13.0';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = value => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const replyLabels = { pending: '等待回复…', received: '已发送', failed: '回复获取失败', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
@@ -20,7 +20,6 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts) {
             '<div class="pp-sms-bubbles" aria-live="polite">' + (thread.length ? thread.map(message => '<div class="pp-sms-item" data-role="' + (message.role === 'user' ? 'user' : 'assistant') + '"><p class="pp-sms-bubble">' + smsEscape(message.text) + '</p><small>' + smsTime(message.createdAt) + (message.role === 'user' ? ' · ' + replyLabels[message.replyStatus] : '') + '</small>' +
                 (message.id === latestUserId && message.replyStatus === 'failed' ? '<button type="button" class="pp-text-button" data-sms-retry="' + smsEscape(message.id) + '"' + (busy || blocked ? ' disabled' : '') + '>重试回复</button>' : '') + '</div>').join('') : '<p class="pp-sms-empty-thread">发送第一条短信</p>') + '</div>' +
             (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML +
-            (view.profiles?.['contactEvent:' + contact.id]?.active && thread.at(-1)?.role === 'assistant' && !thread.at(-1)?.ignored && !blocked ? '<button type="button" class="pp-text-button" data-sms-ignore="' + smsEscape(contact.id) + '"' + (busy || blocked ? ' disabled' : '') + '>暂不回复</button>' : '') +
             (blocked ? '<p class="pp-footnote">此人的短信已被拉黑，取消后才能继续交流。</p>' : '') +
             '<form data-sms-form class="pp-sms-compose"><label for="pp-sms-input">短信内容</label><textarea id="pp-sms-input" data-sms-draft rows="2" maxlength="6000" placeholder="短信…"' + (busy || blocked ? ' disabled' : '') + '>' + smsEscape(drafts[contact.id] || '') + '</textarea><button type="submit" aria-label="发送短信"' + (busy || blocked ? ' disabled' : '') + '>发送</button></form></div>';
     }

@@ -43,14 +43,13 @@ test('declining advances one event step, permits another call, and never self-lo
     await f.phone.checkIncoming({contactId:'card:alex.png',stepKey:'declined:'+first,trigger:'repeat'});assert.equal(f.count(),2);f.close();
 });
 
-test('same event can change to SMS; viewing never advances it; explicit silence advances once',async()=>{
+test('same event can change to SMS; reading or leaving it unanswered never requests',async()=>{
     const f=setup();await f.phone.checkIncoming({narrative:true});
     f.reply(()=>JSON.stringify({...continuation,status:'message',text:'Can we talk?'}));await f.phone.decline();
     await settle(f,()=>Object.keys(f.phone.snapshot().messages).length===1);
     await f.phone.markMessagesRead('card:alex.png');await pause();assert.equal(f.count(),2);
-    f.reply(()=>'{"status":"none","event_action":"wait"}');await f.phone.ignoreMessage('card:alex.png');
-    await settle(f,()=>f.count()===3);assert.ok(f.phone.snapshot().profiles[eventKey('card:alex.png')].active);
-    await f.phone.ignoreMessage('card:alex.png');await pause();assert.equal(f.count(),3);
+    await f.phone.markMessagesRead('card:alex.png');await pause();assert.equal(f.count(),2);
+    assert.equal(typeof f.phone.ignoreMessage,'undefined');
     f.ctx.chat.push({mes:'Several days later, they have moved on.',is_user:false,name:'Alex'});
     f.reply(()=>'{"status":"none","event_action":"end"}');await f.phone.checkIncoming({narrative:true});
     assert.equal(f.phone.snapshot().profiles[eventKey('card:alex.png')].active,false);f.close();
