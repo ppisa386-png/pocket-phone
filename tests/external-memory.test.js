@@ -49,7 +49,7 @@ function fixture() {
 test('host-mode phone tasks receive prepared memory and do not persist its text in the journal',async()=>{
     const f=fixture();globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>prepared()};
     try {
-        await f.phone.open();await f.phone.sendMessage('card:alex.png','Where are we meeting?');
+        await f.phone.scan();await f.phone.sendMessage('card:alex.png','Where are we meeting?');
         assert.equal(f.prompts.length,2);for(const prompt of f.prompts)assert.match(prompt,/agreed to meet at the station/);
         assert.ok(!JSON.stringify(f.c.chatMetadata[JOURNAL_KEY]).includes('Earlier they met in London'));
         globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'})};
@@ -59,7 +59,7 @@ test('host-mode phone tasks receive prepared memory and do not persist its text 
 
 test('QQJ hiding old floors preserves phone history; deleting the source still rolls it back',async()=>{
     const f=fixture();try {
-        await f.phone.open();await f.phone.sendMessage('card:alex.png','Hi');
+        await f.phone.scan();await f.phone.sendMessage('card:alex.png','Hi');
         f.c.chat[0].extra={qianqianjieAutoHide:{schemaVersion:1,chatId:'qqj-chat'}};f.c.chat[0].is_system=true;
         f.bus.emit('MESSAGE_EDITED');await f.memory.read();
         assert.equal(Object.keys(f.phone.snapshot().contacts).length,1);assert.equal(Object.keys(f.phone.snapshot().messages).length,2);

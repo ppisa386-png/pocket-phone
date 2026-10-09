@@ -28,7 +28,7 @@ function setup() {
 }
 
 test('SMS shares discovered phone contacts and sends, receives, persists and marks read', async () => {
-    const f = setup(); await f.service.openMessages(); assert.equal(f.requests(), 1);
+    const f = setup(); await f.service.openMessages(); await f.service.scan(); assert.equal(f.requests(), 1);
     await f.service.open(); assert.equal(f.requests(), 1);
     const result = await f.service.sendMessage('card:alex.png', 'Hello');
     assert.equal(result.value.saved, true);
@@ -44,7 +44,7 @@ test('SMS shares discovered phone contacts and sends, receives, persists and mar
 });
 
 test('failure and retry never duplicate the outgoing text or reply', async () => {
-    const f = setup(); await f.service.openMessages();
+    const f = setup(); await f.service.openMessages(); await f.service.scan();
     f.reply(() => { throw new Error('offline'); });
     const before = f.requests(); const sent = await f.service.sendMessage('card:alex.png', 'Keep this');
     assert.equal(sent.value.saved, true); assert.equal(f.requests() - before, 2);
@@ -60,7 +60,7 @@ test('failure and retry never duplicate the outgoing text or reply', async () =>
 });
 
 test('no_reply does not invent incoming text and unknown numbers cannot receive SMS', async () => {
-    const f = setup(); await f.service.openMessages();
+    const f = setup(); await f.service.openMessages(); await f.service.scan();
     f.reply(() => '{"status":"no_reply","text":""}');
     await f.service.sendMessage('card:alex.png', 'Hello');
     assert.equal(Object.values(f.service.snapshot().messages)[0].replyStatus, 'no_reply');
@@ -71,7 +71,7 @@ test('no_reply does not invent incoming text and unknown numbers cannot receive 
 });
 
 test('SMS generation only includes the recipient\'s private communications', async () => {
-    const f = setup(); await f.service.openMessages();
+    const f = setup(); await f.service.openMessages(); await f.service.scan();
     await f.memory.commit(await f.memory.begin(), [{ collection: 'messages', key: 'other', value: { id: 'other', contactId: 'someone-else', text: 'PRIVATE_OTHER_PERSON', role: 'assistant', read: false, createdAt: 1 } }]);
     f.reply(options => {
         assert.match(options.quietPrompt, /当前渠道：短信/);
@@ -86,7 +86,7 @@ test('SMS generation only includes the recipient\'s private communications', asy
 });
 
 test('late reply cannot enter a different chat; concurrent send is not duplicated', async () => {
-    const f = setup(); await f.service.openMessages();
+    const f = setup(); await f.service.openMessages(); await f.service.scan();
     let resolveReply, started;
     const start = new Promise(resolve => { started = resolve; });
     f.reply(() => { started(); return new Promise(resolve => { resolveReply = resolve; }); });
@@ -101,7 +101,7 @@ test('late reply cannot enter a different chat; concurrent send is not duplicate
 });
 
 test('deleting the sending floor removes SMS but retains earlier acquired contact', async () => {
-    const f = setup(); await f.service.openMessages();
+    const f = setup(); await f.service.openMessages(); await f.service.scan();
     f.context.chat.push({ mes: 'Later that day.' });
     await f.service.sendMessage('card:alex.png', 'Hello');
     f.context.chat.pop(); f.bus.emit('MESSAGE_DELETED'); await f.memory.read();
@@ -111,7 +111,7 @@ test('deleting the sending floor removes SMS but retains earlier acquired contac
 });
 
 test('reopening recovers interrupted requests without automatically paying for another reply', async () => {
-    const f = setup(); await f.service.openMessages();
+    const f = setup(); await f.service.openMessages(); await f.service.scan();
     await f.memory.commit(await f.memory.begin(), [{ collection: 'messages', key: 'interrupted', value: { id: 'interrupted', role: 'user', contactId: 'card:alex.png', text: 'Hello', createdAt: 1, replyStatus: 'pending', read: true } }]);
     const before = f.requests(); await f.service.openMessages();
     assert.equal(f.service.snapshot().messages.interrupted.replyStatus, 'failed');

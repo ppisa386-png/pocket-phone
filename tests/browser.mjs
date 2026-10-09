@@ -209,6 +209,8 @@ try {
         await p.locator('.pp-launcher').tap();
         await p.locator('[data-app="phone"]').tap();
         await p.locator('[data-phone-tab="contacts"]').tap();
+        check(await p.evaluate(()=>window.modelCalls) === 0, 'opening phone contacts does not request a scan');
+        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();
         await p.locator('[data-phone-dial]').waitFor();
         check(await p.locator('.pp-contact-row').count() === 1, 'phone UI shows contact recognized from narrative');
         await p.locator('[data-phone-dial]').tap();
@@ -235,7 +237,9 @@ try {
         const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
         const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
         await p.locator('.pp-launcher').tap(); await p.locator('[data-app="messages"]').tap();
-        await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').waitFor();
+        await p.locator('[data-sms-new]').tap();
+        check(await p.evaluate(()=>window.modelCalls) === 0, 'opening SMS contacts does not request a scan');
+        await p.getByRole('button',{name:'新增联系人',exact:true}).tap(); await p.locator('[data-sms-contact]').waitFor();
         await p.locator('[data-sms-contact]').tap();
         const payload = '<script>window.smsInjection=true</script> Hello';
         await p.locator('[data-sms-draft]').fill(payload);
@@ -455,7 +459,7 @@ try {
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1), 'API settings fit mobile width');
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.onlineStatus='no_connection';window.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},recall:{text:'Prepared memory for phone test'}})};});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="phone"]').tap();
-        await p.locator('[data-phone-tab="contacts"]').tap(); await p.locator('[data-phone-dial]').tap();
+        await p.locator('[data-phone-tab="contacts"]').tap(); await p.getByRole('button',{name:'新增联系人',exact:true}).tap(); await p.locator('[data-phone-dial]').tap();
         await p.getByText('Independent hello.',{exact:true}).waitFor(); await p.locator('[data-phone-hangup]').tap();
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="messages"]').tap();
         await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').tap();
@@ -469,6 +473,22 @@ try {
         check(await p.locator('[data-api-field="key"]').inputValue() === '', 'clear key updates password field');
         await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="api"]').tap();
         check(await p.locator('[data-api-field="key"]').inputValue() === '', 'cleared key stays deleted after reload');
+        await ctx.close();
+    }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Sam has a sister named Bea.'};c.generateQuietPrompt=async()=>{window.modelCalls++;return JSON.stringify({contacts:[{name:'Bea',source:'persona',relationship:'family',user_has_number:true,number:null,evidence:'Sam has a sister named Bea.'}]});};});
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();
+        check(await p.evaluate(()=>window.modelCalls)===0,'persona relatives are not fetched automatically');
+        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByText('已新增 1 位联系人。',{exact:true}).waitFor();
+        check(await p.locator('.pp-contact-row').count()===1,'manual persona scan displays one phone contact');
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-new]').tap();
+        check(await p.locator('[data-sms-contact]').count()===1,'SMS shares the manually added persona contact');
+        check(await p.evaluate(()=>window.modelCalls)===1,'SMS contact picker makes no additional API request');
+        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByText('未找到新的联系人。',{exact:true}).waitFor();
+        check(await p.locator('[data-sms-contact]').count()===1,'repeated manual add does not duplicate persona contact');
+        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'manual contact controls fit mobile width');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));

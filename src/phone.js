@@ -1,8 +1,10 @@
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.10.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.10.0';
-import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.10.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.10.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.10.0';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.11.0';
+export { validateContacts } from './contacts.js?v=0.11.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.11.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.11.0';
+import { narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.11.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.11.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.11.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -12,31 +14,9 @@ export function parseJSON(text) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('模型返回的格式不正确，请重试。');
     return data;
 }
-const normalizeName = name => String(name).normalize('NFKC').trim().toLowerCase();
 const set = (collection, key, value) => ({ collection, key, value });
 const clone = value => structuredClone(value);
 const finished = call => ['ended', 'declined', 'no_answer', 'interrupted', 'missed'].includes(call.status);
-
-export function validateContacts(data, chat, context) {
-    if (!Array.isArray(data.contacts) || data.contacts.length > 30) throw new Error('联系人结果格式不正确。');
-    const contacts = [];
-    for (const item of data.contacts) {
-        if (!item || typeof item.name !== 'string' || !item.name.trim() || item.user_has_number !== true ||
-            typeof item.evidence !== 'string' || item.evidence.trim().length < 4 ||
-            !(item.number === null || typeof item.number === 'string')) continue;
-        const sourceIndex = chat.findIndex(message => String(message.mes ?? '').includes(item.evidence));
-        if (sourceIndex < 0 || normalizeName(item.name) === normalizeName(context.name1)) continue;
-        const number = item.number?.trim() || null;
-        // If digits were supplied they must literally occur in the evidence,
-        // ignoring only number formatting. Never let the model invent digits.
-        if (number && (!/^\+?[\d\s().-]{5,30}$/.test(number) || !item.evidence.replace(/\D/g, '').includes(number.replace(/\D/g, '')))) continue;
-        const name = item.name.trim().slice(0, 100);
-        const charIndex = context.characters?.findIndex(c => normalizeName(c.name) === normalizeName(name)) ?? -1;
-        const identity = charIndex >= 0 ? 'card:' + (context.characters[charIndex].avatar || name) : 'name:' + normalizeName(name);
-        contacts.push({ id: identity, name, number, evidence: item.evidence, sourceIndex, characterId: charIndex >= 0 ? charIndex : null });
-    }
-    return contacts;
-}
 
 export function validateCall(data) {
     if (!['answered', 'no_answer', 'declined'].includes(data.status) || typeof data.text !== 'string' ||
@@ -50,6 +30,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
     let scope;
     let busy = false;
     let error = '';
+    let contactStatus = '';
     let errorKind = null;
     let requestKind = null;
     let requestContactId = null;
@@ -71,10 +52,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             if (!destroyed && getContext().chatMetadata === job.metadata) void api.checkIncoming(job.options);
         });
     }
-    const snapshot = () => clone({ ...state, busy, error, errorKind, activeCallId });
+    const snapshot = () => clone({ ...state, busy, error, errorKind, activeCallId, contactStatus });
     const emit = () => { if (!destroyed) for (const listener of listeners) listener(snapshot()); };
     const unsubscribe = memory.subscribe(value => {
-        if (scope !== value.scope) { operation++; activeCallId = null; error = ''; scope = value.scope; }
+        if (scope !== value.scope) { operation++; activeCallId = null; error = ''; contactStatus = ''; scope = value.scope; }
         state = value.state;
         if (activeCallId && !state.calls[activeCallId]) { operation++; activeCallId = null; }
         emit();
@@ -217,7 +198,6 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             const stranded = Object.values(view.state.calls).filter(call => !finished(call) && call.id !== activeCallId);
             if (stranded.length) await memory.commit(await memory.begin(), stranded.map(call => set('calls', call.id, { ...call, status: call.status === 'ringing' ? 'missed' : 'interrupted', endedAt: Date.now() })));
             if (activeCallId && !finished(view.state.calls[activeCallId] ?? {})) return;
-            return this.scan(false);
         },
         checkIncoming(options = null) {
             options ??= error && errorKind === 'incoming' && retryIncomingOptions ? retryIncomingOptions : {};
@@ -372,25 +352,29 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             await memory.commit(ticket, [set('messages', latest.id, { ...latest, read: true, ignored: true })]);
             queueReaction(contactId, 'ignored:' + latest.id, 'user 选择暂不回复最新短信');
         },
-        scan(force = true) {
+        scan() {
+            contactStatus = '';
             return task(async (view, current) => {
-                if (!force && view.state.profiles.phoneScan?.revision === view.revision) return;
                 const context = getContext();
                 const chat = clone(context.chat);
+                const sources = contactSources(chat, context);
+                const sourceKey = JSON.stringify(sources);
+                const valid = () => current() && sourceKey === JSON.stringify(contactSources(getContext().chat, getContext()));
                 const ticket = await memory.begin();
-                const prompt = getSettings().prompts.contacts + '\nuser 名字：' + context.name1 +
-                    '\n仅分析上下文中实际发生的正文。要求每项提供逐字证据（保留原文语言），用于核对。不要从角色卡或世界书里的私密资料推断 user 已知道号码。' +
-                    '\n已保存联系人：' + JSON.stringify(Object.values(view.state.contacts).map(c => ({ name: c.name, number: c.number }))) +
-                    '\n只输出 JSON：{"contacts":[{"name":"真实姓名","user_has_number":true,"number":"明确的号码或 null","evidence":"正文中说明 user 确实已得到此人号码的连续原文"}]}。没有新证据时返回空数组。' +
-                    '\n“想要号码”“索取但未给出”“别人的号码”“char 单方面获得 user 号码”均不算 user 已获得。正文明确交换了号码但没写数字时 number 用 null，绝不编造。';
-                const contacts = await request(prompt, data => validateContacts(data, chat, context), current);
-                if (!current()) return;
-                const batches = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
+                const prompt = contactPrompt(getSettings().prompts.contacts, context, sources, Object.values(view.state.contacts));
+                const contacts = await request(prompt, data => validateContacts(data, chat, context, sources), valid);
+                if (!valid()) return;
+                const additions = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
                     const old = view.state.contacts[c.id];
                     return !old || (c.number && old.number !== c.number && c.sourceIndex >= old.sourceIndex);
-                }).map(contact => ({ sourceIndex: contact.sourceIndex, changes: [set('contacts', contact.id, contact)] }));
-                batches.push({ changes: [set('profiles', 'phoneScan', { revision: view.revision })] });
-                await memory.commitBatch(ticket, batches);
+                });
+                const batches = additions.map(contact => ({ sourceIndex: contact.sourceIndex, changes: [set('contacts', contact.id, contact)] }));
+                if (batches.length) await memory.commitBatch(ticket, batches);
+                if (!valid()) return;
+                const added = additions.filter(c => !view.state.contacts[c.id]).length;
+                const updated = additions.length - added;
+                contactStatus = added || updated ? '已新增 ' + added + ' 位联系人' + (updated ? '，更新 ' + updated + ' 位' : '') + '。' : '未找到新的联系人。';
+                return { added, updated };
             }, 'contacts');
         },
         dial(contactId) {
@@ -431,7 +415,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     await memory.commit(ticket, stranded.map(message => set('messages', message.id, { ...message, replyStatus: 'failed' })));
                 }
             }, 'messages');
-            if (prepared?.ok) return this.scan(false);
+            return prepared;
         },
         sendMessage(contactId, text) {
             return task(async (view, current) => {

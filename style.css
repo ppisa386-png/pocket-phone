@@ -189,3 +189,5 @@ h2, p { margin: 0; }
 .pp-api-status { margin: 6px 0 0; font-size: 12px; line-height: 1.5; min-height: 1.5em; overflow-wrap: anywhere; }
 .pp-api-status[data-kind="success"] { color: #42bd83; }
 .pp-api-status[data-kind="error"] { color: #ed7777; }
+
+.pp-contact-status { color: #42bd83; margin: 8px 18px; font-size: 12px; line-height: 1.5; }

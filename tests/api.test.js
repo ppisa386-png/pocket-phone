@@ -122,7 +122,7 @@ function phoneFixture() {
 
 test('independent phone and SMS work with host disconnected and roll back together', async () => {
     const f=phoneFixture(); f.settings.proactiveEnabled=false; try {
-        await f.phone.open(); assert.ok(f.phone.snapshot().contacts['card:alex.png']);
+        await f.phone.scan(); assert.ok(f.phone.snapshot().contacts['card:alex.png']);
         f.context.chat.push({mes:'Later that day.',name:'Alex'});
         f.reply(()=>'{"status":"answered","text":"Hello?"}'); await f.phone.dial('card:alex.png'); await f.phone.hangup();
         f.reply(()=>'{"status":"reply","text":"Text received."}'); await f.phone.sendMessage('card:alex.png','Hi');
@@ -136,7 +136,7 @@ test('independent phone and SMS work with host disconnected and roll back togeth
 
 test('deleting a floor aborts in-flight independent SMS and prevents stale records', async () => {
     const f=phoneFixture(); try {
-        await f.phone.open(); f.context.chat.push({mes:'Later.',name:'Alex'});
+        await f.phone.scan(); f.context.chat.push({mes:'Later.',name:'Alex'});
         let started; const ready=new Promise(r=>started=r);
         f.reply(options=>new Promise((_,reject)=>{started();options.signal.addEventListener('abort',()=>reject(new Error('aborted')));}));
         const pending=f.phone.sendMessage('card:alex.png','Hi'); await ready;
@@ -147,7 +147,7 @@ test('deleting a floor aborts in-flight independent SMS and prevents stale recor
 
 test('authentication failure is not retried fifteen times', async () => {
     const f=phoneFixture(); try {
-        await f.phone.open(); f.settings.retries=15; let attempts=0;
+        await f.phone.scan(); f.settings.retries=15; let attempts=0;
         f.reply(()=>{attempts++; throw Object.assign(new Error('认证失败'),{retryable:false});});
         await f.phone.sendMessage('card:alex.png','Hi'); assert.equal(attempts,1);
     } finally {f.close();}

@@ -37,11 +37,11 @@ test('contact evidence and digits are checked; implicit exchange stays numberles
 
 test('scan, outgoing call, text reply, hangup and history work with quiet generation events', async () => {
     const f = setup();
-    await f.phone.open();
+    await f.phone.scan();
     const contact = Object.values(f.phone.snapshot().contacts)[0];
     assert.equal(contact.name, 'Alex');
     assert.equal(f.requests(), 1);
-    await f.phone.open(); assert.equal(f.requests(), 1, 'unchanged narrative does not rescan');
+    await f.phone.open(); assert.equal(f.requests(), 1, 'opening the phone never scans');
     f.reply(options => {
         assert.equal(options.skipWIAN, false); assert.equal(options.quietToLoud, false);
         assert.match(options.quietPrompt, /不得描述表情/);
@@ -62,7 +62,7 @@ test('scan, outgoing call, text reply, hangup and history work with quiet genera
 
 test('numbers are anchored to acquisition floor, not later scan floor', async () => {
     const f = setup(); f.context.chat.push({ mes: 'Later, you go home.' });
-    await f.phone.open();
+    await f.phone.scan();
     f.context.chat.pop(); f.bus.emit('MESSAGE_DELETED'); await f.memory.read();
     assert.equal(Object.keys(f.phone.snapshot().contacts).length, 1);
     f.context.chat[0].mes = 'You ask Alex, but he refuses to give his number.';
@@ -74,7 +74,7 @@ test('numbers are anchored to acquisition floor, not later scan floor', async ()
 });
 
 test('failure respects retries; manual retry does not duplicate user speech', async () => {
-    const f = setup(); await f.phone.open();
+    const f = setup(); await f.phone.scan();
     f.reply(() => '{"status":"answered","text":"Hello"}'); await f.phone.dial('card:alex.png');
     f.settings.retries = 2;
     const before = f.requests(); f.reply(() => { throw new Error('offline'); });
@@ -87,7 +87,7 @@ test('failure respects retries; manual retry does not duplicate user speech', as
 });
 
 test('hangup discards a late call response', async () => {
-    const f = setup(); await f.phone.open();
+    const f = setup(); await f.phone.scan();
     let resolveResponse, started;
     const start = new Promise(r => { started = r; });
     f.reply(() => { started(); return new Promise(r => { resolveResponse = r; }); });
@@ -103,7 +103,7 @@ test('hangup discards a late call response', async () => {
 
 test('offline connection explains the problem without creating fake contacts', async () => {
     const f = setup(); f.context.onlineStatus = 'no_connection';
-    await f.phone.open();
+    await f.phone.scan();
     assert.match(f.phone.snapshot().error, /连接 API/);
     assert.equal(f.requests(), 0); assert.equal(Object.keys(f.phone.snapshot().contacts).length, 0);
     f.close();

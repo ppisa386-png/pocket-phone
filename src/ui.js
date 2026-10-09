@@ -1,9 +1,9 @@
-import { createApiPanel } from './api-view.js?v=0.10.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.10.0';
-import { icon } from './icons.js?v=0.10.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.10.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.10.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.10.0';
+import { createApiPanel } from './api-view.js?v=0.11.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.11.0';
+import { icon } from './icons.js?v=0.11.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.11.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.11.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.11.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -204,7 +204,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderEmptyApp(id) {
         const app = APPS.find(item => item.id === id);
         const words = {
-            phone: phoneTab === 'contacts' ? ['暂无联系人', '通讯模块接入后，在正文中获得号码的人物会出现在这里。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
+            phone: phoneTab === 'contacts' ? ['暂无联系人', '点击「新增联系人」后查找可见正文和人设中的电话联系人。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
             messages: ['暂无短信', '短信功能将在后续阶段接入。'],
             snapchat: ['Snapchat', '好友邀请、私聊与 Stories 将在后续阶段接入。'],
             x: ['X', '个人主页、搜索与动态将在后续阶段接入。'],

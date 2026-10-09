@@ -30,7 +30,7 @@ export function enabledPresetText(context, character) {
 export async function buildApiContext(context, prompt, contact, config, isCurrent = () => true) {
     let characterId = context.characterId;
     if (contact?.id?.startsWith('card:')) characterId = context.characters?.findIndex(item => 'card:' + item.avatar === contact.id);
-    const character = context.characters?.[characterId];
+    const character = contact && !contact.id?.startsWith('card:') ? { name: contact.name } : context.characters?.[characterId];
     if (contact?.id?.startsWith('card:') && !character) throw new Error('当前通信角色已不可用。');
     const card = character?.data ?? character ?? {};
     const history = (context.chat ?? []).filter(message => !message.is_system).slice(-config.historyLimit)
