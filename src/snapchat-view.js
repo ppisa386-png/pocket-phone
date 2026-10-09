@@ -1,4 +1,4 @@
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.13.1';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.14.0';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};

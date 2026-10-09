@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.13.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.14.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -64,6 +64,19 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         if (item.type === 'message') entries.push({time, data:{channel:'Snapchat', speaker:item.role === 'user' ? userName : speaker.name, kind:item.kind, text:item.text}});
         if (item.type === 'call' && item.turns?.length) entries.push({time, data:{channel:'Snapchat ' + (item.mode === 'video' ? '视频通话' : '语音通话'), status:callLabels[item.status], turns:item.turns.map(t=>({speaker:t.role === 'user' ? userName : speaker.name,text:t.text}))}});
         if (item.type === 'transfer') entries.push({time, data:{channel:'Snapcash', text:JSON.stringify({direction:item.direction,status:item.status,amount:item.amountMinor/100,currency:item.currency,memo:item.memo})}});
+    }
+    const xRecords = Object.values(state.x || {});
+    const xKnown = new Set(xRecords.filter(a => a.type === 'account' && a.identityKnown &&
+        ((speaker.avatar && a.characterId === 'card:' + speaker.avatar) ||
+        (!a.characterId && speaker.nameIsUnique && normalized(a.name) === normalized(speaker.name)))).map(a=>a.id));
+    for (const record of xRecords) {
+        if(record.type === 'message' && xKnown.has(record.accountId)) entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',speaker:record.role==='user'?userName:speaker.name,text:record.text}});
+        if(record.type === 'comment') {
+            const post=state.x[record.postId];
+            if((post?.author==='user' && xKnown.has(record.author)) || (xKnown.has(post?.author) && (record.author==='user'||record.author===post.author))) {
+                entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',speaker:record.author==='user'?userName:speaker.name,text:record.text,post:post.text}});
+            }
+        }
     }
     entries.sort((a, b) => a.time - b.time);
     const selected = [];

@@ -234,3 +234,16 @@ h2, p { margin: 0; }
 
 .pp-topline { touch-action:none; user-select:none; cursor:grab; }
 .pp-topline:active { cursor:grabbing; }
+
+/* X uses the same field primitives, with a monochrome timeline. */
+.pp-x .pp-snap-top { border-color:var(--pp-text); }
+.pp-x .pp-snap-primary { background:var(--pp-text); color:var(--pp-bg); }
+.pp-x .pp-snap-avatar { background:var(--pp-line); color:var(--pp-text); }
+.pp-x .pp-snap-tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.pp-x .pp-snap-tabs button[aria-pressed="true"] { color:var(--pp-bg); background:var(--pp-text); }
+.pp-x .pp-snap-actions button[aria-pressed="true"] { border-bottom:3px solid #1d9bf0; }
+.pp-x-account,.pp-x-post { padding:14px 0; border-bottom:1px solid var(--pp-line); }
+.pp-x-post > header .pp-snap-button { padding:0; background:none; border:0; font-size:1em; font-weight:600; }
+.pp-x-post > header { display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
+.pp-x-comments { padding:10px 0 0 12px; border-left:2px solid var(--pp-line); }
+.pp-x h3 { font-size:1em; margin-top:20px; }
