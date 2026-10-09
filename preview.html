@@ -2,9 +2,9 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.13.0</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
+</style></head><body><main><small>POCKET PHONE · 0.13.1</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.13.0';
+const VERSION = '0.13.1';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -438,7 +438,7 @@ function renderPhoneScreen(view, tab, selectedCallId, draft) {
         const live = ['connected', 'dialing', 'answering'].includes(call.status);
         const waitingReply = ['dialing', 'answering'].includes(call.status) || call.turns.at(-1)?.role === 'user';
         return '<div class="pp-call-page"><button type="button" class="pp-text-button" data-phone-list>返回通话记录</button>' +
-            '<div class="pp-call-heading"><span class="pp-contact-avatar">' + icon('person') + '</span><h2>' + phoneEscape(call.name) + '</h2><p>' + phoneEscape(call.number || (call.direction === 'incoming' ? '来电' : '已交换号码')) + '</p><small role="status">' + (busy && live ? '等待对方回应…' : callStatus(call)) + '</small>' + renderBlockButton(view, call.contactId, 'phone') + '</div>' +
+            '<div class="pp-call-heading"><span class="pp-contact-avatar">' + icon('person') + '</span><h2>' + phoneEscape(call.name) + '</h2>' + (call.number ? '<p>' + phoneEscape(call.number) + '</p>' : '') + '<small role="status">' + (busy && live ? '等待对方回应…' : callStatus(call)) + '</small>' + renderBlockButton(view, call.contactId, 'phone') + '</div>' +
             '<div class="pp-call-transcript" aria-live="polite">' + call.turns.map(turn => '<div class="pp-call-turn" data-role="' + (turn.role === 'user' ? 'user' : 'assistant') + '"><small>' + phoneEscape(turn.role === 'user' ? '我' : call.name) + '</small><p>' + phoneEscape(turn.text) + '</p></div>').join('') + '</div>' + errorHTML +
             (error && live && waitingReply ? '<button type="button" class="pp-call-retry" data-phone-retry' + (busy ? ' disabled' : '') + '>重试回应</button>' : '') +
             (call.status === 'connected' ? '<form class="pp-call-compose" data-phone-form><label for="pp-call-input">说话内容</label><textarea id="pp-call-input" data-phone-draft rows="2" maxlength="6000" placeholder="你在电话里说…">' + phoneEscape(draft) + '</textarea><button type="submit"' + (busy || waitingReply ? ' disabled' : '') + '>发送</button></form>' : '') +
@@ -449,12 +449,12 @@ function renderPhoneScreen(view, tab, selectedCallId, draft) {
     const sortedContacts = Object.values(contacts).sort((a, b) => a.name.localeCompare(b.name));
     let rows = '';
     if (tab === 'blocked') rows = renderBlockedList(view, 'phone');
-    else if (tab === 'contacts') rows = sortedContacts.map(contact => '<div class="pp-contact-row"><span class="pp-contact-avatar">' + icon('person') + '</span><div><strong>' + phoneEscape(contact.name) + '</strong><small>' + phoneEscape(contact.number || (contact.sourceKind === 'persona' ? '人设中的亲友' : '已交换号码')) + '</small></div><button type="button" data-phone-dial="' + phoneEscape(contact.id) + '" class="pp-dial-contact" aria-label="拨打 ' + phoneEscape(contact.name) + '"' + (busy ? ' disabled' : '') + '>' + icon('phone') + '</button>' + renderBlockButton(view, contact.id, 'phone') + '</div>').join('');
+    else if (tab === 'contacts') rows = sortedContacts.map(contact => '<div class="pp-contact-row"><span class="pp-contact-avatar">' + icon('person') + '</span><div><strong>' + phoneEscape(contact.name) + '</strong>' + (contact.number ? '<small>' + phoneEscape(contact.number) + '</small>' : '') + '</div><button type="button" data-phone-dial="' + phoneEscape(contact.id) + '" class="pp-dial-contact" aria-label="拨打 ' + phoneEscape(contact.name) + '"' + (busy ? ' disabled' : '') + '>' + icon('phone') + '</button>' + renderBlockButton(view, contact.id, 'phone') + '</div>').join('');
     else rows = sortedCalls.map(item => '<button type="button" class="pp-call-row" data-phone-record="' + phoneEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('phone') + '</span><span><strong>' + phoneEscape(item.name) + '</strong><small>' + (item.direction === 'incoming' ? '来电' : '拨出') + ' · ' + callStatus(item) + '</small></span><time>' + new Date(item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '</time>' + icon('chevron') + '</button>').join('');
     return '<div class="pp-phone-app"><div class="pp-phone-toolbar"><h2>' + (tab === 'blocked' ? '电话黑名单' : tab === 'contacts' ? '联系人' : '最近通话') + '</h2>' + (tab === 'contacts' ? '<button type="button" class="pp-text-button" data-phone-sync' + (busy ? ' disabled' : '') + '>新增联系人</button>' : '') + '</div>' +
-        (error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试主动联系检查</button>' : '') +
+        (error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试</button>' : '') +
         (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML + (contactStatus && tab === 'contacts' ? '<p class="pp-contact-status" role="status">' + phoneEscape(contactStatus) + '</p>' : '') +
-        '<div class="pp-phone-list">' + (rows || '<div class="pp-empty"><h2>' + (tab === 'contacts' ? '暂无联系人' : '暂无通话记录') + '</h2><p>' + (tab === 'contacts' ? '点击「新增联系人」，从可见正文和你的人设中查找。' : '到下方「联系人」选择已经取得号码的人拨打。') + '</p></div>') + '</div><nav class="pp-phone-tabs" aria-label="电话页面">' +
+        '<div class="pp-phone-list">' + (rows || '<div class="pp-empty"><h2>' + (tab === 'contacts' ? '暂无联系人' : '暂无通话记录') + '</h2><p>' + (tab === 'contacts' ? '点击「新增联系人」添加。' : '选择联系人拨打电话。') + '</p></div>') + '</div><nav class="pp-phone-tabs" aria-label="电话页面">' +
         [['history', '电话', 'phone'], ['contacts', '联系人', 'person'], ['blocked', '黑名单', 'person']].map(([id, label, glyph]) => '<button type="button" data-phone-tab="' + id + '" aria-pressed="' + (tab === id) + '">' + icon(glyph) + '<span>' + label + '</span></button>').join('') + '</nav></div>';
 }
 
@@ -484,10 +484,10 @@ function messageParticipants(state) {
 
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = value => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-const replyLabels = { pending: '等待回复…', received: '已发送', failed: '回复获取失败', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
+const replyLabels = { pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
 function renderMessagesScreen(view, selectedContactId, picking, drafts) {
     const { contacts = {}, messages = {}, busy = false, error = '', errorKind = null, contactStatus = '' } = view ?? {};
-    const retryHTML = error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试主动联系检查</button>' : '';
+    const retryHTML = error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试</button>' : '';
     const errorHTML = retryHTML + (error ? '<div class="pp-call-error" role="alert">' + smsEscape(error) + '</div>' : '');
     if (picking === 'blocked') return '<div class="pp-sms-list"><div class="pp-phone-toolbar"><h2>短信黑名单</h2><button type="button" class="pp-text-button" data-sms-back>返回</button></div>' + renderBlockedList(view, 'messages') + '</div>';
     const participants = messageParticipants(view ?? {});
@@ -496,7 +496,7 @@ function renderMessagesScreen(view, selectedContactId, picking, drafts) {
         const blocked = isBlocked(view, contact.id, 'messages');
         const thread = threadMessages(messages, contact.id);
         const latestUserId = thread.filter(message => message.role === 'user').at(-1)?.id;
-        return '<div class="pp-sms-thread"><div class="pp-sms-heading"><button type="button" class="pp-icon-button" data-sms-back aria-label="返回短信列表">' + icon('back') + '</button><div><strong>' + smsEscape(contact.name) + '</strong><small>' + smsEscape(contact.number || (contact.receivedSMS ? '短信发件人' : contact.sourceKind === 'persona' ? '人设中的亲友' : '已交换号码')) + '</small></div>' + renderBlockButton(view, contact.id, 'messages') + '</div>' +
+        return '<div class="pp-sms-thread"><div class="pp-sms-heading"><button type="button" class="pp-icon-button" data-sms-back aria-label="返回短信列表">' + icon('back') + '</button><div><strong>' + smsEscape(contact.name) + '</strong>' + (contact.number ? '<small>' + smsEscape(contact.number) + '</small>' : '') + '</div>' + renderBlockButton(view, contact.id, 'messages') + '</div>' +
             '<div class="pp-sms-bubbles" aria-live="polite">' + (thread.length ? thread.map(message => '<div class="pp-sms-item" data-role="' + (message.role === 'user' ? 'user' : 'assistant') + '"><p class="pp-sms-bubble">' + smsEscape(message.text) + '</p><small>' + smsTime(message.createdAt) + (message.role === 'user' ? ' · ' + replyLabels[message.replyStatus] : '') + '</small>' +
                 (message.id === latestUserId && message.replyStatus === 'failed' ? '<button type="button" class="pp-text-button" data-sms-retry="' + smsEscape(message.id) + '"' + (busy || blocked ? ' disabled' : '') + '>重试回复</button>' : '') + '</div>').join('') : '<p class="pp-sms-empty-thread">发送第一条短信</p>') + '</div>' +
             (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML +
@@ -511,8 +511,8 @@ function renderMessagesScreen(view, selectedContactId, picking, drafts) {
         (entries.length ? entries.map(item => {
             const last = threadMessages(messages, item.id).at(-1);
             const unread = unreadMessages(messages, item.id);
-            return '<button type="button" class="pp-sms-row" data-sms-contact="' + smsEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('person') + '</span><span class="pp-sms-row-text"><strong>' + smsEscape(item.name) + '</strong><small>' + smsEscape(picking ? (item.number || (item.sourceKind === 'persona' ? '人设中的亲友' : '已交换号码')) : last.text) + '</small></span>' + (unread && !picking ? '<span class="pp-unread-count">' + unread + '</span>' : '') + icon('chevron') + '</button>';
-        }).join('') : '<div class="pp-empty"><h2>' + (picking ? '暂无联系人' : '暂无短信') + '</h2><p>' + (picking ? '点击「新增联系人」，从可见正文和你的人设中查找。' : '点击「新建短信」，选择联系人开始交流。') + '</p></div>') +
+            return '<button type="button" class="pp-sms-row" data-sms-contact="' + smsEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('person') + '</span><span class="pp-sms-row-text"><strong>' + smsEscape(item.name) + '</strong>' + (picking ? (item.number ? '<small>' + smsEscape(item.number) + '</small>' : '') : '<small>' + smsEscape(last.text) + '</small>') + '</span>' + (unread && !picking ? '<span class="pp-unread-count">' + unread + '</span>' : '') + icon('chevron') + '</button>';
+        }).join('') : '<div class="pp-empty"><h2>' + (picking ? '暂无联系人' : '暂无短信') + '</h2><p>' + (picking ? '点击「新增联系人」添加。' : '点击「新建短信」，选择联系人开始交流。') + '</p></div>') +
         '</div>';
 }
 
@@ -551,7 +551,7 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
         }).join('')+(accounts.length?'':empty('还没有 Snapchat 联系人。点「新增联系人」查找账号。'));
     }
     function transferHTML(t) {
-        return '<article class="pp-snap-cash"><strong>Snapcash · '+(t.direction==='incoming'?'对方转来':'你转出')+'</strong><b>'+snapMoney(t)+'</b><p>'+snapEsc(t.memo)+'</p><small>'+({pending:'待收款',accepted:'已收款 · 已记入资产流水',declined:'已拒收／取消'})[t.status]+'</small><div class="pp-snap-actions">'+(t.status==='pending'?button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id)+button('cancel',t.direction==='incoming'?'拒收':'取消转账',t.id):'')+'</div></article>';
+        return '<article class="pp-snap-cash"><strong>Snapcash · '+(t.direction==='incoming'?'对方转来':'你转出')+'</strong><b>'+snapMoney(t)+'</b><p>'+snapEsc(t.memo)+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已拒收／取消'})[t.status]+'</small><div class="pp-snap-actions">'+(t.status==='pending'?button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id)+button('cancel',t.direction==='incoming'?'拒收':'取消转账',t.id):'')+'</div></article>';
     }
     function threadHTML(state,a) {
         const items=Object.values(state.snapchat||{}).filter(i=>i.accountId===a.id&&['message','call','transfer'].includes(i.type)).sort((a,b)=>a.createdAt-b.createdAt);
@@ -561,15 +561,15 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
             if(i.type==='call')return '<article class="pp-snap-card"><strong>'+snapKind[i.mode]+'通话 · '+({connected:'通话中',ended:'已结束',no_answer:'未接听'})[i.status]+'</strong>'+i.turns.map(t=>'<p class="pp-snap-copy"><b>'+(t.role==='user'?'你':snapEsc(a.name))+'：</b>'+snapEsc(t.text)+'</p>').join('')+'</article>';
             return '<article class="pp-snap-message '+(i.role==='user'?'is-user':'')+'"><small>'+(i.role==='user'?'你':snapEsc(a.name))+' · '+snapKind[i.kind]+' · '+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p>'+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id):i.status==='no_reply'?'<small>对方暂未回复</small>':'')+'</article>';
         }).join('');
-        return button('list','‹ 聊天列表')+'<div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+(a.identityKnown?'知道你的真实身份':'以网名与你交流')+'</small></div></div><div class="pp-snap-actions">'+(!a.blocked?button('voice','语音通话',a.id)+button('video','视频通话',a.id)+button('cash','转账',a.id)+(a.identityKnown?'':button('reveal','告知真实身份',a.id))+button('block','拉黑',a.id):button('unblock','解除拉黑',a.id))+'</div><div class="pp-snap-thread">'+chat+'</div>'+
-            (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+field('currency','币种',profile().currency)+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容（文字扮演）'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息／语音转写／媒体描述'),'发送'));
+        return button('list','‹ 聊天列表')+'<div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+'</small></div></div><div class="pp-snap-actions">'+(!a.blocked?button('voice','语音通话',a.id)+button('video','视频通话',a.id)+button('cash','转账',a.id)+(a.identityKnown?'':button('reveal','自我介绍',a.id))+button('block','拉黑',a.id):button('unblock','解除拉黑',a.id))+'</div><div class="pp-snap-thread">'+chat+'</div>'+
+            (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+field('currency','币种',profile().currency)+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
     }
     function postHTML(item) {
-        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期 · 留存':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
+        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
     }
     function feedsHTML(state) {
-        if(tab==='stories')return form('story',select('storyKind',['image','video'],'image')+textarea('story','分享照片或视频的描述'),'发布故事')+button('refresh','刷新好友故事')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');
-        if(tab==='spotlight')return button('refresh','加载短视频')+'<div class="pp-snap-clips">'+snapItems(state,'clip').slice().reverse().map(postHTML).join('')+'</div>'+empty('上下滑动浏览已加载内容，不调用 API。');
+        if(tab==='stories')return form('story',select('storyKind',['image','video'],'image')+textarea('story','故事内容'),'发布故事')+button('refresh','刷新好友故事')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');
+        if(tab==='spotlight')return button('refresh','加载短视频')+'<div class="pp-snap-clips">'+snapItems(state,'clip').slice().reverse().map(postHTML).join('')+'</div>'+empty('上下滑动浏览更多视频。');
         const p=profile();const locations=snapItems(state,'location').filter(i=>!state.snapchat[i.author]?.blocked).slice().reverse();
         return button('refresh','刷新共享位置与动态')+'<div class="pp-snap-map"><strong>Snap Map</strong><p>朋友分享的位置 · 世界动态</p><div class="pp-snap-pins">'+(p.sharing&&p.location?'<span>⌖ 你 · '+snapEsc(p.location)+'</span>':'')+locations.slice(0,6).map(i=>'<span>⌖ '+snapEsc(i.name)+' · '+snapEsc(i.place)+'</span>').join('')+'</div></div>'+(!p.sharing?empty('你的位置未共享，可在「我的账号」开启。'):'')+locations.map(i=>'<article class="pp-snap-card"><strong>'+snapEsc(i.name)+' · '+snapEsc(i.place)+'</strong><small>'+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p></article>').join('');
     }
@@ -758,7 +758,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderHome() {
         const enabled = APPS.filter(app => settings.apps[app.id]);
-        content.innerHTML = '<div class="pp-home"><div class="pp-home-clock"><div class="pp-date"></div><div class="pp-big-time"></div><span class="pp-time-label">设备时间</span></div>' +
+        content.innerHTML = '<div class="pp-home"><div class="pp-home-clock"><div class="pp-date"></div><div class="pp-big-time"></div></div>' +
             '<div class="pp-app-grid">' + enabled.filter(app => !app.dock).map(appButton).join('') + '</div>' +
             '<div class="pp-dock">' + enabled.filter(app => app.dock).map(appButton).join('') + appButton({ id: 'settings', name: '设置', color: '#778298' }) + '</div></div>';
         updateClock();
@@ -838,14 +838,14 @@ function mountPhone({ adapter, styles, container = document.body }) {
     function renderEmptyApp(id) {
         const app = APPS.find(item => item.id === id);
         const words = {
-            phone: phoneTab === 'contacts' ? ['暂无联系人', '点击「新增联系人」后查找可见正文和人设中的电话联系人。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
+            phone: phoneTab === 'contacts' ? ['暂无联系人', '点击「新增联系人」添加。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
             messages: ['暂无短信', '短信功能将在后续阶段接入。'],
-            snapchat: ['Snapchat', '好友邀请、私聊与 Stories 将在后续阶段接入。'],
-            x: ['X', '个人主页、搜索与动态将在后续阶段接入。'],
-            amazon: ['Amazon', '商品与虚拟订单将在后续阶段接入。'],
+            snapchat: ['Snapchat', '暂无内容。'],
+            x: ['X', '暂无动态。'],
+            amazon: ['Amazon', '暂无订单。'],
         };
         const [heading, detail] = words[id];
-        content.innerHTML = '<div class="pp-empty-app"><div class="pp-empty"><span class="pp-empty-icon">' + icon(id === 'phone' && phoneTab === 'contacts' ? 'person' : app.id) + '</span><h2>' + heading + '</h2><p>' + detail + '</p><span class="pp-stage-label">页面预留</span></div>' +
+        content.innerHTML = '<div class="pp-empty-app"><div class="pp-empty"><span class="pp-empty-icon">' + icon(id === 'phone' && phoneTab === 'contacts' ? 'person' : app.id) + '</span><h2>' + heading + '</h2><p>' + detail + '</p></div>' +
             (id === 'phone' ? '<nav class="pp-phone-tabs" aria-label="电话页面"><button type="button" data-phone-tab="history" aria-pressed="' + (phoneTab === 'history') + '">' + icon('phone') + '<span>电话</span></button><button type="button" data-phone-tab="contacts" aria-pressed="' + (phoneTab === 'contacts') + '">' + icon('person') + '<span>联系人</span></button></nav>' : '') + '</div>';
     }
 
@@ -906,7 +906,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     function updateClock() {
         if (!opened) return;
-        for(const el of content.querySelectorAll('[data-snap-expiry]'))el.textContent=Date.now()-Number(el.dataset.snapExpiry)>=86400000?'已过期 · 留存':'24 小时内';
+        for(const el of content.querySelectorAll('[data-snap-expiry]'))el.textContent=Date.now()-Number(el.dataset.snapExpiry)>=86400000?'已过期':'24 小时内';
         const now = new Date();
         const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
         shadow.querySelector('.pp-status-time').textContent = time;

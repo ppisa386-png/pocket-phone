@@ -1,11 +1,11 @@
-import { createSnapPanel } from './snapchat-view.js?v=0.13.0';
-import { snapUnread } from './snapchat.js?v=0.13.0';
-import { createApiPanel } from './api-view.js?v=0.13.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.13.0';
-import { icon } from './icons.js?v=0.13.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.13.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.13.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.13.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.13.1';
+import { snapUnread } from './snapchat.js?v=0.13.1';
+import { createApiPanel } from './api-view.js?v=0.13.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.13.1';
+import { icon } from './icons.js?v=0.13.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.13.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.13.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.13.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -139,7 +139,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderHome() {
         const enabled = APPS.filter(app => settings.apps[app.id]);
-        content.innerHTML = '<div class="pp-home"><div class="pp-home-clock"><div class="pp-date"></div><div class="pp-big-time"></div><span class="pp-time-label">设备时间</span></div>' +
+        content.innerHTML = '<div class="pp-home"><div class="pp-home-clock"><div class="pp-date"></div><div class="pp-big-time"></div></div>' +
             '<div class="pp-app-grid">' + enabled.filter(app => !app.dock).map(appButton).join('') + '</div>' +
             '<div class="pp-dock">' + enabled.filter(app => app.dock).map(appButton).join('') + appButton({ id: 'settings', name: '设置', color: '#778298' }) + '</div></div>';
         updateClock();
@@ -219,14 +219,14 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderEmptyApp(id) {
         const app = APPS.find(item => item.id === id);
         const words = {
-            phone: phoneTab === 'contacts' ? ['暂无联系人', '点击「新增联系人」后查找可见正文和人设中的电话联系人。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
+            phone: phoneTab === 'contacts' ? ['暂无联系人', '点击「新增联系人」添加。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
             messages: ['暂无短信', '短信功能将在后续阶段接入。'],
-            snapchat: ['Snapchat', '好友邀请、私聊与 Stories 将在后续阶段接入。'],
-            x: ['X', '个人主页、搜索与动态将在后续阶段接入。'],
-            amazon: ['Amazon', '商品与虚拟订单将在后续阶段接入。'],
+            snapchat: ['Snapchat', '暂无内容。'],
+            x: ['X', '暂无动态。'],
+            amazon: ['Amazon', '暂无订单。'],
         };
         const [heading, detail] = words[id];
-        content.innerHTML = '<div class="pp-empty-app"><div class="pp-empty"><span class="pp-empty-icon">' + icon(id === 'phone' && phoneTab === 'contacts' ? 'person' : app.id) + '</span><h2>' + heading + '</h2><p>' + detail + '</p><span class="pp-stage-label">页面预留</span></div>' +
+        content.innerHTML = '<div class="pp-empty-app"><div class="pp-empty"><span class="pp-empty-icon">' + icon(id === 'phone' && phoneTab === 'contacts' ? 'person' : app.id) + '</span><h2>' + heading + '</h2><p>' + detail + '</p></div>' +
             (id === 'phone' ? '<nav class="pp-phone-tabs" aria-label="电话页面"><button type="button" data-phone-tab="history" aria-pressed="' + (phoneTab === 'history') + '">' + icon('phone') + '<span>电话</span></button><button type="button" data-phone-tab="contacts" aria-pressed="' + (phoneTab === 'contacts') + '">' + icon('person') + '<span>联系人</span></button></nav>' : '') + '</div>';
     }
 
@@ -287,7 +287,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function updateClock() {
         if (!opened) return;
-        for(const el of content.querySelectorAll('[data-snap-expiry]'))el.textContent=Date.now()-Number(el.dataset.snapExpiry)>=86400000?'已过期 · 留存':'24 小时内';
+        for(const el of content.querySelectorAll('[data-snap-expiry]'))el.textContent=Date.now()-Number(el.dataset.snapExpiry)>=86400000?'已过期':'24 小时内';
         const now = new Date();
         const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
         shadow.querySelector('.pp-status-time').textContent = time;

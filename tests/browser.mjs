@@ -370,7 +370,7 @@ try {
         check(await p.evaluate(() => window.modelCalls) === 1, 'one shared request produces proactive SMS');
         await p.locator('[data-app="messages"]').tap(); await p.locator('[data-sms-contact]').tap();
         await p.getByText('Meet at the library instead.', {exact:true}).waitFor();
-        check(await p.getByText('短信发件人', {exact:true}).count() === 1, 'received SMS opens a thread without inventing a phone contact');
+        check(await p.locator('.pp-sms-heading strong').textContent() === 'Alex', 'received SMS opens the sender thread');
         await p.locator('[data-sms-draft]').fill('Got it.'); await p.getByRole('button', {name:'发送短信',exact:true}).tap();
         await p.getByText('Text received.', {exact:true}).waitFor();
         check(await p.locator('.pp-sms-item').count() === 3, 'user can reply in the incoming SMS thread');
@@ -506,9 +506,9 @@ try {
         await p.locator('[data-snap-action="list"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-snap-action="accept"]').waitFor();await p.locator('[data-snap-action="accept"]').tap();await p.locator('[data-snap-action="thread"]').tap();
         await p.locator('[data-snap-field="message"]').fill('Hello');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();
         check(await p.locator('[data-snap-field="message"]').inputValue()==='','Snapchat sent draft clears');
-        check(await p.getByText('@alex · 以网名与你交流',{exact:true}).count()===1,'Snapchat preserves pseudonym');
+        check(await p.getByText('@alex',{exact:true}).count()===1,'Snapchat header displays only account handle');
         await p.locator('[data-snap-action="voice"]').tap();await p.getByText('I can hear you.',{exact:false}).waitFor();await p.locator('[data-snap-action="hangup"]').tap();
-        await p.locator('[data-snap-action="cash"]').tap();await p.locator('[data-snap-field="amount"]').fill('12.30');await p.locator('[data-snap-field="memo"]').fill('Lunch');await p.getByRole('button',{name:'发送转账',exact:true}).tap();await p.getByText('已收款 · 已记入资产流水',{exact:true}).waitFor();
+        await p.locator('[data-snap-action="cash"]').tap();await p.locator('[data-snap-field="amount"]').fill('12.30');await p.locator('[data-snap-field="memo"]').fill('Lunch');await p.getByRole('button',{name:'发送转账',exact:true}).tap();await p.getByText('已收款',{exact:true}).waitFor();
         check(await p.locator('.pp-snap-cash').count()===1,'one settled Snapcash card');
         await p.locator('[data-snap-action="tab"][data-snap-id="stories"]').tap();await p.locator('[data-snap-field="story"]').fill('<script>window.badSnap=true</script> Sunset');const before=await p.evaluate(()=>window.modelCalls);await p.getByRole('button',{name:'发布故事',exact:true}).tap();await p.locator('[data-snap-expiry]').waitFor();
         check(await p.evaluate(()=>window.modelCalls)===before,'publishing story has no API cost');check(await p.evaluate(()=>!window.badSnap),'story text never runs HTML');
@@ -516,7 +516,7 @@ try {
         check(await p.locator('.pp-snap-clip').count()===1,'Spotlight renders a vertical text-video card');
         await p.locator('[data-snap-action="tab"][data-snap-id="map"]').tap();await p.getByRole('button',{name:'刷新共享位置与动态',exact:true}).tap();await p.getByText('Public seaside view',{exact:true}).waitFor();
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Snapchat fits mobile width');
-        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();await p.locator('[data-snap-action="thread"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('已收款 · 已记入资产流水',{exact:true}).waitFor();
+        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();await p.locator('[data-snap-action="thread"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('已收款',{exact:true}).waitFor();
         check(true,'Snapchat conversation and cash survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='Different story';await c.eventSource.emit('MESSAGE_EDITED');});
         await p.getByText('还没有 Snapchat 联系人。点「新增联系人」查找账号。',{exact:true}).waitFor();check(await p.locator('.pp-snap-cash').count()===0,'Snapchat UI rolls back after narrative edit');
