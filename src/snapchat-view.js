@@ -1,5 +1,5 @@
-import { icon } from './icons.js?v=0.16.0';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.16.0';
+import { icon } from './icons.js?v=0.16.1';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.16.1';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -16,9 +16,9 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-snap-action="'+action+'" data-snap-id="'+snapEsc(id)+'" '+extra+disabled()+'>'+snapEsc(label)+'</button>';
     const messageTools=i=>'<div class="pp-message-tools"><button type="button" class="pp-icon-button" data-snap-action="edit-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="修改消息"'+disabled()+'>'+icon('edit')+'</button><button type="button" class="pp-icon-button" data-snap-action="reroll-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="重新生成消息"'+disabled()+'>'+icon('retry')+'</button></div>';
     const field=(name,label,fallback='',type='text')=>'<label class="pp-field"><span>'+label+'</span><input data-snap-field="'+name+'" name="'+name+'" type="'+type+'" value="'+snapEsc(value(name,fallback))+'" '+(type==='number'?'min="0.01" step="0.01"':'maxlength="200"')+'></label>';
-    const textarea=(name,label)=>'<label class="pp-field"><span>'+label+'</span><textarea data-snap-field="'+name+'" name="'+name+'" rows="3" maxlength="6000">'+snapEsc(value(name))+'</textarea></label>';
+    const textarea=(name,label)=>'<label class="pp-field"><span>'+label+'</span><textarea data-snap-field="'+name+'" name="'+name+'" enterkeyhint="enter" rows="3" maxlength="6000">'+snapEsc(value(name))+'</textarea></label>';
     const select=(name,options,fallback)=>'<select name="'+name+'" data-snap-field="'+name+'" aria-label="内容类型">'+options.map(k=>'<option value="'+k+'"'+(value(name,fallback)===k?' selected':'')+'>'+snapKind[k]+'</option>').join('')+'</select>';
-    const form=(name,body,label)=>'<form class="pp-snap-form" data-snap-form="'+name+'">'+body+'<div class="pp-compose-actions"><button class="pp-snap-primary" type="submit"'+disabled()+'>'+label+'</button>'+(name==='message'?'<button type="button" class="pp-icon-button" data-snap-action="flush" aria-label="发送全部消息"'+disabled()+'>'+icon('send')+'</button>':'')+'</div></form>';
+    const form=(name,body,label)=>'<form class="pp-snap-form" data-snap-form="'+name+'">'+body+'<div class="pp-compose-actions"><button class="pp-snap-primary" type="submit"'+disabled()+'>'+label+'</button></div></form>';
     const empty=text=>'<p class="pp-snap-empty">'+text+'</p>';
     function accountsHTML(state) {
         const accounts=snapItems(state,'account');
@@ -66,8 +66,20 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
         catch(error){status=error.message;return null;}
         finally{posting=false;redraw();}
     }
+    async function queueCurrent(){
+        const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
+        if(!message.trim())return;
+        const result=await perform('queueMessage',[selected,kind,message]);
+        if(result?.ok&&drafts[draftKey]===message)delete drafts[draftKey];
+        redraw();return result;
+    }
+    async function sendCurrent(){
+        const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
+        if(message.trim()) {const added=await perform('queueMessage',[selected,kind,message]);if(!added?.ok)return;if(drafts[draftKey]===message)delete drafts[draftKey];}
+        await perform('flushMessages',[selected]);redraw();
+    }
     return {
-        html,
+        html, queueCurrent,
         reset(){editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
         input(target){if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
         async readVisible(){if(reading||posting||getView().busy||!accountId||page==='profile'||!adapter.snapchat)return;if(!snapItems(getView(),'message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;reading=true;try{await adapter.snapchat.markRead(accountId);}finally{reading=false;}},
@@ -75,11 +87,6 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             if(action==='edit-message'){editingId=id;drafts[key('editText')]=getView().snapchat[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='reroll-message'){await perform('rerollMessage',[id]);return;}
-            if(action==='flush'){
-                const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
-                if(message.trim()) {const added=await perform('queueMessage',[selected,kind,message]);if(!added?.ok)return;delete drafts[draftKey];}
-                await perform('flushMessages',[selected]);redraw();return;
-            }
             if(action==='tab'){tab=id;accountId=null;page='';status='';redraw();return;}
             if(action==='profile'){page='profile';redraw();return;}
             if(action==='list'){accountId=null;page='';redraw();return;}
@@ -94,12 +101,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             const initialKey=key('');const draftKey=name=>initialKey+name;let result;
             if(formName==='search'){result=await perform('discover',[data.query]);if(result?.ok)status='搜索完成，新增 '+result.value.added+' 个账号。';}
             if(formName==='profile')result=await perform('saveProfile',[{...data,sharing:data.sharing==='on'}],'已保存个人设置');
-            if(formName==='message'){
-                const before=new Set(snapItems(getView(),'message').map(m=>m.id));
-                result=await perform('queueMessage',[accountId,data.kind,data.message]);
-                // Sent-but-failed messages have a retry button; do not send them twice.
-                if(result?.ok||snapItems(getView(),'message').some(m=>!before.has(m.id)&&m.role==='user'))delete drafts[draftKey('message')];
-            }
+            if(formName==='message'){await sendCurrent();return;}
             if(formName==='edit-message'){result=await perform('editMessage',[editingId,data.editText]);if(result?.ok)editingId=null;}
             if(formName==='story'){result=await perform('publish',[data.storyKind,data.story],'故事已发布');if(result?.ok)delete drafts[draftKey('story')];}
             if(formName==='comment'){result=await perform('comment',[page.slice(8),data.comment]);if(result?.ok){delete drafts[draftKey('comment')];page='';}}

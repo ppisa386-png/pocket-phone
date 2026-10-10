@@ -252,6 +252,10 @@ try {
         await p.locator('[data-sms-contact]').tap();
         const payload = '<script>window.smsInjection=true</script> Hello';
         await p.locator('[data-sms-draft]').fill(payload);
+        const beforeSMS=await p.evaluate(()=>window.modelCalls);
+        await p.locator('[data-sms-draft]').dispatchEvent('compositionstart');await p.locator('[data-sms-draft]').press('Enter');check(await p.locator('.pp-sms-item').count()===0,'IME confirmation does not queue SMS');await p.locator('[data-sms-draft]').dispatchEvent('compositionend');
+        await p.locator('[data-sms-draft]').fill(payload);await p.locator('[data-sms-draft]').press('Enter');await p.locator('.pp-sms-item').waitFor();check(await p.evaluate(()=>window.modelCalls)===beforeSMS,'SMS Enter creates a bubble without API');
+
         await p.getByRole('button', { name: '发送短信', exact: true }).tap();
         await p.getByText('Text received.', { exact: true }).waitFor();
         check(await p.locator('.pp-sms-item').count() === 2, 'SMS UI sends and receives bubbles');
@@ -513,9 +517,9 @@ try {
         await p.locator('[data-snap-action="profile"]').tap();await p.locator('[data-snap-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存个人设置',exact:true}).tap();await p.getByText('已保存个人设置',{exact:true}).waitFor();
         await p.locator('[data-snap-action="list"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-snap-action="accept"]').waitFor();await p.locator('[data-snap-action="accept"]').tap();await p.locator('[data-snap-action="thread"]').tap();
         const queuedCalls=await p.evaluate(()=>window.modelCalls);
-        await p.locator('[data-snap-field="message"]').fill('Hello');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hello',{exact:true}).waitFor();
-        await p.locator('[data-snap-field="message"]').fill('And another thought');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('And another thought',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls,'Snapchat send button queues sentences with no API call');
-        await p.locator('[data-snap-action="flush"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('How are you?',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat arrow sends one batch request');
+        await p.locator('[data-snap-field="message"]').fill('Hello');await p.locator('[data-snap-field="message"]').press('Enter');await p.getByText('Hello',{exact:true}).waitFor();
+        await p.locator('[data-snap-field="message"]').fill('And another thought');await p.locator('[data-snap-field="message"]').evaluate(el=>el.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,composed:true,cancelable:true,inputType:'insertLineBreak'})));await p.getByText('And another thought',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls,'Snapchat Enter and mobile line break queue locally without API');
+        await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('How are you?',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat Send sends one batch request');
         check(await p.locator('.pp-snap-message').count()===4,'Snapchat reply sentences render as separate bubbles');
         await p.locator('[data-snap-action="edit-message"]').first().tap();await p.locator('[data-snap-field="editText"]').fill('Edited snap');await p.locator('[data-snap-form="edit-message"] button[type="submit"]').tap();await p.getByText('Edited snap',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat pencil is local');
         await p.locator('[data-snap-action="reroll-message"]').first().tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();check(await p.getByText('How are you?',{exact:true}).count()===1,'Snapchat reroll leaves the other reply untouched');

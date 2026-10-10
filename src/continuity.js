@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.16.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.16.1';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -38,7 +38,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
     }
     const entries = [];
     for (const message of Object.values(state.messages)) {
-        if (!allowed.has(message.contactId) || !['user', 'assistant'].includes(message.role) || typeof message.text !== 'string') continue;
+        if (message.replyStatus === 'queued' || !allowed.has(message.contactId) || !['user', 'assistant'].includes(message.role) || typeof message.text !== 'string') continue;
         entries.push({ time: Number(message.createdAt) || 0, data: {
             channel: '短信', speaker: message.role === 'user' ? userName : speaker.name, text: message.text,
         } });

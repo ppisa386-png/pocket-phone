@@ -2,9 +2,9 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.16.0</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
+</style></head><body><main><small>POCKET PHONE · 0.16.1</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。桌面暂时显示设备时间。</footer></main><script>const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.16.0';
+const VERSION = '0.16.1';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -74,6 +74,28 @@ function clampPosition(position, viewport, size = LAUNCHER_SIZE) {
         x: Math.min(maxX, Math.max(margin, position?.x ?? maxX)),
         y: Math.min(maxY, Math.max(margin, position?.y ?? Math.max(margin, maxY * 0.8))),
     };
+}
+
+// Desktop Enter and mobile soft-keyboard line breaks share the same local action.
+function bindComposerKeys(root,{queue,onError=()=>{},signal}) {
+    const selector='textarea[data-sms-draft],textarea[data-snap-field="message"]';
+    const composing=new WeakSet(),finishing=new WeakSet();
+    let pending=false;
+    const composer=event=>event.target?.matches?.(selector)?event.target:null;
+    function submit(event) {
+        const input=composer(event);if(!input||input.disabled)return;
+        if(event.isComposing||event.keyCode===229||composing.has(input)||finishing.has(input))return;
+        event.preventDefault();
+        if(pending||!input.value.trim())return;
+        pending=true;
+        Promise.resolve().then(()=>queue(input)).catch(onError).finally(()=>{pending=false;});
+    }
+    root.addEventListener('compositionstart',e=>{const input=composer(e);if(input)composing.add(input);},{signal});
+    root.addEventListener('compositionend',e=>{const input=composer(e);if(input){composing.delete(input);finishing.add(input);setTimeout(()=>finishing.delete(input),0);}},{signal});
+    root.addEventListener('keydown',e=>{if(e.key==='Enter')submit(e);},{signal});
+    root.addEventListener('beforeinput',e=>{if(['insertLineBreak','insertParagraph'].includes(e.inputType)&&e.cancelable)submit(e);},{signal});
+    // Some mobile keyboards deliver only a non-cancelable input event.
+    root.addEventListener('input',e=>{if(['insertLineBreak','insertParagraph'].includes(e.inputType))submit(e);},{signal});
 }
 
 // Local, bounded error history. Never persist request bodies, responses or keys.
@@ -570,7 +592,7 @@ function messageParticipants(state) {
 
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = value => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-const replyLabels = { pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
+const replyLabels = { queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
 function renderMessagesScreen(view, selectedContactId, picking, drafts, editing = null) {
     const { contacts = {}, messages = {}, busy = false, error = '', errorKind = null, contactStatus = '' } = view ?? {};
     const retryHTML = error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试</button>' : '';
@@ -582,7 +604,7 @@ function renderMessagesScreen(view, selectedContactId, picking, drafts, editing 
         const blocked = isBlocked(view, contact.id, 'messages');
         const phoneOnly=contact.supportsSMS===false;
         const thread = threadMessages(messages, contact.id);
-        const latestUserId = thread.filter(message => message.role === 'user').at(-1)?.id;
+        const latestUserId = thread.filter(message => message.role === 'user'&&message.replyStatus!=='queued').at(-1)?.id;
         return '<div class="pp-sms-thread"><div class="pp-sms-heading"><button type="button" class="pp-icon-button" data-sms-back aria-label="返回短信列表">' + icon('back') + '</button><div><strong>' + smsEscape(contact.name) + '</strong>' + (contact.number ? '<small>' + smsEscape(contact.number) + '</small>' : '') + '</div>' + renderBlockButton(view, contact.id, 'messages') + '</div>' +
             '<div class="pp-sms-bubbles" aria-live="polite">' + (thread.length ? thread.map(message => '<div class="pp-sms-item" data-role="' + (message.role === 'user' ? 'user' : 'assistant') + '"><p class="pp-sms-bubble">' + smsEscape(message.text) + '</p><small>' + smsTime(message.createdAt) + (message.role === 'user' ? ' · ' + replyLabels[message.replyStatus] : '') + '</small>' +
                 (message.role==='assistant'?'<div class="pp-message-tools"><button type="button" class="pp-icon-button" data-sms-edit="'+smsEscape(message.id)+'" aria-label="修改消息"'+(busy?' disabled':'')+'>'+icon('edit')+'</button><button type="button" class="pp-icon-button" data-sms-reroll="'+smsEscape(message.id)+'" aria-label="重新生成消息"'+(busy||blocked?' disabled':'')+'>'+icon('retry')+'</button></div>'+(editing?.id===message.id?'<form data-sms-edit-form class="pp-sms-edit-form"><textarea data-sms-edit-text maxlength="6000" aria-label="修改消息">'+smsEscape(editing.text)+'</textarea><button type="submit"'+(busy?' disabled':'')+'>保存</button><button type="button" data-sms-edit-cancel>取消</button></form>':''):'')+
@@ -590,7 +612,7 @@ function renderMessagesScreen(view, selectedContactId, picking, drafts, editing 
             (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML +
             (phoneOnly ? '<p class="pp-footnote">此号码不支持短信。</p>' : '') +
             (blocked ? '<p class="pp-footnote">此人的短信已被拉黑，取消后才能继续交流。</p>' : '') +
-            '<form data-sms-form class="pp-sms-compose"><label for="pp-sms-input">短信内容</label><textarea id="pp-sms-input" data-sms-draft rows="2" maxlength="6000" placeholder="短信…"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>' + smsEscape(drafts[contact.id] || '') + '</textarea><button type="submit" aria-label="发送短信"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>发送</button></form></div>';
+            '<form data-sms-form class="pp-sms-compose"><label for="pp-sms-input">短信内容</label><textarea id="pp-sms-input" data-sms-draft enterkeyhint="enter" rows="2" maxlength="6000" placeholder="短信…"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>' + smsEscape(drafts[contact.id] || '') + '</textarea><button type="submit" aria-label="发送短信"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>发送</button></form></div>';
     }
     let entries = Object.values(picking ? contacts : participants);
     if (picking) entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -628,9 +650,9 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
     const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-snap-action="'+action+'" data-snap-id="'+snapEsc(id)+'" '+extra+disabled()+'>'+snapEsc(label)+'</button>';
     const messageTools=i=>'<div class="pp-message-tools"><button type="button" class="pp-icon-button" data-snap-action="edit-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="修改消息"'+disabled()+'>'+icon('edit')+'</button><button type="button" class="pp-icon-button" data-snap-action="reroll-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="重新生成消息"'+disabled()+'>'+icon('retry')+'</button></div>';
     const field=(name,label,fallback='',type='text')=>'<label class="pp-field"><span>'+label+'</span><input data-snap-field="'+name+'" name="'+name+'" type="'+type+'" value="'+snapEsc(value(name,fallback))+'" '+(type==='number'?'min="0.01" step="0.01"':'maxlength="200"')+'></label>';
-    const textarea=(name,label)=>'<label class="pp-field"><span>'+label+'</span><textarea data-snap-field="'+name+'" name="'+name+'" rows="3" maxlength="6000">'+snapEsc(value(name))+'</textarea></label>';
+    const textarea=(name,label)=>'<label class="pp-field"><span>'+label+'</span><textarea data-snap-field="'+name+'" name="'+name+'" enterkeyhint="enter" rows="3" maxlength="6000">'+snapEsc(value(name))+'</textarea></label>';
     const select=(name,options,fallback)=>'<select name="'+name+'" data-snap-field="'+name+'" aria-label="内容类型">'+options.map(k=>'<option value="'+k+'"'+(value(name,fallback)===k?' selected':'')+'>'+snapKind[k]+'</option>').join('')+'</select>';
-    const form=(name,body,label)=>'<form class="pp-snap-form" data-snap-form="'+name+'">'+body+'<div class="pp-compose-actions"><button class="pp-snap-primary" type="submit"'+disabled()+'>'+label+'</button>'+(name==='message'?'<button type="button" class="pp-icon-button" data-snap-action="flush" aria-label="发送全部消息"'+disabled()+'>'+icon('send')+'</button>':'')+'</div></form>';
+    const form=(name,body,label)=>'<form class="pp-snap-form" data-snap-form="'+name+'">'+body+'<div class="pp-compose-actions"><button class="pp-snap-primary" type="submit"'+disabled()+'>'+label+'</button></div></form>';
     const empty=text=>'<p class="pp-snap-empty">'+text+'</p>';
     function accountsHTML(state) {
         const accounts=snapItems(state,'account');
@@ -678,8 +700,20 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
         catch(error){status=error.message;return null;}
         finally{posting=false;redraw();}
     }
+    async function queueCurrent(){
+        const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
+        if(!message.trim())return;
+        const result=await perform('queueMessage',[selected,kind,message]);
+        if(result?.ok&&drafts[draftKey]===message)delete drafts[draftKey];
+        redraw();return result;
+    }
+    async function sendCurrent(){
+        const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
+        if(message.trim()) {const added=await perform('queueMessage',[selected,kind,message]);if(!added?.ok)return;if(drafts[draftKey]===message)delete drafts[draftKey];}
+        await perform('flushMessages',[selected]);redraw();
+    }
     return {
-        html,
+        html, queueCurrent,
         reset(){editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
         input(target){if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
         async readVisible(){if(reading||posting||getView().busy||!accountId||page==='profile'||!adapter.snapchat)return;if(!snapItems(getView(),'message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;reading=true;try{await adapter.snapchat.markRead(accountId);}finally{reading=false;}},
@@ -687,11 +721,6 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
             if(action==='edit-message'){editingId=id;drafts[key('editText')]=getView().snapchat[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='reroll-message'){await perform('rerollMessage',[id]);return;}
-            if(action==='flush'){
-                const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
-                if(message.trim()) {const added=await perform('queueMessage',[selected,kind,message]);if(!added?.ok)return;delete drafts[draftKey];}
-                await perform('flushMessages',[selected]);redraw();return;
-            }
             if(action==='tab'){tab=id;accountId=null;page='';status='';redraw();return;}
             if(action==='profile'){page='profile';redraw();return;}
             if(action==='list'){accountId=null;page='';redraw();return;}
@@ -706,12 +735,7 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
             const initialKey=key('');const draftKey=name=>initialKey+name;let result;
             if(formName==='search'){result=await perform('discover',[data.query]);if(result?.ok)status='搜索完成，新增 '+result.value.added+' 个账号。';}
             if(formName==='profile')result=await perform('saveProfile',[{...data,sharing:data.sharing==='on'}],'已保存个人设置');
-            if(formName==='message'){
-                const before=new Set(snapItems(getView(),'message').map(m=>m.id));
-                result=await perform('queueMessage',[accountId,data.kind,data.message]);
-                // Sent-but-failed messages have a retry button; do not send them twice.
-                if(result?.ok||snapItems(getView(),'message').some(m=>!before.has(m.id)&&m.role==='user'))delete drafts[draftKey('message')];
-            }
+            if(formName==='message'){await sendCurrent();return;}
             if(formName==='edit-message'){result=await perform('editMessage',[editingId,data.editText]);if(result?.ok)editingId=null;}
             if(formName==='story'){result=await perform('publish',[data.storyKind,data.story],'故事已发布');if(result?.ok)delete drafts[draftKey('story')];}
             if(formName==='comment'){result=await perform('comment',[page.slice(8),data.comment]);if(result?.ok){delete drafts[draftKey('comment')];page='';}}
@@ -1192,6 +1216,24 @@ function mountPhone({ adapter, styles, container = document.body }) {
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
     }, { signal: lifetime.signal });
 
+    bindComposerKeys(shadow, {
+        signal:lifetime.signal,
+        async queue(input){
+            if(phoneView.busy)return;
+            if(input.hasAttribute('data-sms-draft')){
+                const id=selectedSMSContactId,draft=input.value;
+                if(!draft.trim()||!adapter.phone)return;
+                const result=await adapter.phone.queueMessage(id,draft);
+                if(result?.value?.saved&&smsDrafts[id]===draft)delete smsDrafts[id];
+                if(opened&&route==='app:messages'&&selectedSMSContactId===id){renderMessages();content.querySelector('[data-sms-draft]')?.focus({preventScroll:true});}
+            }else{
+                await snapPanel.queueCurrent();
+                if(opened&&route==='app:snapchat')content.querySelector('[data-snap-field="message"]')?.focus({preventScroll:true});
+            }
+        },
+        onError:error=>{adapter.diagnostics?.add(error,'消息输入');notice(error.message);},
+    });
+
     shadow.addEventListener('submit', event => {
         if(event.target.hasAttribute('data-contact-search')){
             event.preventDefault();const query=contactQuery.trim();if(!query)return;
@@ -1207,8 +1249,8 @@ function mountPhone({ adapter, styles, container = document.body }) {
             event.preventDefault();
             const contactId = selectedSMSContactId;
             const draft = smsDrafts[contactId] || '';
-            if (draft.trim()) phoneAction(async () => {
-                const result = await adapter.phone.sendMessage(contactId, draft);
+            phoneAction(async () => {
+                const result = await adapter.phone.flushMessages(contactId, draft);
                 if (result?.value?.saved && smsDrafts[contactId] === draft) delete smsDrafts[contactId];
                 if (opened && route === 'app:messages') renderMessages();
             });

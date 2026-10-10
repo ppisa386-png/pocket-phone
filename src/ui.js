@@ -1,13 +1,14 @@
-import { createXPanel } from './x-view.js?v=0.16.0';
-import { xUnread } from './x.js?v=0.16.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.16.0';
-import { snapUnread } from './snapchat.js?v=0.16.0';
-import { createApiPanel } from './api-view.js?v=0.16.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.16.0';
-import { icon } from './icons.js?v=0.16.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.16.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.16.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.16.0';
+import { bindComposerKeys } from './composer.js?v=0.16.1';
+import { createXPanel } from './x-view.js?v=0.16.1';
+import { xUnread } from './x.js?v=0.16.1';
+import { createSnapPanel } from './snapchat-view.js?v=0.16.1';
+import { snapUnread } from './snapchat.js?v=0.16.1';
+import { createApiPanel } from './api-view.js?v=0.16.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.16.1';
+import { icon } from './icons.js?v=0.16.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.16.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.16.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.16.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -378,6 +379,24 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
     }, { signal: lifetime.signal });
 
+    bindComposerKeys(shadow, {
+        signal:lifetime.signal,
+        async queue(input){
+            if(phoneView.busy)return;
+            if(input.hasAttribute('data-sms-draft')){
+                const id=selectedSMSContactId,draft=input.value;
+                if(!draft.trim()||!adapter.phone)return;
+                const result=await adapter.phone.queueMessage(id,draft);
+                if(result?.value?.saved&&smsDrafts[id]===draft)delete smsDrafts[id];
+                if(opened&&route==='app:messages'&&selectedSMSContactId===id){renderMessages();content.querySelector('[data-sms-draft]')?.focus({preventScroll:true});}
+            }else{
+                await snapPanel.queueCurrent();
+                if(opened&&route==='app:snapchat')content.querySelector('[data-snap-field="message"]')?.focus({preventScroll:true});
+            }
+        },
+        onError:error=>{adapter.diagnostics?.add(error,'消息输入');notice(error.message);},
+    });
+
     shadow.addEventListener('submit', event => {
         if(event.target.hasAttribute('data-contact-search')){
             event.preventDefault();const query=contactQuery.trim();if(!query)return;
@@ -393,8 +412,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             event.preventDefault();
             const contactId = selectedSMSContactId;
             const draft = smsDrafts[contactId] || '';
-            if (draft.trim()) phoneAction(async () => {
-                const result = await adapter.phone.sendMessage(contactId, draft);
+            phoneAction(async () => {
+                const result = await adapter.phone.flushMessages(contactId, draft);
                 if (result?.value?.saved && smsDrafts[contactId] === draft) delete smsDrafts[contactId];
                 if (opened && route === 'app:messages') renderMessages();
             });

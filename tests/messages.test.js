@@ -126,3 +126,15 @@ test('SMS pencil and reroll replace only selected char text and roll back on del
  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.service.snapshot().messages[replies[0].id].text,replies[0].text);
  }finally{f.close();}
 });
+
+test('SMS queued bubbles stay out of AI context; send batches and retries never duplicate and roll back',async()=>{
+ const f=setup();try{
+ await f.service.scan();const id='card:alex.png',before=f.requests();
+ await f.service.queueMessage(id,'First queued');await f.service.queueMessage(id,'Second queued');assert.equal(f.requests(),before);
+ const {buildContinuityPrompt}=await import('../src/continuity.js');assert.doesNotMatch(buildContinuityPrompt(f.service.snapshot(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{instruction:'Remember'}),/queued/);
+ f.context.chat.push({mes:'Send floor'});await f.memory.read();f.reply(async o=>{assert.match(o.quietPrompt,/First queued/);assert.match(o.quietPrompt,/Second queued/);assert.match(o.quietPrompt,/Final typed/);throw Error('offline');});
+ await f.service.flushMessages(id,'Final typed');let thread=threadMessages(f.service.snapshot().messages,id);assert.equal(thread.length,3);assert.ok(thread.every(m=>m.replyStatus==='failed'));
+ const n=f.requests();f.reply(async()=>'{"status":"reply","text":"Understood all three."}');await f.service.retryMessage(thread[0].id);assert.equal(f.requests(),n+1);thread=threadMessages(f.service.snapshot().messages,id);assert.equal(thread.length,4);assert.ok(thread.filter(m=>m.role==='user').every(m=>m.replyStatus==='received'));
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();thread=threadMessages(f.service.snapshot().messages,id);assert.equal(thread.length,2);assert.ok(thread.every(m=>m.replyStatus==='queued'));
+ }finally{f.close();}
+});
