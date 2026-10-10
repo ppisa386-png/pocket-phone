@@ -1,13 +1,13 @@
-import { createXPanel } from './x-view.js?v=0.14.0';
-import { xUnread } from './x.js?v=0.14.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.14.0';
-import { snapUnread } from './snapchat.js?v=0.14.0';
-import { createApiPanel } from './api-view.js?v=0.14.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.14.0';
-import { icon } from './icons.js?v=0.14.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.14.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.14.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.14.0';
+import { createXPanel } from './x-view.js?v=0.14.1';
+import { xUnread } from './x.js?v=0.14.1';
+import { createSnapPanel } from './snapchat-view.js?v=0.14.1';
+import { snapUnread } from './snapchat.js?v=0.14.1';
+import { createApiPanel } from './api-view.js?v=0.14.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.14.1';
+import { icon } from './icons.js?v=0.14.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.14.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.14.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.14.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },

@@ -1,5 +1,5 @@
-import { isMemoryHidden } from './journal.js?v=0.14.0';
-import { eventDirective } from './contact-events.js?v=0.14.0';
+import { isMemoryHidden } from './journal.js?v=0.14.1';
+import { eventDirective } from './contact-events.js?v=0.14.1';
 // Turn counts describe history only; they never throttle character decisions.
 export const narrativeReplyCount = chat => chat.filter(message => !message.is_user && (!message.is_system || isMemoryHidden(message))).length;
 export const narrativeTurn = chat => chat.filter(message => message.is_user && (!message.is_system || isMemoryHidden(message))).length;

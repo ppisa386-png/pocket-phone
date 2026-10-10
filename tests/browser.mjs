@@ -483,7 +483,7 @@ try {
     {
         const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
         const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
-        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Sam has a sister named Bea.'};c.generateQuietPrompt=async()=>{window.modelCalls++;return JSON.stringify({contacts:[{name:'Bea',source:'persona',relationship:'family',user_has_number:true,number:null,evidence:'Sam has a sister named Bea.'}]});};});
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Sam has a sister named Bea.'};c.generateQuietPrompt=async()=>{window.modelCalls++;return JSON.stringify({contacts:[{name:'Bea',source:'persona',relationship:'family',can_use_phone:true,user_has_number:true,number:null,evidence:'Sam has a sister named Bea.'}]});};});
         await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();
         check(await p.evaluate(()=>window.modelCalls)===0,'persona relatives are not fetched automatically');
         await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByText('已新增 1 位联系人。',{exact:true}).waitFor();
@@ -546,6 +546,15 @@ try {
         calls=await p.evaluate(()=>window.modelCalls);await p.locator('[data-x-action="like"]').tap();await p.getByRole('button',{name:'已赞',exact:true}).waitFor();await p.locator('[data-x-action="repost"]').tap();await p.getByRole('button',{name:'已转发',exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===calls,'X likes and reposts are local');check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'X fits mobile width');
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.getByText('See you at the concert.',{exact:true}).waitFor();await p.locator('[data-x-action="tab"][data-x-id="messages"]').tap();await p.locator('[data-x-action="thread"]').tap();await p.getByText('Hello, Moon.',{exact:true}).waitFor();check(true,'X posts and messages survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='New timeline';await c.eventSource.emit('MESSAGE_EDITED');});await p.getByText('暂无消息。搜索用户，开始私信。',{exact:true}).waitFor();check(await p.locator('.pp-snap-message').count()===0,'X UI rolls back after editing its source');await ctx.close();
+    }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Sam has a sister named Bea.'};c.generateQuietPrompt=async()=>JSON.stringify({contacts:[{name:'Bea',source:'persona',relationship:'family',user_has_number:true,can_use_phone:true,number:null,evidence:'Sam has a sister named Bea.'}]});});
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByRole('button',{name:'拨打 Bea',exact:true}).waitFor();
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();const status='Bea has been a mindless zombie for years and cannot use a phone.';const evidence='Sam receives a note with the landline to the holding sector where Alex is detained.';c.chat.push({name:'Alex',mes:status+' '+evidence});c.generateQuietPrompt=async()=>JSON.stringify({contacts:[{name:'Holding sector',source:'chat',contact_kind:'location',endpoint_kind:'landline',endpoint_name:'Holding sector',target_name:'Alex',can_use_phone:true,user_has_number:true,number:null,evidence}],reviews:[{id:'name:bea',can_use_phone:false,evidence:status}]});});
+        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByRole('button',{name:'拨打 Holding sector',exact:true}).waitFor();check(await p.getByRole('button',{name:'拨打 Bea',exact:true}).count()===0,'scan removes an explicitly unusable old contact');
+        check(await p.getByRole('button',{name:'拨打 Alex',exact:true}).count()===0,'temporary phone is named for its location, not target');
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-new]').tap();await p.locator('[data-sms-contact]').tap();await p.getByText('此号码不支持短信。',{exact:true}).waitFor();check(await p.locator('[data-sms-draft]').isDisabled(),'landline remains shared but cannot send SMS');await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
