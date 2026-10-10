@@ -113,3 +113,15 @@ test('status materials support lore-based availability without becoming a number
  const sources=contactSources([{mes:'Later.'}],context);assert.match(sources.status[0].text,/cannot use phones/);
  assert.equal(validateContacts({contacts:[{...entry('Bea',sources.status[0].text),can_use_phone:true}]},[{mes:'Later.'}],context,sources).length,0);
 });
+
+test('partial-name retrieval retains adjacent handoff and accepts cross-floor private satellite evidence',()=>{
+ const owner='It is Leon S. Kennedy’s private satellite phone number.（这是里昂·S·肯尼迪的私人卫星电话号码。）';
+ const handoff='你打开收纳盒，里面的黑色卡片上只打印了一串由特殊区号开头的数字。';
+ const chat=[{mes:'Unrelated cooking.'},{mes:'Another unrelated day.'},{mes:owner},{mes:handoff},{mes:'Elsewhere.'}];
+ const context={name1:'Sam',characters:[{name:'Leon S. Kennedy',avatar:'leon.png'}]};
+ const sources=contactSources(chat,context,'里昂');assert.equal(sources.chat.length,3);assert.ok(!JSON.stringify(sources).includes('Unrelated cooking'));
+ const found=validateContacts({contacts:[{name:'里昂·S·肯尼迪',aliases:['Leon S. Kennedy'],source:'chat',contact_kind:'person',can_use_phone:true,user_has_number:true,evidence:[owner.replace('’',"'"),handoff]}]},chat,context,sources);
+ assert.equal(found.length,1);assert.equal(found[0].id,'card:leon.png');assert.equal(found[0].number,null);assert.equal(found[0].sourceIndex,3);
+ assert.equal(validateContacts({contacts:[{...entry('Other',owner),aliases:[]}]},chat,context,sources).length,0);
+ assert.equal(validateContacts({contacts:[{...entry('里昂',owner),evidence:[owner,'Invented handoff evidence']} ]},chat,context,sources).length,0);
+});

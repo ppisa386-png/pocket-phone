@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.15.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.16.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -61,7 +61,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
     for (const item of social) {
         if (!recognized.has(item.accountId)) continue;
         const time = Number(item.createdAt) || 0;
-        if (item.type === 'message') entries.push({time, data:{channel:'Snapchat', speaker:item.role === 'user' ? userName : speaker.name, kind:item.kind, text:item.text}});
+        if (item.type === 'message' && item.status !== 'queued') entries.push({time, data:{channel:'Snapchat', speaker:item.role === 'user' ? userName : speaker.name, kind:item.kind, text:item.text}});
         if (item.type === 'call' && item.turns?.length) entries.push({time, data:{channel:'Snapchat ' + (item.mode === 'video' ? '视频通话' : '语音通话'), status:callLabels[item.status], turns:item.turns.map(t=>({speaker:t.role === 'user' ? userName : speaker.name,text:t.text}))}});
         if (item.type === 'transfer') entries.push({time, data:{channel:'Snapcash', text:JSON.stringify({direction:item.direction,status:item.status,amount:item.amountMinor/100,currency:item.currency,memo:item.memo})}});
     }

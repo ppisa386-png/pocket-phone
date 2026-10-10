@@ -1,10 +1,10 @@
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.15.0';
-export { validateContacts } from './contacts.js?v=0.15.0';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.15.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.15.0';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.15.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.15.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.15.0';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.16.0';
+export { validateContacts } from './contacts.js?v=0.16.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.16.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.16.0';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.16.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.16.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.16.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -187,6 +187,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 // Failed generation does not send the user's text a second time.
                 // A retry replaces this status and creates one deterministic reply.
                 await memory.commit(ticket, [set('messages', message.id, { ...message, replyStatus: 'failed' })]);
+                onError(failure,'messages');
                 error = failure.message || '获取短信回复失败，请重试。';
             }
         }
@@ -361,17 +362,21 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             await memory.commit(ticket, changes);
             error = ''; emit();
         },
-        scan() {
+        scan(query = '') {
             contactStatus = '';
             return task(async (view, current) => {
                 const context = getContext();
                 const chat = clone(context.chat);
-                const sources = contactSources(chat, context);
+                const sources = contactSources(chat, context, query);
                 const sourceKey = JSON.stringify(sources);
-                const valid = () => current() && sourceKey === JSON.stringify(contactSources(getContext().chat, getContext()));
+                const valid = () => current() && sourceKey === JSON.stringify(contactSources(getContext().chat, getContext(), query));
                 const ticket = await memory.begin();
                 const prompt = contactPrompt(getSettings().prompts.contacts, context, sources, Object.values(view.state.contacts));
-                const contacts = await request(prompt, data => validateContacts(data,chat,context,sources), valid);
+                const contacts = await request(prompt, data => {
+                    const found=validateContacts(data,chat,context,sources);
+                    if(data.contacts?.length&&!found.length)throw new Error('未能核对返回的姓名或取号依据，请重试。');
+                    return found;
+                }, valid);
                 if (!valid()) return;
                 const additions = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
                     const old = view.state.contacts[c.id];
@@ -382,7 +387,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (!valid()) return;
                 const added = additions.filter(c => !view.state.contacts[c.id]).length;
                 const updated = additions.length - added;
-                contactStatus = added || updated ? '已新增 ' + added + ' 位联系人' + (updated ? '，更新 ' + updated + ' 位' : '') + '。' : '未找到新的联系人。';
+                contactStatus = added || updated ? '已新增 ' + added + ' 位联系人' + (updated ? '，更新 ' + updated + ' 位' : '') + '。' : (query ? (contacts.length ? '此联系人已在通讯录中。' : '你现在还没有TA的电话号码哦') : '未找到新的联系人。');
                 return { added, updated };
             }, 'contacts');
         },
@@ -450,6 +455,26 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (latest?.id !== message.id) throw new Error('请重试最新一条短信。');
                 await smsResponse(message, current);
             }, 'messages');
+        },
+        editMessage(messageId,text) {
+            return task(async(view)=>{
+                const m=view.state.messages[messageId];
+                if(m?.role!=='assistant')throw new Error('只能修改对方的短信。');
+                if(typeof text!=='string'||!text.trim()||text.length>6000)throw new Error('请填写有效的短信内容。');
+                await memory.commit(await memory.begin(),[set('messages',m.id,{...m,text:text.trim()})]);
+            },'messages');
+        },
+        rerollMessage(messageId) {
+            return task(async(view,current)=>{
+                const m=view.state.messages[messageId];
+                if(m?.role!=='assistant')throw new Error('只能重新生成对方的短信。');
+                const contact=messageParticipants(view.state)[m.contactId];
+                if(!contact||isBlocked(view.state,m.contactId,'messages'))throw new Error('此联系人暂不可用。');
+                const ticket=await memory.begin(),thread=threadMessages(view.state.messages,m.contactId);
+                const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.messages+'\n当前渠道：短信。仅重写选中的一条 char 短信，保持其他消息不变，不产生新的主动联系事件。对方真实姓名：'+JSON.stringify(contact.name)+'；此前短信：'+JSON.stringify(thread.slice(0,thread.findIndex(x=>x.id===m.id)).map(({role,text})=>({role,text})))+'；选中的短信：'+JSON.stringify(m.text)+'\n仅基于此前交流重写，不预知后续。只输出 {"text":"这一条短信的新内容"}。';
+                const result=await request(prompt,d=>{if(typeof d.text!=='string'||!d.text.trim()||d.text.length>6000)throw new Error('短信格式不正确。');return {text:d.text.trim()};},current,contact);
+                if(current())await memory.commit(ticket,[set('messages',m.id,{...m,text:result.text})]);
+            },'messages');
         },
         async markMessagesRead(contactId) {
             const key = scope + ':' + contactId;

@@ -67,6 +67,11 @@ function track(page) {
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (!request.url().startsWith(origin)) external.push(request.url()); });
 }
+async function addPhoneContact(p,query='Alex',click=false){
+    await p.getByRole('button',{name:'新增联系人',exact:true})[click?'click':'tap']();
+    await p.locator('[data-contact-query]').fill(query);
+    await p.locator('[data-contact-search] button[type="submit"]')[click?'click':'tap']();
+}
 const check = (condition, message) => { assert.ok(condition, message); console.log('PASS ' + message); };
 try {
     if (process.env.QA_PART !== 'integration') {
@@ -214,7 +219,7 @@ try {
         await p.locator('[data-app="phone"]').tap();
         await p.locator('[data-phone-tab="contacts"]').tap();
         check(await p.evaluate(()=>window.modelCalls) === 0, 'opening phone contacts does not request a scan');
-        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();
+        await addPhoneContact(p,'Alex');
         await p.locator('[data-phone-dial]').waitFor();
         check(await p.locator('.pp-contact-row').count() === 1, 'phone UI shows contact recognized from narrative');
         await p.locator('[data-phone-dial]').tap();
@@ -243,13 +248,16 @@ try {
         await p.locator('.pp-launcher').tap(); await p.locator('[data-app="messages"]').tap();
         await p.locator('[data-sms-new]').tap();
         check(await p.evaluate(()=>window.modelCalls) === 0, 'opening SMS contacts does not request a scan');
-        await p.getByRole('button',{name:'新增联系人',exact:true}).tap(); await p.locator('[data-sms-contact]').waitFor();
+        await addPhoneContact(p,'Alex'); await p.locator('[data-sms-contact]').waitFor();
         await p.locator('[data-sms-contact]').tap();
         const payload = '<script>window.smsInjection=true</script> Hello';
         await p.locator('[data-sms-draft]').fill(payload);
         await p.getByRole('button', { name: '发送短信', exact: true }).tap();
         await p.getByText('Text received.', { exact: true }).waitFor();
         check(await p.locator('.pp-sms-item').count() === 2, 'SMS UI sends and receives bubbles');
+        const smsCalls=await p.evaluate(()=>window.modelCalls);await p.locator('[data-sms-edit]').tap();await p.locator('[data-sms-edit-text]').fill('Edited SMS');await p.locator('[data-sms-edit-form] button[type="submit"]').tap();await p.getByText('Edited SMS',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===smsCalls,'SMS pencil is local');
+        await p.locator('[data-sms-reroll]').tap();await p.getByText('Text received.',{exact:true}).waitFor();check(await p.locator('.pp-sms-item').count()===2,'SMS reroll replaces one bubble without duplicating messages');
+
         check(await p.evaluate(() => !window.smsInjection), 'SMS content renders as text, not HTML');
         await p.waitForFunction(() => document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('[data-sms-draft]').value === '');
         await p.evaluate(() => { window.smsHold = true; });
@@ -464,7 +472,7 @@ try {
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1), 'API settings fit mobile width');
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.onlineStatus='no_connection';window.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},recall:{text:'Prepared memory for phone test'}})};});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="phone"]').tap();
-        await p.locator('[data-phone-tab="contacts"]').tap(); await p.getByRole('button',{name:'新增联系人',exact:true}).tap(); await p.locator('[data-phone-dial]').tap();
+        await p.locator('[data-phone-tab="contacts"]').tap(); await addPhoneContact(p,'Alex'); await p.locator('[data-phone-dial]').tap();
         await p.getByText('Independent hello.',{exact:true}).waitFor(); await p.locator('[data-phone-hangup]').tap();
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="messages"]').tap();
         await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').tap();
@@ -486,12 +494,12 @@ try {
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Sam has a sister named Bea.'};c.generateQuietPrompt=async()=>{window.modelCalls++;return JSON.stringify({contacts:[{name:'Bea',source:'persona',relationship:'family',can_use_phone:true,user_has_number:true,number:null,evidence:'Sam has a sister named Bea.'}]});};});
         await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();
         check(await p.evaluate(()=>window.modelCalls)===0,'persona relatives are not fetched automatically');
-        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByText('已新增 1 位联系人。',{exact:true}).waitFor();
+        await addPhoneContact(p,'Bea');await p.getByText('已新增 1 位联系人。',{exact:true}).waitFor();
         check(await p.locator('.pp-contact-row').count()===1,'manual persona scan displays one phone contact');
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-new]').tap();
         check(await p.locator('[data-sms-contact]').count()===1,'SMS shares the manually added persona contact');
         check(await p.evaluate(()=>window.modelCalls)===1,'SMS contact picker makes no additional API request');
-        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByText('未找到新的联系人。',{exact:true}).waitFor();
+        await addPhoneContact(p,'Bea');await p.getByText('此联系人已在通讯录中。',{exact:true}).waitFor();
         check(await p.locator('[data-sms-contact]').count()===1,'repeated manual add does not duplicate persona contact');
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'manual contact controls fit mobile width');
         await ctx.close();
@@ -499,12 +507,19 @@ try {
     {
         const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
         const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
-        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async options=>{window.modelCalls++;const task=options.quietPrompt;return JSON.stringify(task.includes('当前任务：Snapchat 新增联系人')?{accounts:[{name:'Alex',handle:'alex',has_account:true,invitation:'incoming'}]}:task.includes('当前任务：Snapchat 聊天')?{status:'reply',kind:'voice',text:'Hey Moon!'}:task.includes('当前任务：Snapcash')?{status:'accepted'}:task.includes('通话')&&task.includes('当前任务：Snapchat 语音')?{status:'answered',text:'I can hear you.'}:task.includes('当前任务：Snapchat spotlight')?{items:[{name:'Traveler',text:'A walk along the beach.'}]}:task.includes('当前任务：Snapchat map')?{items:[{name:'Traveler',place:'Beach',text:'Public seaside view',shared:true}]}:{items:[]});};});
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async options=>{window.modelCalls++;const task=options.quietPrompt;return JSON.stringify(task.includes('当前任务：Snapchat 新增联系人')?{accounts:[{name:'Alex',handle:'alex',has_account:true,invitation:'incoming'}]}:task.includes('当前任务：仅重写')?{text:'Hey Moon!'}:task.includes('当前任务：Snapchat 聊天')?{status:'reply',messages:[{kind:'text',text:'Hey Moon!'},{kind:'text',text:'How are you?'}]}:task.includes('当前任务：Snapcash')?{status:'accepted'}:task.includes('通话')&&task.includes('当前任务：Snapchat 语音')?{status:'answered',text:'I can hear you.'}:task.includes('当前任务：Snapchat spotlight')?{items:[{name:'Traveler',text:'A walk along the beach.'}]}:task.includes('当前任务：Snapchat map')?{items:[{name:'Traveler',place:'Beach',text:'Public seaside view',shared:true}]}:{items:[]});};});
         await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();
         check(await p.evaluate(()=>window.modelCalls)===0,'opening Snapchat is local');
         await p.locator('[data-snap-action="profile"]').tap();await p.locator('[data-snap-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存个人设置',exact:true}).tap();await p.getByText('已保存个人设置',{exact:true}).waitFor();
         await p.locator('[data-snap-action="list"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-snap-action="accept"]').waitFor();await p.locator('[data-snap-action="accept"]').tap();await p.locator('[data-snap-action="thread"]').tap();
-        await p.locator('[data-snap-field="message"]').fill('Hello');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();
+        const queuedCalls=await p.evaluate(()=>window.modelCalls);
+        await p.locator('[data-snap-field="message"]').fill('Hello');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hello',{exact:true}).waitFor();
+        await p.locator('[data-snap-field="message"]').fill('And another thought');await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('And another thought',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls,'Snapchat send button queues sentences with no API call');
+        await p.locator('[data-snap-action="flush"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('How are you?',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat arrow sends one batch request');
+        check(await p.locator('.pp-snap-message').count()===4,'Snapchat reply sentences render as separate bubbles');
+        await p.locator('[data-snap-action="edit-message"]').first().tap();await p.locator('[data-snap-field="editText"]').fill('Edited snap');await p.locator('[data-snap-form="edit-message"] button[type="submit"]').tap();await p.getByText('Edited snap',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat pencil is local');
+        await p.locator('[data-snap-action="reroll-message"]').first().tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();check(await p.getByText('How are you?',{exact:true}).count()===1,'Snapchat reroll leaves the other reply untouched');
+
         check(await p.locator('[data-snap-field="message"]').inputValue()==='','Snapchat sent draft clears');
         check(await p.getByText('@alex',{exact:true}).count()===1,'Snapchat header displays only account handle');
         await p.locator('[data-snap-action="voice"]').tap();await p.getByText('I can hear you.',{exact:false}).waitFor();await p.locator('[data-snap-action="hangup"]').tap();
@@ -530,7 +545,7 @@ try {
         await p.mouse.move(handle.x+handle.width/2,handle.y+20);await p.mouse.down();await p.mouse.move(handle.x+handle.width/2-180,handle.y+60,{steps:8});await p.mouse.up();
         const after=await p.locator('.pp-phone').boundingBox();check(Math.abs(after.x-before.x+180)<2&&Math.abs(after.y-before.y-40)<2,'top bar drags the whole phone');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal',{},true);c.streamingProcessor={isFinished:false,isStopped:true};});
-        await p.locator('[data-app="phone"]').click();await p.locator('[data-phone-tab="contacts"]').click();await p.getByRole('button',{name:'新增联系人',exact:true}).click();await p.locator('[data-phone-dial]').waitFor();
+        await p.locator('[data-app="phone"]').click();await p.locator('[data-phone-tab="contacts"]').click();await addPhoneContact(p,'Alex',true);await p.locator('[data-phone-dial]').waitFor();
         check(true,'dry-run and stopped stream do not block an existing chat');
         await ctx.close();
     }
@@ -550,9 +565,9 @@ try {
     {
         const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Sam has a sister named Bea.'};c.generateQuietPrompt=async()=>JSON.stringify({contacts:[{name:'Bea',source:'persona',relationship:'family',user_has_number:true,can_use_phone:true,number:null,evidence:'Sam has a sister named Bea.'}]});});
-        await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByRole('button',{name:'拨打 Bea',exact:true}).waitFor();
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await addPhoneContact(p,'Bea');await p.getByRole('button',{name:'拨打 Bea',exact:true}).waitFor();
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();const status='Bea has been a mindless zombie for years and cannot use a phone.';const evidence='Sam receives a note with the landline to the holding sector where Alex is detained.';c.chat.push({name:'Alex',mes:status+' '+evidence});c.generateQuietPrompt=async()=>JSON.stringify({contacts:[{name:'Holding sector',source:'chat',contact_kind:'location',endpoint_kind:'landline',endpoint_name:'Holding sector',target_name:'Alex',can_use_phone:true,user_has_number:true,number:null,evidence}],reviews:[{id:'name:bea',can_use_phone:false,evidence:status}]});});
-        await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByRole('button',{name:'拨打 Holding sector',exact:true}).waitFor();check(await p.getByRole('button',{name:'拨打 Bea',exact:true}).count()===1,'scan preserves existing contacts despite obsolete removal review');
+        await addPhoneContact(p,'Alex');await p.getByRole('button',{name:'拨打 Holding sector',exact:true}).waitFor();check(await p.getByRole('button',{name:'拨打 Bea',exact:true}).count()===1,'scan preserves existing contacts despite obsolete removal review');
         check(await p.getByRole('button',{name:'拨打 Alex',exact:true}).count()===0,'temporary phone is named for its location, not target');
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-new]').tap();await p.locator('[data-sms-contact]').filter({hasText:'Holding sector'}).tap();await p.getByText('此号码不支持短信。',{exact:true}).waitFor();check(await p.locator('[data-sms-draft]').isDisabled(),'landline remains shared but cannot send SMS');await ctx.close();
     }
@@ -565,10 +580,10 @@ try {
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="api"]').tap();check(await p.locator('[data-api-field="key"]').inputValue()==='key-B','active API preset and key survive reload');
         await p.locator('[data-api-action="tab:profiles"]').tap();await p.locator('[data-api-field="selectedProfile"]').selectOption({label:'方案 A'});await p.locator('[data-api-action="profile-use"]').tap();await p.locator('[data-api-action="tab:connection"]').tap();check(await p.locator('[data-api-field="key"]').inputValue()==='key-A','same-address API presets restore their own keys');
         await p.locator('[data-api-action="test"]').tap();await p.getByText('连接成功，模型已返回文字。请保存设置后使用。',{exact:true}).waitFor();check(independentRequests.at(-1).proxy_password==='key-A','connection test uses selected preset key');
-        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-phone-dial]').waitFor();check(independentRequests.at(-1).proxy_password==='key-A','app generation uses selected preset key');
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await addPhoneContact(p,'Alex');await p.locator('[data-phone-dial]').waitFor();check(independentRequests.at(-1).proxy_password==='key-A','app generation uses selected preset key');
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="api"]').tap();await p.locator('[data-api-field="mode"]').selectOption('host');await p.locator('[data-api-action="save"]').tap();
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async()=>{throw new Error('Test failure with key-A');};});
-        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.getByText('Test failure with key-A',{exact:true}).waitFor();
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await addPhoneContact(p,'Alex');await p.getByText('Test failure with key-A',{exact:true}).waitFor();
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();const log=await p.locator('[data-error-log]').inputValue();check(log.includes('Test failure')&&!log.includes('key-A'),'runtime errors persist after reload with credentials removed');
         await p.locator('[data-action="copy-errors"]').tap();await p.getByText('报错已复制。',{exact:true}).waitFor();check(await p.evaluate(()=>navigator.clipboard.readText())===log,'copy errors copies the displayed redacted history');
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'error history fits mobile width');await p.locator('[data-action="clear-errors"]').tap();check(await p.locator('[data-error-log]').inputValue()==='','error history can be cleared');await ctx.close();

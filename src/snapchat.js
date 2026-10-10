@@ -15,7 +15,7 @@ const currencyOf = value => { if(!/^[A-Z]{3}$/.test(value||''))throw new Error('
 const accountBy = (state,id) => {const a=state.snapchat?.[id];if(a?.type!=='account')throw new Error('账号已不可用。');return a;};
 const friendBy = (state,id) => {const a=accountBy(state,id);if(a.friend!=='friends'||a.blocked)throw new Error('需要先成为好友，且不能处于拉黑状态。');return a;};
 const mediaKinds=['text','voice','image','video'];
-const threadFor=(state,id)=>snapItems(state,'message').filter(m=>m.accountId===id).sort((a,b)=>a.createdAt-b.createdAt);
+const threadFor=(state,id)=>snapItems(state,'message').filter(m=>m.accountId===id&&m.status!=='queued').sort((a,b)=>a.createdAt-b.createdAt);
 const newRecord=(type,fields)=>({id:crypto.randomUUID(),type,createdAt:Date.now(),...fields});
 
 export function createSnapchat({memory,phone,getContext,getSettings}) {
@@ -45,18 +45,23 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
     }
     function replyData(data) {
         if(!['reply','no_reply'].includes(data.status))throw new Error('Snapchat 回复格式不正确。');
-        if(data.status==='reply'&&!text(data.text))throw new Error('回复没有文字内容。');
+        const source=data.messages??(data.text?[{kind:data.kind,text:data.text}]:[]);
+        if(!Array.isArray(source)||source.length>8)throw new Error('Snapchat 消息格式不正确。');
+        const messages=source.map(m=>({kind:mediaKinds.includes(m.kind)?m.kind:'text',text:text(m.text)}));
+        if(data.status==='reply'&&(!messages.length||messages.some(m=>!m.text)))throw new Error('回复没有文字内容。');
+        if(messages.some(m=>m.text.length>600))throw new Error('回复过长，请分成简短消息。');
         if(data.transfer){snapAmount(data.transfer.amount);currencyOf(data.transfer.currency);}
-        return {status:data.status,text:text(data.text),kind:mediaKinds.includes(data.kind)?data.kind:'text',transfer:data.transfer};
+        return {status:data.status,messages:data.status==='reply'?messages:[],transfer:data.transfer};
     }
     async function answerMessage(state,account,message,request,current,commit) {
-        const result=await ask(state,account,request,current,'当前任务：Snapchat 聊天。仅回应最后一条 user 内容。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
-            '\n只输出 {"status":"reply 或 no_reply","kind":"text/voice/image/video","text":"消息文字、语音转写或媒体描述","transfer":null}。如角色自愿给 user 转账，可将 transfer 设为 {"amount":"金额字符串","currency":"USD 等三字母币种","memo":"附言"}；这仅是待收款邀请，不自动收款。',replyData);
-        const changes=[setSnap({...message,status:result.status==='reply'?'answered':'no_reply'})];
-        if(result.status==='reply')changes.push(setSnap({id:'reply:'+message.id,type:'message',accountId:account.id,role:'assistant',kind:result.kind,text:result.text,createdAt:Date.now(),read:false}));
-        if(result.transfer) {
-            const incoming={id:'transfer:'+message.id,type:'transfer',accountId:account.id,direction:'incoming',status:'pending',amountMinor:snapAmount(result.transfer.amount),currency:currencyOf(result.transfer.currency),memo:text(result.transfer.memo,300),createdAt:Date.now()};changes.push(setSnap(incoming));
-        }
+        const batch=message.batchId?threadFor(state,account.id).filter(m=>m.role==='user'&&m.batchId===message.batchId):[message];
+        const result=await ask(state,account,request,current,'当前任务：Snapchat 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
+            '\n本次 user 消息：'+JSON.stringify(batch.map(m=>({kind:m.kind,text:m.text})))+
+            '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null}。语言和翻译要求遵守预设。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"USD 等三字母币种","memo":"附言"}；仅为待收款邀请，不自动收款。',replyData);
+        const changes=batch.map(m=>setSnap({...m,status:result.status==='reply'?'answered':'no_reply'}));
+        const time=Math.max(Date.now(),...threadFor(state,account.id).map(m=>m.createdAt+1));
+        result.messages.forEach((m,i)=>changes.push(setSnap({id:'reply:'+message.id+(i?':'+i:''),type:'message',accountId:account.id,role:'assistant',kind:m.kind,text:m.text,replyTo:message.id,createdAt:time+i/1000,read:false})));
+        if(result.transfer)changes.push(setSnap({id:'transfer:'+message.id,type:'transfer',accountId:account.id,direction:'incoming',status:'pending',amountMinor:snapAmount(result.transfer.amount),currency:currencyOf(result.transfer.currency),memo:text(result.transfer.memo,300),createdAt:time}));
         await commit(changes);
     }
     return {
@@ -86,6 +91,30 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
         accept(id,accept){return run(async(state,_c,_r,commit)=>{const a=accountBy(state,id);if(a.friend!=='incoming')throw new Error('邀请已处理。');await commit([setSnap({...a,friend:accept?'friends':'declined',identityKnown:accept?knownAtContact(state,a):a.identityKnown})]);});},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=accountBy(state,id);const changes=[setSnap({...a,blocked:value})];for(const call of snapItems(state,'call').filter(c=>c.accountId===id&&c.status==='connected'))changes.push(setSnap({...call,status:'ended'}));await commit(changes);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=friendBy(state,id);await commit([setSnap({...a,identityKnown:true}),setSnap(newRecord('message',{accountId:id,role:'user',kind:'text',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
+        queueMessage(id,kind,value){return run(async(state,_c,_r,commit)=>{
+            friendBy(state,id);if(!mediaKinds.includes(kind))throw new Error('消息类型不可用。');
+            const message=newRecord('message',{accountId:id,role:'user',kind,text:required(value,'消息内容'),status:'queued',read:true});
+            await commit([setSnap(message)]);return message.id;
+        });},
+        flushMessages(id){return run(async(state,current,request,commit)=>{
+            const a=friendBy(state,id),queued=snapItems(state,'message').filter(m=>m.accountId===id&&m.role==='user'&&m.status==='queued');
+            if(!queued.length)throw new Error('请先填写消息。');
+            const batchId=crypto.randomUUID(),batch=queued.map(m=>({...m,status:'pending',batchId})),last=batch.at(-1);
+            await commit(batch.map(setSnap));
+            const fresh=await memory.read(),ticket=await memory.begin();
+            try{await answerMessage(fresh.state,a,last,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(ticket,changes);});}
+            catch(error){if(current())await memory.commit(ticket,batch.map(m=>setSnap({...m,status:'failed'})));throw error;}
+        });},
+        editMessage(id,value){return run(async(state,_c,_r,commit)=>{
+            const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能修改对方的消息。');
+            await commit([setSnap({...m,text:required(value,'消息内容')})]);
+        });},
+        rerollMessage(id){return run(async(state,current,request,commit)=>{
+            const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能重新生成对方的消息。');
+            const a=friendBy(state,m.accountId),thread=threadFor(state,a.id),before=thread.slice(0,thread.findIndex(x=>x.id===id));
+            const result=await ask(state,a,request,current,'当前任务：仅重写选中的一条 Snapchat 消息。只用它之前的聊天，不预知后续；简短自然，通常一句话。保持消息类型，不生成其他消息，不触发或改变转账。此前聊天：'+JSON.stringify(before.map(({role,kind,text})=>({role,kind,text})))+'\n被选中的消息：'+JSON.stringify({kind:m.kind,text:m.text})+'\n输出 {"text":"这条消息的新内容"}。',d=>({text:required(d.text,'回复内容',600)}));
+            await commit([setSnap({...m,text:result.text})]);
+        });},
         send(id,kind,value){return run(async(state,current,request,commit)=>{
             const a=friendBy(state,id);if(!mediaKinds.includes(kind))throw new Error('消息类型不可用。');
             const message=newRecord('message',{accountId:id,role:'user',kind,text:required(value,'消息内容'),status:'pending',read:true});
@@ -94,7 +123,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             try{await answerMessage(fresh.state,a,message,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(nextTicket,changes);});}
             catch(error){if(current())await memory.commit(nextTicket,[setSnap({...message,status:'failed'})]);throw error;}
         });},
-        retryMessage(id){return run(async(state,current,request,commit)=>{const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending'].includes(m.status))throw new Error('此消息不需要重试。');const a=friendBy(state,m.accountId);await answerMessage(state,a,m,request,current,commit);});},
+        retryMessage(id){return run(async(state,current,request,commit)=>{const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending'].includes(m.status))throw new Error('此消息不需要重试。');const a=friendBy(state,m.accountId);const last=m.batchId?threadFor(state,a.id).filter(x=>x.role==='user'&&x.batchId===m.batchId).at(-1):m;await answerMessage(state,a,last,request,current,commit);});},
         markRead(id){return run(async(state,_c,_r,commit)=>{await commit(threadFor(state,id).filter(m=>m.role==='assistant'&&!m.read).map(m=>setSnap({...m,read:true})));});},
         call(id,mode,value='',callId=null){return run(async(state,current,request,commit)=>{
             const a=friendBy(state,id);if(!['voice','video'].includes(mode))throw new Error('通话类型不可用。');

@@ -1,13 +1,13 @@
-import { createXPanel } from './x-view.js?v=0.15.0';
-import { xUnread } from './x.js?v=0.15.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.15.0';
-import { snapUnread } from './snapchat.js?v=0.15.0';
-import { createApiPanel } from './api-view.js?v=0.15.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.15.0';
-import { icon } from './icons.js?v=0.15.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.15.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.15.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.15.0';
+import { createXPanel } from './x-view.js?v=0.16.0';
+import { xUnread } from './x.js?v=0.16.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.16.0';
+import { snapUnread } from './snapchat.js?v=0.16.0';
+import { createApiPanel } from './api-view.js?v=0.16.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.16.0';
+import { icon } from './icons.js?v=0.16.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.16.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.16.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.16.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -33,6 +33,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let selectedCallId = null;
     let callDraft = '';
     let previousActiveCallId = null;
+    let contactSearchOpen=false,contactQuery='',smsEditing=null;
     let selectedSMSContactId = null;
     let pickingSMSContact = false;
     let smsDrafts = Object.create(null);
@@ -213,12 +214,17 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form"><label class="pp-field"><span>失败后自动重试次数</span><input class="pp-number" type="number" inputmode="numeric" min="0" max="15" step="1" data-setting="retries" value="' + settings.retries + '" aria-describedby="pp-retry-help"></label></div><p id="pp-retry-help" class="pp-footnote">填写 0—15 的整数。0 表示不自动重试；次数不包含首次请求，成功后立即停止。</p><p class="pp-footnote">此设置用于联系人识别、来电判断、电话和短信回应的请求失败重试。</p></div>';
     }
 
+    function contactSearchHTML() {
+        return contactSearchOpen?'<form data-contact-search class="pp-card pp-form"><label class="pp-field"><span>联系人姓名</span><input data-contact-query value="'+esc(contactQuery)+'" maxlength="100" placeholder="姓名或部分名字" required></label><div class="pp-api-actions"><button type="submit" class="pp-text-button"'+(phoneView.busy?' disabled':'')+'>确认添加</button><button type="button" class="pp-text-button" data-contact-cancel>取消</button></div></form>':'';
+    }
+    function openContactSearch(){contactSearchOpen=true;route==='app:phone'?renderPhone():renderMessages();content.querySelector('[data-contact-query]')?.focus();}
     function renderPhone() {
         const input = shadow.querySelector('[data-phone-draft]');
         const focused = input && shadow.activeElement === input;
         const selection = input ? [input.selectionStart, input.selectionEnd] : null;
         const scroll = content.scrollTop;
         content.innerHTML = renderPhoneScreen(phoneView, phoneTab, selectedCallId, callDraft);
+        if(phoneTab==='contacts')content.insertAdjacentHTML('afterbegin',contactSearchHTML());
         content.scrollTop = scroll;
         const next = shadow.querySelector('[data-phone-draft]');
         if (focused && next) { next.focus({ preventScroll: true }); next.setSelectionRange(...selection); }
@@ -231,7 +237,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const scroll = content.scrollTop;
         const count = Object.values(phoneView.messages || {}).filter(item => item.contactId === selectedSMSContactId).length;
         const key = selectedSMSContactId + ':' + count;
-        content.innerHTML = renderMessagesScreen(phoneView, selectedSMSContactId, pickingSMSContact, smsDrafts);
+        content.innerHTML = renderMessagesScreen(phoneView, selectedSMSContactId, pickingSMSContact, smsDrafts, smsEditing);
+        if(pickingSMSContact===true)content.insertAdjacentHTML('afterbegin',contactSearchHTML());
         content.scrollTop = key === smsRenderKey ? scroll : content.scrollHeight;
         smsRenderKey = key;
         const next = shadow.querySelector('[data-sms-draft]');
@@ -348,7 +355,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             shadow.querySelectorAll('[data-wallpaper]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.wallpaper === settings.wallpaper)));
         }
         if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; selectedCallId = null; renderPhone(); }
-        if (target.hasAttribute('data-phone-sync')) phoneAction(() => adapter.phone.scan());
+        if (target.hasAttribute('data-phone-sync')) openContactSearch();
         if (target.dataset.phoneDial) phoneAction(() => adapter.phone.dial(target.dataset.phoneDial));
         if (target.dataset.phoneRecord) { selectedCallId = target.dataset.phoneRecord; callDraft = ''; renderPhone(); }
         if (target.hasAttribute('data-phone-list')) { selectedCallId = null; phoneTab = 'history'; renderPhone(); }
@@ -362,12 +369,24 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.hasAttribute('data-sms-blocklist')) { pickingSMSContact = 'blocked'; selectedSMSContactId = null; renderMessages(); }
         if (target.dataset.blockId) phoneAction(() => adapter.phone.setBlocked(target.dataset.blockId, target.dataset.blockChannel, target.dataset.blockValue === 'true'));
         if (target.dataset.smsContact) { selectedSMSContactId = target.dataset.smsContact; pickingSMSContact = false; renderMessages(); }
-        if (target.hasAttribute('data-sms-sync')) phoneAction(() => adapter.phone.scan());
+        if (target.hasAttribute('data-sms-sync')) openContactSearch();
+        if(target.hasAttribute('data-contact-cancel')){contactSearchOpen=false;render();}
+        if(target.dataset.smsEdit){smsEditing={id:target.dataset.smsEdit,text:phoneView.messages[target.dataset.smsEdit]?.text||''};renderMessages();}
+        if(target.hasAttribute('data-sms-edit-cancel')){smsEditing=null;renderMessages();}
+        if(target.dataset.smsReroll)phoneAction(()=>adapter.phone.rerollMessage(target.dataset.smsReroll));
         if (target.dataset.smsRetry) phoneAction(() => adapter.phone.retryMessage(target.dataset.smsRetry));
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('submit', event => {
+        if(event.target.hasAttribute('data-contact-search')){
+            event.preventDefault();const query=contactQuery.trim();if(!query)return;
+            phoneAction(async()=>{const result=await adapter.phone.scan(query);if(result?.ok){contactSearchOpen=false;render();}});return;
+        }
+        if(event.target.hasAttribute('data-sms-edit-form')){
+            event.preventDefault();const edit=smsEditing;if(!edit)return;
+            phoneAction(async()=>{const result=await adapter.phone.editMessage(edit.id,edit.text);if(result?.ok){smsEditing=null;renderMessages();}});return;
+        }
         if(event.target.dataset.xForm){event.preventDefault();void xPanel.submit(event.target);return;}
         if(event.target.dataset.snapForm){event.preventDefault();void snapPanel.submit(event.target);return;}
         if (event.target.hasAttribute('data-sms-form')) {
@@ -414,6 +433,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     shadow.addEventListener('input', event => {
+        if(event.target.hasAttribute('data-contact-query')){contactQuery=event.target.value;return;}
+        if(event.target.hasAttribute('data-sms-edit-text')){if(smsEditing)smsEditing.text=event.target.value;return;}
         if(event.target.dataset.xField){xPanel.input(event.target);return;}
         if(event.target.dataset.snapField){snapPanel.input(event.target);return;}
         if (event.target.dataset.apiField && event.target.tagName !== 'SELECT') {
@@ -522,7 +543,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let lastScope;
     const unsubscribeMemory = adapter.memory?.subscribe(({ scope }) => {
         if (scope !== lastScope) {
-            lastScope = scope;
+            lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             snapPanel.reset();xPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';

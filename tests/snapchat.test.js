@@ -84,3 +84,31 @@ test('independent Snapchat context selects the target and states the anonymous i
  const messages=await buildApiContext(context,'Reply',{id:'card:alex.png',name:'Alex',channel:'snapchat',alias:'Moon',identityKnown:false},{historyLimit:10});
  const prompt=messages.map(m=>m.content).join('\n');assert.match(prompt,/Alex likes music/);assert.match(prompt,/对方真实身份尚未确认/);assert.match(prompt,/Moon/);assert.doesNotMatch(prompt,/"name":"Wrong person"/);
 });
+
+test('queued Snapchat sentences cost no API, flush together, stay private until sent, and roll back',async()=>{
+ const f=setup();try{const id=await friend(f,'Sam');const count=f.count();
+ ok(await f.snap.queueMessage(id,'text','First thought'));ok(await f.snap.queueMessage(id,'image','Then this photo'));
+ assert.equal(f.count(),count);assert.equal(snapItems(f.state(),'message').length,2);
+ assert.doesNotMatch(buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{instruction:'Remember'}),/First thought/);
+ f.context.chat.push({name:'Alex',mes:'Later.'});await f.memory.read();
+ f.reply({status:'reply',messages:[{kind:'text',text:'Got it.'},{kind:'text',text:'Nice photo!'}]});ok(await f.snap.flushMessages(id));assert.equal(f.count(),count+1);assert.equal(snapItems(f.state(),'message').length,4);assert.match(f.prompt(),/First thought/);assert.match(f.prompt(),/Then this photo/);
+ const before=f.count();assert.equal((await f.snap.flushMessages(id)).ok,false);assert.equal(f.count(),before);
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(snapItems(f.state(),'message').length,2);assert.ok(snapItems(f.state(),'message').every(m=>m.status==='queued'));
+ }finally{f.close();}
+});
+
+test('editing and rerolling one Snapchat bubble preserve its neighbors and transfers',async()=>{
+ const f=setup();try{const id=await friend(f);f.reply({status:'reply',messages:[{text:'One.'},{text:'Two.'}],transfer:{amount:'10',currency:'USD',memo:'Gift'}});ok(await f.snap.send(id,'text','Hello'));
+ const replies=snapItems(f.state(),'message').filter(m=>m.role==='assistant'),transfer=structuredClone(snapItems(f.state(),'transfer'));
+ f.context.chat.push({mes:'Editing floor'});await f.memory.read();const count=f.count();ok(await f.snap.editMessage(replies[0].id,'Edited'));assert.equal(f.count(),count);
+ f.reply({text:'Rerolled',transfer:{amount:'999',currency:'USD'}});ok(await f.snap.rerollMessage(replies[0].id));assert.equal(f.state().snapchat[replies[0].id].text,'Rerolled');assert.equal(f.state().snapchat[replies[1].id].text,'Two.');assert.deepEqual(snapItems(f.state(),'transfer'),transfer);
+ assert.equal((await f.snap.editMessage(snapItems(f.state(),'message').find(m=>m.role==='user').id,'Wrong')).ok,false);
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.state().snapchat[replies[0].id].text,'One.');
+ }finally{f.close();}
+});
+
+test('failed Snapchat batches retry once without duplicate sent messages',async()=>{
+ const f=setup();try{const id=await friend(f);ok(await f.snap.queueMessage(id,'text','A'));ok(await f.snap.queueMessage(id,'text','B'));f.reply(()=>{throw Error('offline');});assert.equal((await f.snap.flushMessages(id)).ok,false);
+ const messages=snapItems(f.state(),'message');assert.ok(messages.every(m=>m.status==='failed'));f.reply({status:'reply',messages:[{text:'Okay.'}]});ok(await f.snap.retryMessage(messages[0].id));assert.equal(snapItems(f.state(),'message').length,3);assert.ok(snapItems(f.state(),'message').filter(m=>m.role==='user').every(m=>m.status==='answered'));
+ }finally{f.close();}
+});

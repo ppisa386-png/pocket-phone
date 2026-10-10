@@ -118,3 +118,11 @@ test('reopening recovers interrupted requests without automatically paying for a
     assert.equal(f.requests(), before);
     f.close();
 });
+
+test('SMS pencil and reroll replace only selected char text and roll back on deleted floor',async()=>{
+ const f=setup();try{await f.service.scan();await f.service.sendMessage('card:alex.png','First');await f.service.sendMessage('card:alex.png','Second');const original=f.service.snapshot();const replies=threadMessages(original.messages,'card:alex.png').filter(m=>m.role==='assistant');
+ f.context.chat.push({mes:'Edit now.'});await f.memory.read();const count=f.requests();assert.equal((await f.service.editMessage(replies[0].id,'Edited')).ok,true);assert.equal(f.requests(),count);
+ f.reply(async()=>JSON.stringify({text:'Rerolled'}));assert.equal((await f.service.rerollMessage(replies[0].id)).ok,true);const state=f.service.snapshot();assert.equal(state.messages[replies[0].id].text,'Rerolled');assert.deepEqual(state.messages[replies[1].id],original.messages[replies[1].id]);assert.equal(Object.keys(state.messages).length,4);
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.service.snapshot().messages[replies[0].id].text,replies[0].text);
+ }finally{f.close();}
+});
