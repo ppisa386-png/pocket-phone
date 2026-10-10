@@ -1,14 +1,15 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.16.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.16.2';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
     'GENERATION_ENDED', 'GENERATION_STOPPED'];
 
 function chatScope(context) {
-    const id = context?.getCurrentChatId?.() ?? context?.chatId;
+    const primary = context?.getCurrentChatId?.();
+    const id = primary === undefined || primary === null || primary === '' ? context?.chatId : primary;
     if (id === undefined || id === null || id === '' || !Array.isArray(context.chat) || !context.chatMetadata ||
         typeof context.saveMetadata !== 'function') return null;
-    const owner = context.groupId != null ? ['group', context.groupId] :
+    const owner = context.groupId != null && context.groupId !== '' ? ['group', context.groupId] :
         ['character', context.characters?.[context.characterId]?.avatar ?? context.characterId ?? 'current'];
     return JSON.stringify([...owner, id]);
 }
@@ -18,7 +19,8 @@ function chatScope(context) {
 export function hostGenerationState(doc = globalThis.document) {
     if (!doc?.body) return null;
     if (doc.body.dataset?.generating === 'true') return true;
-    const display = doc.getElementById('mes_stop')?.style?.display;
+    const stop=doc.getElementById('mes_stop');
+    const display = stop?.style?.display || (stop&&doc.defaultView?.getComputedStyle?.(stop)?.display);
     if (display === 'none') return false;
     if (display) return true;
     return null; // Older hosts / non-browser fixtures retain event-based checks.
@@ -32,6 +34,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     let settledProcessor = null;
     let generation = 0;
     let lastError = '';
+    let unavailable='NO_CHAT',lastHostState=null;
     const listeners = new Set();
     const tickets = new WeakMap();
     const context = getContext();
@@ -39,6 +42,12 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     const types = context?.event_types ?? context?.eventTypes ?? {};
     const subscriptions = [];
 
+    function unavailableError() {
+        const messages={NO_CHAT:'请先打开角色聊天。',GENERATING:'请等待正文生成结束后再试。',EMPTY_CHAT:'当前聊天还没有可用正文。',CHANGED:'聊天刚刚发生变化，请重试。'};
+        const current=getContext();
+        return Object.assign(new Error(messages[unavailable]||messages.CHANGED),{code:unavailable,
+            diagnostic:JSON.stringify({code:unavailable,generationSource:getGenerationState.source||'compatibility',hostGenerating:lastHostState,startEventPending:generating,hasChatId:!!chatScope(current),hasMetadata:!!current?.chatMetadata,canSave:typeof current?.saveMetadata==='function',messageCount:Array.isArray(current?.chat)?current.chat.length:0,streamFinished:current?.streamingProcessor?.isFinished??null,streamStopped:current?.streamingProcessor?.isStopped??null})});
+    }
     function notify() {
         const value = { scope: active?.scope ?? null, state: replayJournal(active?.journal) };
         for (const listener of listeners) listener(structuredClone(value));
@@ -64,12 +73,12 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     async function sync() {
         const current = getContext();
         const scope = chatScope(current);
-        if (!scope) { active = null; notify(); return null; }
+        if (!scope) { unavailable='NO_CHAT';active = null; notify(); return null; }
         const snapshot = { scope, metadata: current.chatMetadata, context: current, signatures: messageSignatures(current.chat) };
         // Do not persist a transient streaming revision. Final generation events
         // reconcile it; phone actions are blocked until that point.
         const processor = current.streamingProcessor;
-        const hostGenerating = getGenerationState();
+        const hostGenerating = getGenerationState();lastHostState=hostGenerating;
         if (hostGenerating === false) {
             generating = false;
             settledProcessor = processor ?? null;
@@ -77,17 +86,18 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const streaming = processor && processor !== settledProcessor && processor.isFinished === false &&
             processor.isStopped !== true && !processor.abortController?.signal?.aborted;
         if (hostGenerating === true || generating || streaming) {
+            unavailable='GENERATING';
             if (active?.scope !== scope || active?.metadata !== snapshot.metadata) { active = null; notify(); }
             return null;
         }
         snapshot.revisions = await revisionsFor(snapshot.signatures);
-        if (!sameChat(snapshot)) return null;
+        if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         const legacyRevisions = current.chat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(current.chat, true)) : null;
         const { journal, removed, migrated } = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
         if (removed || migrated) await save(snapshot, journal);
-        if (!sameChat(snapshot)) return null;
+        if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
-        active = snapshot;
+        active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
         notify();
         if (removed) onRollback(removed);
         return snapshot;
@@ -130,14 +140,14 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     backgroundRefresh();
 
     return {
-        refresh,
+        refresh, unavailableError,
         epoch: () => generation,
         subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
         read() { return schedule(async () => { const snapshot = await sync(); return { scope: snapshot?.scope ?? null, state: replayJournal(snapshot?.journal), revision: snapshot?.revisions.at(-1) ?? null }; }); },
         begin() {
             return schedule(async () => {
                 const snapshot = await sync();
-                if (!snapshot?.revisions.length) throw new Error('请先打开聊天，并等待正文生成完成。');
+                if (!snapshot?.revisions.length) throw unavailableError();
                 const ticket = {};
                 tickets.set(ticket, { scope: snapshot.scope, metadata: snapshot.metadata, revision: snapshot.revisions.at(-1), generation });
                 return ticket;

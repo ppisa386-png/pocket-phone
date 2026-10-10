@@ -1,5 +1,5 @@
-import { narrativeReplyCount } from './contact-policy.js?v=0.16.1';
-import { isMemoryHidden } from './journal.js?v=0.16.1';
+import { narrativeReplyCount } from './contact-policy.js?v=0.16.2';
+import { isMemoryHidden } from './journal.js?v=0.16.2';
 // Only the current single-chat character or the last actual group speaker may call.
 export function incomingParticipant(context) {
     const characters = context.characters ?? [];

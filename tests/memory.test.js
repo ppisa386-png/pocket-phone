@@ -7,7 +7,7 @@ const message = (i, text = '剧情 ' + i) => ({ mes: text, name: 'Alex', is_user
 const rev = chat => revisionsFor(messageSignatures(chat));
 const change = (key, value, collection = 'contacts') => [{ collection, key, value }];
 
-function fixture() {
+function fixture(getGenerationState) {
     const bus = new EventEmitter();
     const names = ['CHAT_CHANGED', 'CHAT_LOADED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED', 'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'GENERATION_STARTED', 'GENERATION_ENDED', 'GENERATION_STOPPED'];
     const event_types = Object.fromEntries(names.map(name => [name, name]));
@@ -19,7 +19,7 @@ function fixture() {
     }
     let current = make('A');
     const errors = [];
-    const memory = createPhoneMemory({ getContext: () => current, onError: error => errors.push(error) });
+    const memory = createPhoneMemory({ getContext: () => current, getGenerationState, onError: error => errors.push(error) });
     return { bus, memory, contexts, errors, saves: () => saves, current: () => current,
         switch(id, extra) { current = contexts[id] ?? make(id, extra); bus.emit('CHAT_CHANGED'); },
         async put(key, value, collection) { return memory.commit(await memory.begin(), change(key, value, collection)); },
@@ -142,7 +142,7 @@ test('no chat and active generation cannot accept phone records', async () => {
     f.bus.emit('GENERATION_ENDED');
     await f.put('a', {});
     f.current().chatId = undefined;
-    await assert.rejects(f.memory.begin(), /等待正文/);
+    await assert.rejects(f.memory.begin(), /打开角色聊天/);
     assert.equal((await f.memory.read()).scope, null);
     f.memory.destroy();
 });
@@ -191,4 +191,17 @@ test('live host markers distinguish idle, active, and unavailable state',()=>{
  delete doc.body.dataset.generating;
  doc.getElementById=()=>({style:{display:'flex'}});assert.equal(hostGenerationState(doc),true);
  doc.getElementById=()=>null;assert.equal(hostGenerationState(doc),null);
+});
+
+
+test('live host readiness overrides stale start/stream state and reports precise block reason',async()=>{
+ let busy=false;const f=fixture(()=>busy);
+ try {
+  f.bus.emit('GENERATION_STARTED','normal');f.current().streamingProcessor={isFinished:false,isStopped:false};
+  await f.put('ready',{});assert.ok((await f.memory.read()).state.contacts.ready);
+  busy=true;await assert.rejects(f.memory.begin(),e=>e.code==='GENERATING'&&JSON.parse(e.diagnostic).hostGenerating===true);
+  busy=false;await f.put('ready-again',{});
+  f.current().getCurrentChatId=()=>'';await f.put('fallback-id',{});
+  f.current().chatId=undefined;await assert.rejects(f.memory.begin(),e=>e.code==='NO_CHAT');
+ }finally{f.memory.destroy();}
 });

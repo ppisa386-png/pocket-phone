@@ -1,10 +1,10 @@
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.16.1';
-export { validateContacts } from './contacts.js?v=0.16.1';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.16.1';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.16.1';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.16.1';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.16.1';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.16.1';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.16.2';
+export { validateContacts } from './contacts.js?v=0.16.2';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.16.2';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.16.2';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.16.2';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.16.2';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.16.2';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -94,7 +94,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         // read() establishes the initial scope before assigning an operation ID.
         try {
             const view = await memory.read();
-            if (!view.scope) throw new Error('请先打开角色聊天，并等待正文生成结束。');
+            if (!view.scope) throw memory.unavailableError();
             const id = ++operation; taskId = id;
             const epoch = memory.epoch();
             const apiConfig = JSON.stringify(getSettings().api);

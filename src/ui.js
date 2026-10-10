@@ -1,14 +1,14 @@
-import { bindComposerKeys } from './composer.js?v=0.16.1';
-import { createXPanel } from './x-view.js?v=0.16.1';
-import { xUnread } from './x.js?v=0.16.1';
-import { createSnapPanel } from './snapchat-view.js?v=0.16.1';
-import { snapUnread } from './snapchat.js?v=0.16.1';
-import { createApiPanel } from './api-view.js?v=0.16.1';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.16.1';
-import { icon } from './icons.js?v=0.16.1';
-import { renderMessagesScreen } from './messages-view.js?v=0.16.1';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.16.1';
-import { renderPhoneScreen } from './phone-view.js?v=0.16.1';
+import { bindComposerKeys } from './composer.js?v=0.16.2';
+import { createXPanel } from './x-view.js?v=0.16.2';
+import { xUnread } from './x.js?v=0.16.2';
+import { createSnapPanel } from './snapchat-view.js?v=0.16.2';
+import { snapUnread } from './snapchat.js?v=0.16.2';
+import { createApiPanel } from './api-view.js?v=0.16.2';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.16.2';
+import { icon } from './icons.js?v=0.16.2';
+import { renderMessagesScreen } from './messages-view.js?v=0.16.2';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.16.2';
+import { renderPhoneScreen } from './phone-view.js?v=0.16.2';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },

@@ -20,7 +20,7 @@ export function createDiagnostics({storage, version = '', getSecrets = () => []}
     function save() { try { if(!storage)throw Error();storage.setItem(key,JSON.stringify(entries));persisted=true; } catch { persisted=false; } }
     return {
         add(error, source = '运行', secrets = []) {
-            const message=clean(error?.message ?? error ?? '未知错误',secrets);
+            const message=clean(error?.message ?? error ?? '未知错误',secrets)+(typeof error?.diagnostic==='string'?'\n'+clean(error.diagnostic,secrets):'');
             entries.push({time:new Date().toISOString(),version,source:clean(source,secrets),message});
             entries=entries.slice(-100);save();
         },
