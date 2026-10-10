@@ -20,18 +20,25 @@ const persistedChat = JSON.parse(localStorage.getItem('phone-test-data') || 'nul
 ctx.chat = persistedChat?.chat || [{name:'Alex',mes:'Alex gives you his number: +1 212 555 0123.'}];
 ctx.chatMetadata = persistedChat?.metadata || {};
 ctx.saveMetadata = async () => localStorage.setItem('phone-test-data', JSON.stringify({chat:ctx.chat,metadata:ctx.chatMetadata}));
-const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED'].map(n => [n,n]));
-ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},async emit(type,...args) {for(const fn of handlers[type] || []) await fn(...args);}};
+const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','GENERATE_AFTER_DATA','CHAT_COMPLETION_SETTINGS_READY'].map(n => [n,n]));
+ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},removeListener(type,fn){handlers[type]=(handlers[type]||[]).filter(f=>f!==fn);},async emit(type,...args) {for(const fn of [...(handlers[type] || [])]) {try{await fn(...args);}catch{}}}};
 ctx.extensionPrompts = {};
 ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.extensionPrompts[key] = {value,position,depth,scan,role,filter}; };
 ctx.getRequestHeaders=()=>({'Content-Type':'application/json'});
-window.modelCalls=0;
+window.modelCalls=0;window.hostPreparations=0;window.hostBodies=[];
 window.finishProactiveBatch=async()=>{
  await ctx.eventSource.emit('GENERATION_ENDED');await new Promise(r=>setTimeout(r,40));
  for(let i=0;i<2;i++){await ctx.eventSource.emit('GENERATION_STARTED','normal');ctx.chat.push({name:'Alex',is_user:false,mes:'A further character reply '+ctx.chat.length});await ctx.eventSource.emit('GENERATION_ENDED');await new Promise(r=>setTimeout(r,40));}
 };
 ctx.generateQuietPrompt = async options => {
- window.modelCalls++; await ctx.eventSource.emit('GENERATION_STARTED','quiet');
+ window.hostPreparations++;
+ await ctx.eventSource.emit('GENERATION_STARTED','quiet',{quiet_prompt:options.quietPrompt},false);
+ const generated={prompt:[{role:'system',content:'Host preset and character with dynamic plugin memory'},...ctx.chat.map(m=>({role:m.is_user?'user':'assistant',content:m.mes})),{role:'system',content:options.quietPrompt}]};
+ await ctx.eventSource.emit('GENERATE_AFTER_DATA',generated,false);
+ const payload={type:'quiet',messages:generated.prompt.filter(Boolean),model:'host-model',max_tokens:4321,temperature:.83,chat_completion_source:'custom',custom_url:'https://host.invalid/v1',custom_include_headers:'Authorization: host-only-secret'};
+ await ctx.eventSource.emit('CHAT_COMPLETION_SETTINGS_READY',payload);
+ window.hostBodies.push(JSON.parse(JSON.stringify(payload)));
+ window.modelCalls++;
  const answer = options.quietPrompt.includes('当前任务：主动联系判断') ? (window.proactiveReply || (window.allowIncoming ? {status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:'Sam gave Alex their phone number.',reason:'Confirm the meeting.',reason_kind:'urgent_question',reason_evidence:window.contactEvidence||'Sam gave Alex their phone number.',requires_live_conversation:true} : {status:'none'})) : options.quietPrompt.includes('"contacts"') ? {contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:'Alex gives you his number: +1 212 555 0123.'}]} : options.quietPrompt.includes('当前渠道：短信') ? {status:'reply',text:'Text received.'} : {status:'answered',text:options.quietPrompt.includes('Can you hear me?') ? 'I can hear you.' : 'Hello?'};
  if(options.quietPrompt.includes('当前渠道：短信')) { if(window.smsFail) throw new Error('Test reply failure'); if(window.smsHold) await new Promise(resolve => {window.finishSMS = resolve;}); }
  await ctx.eventSource.emit('GENERATION_ENDED',ctx.chat.length); return JSON.stringify(answer);
@@ -456,7 +463,8 @@ try {
         await p.getByText('连接成功，模型已返回文字。请保存设置后使用。',{exact:true}).waitFor();
         check(independentRequests.at(-1).messages.length === 1, 'UI connection test sends no character or chat data');
         await p.locator('[data-api-action="tab:parameters"]').tap();
-        await p.locator('[data-api-field="historyLimit"]').fill('50');
+        check(await p.locator('[data-api-field="historyLimit"]').count()===0 && await p.locator('[data-api-field="maxTokens"]').count()===0,'context and response length now follow host preset');
+        await p.locator('[data-api-field="timeout"]').fill('100');
         await p.locator('[data-api-action="save"]').tap();
         await p.getByText('已保存，手机将使用独立 API。',{exact:true}).waitFor();
         check(await p.locator('[data-api-status]').getAttribute('data-kind') === 'success', 'successful save has green success state');
@@ -485,6 +493,9 @@ try {
         await p.getByText('Independent SMS received.',{exact:true}).waitFor();
         check(independentRequests.at(-1).messages.some(m=>m.content.includes('Prepared memory for phone test')), 'independent SMS includes current prepared memory');
         check(await p.evaluate(()=>window.modelCalls) === 0, 'independent phone and SMS do not use the host model');
+        check(await p.evaluate(()=>window.hostPreparations) >= 3,'independent apps run real host preparation');
+        check(independentRequests.at(-1).messages[0].content==='Host preset and character with dynamic plugin memory' && independentRequests.at(-1).max_tokens===4321,'independent request retains host prepared content and response length');
+        check(!JSON.stringify(independentRequests.at(-1)).includes('host-only-secret') && !JSON.stringify(independentRequests.at(-1)).includes('durian-request-'),'request does not leak host authorization or internal marker');
         check(await p.evaluate(()=>!JSON.stringify(window.SillyTavern.getContext().extensionSettings).includes('test-browser-key') && !JSON.stringify(window.SillyTavern.getContext().chatMetadata).includes('test-browser-key')), 'key is absent from extension settings and chat metadata');
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="api"]').tap();
         await p.locator('[data-api-action="clear-key"]').tap();

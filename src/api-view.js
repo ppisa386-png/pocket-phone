@@ -1,4 +1,4 @@
-import { normalizeApiUrl } from './api.js?v=0.16.2';
+import { normalizeApiUrl } from './api.js?v=0.17.0';
 const apiEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export function createApiPanel({ adapter, getSettings, persist, redraw }) {
@@ -15,7 +15,7 @@ export function createApiPanel({ adapter, getSettings, persist, redraw }) {
         init();
         const value = { ...draft, baseUrl: normalizeApiUrl(draft.baseUrl), model: draft.model.trim() };
         if (requireModel && !value.model) throw new Error('请填写或选择模型 ID。');
-        for (const [id, min, max] of [['maxTokens', 128, 32768], ['timeout', 15, 300], ['historyLimit', 1, 500]]) {
+        for (const [id, min, max] of [['timeout', 15, 300]]) {
             if (!Number.isInteger(value[id]) || value[id] < min || value[id] > max) throw new Error('请在参数页填写范围内的整数。');
         }
         if (/\r|\n/.test(key)) throw new Error('密钥不能包含换行。');
@@ -40,9 +40,7 @@ export function createApiPanel({ adapter, getSettings, persist, redraw }) {
                 body = '<p class="pp-footnote">当前使用：' + apiEscape(activeName) + '</p><div class="pp-card pp-form"><label class="pp-field"><span>已保存方案</span><select data-api-field="selectedProfile"' + disabled + '><option value="">选择方案</option>' + profiles().map(p => '<option value="' + apiEscape(p.id) + '"' + (selectedProfile === p.id ? ' selected' : '') + '>' + apiEscape(p.name) + '</option>').join('') + '</select></label><div class="pp-api-actions"><button type="button" class="pp-text-button" data-api-action="profile-use"' + disabled + '>使用方案</button><button type="button" class="pp-text-button" data-api-action="profile-delete"' + disabled + '>删除方案</button></div></div>' +
                     '<div class="pp-card pp-form"><label class="pp-field"><span>新方案名称</span><input data-api-field="profileName" maxlength="80" value="' + apiEscape(profileName) + '"' + disabled + '></label><button type="button" class="pp-text-button" data-api-action="profile-save"' + disabled + '>另存为新方案</button></div><p class="pp-footnote">另存当前连接、参数和记忆设置。使用方案后立即生效；修改后点击下方保存，会更新当前方案。各方案密钥分别保存在当前浏览器。</p>';
             } else if (tab === 'parameters') {
-                body = '<div class="pp-card pp-form">' + field('maxTokens', '回复 token 上限（128—32768）', 'number', 'min="128" max="32768" step="1"') +
-                    field('timeout', '超时秒数（15—300）', 'number', 'min="15" max="300" step="1"') +
-                    field('historyLimit', '读取最近正文楼数（1—500）', 'number', 'min="1" max="500" step="1"') + '</div><p class="pp-footnote">这些参数只用于独立 API。读取楼数不会删除旧记录；请求失败重试次数仍在设置的「失败重试」页调整。</p>';
+                body = '<div class="pp-card pp-form">' + field('timeout', '超时秒数（15—300）', 'number', 'min="15" max="300" step="1"') + '</div><p class="pp-footnote">预设、上下文范围和回复长度跟随酒馆。超时只用于独立 API；失败重试次数在设置的「失败重试」页调整。</p>';
             } else if (tab === 'memory') {
                 const source = draft.memorySource || 'qqj';
                 const report = adapter.memoryStatus?.({ ...getSettings(), api: draft });
@@ -50,7 +48,7 @@ export function createApiPanel({ adapter, getSettings, persist, redraw }) {
                     '<p class="pp-footnote" data-memory-status>' + apiEscape(report?.message || '请在酒馆内查看接口状态。') + '</p><button type="button" class="pp-text-button" data-api-action="memory-refresh">刷新状态</button>' +
                     '<p class="pp-footnote">读取当前聊天已准备的召回与前情，不额外调用模型。没有材料时使用正文与手机记录；先完成一次正文召回后可再读。隐藏楼层不等于删除。删改楼层后不用旧材料，待千千结重新准备。</p>';
             } else {
-                body = '<div class="pp-card pp-info"><p>独立模式读取当前角色卡、最近正文、启用的预设文本与可用的世界书信息。复杂宏和其他插件的动态注入可能与酒馆正文流程不同。</p><p>内容语言跟随已启用的预设文本。测试连接仅发送简短测试消息，不携带角色或剧情，会消耗少量 token；获取模型失败时仍可手填模型 ID。</p><p>短信、电话及后续 App 的使用记录继续随聊天保存与删楼回退。API 配置不随删楼改变；聊天变化后旧请求结果不会写入记录。</p><p>允许主动联系时，正文完成和拒接等操作可能调用模型；可在「主动联系」页暂停。</p></div>';
+                body = '<div class="pp-card pp-info"><p>两种模式均使用酒馆的完整生成流程；独立 API 只更换接收请求的接口和模型。独立模式需要酒馆使用「聊天补全」连接类型。</p><p>内容语言跟随已启用的预设文本。测试连接仅发送简短测试消息，不携带角色或剧情，会消耗少量 token；获取模型失败时仍可手填模型 ID。</p><p>短信、电话及后续 App 的使用记录继续随聊天保存与删楼回退。API 配置不随删楼改变；聊天变化后旧请求结果不会写入记录。</p><p>允许主动联系时，正文完成和拒接等操作可能调用模型；可在「主动联系」页暂停。</p></div>';
             }
             return '<div class="pp-page"><nav class="pp-api-tabs" aria-label="API 设置分页">' + [['connection','连接'],['profiles','方案'],['parameters','参数'],['memory','记忆'],['help','说明']].map(([id,label]) => '<button type="button" class="pp-text-button" data-api-action="tab:' + id + '" aria-pressed="' + (tab === id) + '">' + label + '</button>').join('') + '</nav>' + body +
                 '<div class="pp-api-savebar"><div class="pp-api-actions"><button type="button" class="pp-call-retry" data-api-action="save"' + disabled + '>保存 API 设置</button>' + (busy ? '<button type="button" class="pp-text-button" data-api-action="cancel">取消请求</button>' : '') + '</div><p class="pp-api-status" data-api-status data-kind="' + statusKind + '" role="status">' + apiEscape(status || '修改后点击保存才会用于手机通信。') + '</p></div></div>';

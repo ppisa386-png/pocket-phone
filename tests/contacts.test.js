@@ -5,7 +5,6 @@ import { contactSources, validateContacts } from '../src/contacts.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
-import { buildApiContext } from '../src/api-context.js';
 
 const quote='Alex gives Sam his number: +1 212 555 0123.';
 const persona='Sam has a sister named Bea. Their close friend is Casey. Jordan is a coworker.';
@@ -62,10 +61,11 @@ test('changing persona during scan discards the pending result',async()=>{
     }finally{f.close();}
 });
 
-test('persona NPC call uses that person rather than pretending to be the selected character card',async()=>{
-    const c={name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',data:{description:'Alex private character description'}}],powerUserSettings:{persona_description:persona},chat:[]};
-    const result=await buildApiContext(c,'Telephone task',{id:'name:bea',name:'Bea'},normalizeSettings().api);
-    const content=JSON.stringify(result);assert.match(content,/Bea/);assert.ok(!content.includes('Alex private character description'));assert.match(content,/sister/);
+test('persona NPC call names its actual recipient in the shared host task',async()=>{
+    const f=fixture();try{
+        await f.phone.scan();f.reply(()=>({status:'answered',text:'Hi from Bea'}));
+        await f.phone.dial('name:bea');assert.match(f.prompts.at(-1),/当前通话对象：.*Bea/);
+    }finally{f.close();}
 });
 
 test('delivered but unwritten temporary landline uses location name and stays separate from target',()=>{

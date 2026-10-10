@@ -1,5 +1,5 @@
-import { icon } from './icons.js?v=0.16.2';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.16.2';
+import { icon } from './icons.js?v=0.17.0';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.17.0';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};

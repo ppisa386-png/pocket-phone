@@ -44,8 +44,9 @@ export function extractApiText(data) {
     return text.trim();
 }
 
-export function createApiClient({ getContext, getSettings, getKey, buildContext, fetchImpl = globalThis.fetch }) {
+export function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
     const active = new Set();
+    let cancelEpoch = 0;
     async function post(path, config, key, extra, isCurrent = () => true) {
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
@@ -83,12 +84,14 @@ export function createApiClient({ getContext, getSettings, getKey, buildContext,
     return {
         async generate(prompt, contact, isCurrent) {
             const config = structuredClone(getSettings().api);
+            normalizeApiUrl(config.baseUrl);
+            if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
             const key = getKey(config.baseUrl);
-            const fingerprint = JSON.stringify(config);
-            const current = () => isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
-            const messages = await buildContext(getContext(), prompt, contact, config, current);
+            const fingerprint = JSON.stringify(config), epoch = cancelEpoch;
+            const current = () => epoch === cancelEpoch && isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
+            const prepared = await prepareRequest(getContext(), prompt, contact, current);
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
-            return complete(config, key, messages, current);
+            return extractApiText(await post('generate', config, key, independentPayload(prepared, config), current));
         },
         async models(config, key, isCurrent) {
             const data = await post('status', config, key, {}, isCurrent);
@@ -99,6 +102,18 @@ export function createApiClient({ getContext, getSettings, getKey, buildContext,
             return complete({ ...config, maxTokens: Math.max(128, Math.min(config.maxTokens, 1024)) }, key,
                 [{ role: 'user', content: 'Connection test. Reply only: OK' }], isCurrent);
         },
-        cancel() { for (const controller of active) controller.abort(); },
+        cancel() { cancelEpoch++; for (const controller of active) controller.abort(); },
     };
+}
+
+// Keep prompt contents and portable preset parameters. Never forward the host's
+// URL, authorization headers, custom endpoint configuration or account fields.
+export function independentPayload(prepared, config) {
+    const fields = ['messages','temperature','frequency_penalty','presence_penalty','top_p','top_k','min_p','top_a','typical_p',
+        'max_tokens','max_completion_tokens','stop','seed','logit_bias','logprobs','top_logprobs',
+        'include_reasoning','reasoning_effort','verbosity','custom_prompt_post_processing','user_name','char_name','group_names',
+        'tools','tool_choice','response_format','json_schema'];
+    if (!Array.isArray(prepared?.messages) || !prepared.messages.length) throw failure('酒馆没有提供有效的生成内容。');
+    const payload = Object.fromEntries(fields.filter(k => prepared[k] !== undefined).map(k => [k, prepared[k]]));
+    return { ...payload, model: config.model.trim(), stream: false, type: 'quiet' };
 }

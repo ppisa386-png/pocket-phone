@@ -78,11 +78,10 @@ test('deleting only the settlement floor restores pending transfer and removes i
  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.state().snapchat[t.value].status,'pending');assert.equal(Object.keys(f.state().assets).length,0);f.close();
 });
 
-test('independent Snapchat context selects the target and states the anonymous identity boundary',async()=>{
- const {buildApiContext}=await import('../src/api-context.js');
- const context={name1:'Sam',name2:'Wrong person',characterId:1,characters:[{name:'Alex',avatar:'alex.png',description:'Alex likes music.'},{name:'Wrong person',avatar:'other.png'}],chat:[],powerUserSettings:{persona_description:'Sam is a student.'}};
- const messages=await buildApiContext(context,'Reply',{id:'card:alex.png',name:'Alex',channel:'snapchat',alias:'Moon',identityKnown:false},{historyLimit:10});
- const prompt=messages.map(m=>m.content).join('\n');assert.match(prompt,/Alex likes music/);assert.match(prompt,/对方真实身份尚未确认/);assert.match(prompt,/Moon/);assert.doesNotMatch(prompt,/"name":"Wrong person"/);
+test('both transports use identical quiet options and the selected group actor',async()=>{
+ const {phoneQuietOptions}=await import('../src/api-context.js');
+ assert.deepEqual(phoneQuietOptions({groupId:'group'},'Reply',{characterId:2}),{quietPrompt:'Reply',quietToLoud:false,skipWIAN:false,forceChId:2});
+ assert.equal(phoneQuietOptions({groupId:''},'Reply',{characterId:2}).forceChId,null);
 });
 
 test('queued Snapchat sentences cost no API, flush together, stay private until sent, and roll back',async()=>{

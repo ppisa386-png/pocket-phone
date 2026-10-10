@@ -1,10 +1,11 @@
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.16.2';
-export { validateContacts } from './contacts.js?v=0.16.2';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.16.2';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.16.2';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.16.2';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.16.2';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.16.2';
+import { phoneQuietOptions } from './api-context.js?v=0.17.0';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.17.0';
+export { validateContacts } from './contacts.js?v=0.17.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.17.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.17.0';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.17.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.17.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.17.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -78,8 +79,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         for (let attempt = 0; attempt <= retries; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
             try {
-                const text = independent ? await modelClient.generate(prompt, contact, isCurrent) : await context.generateQuietPrompt({ quietPrompt: prompt, quietToLoud: false, skipWIAN: false,
-                    forceChId: context.groupId != null ? contact?.characterId ?? null : null });
+                const text = independent ? await modelClient.generate(prompt, contact, isCurrent) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 return validate(parseJSON(text));
             } catch (failure) {
