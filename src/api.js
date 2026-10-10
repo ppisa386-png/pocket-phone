@@ -12,10 +12,13 @@ export function createKeyStore(storage) {
     if (arguments.length === 0) { try { storage = globalThis.localStorage; } catch { storage = null; } }
     const prefix = 'durian_phone_api_key:';
     return {
-        get(url) { try { return storage?.getItem(prefix + normalizeApiUrl(url)) ?? ''; } catch { return ''; } },
-        set(url, key) {
+        get(url, profileId = '') { try { return storage?.getItem(prefix + (profileId ? 'profile:' + profileId + ':' : '') + normalizeApiUrl(url)) ?? ''; } catch { return ''; } },
+        secrets() {
+            try { return Array.from({length: storage?.length || 0}, (_, i) => storage.key(i)).filter(k => k?.startsWith(prefix)).map(k => storage.getItem(k)).filter(Boolean); } catch { return []; }
+        },
+        set(url, key, profileId = '') {
             if (!storage) throw new Error('当前浏览器不能保存密钥，请检查浏览器存储设置。');
-            const name = prefix + normalizeApiUrl(url);
+            const name = prefix + (profileId ? 'profile:' + profileId + ':' : '') + normalizeApiUrl(url);
             try { key ? storage.setItem(name, key) : storage.removeItem(name); }
             catch { throw new Error('密钥保存失败，请检查浏览器存储空间或权限。'); }
         },

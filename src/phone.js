@@ -1,10 +1,10 @@
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.14.2';
-export { validateContacts } from './contacts.js?v=0.14.2';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.14.2';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.14.2';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.14.2';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.14.2';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.14.2';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.15.0';
+export { validateContacts } from './contacts.js?v=0.15.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.15.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.15.0';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.15.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.15.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.15.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -24,7 +24,7 @@ export function validateCall(data) {
     return { status: data.status, text: data.text.trim() };
 }
 
-export function createPhoneService({ memory, getContext, getSettings, modelClient = null }) {
+export function createPhoneService({ memory, getContext, getSettings, modelClient = null, onError = () => {} }) {
     const listeners = new Set();
     let state = { contacts: {}, calls: {}, profiles: {}, messages: {} };
     let scope;
@@ -101,7 +101,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             const current = () => !destroyed && id === operation && epoch === memory.epoch() && apiConfig === JSON.stringify(getSettings().api);
             const value = await work(view, current);
             return { ok: true, value };
-        } catch (failure) { if (taskId === null || taskId === operation) error = failure.message || '请求失败，请重试。'; return { ok: false, error: failure.message }; }
+        } catch (failure) { onError(failure, kind); if (taskId === null || taskId === operation) error = failure.message || '请求失败，请重试。'; return { ok: false, error: failure.message }; }
         finally { busy = false; requestKind = null; emit(); flushReaction(); }
     }
     function instructions() {

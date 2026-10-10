@@ -7,10 +7,10 @@ import {createX,xItems,xUnread} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 
-function setup(){
+function setup(getGenerationState){
  const bus=new EventEmitter();let response={},count=0,lastPrompt='';
  const context={chatId:'x-test',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'Alex uses X.',name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;lastPrompt=o.quietPrompt;return typeof response==='function'?response(o):JSON.stringify(response);}};
- const settings=normalizeSettings({retries:0});const memory=createPhoneMemory({getContext:()=>context});const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});const x=createX({memory,phone,getContext:()=>context,getSettings:()=>settings});
+ const settings=normalizeSettings({retries:0});const memory=createPhoneMemory({getContext:()=>context,getGenerationState});const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});const x=createX({memory,phone,getContext:()=>context,getSettings:()=>settings});
  return {x,memory,phone,context,settings,bus,state:()=>phone.snapshot(),reply:r=>{response=r;},count:()=>count,prompt:()=>lastPrompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
@@ -53,4 +53,23 @@ test('X state and in-flight output roll back after deleting narrative or switchi
 
 test('disabling X prevents even local changes without disabling Snapchat',async()=>{
  const f=setup();f.settings.apps.x=false;assert.equal((await f.x.publish('No')).ok,false);assert.equal(xItems(f.state(),'post').length,0);assert.equal(f.settings.apps.snapchat,true);assert.equal(f.count(),0);f.close();
+});
+
+
+test('X recovers from a missed generation-end event through the shared host state',async()=>{
+ let hostBusy=false;const f=setup(()=>hostBusy);
+ try {
+  f.bus.emit('GENERATION_STARTED','normal');
+  f.context.streamingProcessor={isFinished:false,isStopped:false};
+  const id=await account(f,'open');
+  ok(await f.x.publish('Available after the story ended'));
+  f.reply({status:'reply',text:'Hello again'});ok(await f.x.send(id,'Hi'));
+  hostBusy=true;
+  assert.equal((await f.x.publish('Still generating')).ok,false);
+  hostBusy=false;
+  ok(await f.x.publish('Ready again without an end event'));
+  assert.equal(xItems(f.state(),'post').length,2);
+  f.context.chatId=undefined;
+  assert.equal((await f.x.publish('No chat')).ok,false);
+ } finally {f.close();}
 });

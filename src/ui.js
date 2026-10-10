@@ -1,13 +1,13 @@
-import { createXPanel } from './x-view.js?v=0.14.2';
-import { xUnread } from './x.js?v=0.14.2';
-import { createSnapPanel } from './snapchat-view.js?v=0.14.2';
-import { snapUnread } from './snapchat.js?v=0.14.2';
-import { createApiPanel } from './api-view.js?v=0.14.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.14.2';
-import { icon } from './icons.js?v=0.14.2';
-import { renderMessagesScreen } from './messages-view.js?v=0.14.2';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.14.2';
-import { renderPhoneScreen } from './phone-view.js?v=0.14.2';
+import { createXPanel } from './x-view.js?v=0.15.0';
+import { xUnread } from './x.js?v=0.15.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.15.0';
+import { snapUnread } from './snapchat.js?v=0.15.0';
+import { createApiPanel } from './api-view.js?v=0.15.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.15.0';
+import { icon } from './icons.js?v=0.15.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.15.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.15.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.15.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -15,6 +15,7 @@ const SECTIONS = [
     { id: 'apps', name: 'App 管理', icon: 'apps', note: '选择桌面上显示的应用' },
     { id: 'prompts', name: '提示词', icon: 'prompts', note: '按功能分别编辑' },
     { id: 'contact', name: '主动联系', icon: 'phone', note: '允许角色主动联系' },
+    { id: 'errors', name: '报错记录', icon: 'prompts', note: '查看与复制运行报错' },
     { id: 'retry', name: '失败重试', icon: 'retry', note: '设置自动重试次数' },
 ];
 
@@ -111,6 +112,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         try {
             adapter.save(settings);
         } catch (error) {
+            adapter.diagnostics?.add(error,'设置保存');
             settings = previous;
             applyAppearance();
             notice('设置保存失败，请检查储存空间后重试。');
@@ -175,6 +177,21 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="420" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度。</p></div>';
     }
 
+    function renderErrors() {
+        const log=adapter.diagnostics?.text()||'';
+        content.innerHTML='<div class="pp-page"><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近 100 条报错。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
+    }
+    async function copyErrors() {
+        const text=adapter.diagnostics?.text()||'';
+        if(!text){notice('暂无报错可复制。');return;}
+        try { await navigator.clipboard.writeText(text);notice('报错已复制。'); }
+        catch {
+            const field=content.querySelector('[data-error-log]');field?.focus();field?.select();
+            try { if(document.execCommand('copy')){notice('报错已复制。');return;} } catch {}
+            notice('请长按报错内容，选择复制。');
+        }
+    }
+
     function renderAPI() { content.innerHTML = apiPanel.html(); }
 
     function renderApps() {
@@ -225,7 +242,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
     function phoneAction(action) {
         if (!adapter.phone) { notice('请在酒馆中连接 API 后使用通信功能。'); return; }
-        Promise.resolve().then(action).catch(error => notice(error.message));
+        Promise.resolve().then(action).catch(error => {adapter.diagnostics?.add(error,'手机操作');notice(error.message);});
     }
 
     function renderEmptyApp(id) {
@@ -252,6 +269,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (route === 'settings') renderSettings();
         else if (route === 'appearance') renderAppearance();
         else if (route === 'api') renderAPI();
+        else if (route === 'errors') renderErrors();
         else if (route === 'apps') renderApps();
         else if (route === 'prompts') renderPrompts();
         else if (route === 'contact') renderContactSettings();
@@ -318,6 +336,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
         if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
         const action = target.dataset.action;
+        if (action === 'copy-errors') void copyErrors();
+        if (action === 'refresh-errors') renderErrors();
+        if (action === 'clear-errors') {adapter.diagnostics?.clear();renderErrors();}
         if (action === 'close') close();
         if (action === 'home') { route = 'home'; history = []; render(); }
         if (action === 'back') { route = history.pop() || 'home'; render(); }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, readJournal, reconcileJournal, appendChange, replayJournal } from '../src/journal.js';
-import { createPhoneMemory } from '../src/memory.js';
+import { createPhoneMemory, hostGenerationState } from '../src/memory.js';
 const message = (i, text = '剧情 ' + i) => ({ mes: text, name: 'Alex', is_user: false, send_date: i, swipe_id: 0 });
 const rev = chat => revisionsFor(messageSignatures(chat));
 const change = (key, value, collection = 'contacts') => [{ collection, key, value }];
@@ -181,4 +181,14 @@ test('stopped, aborted, and completed-event stream objects do not cause a perman
  f.bus.emit('GENERATION_ENDED');await f.put('ended',{});
  f.bus.emit('GENERATION_STARTED','normal');await assert.rejects(f.memory.begin(),/等待正文/);
  f.bus.emit('GENERATION_STOPPED');await f.put('stopped-event',{});f.memory.destroy();
+});
+
+
+test('live host markers distinguish idle, active, and unavailable state',()=>{
+ const doc={body:{dataset:{}},getElementById:()=>({style:{display:'none'}})};
+ assert.equal(hostGenerationState(doc),false);
+ doc.body.dataset.generating='true';assert.equal(hostGenerationState(doc),true);
+ delete doc.body.dataset.generating;
+ doc.getElementById=()=>({style:{display:'flex'}});assert.equal(hostGenerationState(doc),true);
+ doc.getElementById=()=>null;assert.equal(hostGenerationState(doc),null);
 });

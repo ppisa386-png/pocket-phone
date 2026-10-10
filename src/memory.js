@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.14.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.15.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -13,7 +13,18 @@ function chatScope(context) {
     return JSON.stringify([...owner, id]);
 }
 
-export function createPhoneMemory({ getContext, onError = () => {}, onRollback = () => {} }) {
+// SillyTavern toggles these markers in activate/deactivateSendButtons.
+// A missed GENERATION_ENDED event must not keep every app locked forever.
+export function hostGenerationState(doc = globalThis.document) {
+    if (!doc?.body) return null;
+    if (doc.body.dataset?.generating === 'true') return true;
+    const display = doc.getElementById('mes_stop')?.style?.display;
+    if (display === 'none') return false;
+    if (display) return true;
+    return null; // Older hosts / non-browser fixtures retain event-based checks.
+}
+
+export function createPhoneMemory({ getContext, onError = () => {}, onRollback = () => {}, getGenerationState = hostGenerationState }) {
     let queue = Promise.resolve();
     let disposed = false;
     let active = null;
@@ -58,9 +69,14 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         // Do not persist a transient streaming revision. Final generation events
         // reconcile it; phone actions are blocked until that point.
         const processor = current.streamingProcessor;
+        const hostGenerating = getGenerationState();
+        if (hostGenerating === false) {
+            generating = false;
+            settledProcessor = processor ?? null;
+        }
         const streaming = processor && processor !== settledProcessor && processor.isFinished === false &&
             processor.isStopped !== true && !processor.abortController?.signal?.aborted;
-        if (generating || streaming) {
+        if (hostGenerating === true || generating || streaming) {
             if (active?.scope !== scope || active?.metadata !== snapshot.metadata) { active = null; notify(); }
             return null;
         }

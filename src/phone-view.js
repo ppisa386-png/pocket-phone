@@ -1,5 +1,5 @@
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.14.2';
-import { icon } from './icons.js?v=0.14.2';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.15.0';
+import { icon } from './icons.js?v=0.15.0';
 const phoneEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const statuses = { dialing: '正在拨号', connected: '通话中', ended: '已结束', interrupted: '已中断', ringing: '来电中', answering: '正在接听', missed: '未接来电', declined: '对方拒接', no_answer: '无人接听' };
 const callStatus = call => call.direction === 'incoming' && call.status === 'declined' ? '已拒接' : statuses[call.status];

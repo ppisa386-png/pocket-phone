@@ -247,3 +247,5 @@ h2, p { margin: 0; }
 .pp-x-post > header { display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
 .pp-x-comments { padding:10px 0 0 12px; border-left:2px solid var(--pp-line); }
 .pp-x h3 { font-size:1em; margin-top:20px; }
+
+.pp-log-output{display:block;width:100%;min-height:300px;margin:16px 0;padding:12px;box-sizing:border-box;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--pp-card);color:inherit;border:1px solid var(--pp-line);border-radius:12px;font:13px/1.6 monospace;}
