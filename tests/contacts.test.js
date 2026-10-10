@@ -88,13 +88,13 @@ test('persona contacts require an explicit availability decision; negative decis
  }finally{f.close();}
 });
 
-test('manual scan reviews explicitly unusable contacts, preserves omissions and allows rollback',async()=>{
+test('manual scan preserves existing contacts even if model returns an obsolete removal review',async()=>{
  const f=fixture();try{
  await f.phone.scan();const id='name:bea';assert.ok(f.phone.snapshot().contacts[id]);
  const status='Bea has been an uncommunicative zombie for many years and cannot operate a telephone.';
  f.context.chat.push({mes:status,name:'Alex'});await f.memory.read();
  f.reply(()=>({contacts:[],reviews:[{id,can_use_phone:false,evidence:'A made-up status with no source'}]}));await f.phone.scan();assert.ok(f.phone.snapshot().contacts[id]);
- f.reply(()=>({contacts:[],reviews:[{id,can_use_phone:false,evidence:status}]}));const reviewed=await f.phone.scan();assert.equal(reviewed.value.removed,1);assert.equal(f.phone.snapshot().contacts[id],undefined);assert.ok(f.phone.snapshot().contacts['card:alex.png']);
+ f.reply(()=>({contacts:[],reviews:[{id,can_use_phone:false,evidence:status}]}));const reviewed=await f.phone.scan();assert.deepEqual(reviewed.value,{added:0,updated:0});assert.ok(f.phone.snapshot().contacts[id]);assert.ok(f.phone.snapshot().contacts['card:alex.png']);
  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.ok(f.phone.snapshot().contacts[id]);
  }finally{f.close();}
 });

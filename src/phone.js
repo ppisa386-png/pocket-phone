@@ -1,10 +1,10 @@
-import { contactSources, contactPrompt, validateContacts, validateContactReviews } from './contacts.js?v=0.14.1';
-export { validateContacts } from './contacts.js?v=0.14.1';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.14.1';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.14.1';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.14.1';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.14.1';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.14.1';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.14.2';
+export { validateContacts } from './contacts.js?v=0.14.2';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.14.2';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.14.2';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.14.2';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.14.2';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.14.2';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -368,26 +368,22 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const chat = clone(context.chat);
                 const sources = contactSources(chat, context);
                 const sourceKey = JSON.stringify(sources);
-                sources.memory = readPreparedMemory(context,getSettings()).text;
                 const valid = () => current() && sourceKey === JSON.stringify(contactSources(getContext().chat, getContext()));
                 const ticket = await memory.begin();
                 const prompt = contactPrompt(getSettings().prompts.contacts, context, sources, Object.values(view.state.contacts));
-                const result = await request(prompt, data => ({contacts:validateContacts(data,chat,context,sources),reviews:validateContactReviews(data,Object.values(view.state.contacts),sources)}), valid);
-                const contacts=result.contacts;
+                const contacts = await request(prompt, data => validateContacts(data,chat,context,sources), valid);
                 if (!valid()) return;
                 const additions = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
                     const old = view.state.contacts[c.id];
                     return !old || (c.number && old.number !== c.number && c.sourceIndex >= old.sourceIndex);
                 });
                 const batches = additions.map(contact => ({ sourceIndex: contact.sourceIndex, changes: [set('contacts', contact.id, contact)] }));
-                const removals=[...new Set(result.reviews.map(r=>r.id))];
-                if(removals.length)batches.push({sourceIndex:chat.length-1,changes:removals.map(id=>set('contacts',id,null))});
                 if (batches.length) await memory.commitBatch(ticket, batches);
                 if (!valid()) return;
                 const added = additions.filter(c => !view.state.contacts[c.id]).length;
                 const updated = additions.length - added;
-                contactStatus = removals.length ? '联系人已更新。' : added || updated ? '已新增 ' + added + ' 位联系人' + (updated ? '，更新 ' + updated + ' 位' : '') + '。' : '未找到新的联系人。';
-                return { added, updated, ...(removals.length?{removed:removals.length}:{}) };
+                contactStatus = added || updated ? '已新增 ' + added + ' 位联系人' + (updated ? '，更新 ' + updated + ' 位' : '') + '。' : '未找到新的联系人。';
+                return { added, updated };
             }, 'contacts');
         },
         dial(contactId) {

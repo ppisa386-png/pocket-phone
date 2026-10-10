@@ -1,7 +1,7 @@
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.14.1';
-import { isBlocked } from './contact-events.js?v=0.14.1';
-import { icon } from './icons.js?v=0.14.1';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.14.1';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.14.2';
+import { isBlocked } from './contact-events.js?v=0.14.2';
+import { icon } from './icons.js?v=0.14.2';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.14.2';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = value => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const replyLabels = { pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
