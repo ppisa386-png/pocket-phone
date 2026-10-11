@@ -1,14 +1,15 @@
-import { bindComposerKeys } from './composer.js?v=0.18.0';
-import { createXPanel } from './x-view.js?v=0.18.0';
-import { xUnread } from './x.js?v=0.18.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.18.0';
-import { snapUnread } from './snapchat.js?v=0.18.0';
-import { createApiPanel } from './api-view.js?v=0.18.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.18.0';
-import { icon } from './icons.js?v=0.18.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.18.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.18.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.18.0';
+import { createAmazonPanel } from './amazon-view.js?v=0.19.0';
+import { bindComposerKeys } from './composer.js?v=0.19.0';
+import { createXPanel } from './x-view.js?v=0.19.0';
+import { xUnread } from './x.js?v=0.19.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.19.0';
+import { snapUnread } from './snapchat.js?v=0.19.0';
+import { createApiPanel } from './api-view.js?v=0.19.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.19.0';
+import { icon } from './icons.js?v=0.19.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.19.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.19.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.19.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -99,6 +100,15 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const next=field?Array.from(content.querySelectorAll('[data-x-field]')).find(el=>el.dataset.xField===field):null;
         if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
         queueMicrotask(()=>{if(opened&&route==='app:x')void xPanel.readVisible();});
+    }
+
+    const shopPanel=createAmazonPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:amazon')renderAmazon();},notice});
+    function renderAmazon(){
+        const active=shadow.activeElement,field=active?.dataset.shopField;
+        const selection=field&&active.type==='text'?[active.selectionStart,active.selectionEnd]:null;
+        const scroll=content.scrollTop;content.innerHTML=shopPanel.html();content.scrollTop=scroll;
+        const next=field?Array.from(content.querySelectorAll('[data-shop-field]')).find(el=>el.dataset.shopField===field):null;
+        if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
     }
 
     function notice(message) {
@@ -286,6 +296,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (app?.id === 'messages') renderMessages();
         else if (app?.id === 'snapchat') renderSnapchat();
         else if (app?.id === 'x') renderX();
+        else if (app?.id === 'amazon') renderAmazon();
         else if (app) renderEmptyApp(app.id);
         content.scrollTop = route === 'app:messages' && selectedSMSContactId ? content.scrollHeight : 0;
     }
@@ -298,6 +309,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         shadow.querySelector('[data-action="back"]').focus({ preventScroll: true });
         if (next === 'app:phone') phoneAction(() => adapter.phone.open());
         if (next === 'app:messages') phoneAction(() => adapter.phone.openMessages());
+        if (next === 'app:amazon' && adapter.amazon) phoneAction(() => adapter.amazon.open());
         if (next === 'app:x' && adapter.x) phoneAction(() => adapter.x.open());
         if (next === 'app:snapchat' && adapter.snapchat) phoneAction(() => adapter.snapchat.open());
     }
@@ -340,6 +352,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
+        if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
         if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
@@ -406,6 +419,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             event.preventDefault();const edit=smsEditing;if(!edit)return;
             phoneAction(async()=>{const result=await adapter.phone.editMessage(edit.id,edit.text);if(result?.ok){smsEditing=null;renderMessages();}});return;
         }
+        if(event.target.dataset.shopForm){event.preventDefault();void shopPanel.submit(event.target);return;}
         if(event.target.dataset.xForm){event.preventDefault();void xPanel.submit(event.target);return;}
         if(event.target.dataset.snapForm){event.preventDefault();void snapPanel.submit(event.target);return;}
         if (event.target.hasAttribute('data-sms-form')) {
@@ -427,6 +441,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
+        if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
         if(target.dataset.snapField){snapPanel.input(target);return;}
         if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
@@ -454,6 +469,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('input', event => {
         if(event.target.hasAttribute('data-contact-query')){contactQuery=event.target.value;return;}
         if(event.target.hasAttribute('data-sms-edit-text')){if(smsEditing)smsEditing.text=event.target.value;return;}
+        if(event.target.dataset.shopField){shopPanel.input(event.target);return;}
         if(event.target.dataset.xField){xPanel.input(event.target);return;}
         if(event.target.dataset.snapField){snapPanel.input(event.target);return;}
         if (event.target.dataset.apiField && event.target.tagName !== 'SELECT') {
@@ -564,7 +580,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (scope !== lastScope) {
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
-            snapPanel.reset();xPanel.reset();
+            snapPanel.reset();xPanel.reset();shopPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }
@@ -583,6 +599,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened && route === 'app:messages') renderMessages();
         if (opened && route === 'app:snapchat') renderSnapchat();
         if (opened && route === 'app:x') renderX();
+        if (opened && route === 'app:amazon') renderAmazon();
         if (opened && route === 'home') renderHome();
     });
     const clockInterval = setInterval(updateClock, 15000);

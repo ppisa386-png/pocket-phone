@@ -255,3 +255,15 @@ h2, p { margin: 0; }
 .pp-x-comment { padding:10px 0; border-bottom:1px solid var(--pp-line); }
 .pp-x-comment > small { display:block; color:var(--pp-muted); }
 .pp-x .pp-x-refresh { margin-left:auto; display:inline-flex; align-items:center; justify-content:center; }
+
+/* Amazon: compact product and order cards, shared phone controls. */
+.pp-shop-product,.pp-shop-review{padding:16px;margin:12px 0;border:1px solid var(--pp-line);border-radius:16px;overflow-wrap:anywhere}
+.pp-shop-product{display:flex;flex-direction:column;gap:10px}
+.pp-shop-product h3,.pp-shop-product p{margin:0}
+.pp-shop-product small{opacity:.72}
+.pp-shop-product .pp-snap-button{align-self:flex-start}
+.pp-shop-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pp-shop input[type=date],.pp-shop input[type=time]{min-width:0;width:100%;max-width:100%}
+
+.pp-shop input[type=date],.pp-shop input[type=time]{padding:10px 12px;border:1px solid var(--pp-line);border-radius:9px;background:var(--pp-input);color:var(--pp-text);color-scheme:dark}
+.pp-layer[data-theme=light] .pp-shop input{color-scheme:light}
