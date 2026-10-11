@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
-import {createX,xItems,xUnread} from '../src/x.js';
+import {createX,xItems,xUnread,xCounts} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 
@@ -72,4 +72,76 @@ test('X recovers from a missed generation-end event through the shared host stat
   f.context.chatId=undefined;
   assert.equal((await f.x.publish('No chat')).ok,false);
  } finally {f.close();}
+});
+
+
+test('square refresh needs no following and rejects character authors while creating world-local crowd posts',async()=>{
+ const f=setup();try{
+  const before=f.count();await f.x.open();assert.equal(f.count(),before);
+  f.reply({posts:[{name:'Alex',handle:'alex_new',text:'Not a square author'},
+    {name:'alex',handle:'a2',text:'Still the character'},
+    {name:'Juniper',handle:'juniper_walks',text:'The park is lovely today.',metrics:{likes:12,reposts:2,replies:6},publicBasis:'Park visit in current story',
+      comments:[{key:'one',name:'Rowan',handle:'rowan',text:'How crowded is it?'},{key:'two',isAuthor:true,replyTo:'one',text:'Quiet by the lake.'}]}]});
+  ok(await f.x.refresh('square'));assert.equal(f.count(),before+1);
+  const posts=xItems(f.state(),'post');assert.equal(posts.length,1);assert.equal(posts[0].feed,'square');
+  assert.equal(xItems(f.state(),'account').some(a=>a.following),false);assert.equal(f.state().x[posts[0].author].crowd,true);
+  assert.equal(xItems(f.state(),'comment').length,2);assert.equal(xUnread(f.state()),0);
+  assert.deepEqual(xCounts(f.state(),posts[0]),{likes:12,reposts:2,replies:6});
+  assert.match(f.prompt(),/秘密/);assert.match(f.prompt(),/无需关注/);assert.match(f.prompt(),/不围绕 user 转/);
+ }finally{f.close();}
+});
+
+test('followed characters have un-followed commenters and may remain completely silent',async()=>{
+ const f=setup();try{
+  const id=await account(f);ok(await f.x.follow(id,true));
+  f.reply({posts:[{accountId:id,text:'A quiet walk.',metrics:{likes:2,reposts:0,replies:1},comments:[{key:'friend',name:'Bea',handle:'bea',text:'Nice weather.'}]}]});
+  ok(await f.x.refresh(true));const p=xItems(f.state(),'post')[0],c=xItems(f.state(),'comment')[0];
+  assert.equal(f.state().x[c.author].name,'Bea');assert.equal(f.state().x[c.author].following,false);
+  assert.equal(xItems(f.state(),'comment').some(c=>c.author===id),false);assert.match(f.prompt(),/可以一条都不回复/);
+  const before=f.count();ok(await f.x.react(p.id,'liked'));ok(await f.x.react(p.id,'reposted'));
+  assert.equal(f.count(),before);assert.deepEqual(xCounts(f.state(),f.state().x[p.id]),{likes:3,reposts:1,replies:1});
+  ok(await f.x.react(p.id,'liked'));assert.equal(xCounts(f.state(),f.state().x[p.id]).likes,2);
+  f.reply({text:''});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,2);
+  assert.equal(xCounts(f.state(),f.state().x[p.id]).replies,2);
+ }finally{f.close();}
+});
+
+test('replying to a comment addresses that commenter and rejects a parent from another post',async()=>{
+ const f=setup();try{
+  const id=await account(f);ok(await f.x.follow(id,true));
+  f.reply({posts:[{accountId:id,text:'Concert tonight',comments:[{key:'one',name:'Bea',handle:'bea',text:'I am going too.'}]}]});
+  ok(await f.x.refresh(true));const post=xItems(f.state(),'post')[0],parent=xItems(f.state(),'comment')[0];
+  f.reply({text:'See you there!'});ok(await f.x.comment(post.id,'When will you arrive?',parent.id));
+  const comments=xItems(f.state(),'comment');assert.equal(comments.at(-1).author,parent.author);
+  assert.equal(comments.at(-2).replyTo,parent.id);assert.equal(comments.at(-1).replyTo,comments.at(-2).id);
+  assert.match(f.prompt(),/被回复的账号：.*Bea/);assert.match(f.prompt(),/不强制帖子作者出面/);
+  ok(await f.x.publish('Other post'));const own=xItems(f.state(),'post').find(p=>p.author==='user');
+  const count=f.count();assert.equal((await f.x.comment(own.id,'Wrong parent',parent.id)).ok,false);assert.equal(f.count(),count);
+  ok(await f.x.block(parent.author,true));assert.equal((await f.x.comment(post.id,'Blocked',parent.id)).ok,false);
+ }finally{f.close();}
+});
+
+test('square contents and engagement roll back and unrelated crowd threads stay out of character memory',async()=>{
+ const f=setup();try{
+  const id=await account(f);ok(await f.x.follow(id,true));ok(await f.x.reveal(id));
+  f.context.chat.push({mes:'At the park.'});await f.memory.read();
+  f.reply({posts:[{accountId:id,text:'The park',comments:[{key:'a',name:'Bea',handle:'bea',text:'A friend remark'},{key:'b',isAuthor:true,replyTo:'a',text:'Reply only to Bea'}]}]});ok(await f.x.refresh(true));
+  const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};
+  assert.doesNotMatch(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Reply only to Bea/);
+  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'A local park report',metrics:{likes:15,reposts:4,replies:0}}]});ok(await f.x.refresh('square'));
+  const p=xItems(f.state(),'post').find(p=>p.feed==='square');ok(await f.x.react(p.id,'liked'));
+  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
+  assert.equal(xItems(f.state(),'post').length,0);assert.equal(xItems(f.state(),'comment').length,0);
+  assert.equal(xItems(f.state(),'account').length,1);assert.equal(f.state().x[id].following,true);
+ }finally{f.close();}
+});
+
+test('reposted posts appear on the personal profile and canceling removes them',async()=>{
+ const {createXPanel}=await import('../src/x-view.js');const f=setup();try{
+  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'My favorite park'}]});ok(await f.x.refresh('square'));
+  const post=xItems(f.state(),'post')[0];ok(await f.x.react(post.id,'reposted'));
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:f.state,redraw(){},notice(){}});
+  await panel.action('profile');assert.match(panel.html(),/你转发了/);assert.match(panel.html(),/My favorite park/);
+  ok(await f.x.react(post.id,'reposted'));assert.doesNotMatch(panel.html(),/My favorite park/);
+ }finally{f.close();}
 });

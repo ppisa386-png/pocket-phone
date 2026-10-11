@@ -1,4 +1,4 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.17.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.18.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -71,10 +71,13 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         (!a.characterId && speaker.nameIsUnique && normalized(a.name) === normalized(speaker.name)))).map(a=>a.id));
     for (const record of xRecords) {
         if(record.type === 'message' && xKnown.has(record.accountId)) entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',speaker:record.role==='user'?userName:speaker.name,text:record.text}});
-        if(record.type === 'comment') {
-            const post=state.x[record.postId];
-            if((post?.author==='user' && xKnown.has(record.author)) || (xKnown.has(post?.author) && (record.author==='user'||record.author===post.author))) {
-                entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',speaker:record.author==='user'?userName:speaker.name,text:record.text,post:post.text}});
+        if(record.type === 'comment' && !record.ambient) {
+            const post=state.x[record.postId],parent=state.x[record.replyTo];
+            const fromUser=record.author==='user';
+            const counterpart=fromUser?(parent?.author||post?.author):record.author;
+            const addressedUser=!fromUser&&(parent?.author==='user'||!parent&&post?.author==='user');
+            if(post && xKnown.has(counterpart) && (fromUser || addressedUser)) {
+                entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',speaker:fromUser?userName:speaker.name,text:record.text,post:post.text}});
             }
         }
     }

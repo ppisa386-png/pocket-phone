@@ -1,11 +1,11 @@
-import { phoneQuietOptions } from './api-context.js?v=0.17.0';
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.17.0';
-export { validateContacts } from './contacts.js?v=0.17.0';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.17.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.17.0';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.17.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.17.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.17.0';
+import { phoneQuietOptions } from './api-context.js?v=0.18.0';
+import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.18.0';
+export { validateContacts } from './contacts.js?v=0.18.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.18.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.18.0';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.18.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.18.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.18.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
