@@ -1,5 +1,5 @@
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.19.0';
-import { icon } from './icons.js?v=0.19.0';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.20.0';
+import { icon } from './icons.js?v=0.20.0';
 const phoneEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const statuses = { dialing: '正在拨号', connected: '通话中', ended: '已结束', interrupted: '已中断', ringing: '来电中', answering: '正在接听', missed: '未接来电', declined: '对方拒接', no_answer: '无人接听' };
 const callStatus = call => call.direction === 'incoming' && call.status === 'declined' ? '已拒接' : statuses[call.status];
@@ -16,6 +16,7 @@ export function renderPhoneScreen(view, tab, selectedCallId, draft) {
             (error && live && waitingReply ? '<button type="button" class="pp-call-retry" data-phone-retry' + (busy ? ' disabled' : '') + '>重试回应</button>' : '') +
             (call.status === 'connected' ? '<form class="pp-call-compose" data-phone-form><label for="pp-call-input">说话内容</label><textarea id="pp-call-input" data-phone-draft rows="2" maxlength="6000" placeholder="你在电话里说…">' + phoneEscape(draft) + '</textarea><button type="submit"' + (busy || waitingReply ? ' disabled' : '') + '>发送</button></form>' : '') +
             (call.status === 'ringing' ? '<div class="pp-incoming-actions"><button type="button" class="pp-answer" data-phone-answer' + (busy ? ' disabled' : '') + '>接听</button><button type="button" class="pp-hangup" data-phone-decline' + (busy ? ' disabled' : '') + '>拒接</button></div>' : '') +
+            (!live && call.status!=='ringing' && contacts[call.contactId] ? '<button type="button" class="pp-text-button" data-phone-dial="'+phoneEscape(call.contactId)+'"'+(busy?' disabled':'')+'>回拨</button>' : '') +
             (live ? '<button type="button" class="pp-hangup" data-phone-hangup aria-label="挂断电话">' + icon('phone') + '<span>挂断</span></button>' : '') + '</div>';
     }
     const sortedCalls = Object.values(calls).sort((a, b) => b.createdAt - a.createdAt);

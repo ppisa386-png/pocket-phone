@@ -1,4 +1,4 @@
-import { dateDay, readStoryClock } from './story-clock.js?v=0.19.0';
+import { dateDay, readStoryClock } from './story-clock.js?v=0.20.0';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>`${(minor/100).toLocaleString('zh-CN',{maximumFractionDigits:2})} ${currency}`;

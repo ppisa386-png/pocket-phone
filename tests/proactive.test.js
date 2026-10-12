@@ -23,7 +23,7 @@ function setup() {
     ctx.generateQuietPrompt = async options => { requests++; bus.emit('GENERATION_STARTED','quiet'); try { return await reply(options); } finally { bus.emit('GENERATION_ENDED'); } };
     const settings = normalizeSettings({retries:0});
     const memory = createPhoneMemory({getContext:()=>ctx});
-    const phone = createPhoneService({memory,getContext:()=>ctx,getSettings:()=>settings});
+    const phone = createPhoneService({narrativeContact:false,memory,getContext:()=>ctx,getSettings:()=>settings});
     const advance = count => { for(let i=0;i<count;i++) ctx.chat.push({mes:'Continue '+ctx.chat.length,is_user:true},{mes:'Quiet story progression '+ctx.chat.length,is_user:false,name:'Alex'}); };
     return {ctx,settings,memory,phone,bus,advance,requests:()=>requests,reply:fn=>{reply=fn;},close:()=>{phone.destroy();memory.destroy();}};
 }
@@ -63,7 +63,7 @@ test('proactive SMS arrives with no contact, replies in same thread, and enters 
 test('reading, reload and repeated checks do not trigger extra decisions; new narrative can', async () => {
     const f=setup();await f.phone.checkIncoming();await f.phone.markMessagesRead('card:alex.png');
     await f.phone.checkIncoming();assert.equal(f.requests(),1);
-    const reloaded=createPhoneService({memory:f.memory,getContext:()=>f.ctx,getSettings:()=>f.settings});
+    const reloaded=createPhoneService({narrativeContact:false,memory:f.memory,getContext:()=>f.ctx,getSettings:()=>f.settings});
     await reloaded.checkIncoming();assert.equal(f.requests(),1);reloaded.destroy();
     f.advance(1);await f.phone.checkIncoming();assert.equal(f.requests(),2);
     assert.equal(Object.keys(f.phone.snapshot().messages).length,2,'AI may choose to contact again without waiting sixteen turns');f.close();
@@ -112,4 +112,20 @@ test('settings discard legacy frequency fields and keep the master switch', () =
     for(const name of ['contactInterval','unansweredInterval','contactEvents','contactExceptions']) assert.equal(Object.hasOwn(settings,name),false);
     assert.equal(settings.proactiveEnabled,false);
     const custom='My custom instructions';assert.equal(normalizeSettings({prompts:{contactEvent:custom}}).prompts.contactEvent,custom);
+});
+
+test('long-distance established contact can use character/persona relationship evidence without an exchange-number scene',async()=>{
+ const f=setup();try{
+ const relation='Alex and Sam are long-distance partners who normally call one another every evening.';
+ f.ctx.characters[0].data={scenario:relation};f.ctx.chat=[{mes:'Alex gets home after work.',name:'Alex',is_user:false}];
+ f.reply(o=>{assert.match(o.quietPrompt,/不需要先出现危机/);assert.match(o.quietPrompt,/card:scenario/);return JSON.stringify({...proposal,evidence:relation,evidence_source:'card:scenario',reason_evidence:relation,reason_source:'card:scenario',reason_kind:'character_motivation',text:'How was your day?'});});
+ assert.equal((await f.phone.checkIncoming()).ok,true);assert.equal(Object.values(f.phone.snapshot().messages)[0].text,'How was your day?');assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
+ }finally{f.close();}
+});
+
+test('context evidence is scoped to the current participant and quoted sources must exist',async()=>{
+ const f=setup();try{
+ f.ctx.characters.push({name:'Bea',avatar:'bea.png',data:{scenario:'Bea and Sam call each other every night.'}});
+ f.reply(()=>JSON.stringify({...proposal,evidence:'Bea and Sam call each other every night.',evidence_source:'card:scenario',reason_kind:'character_motivation'}));assert.equal((await f.phone.checkIncoming()).ok,false);assert.equal(Object.keys(f.phone.snapshot().messages).length,0);
+ }finally{f.close();}
 });

@@ -21,7 +21,7 @@ function setup() {
     let count=0,reply=()=>JSON.stringify(start);
     ctx.generateQuietPrompt=async options=>{count++;bus.emit('GENERATION_STARTED','quiet');try{return await reply(options);}finally{bus.emit('GENERATION_ENDED');}};
     const settings=normalizeSettings({retries:0});const memory=createPhoneMemory({getContext:()=>ctx});
-    const phone=createPhoneService({memory,getContext:()=>ctx,getSettings:()=>settings});
+    const phone=createPhoneService({narrativeContact:false,memory,getContext:()=>ctx,getSettings:()=>settings});
     return {ctx,settings,memory,phone,bus,count:()=>count,reply:fn=>{reply=fn;},close:()=>{phone.destroy();memory.destroy();}};
 }
 
@@ -76,7 +76,7 @@ test('blocking during generation discards late output and persists across reload
     const work=f.phone.checkIncoming({narrative:true});await ready;await f.phone.setBlocked('card:alex.png','messages',true);
     finish(JSON.stringify({...continuation,status:'message',text:'late'}));await work;
     assert.equal(Object.keys(f.phone.snapshot().messages).length,0);
-    const restored=createPhoneService({memory:f.memory,getContext:()=>f.ctx,getSettings:()=>f.settings});await f.memory.read();
+    const restored=createPhoneService({narrativeContact:false,memory:f.memory,getContext:()=>f.ctx,getSettings:()=>f.settings});await f.memory.read();
     assert.equal(isBlocked(restored.snapshot(),'card:alex.png','phone'),true);assert.equal(isBlocked(restored.snapshot(),'card:alex.png','messages'),true);
     restored.destroy();f.close();
 });

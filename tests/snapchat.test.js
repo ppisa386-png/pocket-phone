@@ -31,7 +31,7 @@ test('opening does not request; discovery deduplicates; unaccepted and blocked a
 test('aliases stay private until explicit disclosure; rename never erases recognition',async()=>{
  const f=setup();const id=await friend(f);assert.equal(f.state().snapchat[id].identityKnown,false);
  f.reply({status:'reply',text:'Hello Moon',kind:'voice'});ok(await f.snap.send(id,'text','Hi'));assert.match(f.prompt(),/不知道这个账号是谁/);assert.equal(snapUnread(f.state()),1);
- const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.equal(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),'');
+ const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/\"identityKnown\":false/);
  ok(await f.snap.markRead(id));assert.equal(snapUnread(f.state()),0);ok(await f.snap.reveal(id));ok(await f.snap.saveProfile({alias:'New name',currency:'USD'}));assert.equal(f.state().snapchat[id].identityKnown,true);
  assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
 });

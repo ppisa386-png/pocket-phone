@@ -148,11 +148,11 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             }
             await commit(changes);
         });},
-        like(id){return run(async(state,_c,_r,commit)=>{const item=state.snapchat[id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');await commit([setSnap({...item,liked:!item.liked})]);});},
+        like(id){return run(async(state,_c,_r,commit)=>{const item=state.snapchat[id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');await commit([setSnap({...item,liked:!item.liked,likedAt:Date.now()})]);});},
         comment(id,value){return run(async(state,current,request,commit)=>{const item=state.snapchat[id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');const content=required(value,'评论');const a=state.snapchat[item.author];
             if(a?.blocked)throw new Error('此账号已拉黑。');
             const reply=item.author==='user'?{text:''}:await ask(state,a?.type==='account'?a:null,request,current,'当前任务：Snapchat 动态评论。动态：'+JSON.stringify({name:item.name,text:item.text})+'；user 网名 '+JSON.stringify(profile(state).alias)+' 评论：'+JSON.stringify(content)+'。仅生成作者的简短回复或不回复，输出 {"text":"回复或空字符串"}。',d=>({text:text(d.text,1000)}));
-            const comments=[...(item.comments||[]),{name:profile(state).alias,text:content},...(reply.text?[{name:item.name,text:reply.text}]:[])];await commit([setSnap({...item,comments})]);
+            const comments=[...(item.comments||[]),{name:profile(state).alias,text:content,createdAt:Date.now()},...(reply.text?[{name:item.name,text:reply.text,createdAt:Date.now()+1}]:[])];await commit([setSnap({...item,comments})]);
         });},
         transfer(id,amount,currency,memo){return run(async(state,_c,_r,commit)=>{friendBy(state,id);const t=newRecord('transfer',{accountId:id,direction:'outgoing',status:'pending',amountMinor:snapAmount(amount),currency:currencyOf(currency),memo:text(memo,300)});await commit([setSnap(t)]);return t.id;});},
         settle(id,accept=true){return run(async(state,current,request,commit)=>{

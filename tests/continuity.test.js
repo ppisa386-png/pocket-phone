@@ -148,3 +148,18 @@ test('unknown data schema does not overwrite the stored journal or block normal 
     assert.equal(f.context.chatMetadata[JOURNAL_KEY].schema, 99); assert.equal(f.errors.length, 1);
     f.close();
 });
+
+test('each relevant channel keeps at most ten records; ordinary and anonymous dialogue remain while other people and private assets stay out',()=>{
+ const state={contacts:{alex:{id:'card:alex.png',name:'Alex'}},messages:{},calls:{},snapchat:{profile:{alias:'Moon'},a:{id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}},x:{profile:{alias:'Moon'},a:{id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}},orders:{secret:'ORDER_SECRET'},assets:{secret:'ASSET_SECRET'}};
+ for(let i=0;i<15;i++){
+  state.messages['m'+i]={contactId:'card:alex.png',role:'user',text:'SMS '+i,createdAt:i};
+  state.calls['c'+i]={contactId:'card:alex.png',status:'missed',turns:[],createdAt:i};
+  state.snapchat['s'+i]={type:'message',accountId:'a',role:'user',text:'Snap casual '+i,createdAt:i};
+  state.x['x'+i]={type:'message',accountId:'a',role:'user',text:'X casual '+i,createdAt:i};
+ }
+ state.messages.other={contactId:'card:bea.png',role:'user',text:'BEA_PRIVATE',createdAt:50};
+ const prompt=buildContinuityPrompt(state,{avatar:'alex.png',name:'Alex',nameIsUnique:true},{instruction:'Remember',userName:'Sam',budget:50000}),records=JSON.parse(prompt.split('\n').at(-1)).records;
+ for(const channel of ['短信','电话','Snapchat','X 私信'])assert.equal(records.filter(r=>r.channel===channel).length,10);
+ assert.match(prompt,/X casual 14/);assert.doesNotMatch(prompt,/X casual 0"|ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/);
+ const anon=records.find(r=>r.channel==='X 私信');assert.equal(anon.identityKnown,false);assert.equal(anon.speaker,'Moon');
+});

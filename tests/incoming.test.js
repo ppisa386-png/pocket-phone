@@ -22,7 +22,7 @@ function setup() {
     };
     const memory = createPhoneMemory({ getContext: () => context });
     const settings = normalizeSettings({ retries: 0 });
-    const phone = createPhoneService({ memory, getContext: () => context, getSettings: () => settings });
+    const phone = createPhoneService({narrativeContact:false, memory, getContext: () => context, getSettings: () => settings });
     const watcher = watchIncoming({ getContext: () => context, phone });
     return { phone, memory, context, settings, bus, requests: () => requests, reply: fn => { response = fn; }, close: () => { watcher.destroy(); phone.destroy(); memory.destroy(); } };
 }
@@ -104,7 +104,7 @@ test('pending ignored call becomes missed and AI can reassess on new narrative',
 
 test('reload turns unhandled ringing into missed history and does not replay caller speech', async () => {
     const f = setup(); await f.phone.checkIncoming(); const id = f.phone.snapshot().activeCallId;
-    const reloaded = createPhoneService({ memory: f.memory, getContext: () => f.context, getSettings: () => f.settings });
+    const reloaded = createPhoneService({narrativeContact:false, memory: f.memory, getContext: () => f.context, getSettings: () => f.settings });
     f.reply(() => '{"contacts":[]}'); await reloaded.open();
     assert.equal(reloaded.snapshot().calls[id].status, 'missed');
     assert.deepEqual(reloaded.snapshot().calls[id].turns, []); reloaded.destroy(); f.close();
@@ -161,7 +161,7 @@ test('scheduled checks count three char replies, persist progress and ignore use
  f.bus.emit('GENERATION_STARTED','regenerate');f.context.chat.at(-1).mes='Two revised';f.bus.emit('GENERATION_ENDED');await tick();assert.equal(f.requests(),0);
  await reply('Three');for(let i=0;i<20&&f.requests()<1;i++)await tick();assert.equal(f.requests(),1);
  await reply('Four');assert.equal(f.requests(),1);
- const reloaded=createPhoneService({memory:f.memory,getContext:()=>f.context,getSettings:()=>f.settings});
+ const reloaded=createPhoneService({narrativeContact:false,memory:f.memory,getContext:()=>f.context,getSettings:()=>f.settings});
  f.context.chat.push({mes:'Five',is_user:false});await reloaded.checkIncoming({narrative:true,scheduled:true});assert.equal(f.requests(),1);
  f.context.chat.push({mes:'Six',is_user:false});await reloaded.checkIncoming({narrative:true,scheduled:true});assert.equal(f.requests(),2);
  // Counter and no-contact result roll back together when their source reply is deleted.
@@ -174,4 +174,24 @@ test('manual retry after a scheduled check failure does not consume another thre
  for(let i=0;i<3;i++){f.context.chat.push({mes:'Reply '+i,is_user:false});await f.phone.checkIncoming({narrative:true,scheduled:true});}
  assert.equal(f.requests(),1);assert.match(f.phone.snapshot().error,/offline/);
  f.reply(()=>'{"status":"none"}');await f.phone.checkIncoming();assert.equal(f.requests(),2);assert.equal(f.phone.snapshot().error,'');f.close();
+});
+
+test('dry-run previews and nested quiet memory work do not erase the three-reply trigger',async()=>{
+ const f=setup();f.reply(()=>'{"status":"none"}');f.context.groupId='';
+ for(let i=0;i<3;i++){
+  f.bus.emit('GENERATION_STARTED','normal');
+  f.bus.emit('GENERATION_STARTED','normal',{},true);
+  f.bus.emit('GENERATION_STARTED','quiet');f.bus.emit('GENERATION_ENDED');
+  f.context.chat.push({mes:'New character reply '+i,is_user:false,name:'Alex'});
+  f.bus.emit('GENERATION_ENDED');await tick();
+ }
+ for(let i=0;i<20&&f.requests()<1;i++)await tick();assert.equal(f.requests(),1);f.close();
+});
+
+test('local scheduler waits for busy host without consuming extra API checks or reacting to unrelated extras',async()=>{
+ const bus=new EventEmitter(),context={chat:[{mes:'Before',is_user:false}],chatMetadata:{},groupId:'',eventSource:bus,event_types:{GENERATION_STARTED:'start',GENERATION_ENDED:'end'}};
+ let attempts=0,modelCalls=0;
+ const phone={async checkIncoming(){attempts++;if(attempts===1)return {ok:false,code:'GENERATING'};modelCalls++;return {ok:true};}};
+ const watcher=watchIncoming({getContext:()=>context,phone});
+ try{bus.emit('start','normal');context.chat.push({mes:'After',is_user:false});bus.emit('end');await tick();context.chat.at(-1).extra={decorated:true};await new Promise(r=>setTimeout(r,280));assert.equal(attempts,2);assert.equal(modelCalls,1);}finally{watcher.destroy();}
 });

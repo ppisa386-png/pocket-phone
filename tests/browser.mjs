@@ -219,235 +219,7 @@ try {
         await p.locator('[data-pp-visibility]').uncheck();
         check(await launcher.isHidden(), 'top layer does not block underlying host controls');
         await ctx.close();
-    }
-    {
-        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
-        await p.locator('.pp-launcher').tap();
-        await p.locator('[data-app="phone"]').tap();
-        await p.locator('[data-phone-tab="contacts"]').tap();
-        check(await p.evaluate(()=>window.modelCalls) === 0, 'opening phone contacts does not request a scan');
-        await addPhoneContact(p,'Alex');
-        await p.locator('[data-phone-dial]').waitFor();
-        check(await p.locator('.pp-contact-row').count() === 1, 'phone UI shows contact recognized from narrative');
-        await p.locator('[data-phone-dial]').tap();
-        await p.getByText('Hello?', { exact: true }).waitFor();
-        await p.locator('[data-phone-draft]').fill('Can you hear me?');
-        await p.getByRole('button', { name: '发送', exact: true }).tap();
-        await p.getByText('I can hear you.', { exact: true }).waitFor();
-        check(await p.locator('.pp-call-turn').count() === 3, 'touch phone UI supports two-way text call');
-        await p.locator('[data-phone-hangup]').tap();
-        await p.getByText('拨出 · 已结束', { exact: true }).waitFor();
-        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="phone"]').tap();
-        await p.getByText('拨出 · 已结束', { exact: true }).waitFor();
-        check(await p.evaluate(() => window.modelCalls) === 0, 'reopening unchanged chat restores history without API request');
-        await p.locator('[data-phone-record]').tap();
-        check(await p.locator('.pp-call-turn').count() === 3, 'call transcript survives reload');
-        await p.locator('[data-phone-list]').tap();
-        await p.locator('[data-phone-tab="contacts"]').tap();
-        await p.evaluate(async () => { const c = window.SillyTavern.getContext(); c.chat[0].mes = 'Alex refuses to give his number.'; await c.eventSource.emit('MESSAGE_EDITED'); });
-        await p.locator('[data-phone-dial]').waitFor({ state: 'detached' });
-        check(await p.locator('.pp-contact-row').count() === 0, 'phone contacts disappear when acquisition is removed');
-        await ctx.close();
-    }
-    {
-        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
-        await p.locator('.pp-launcher').tap(); await p.locator('[data-app="messages"]').tap();
-        await p.locator('[data-sms-new]').tap();
-        check(await p.evaluate(()=>window.modelCalls) === 0, 'opening SMS contacts does not request a scan');
-        await addPhoneContact(p,'Alex'); await p.locator('[data-sms-contact]').waitFor();
-        await p.locator('[data-sms-contact]').tap();
-        const payload = '<script>window.smsInjection=true</script> Hello';
-        await p.locator('[data-sms-draft]').fill(payload);
-        const beforeSMS=await p.evaluate(()=>window.modelCalls);
-        await p.locator('[data-sms-draft]').dispatchEvent('compositionstart');await p.locator('[data-sms-draft]').press('Enter');check(await p.locator('.pp-sms-item').count()===0,'IME confirmation does not queue SMS');await p.locator('[data-sms-draft]').dispatchEvent('compositionend');await p.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));
-        await p.locator('[data-sms-draft]').fill(payload);await p.locator('[data-sms-draft]').press('Enter');await p.locator('.pp-sms-item').waitFor();check(await p.evaluate(()=>window.modelCalls)===beforeSMS,'SMS Enter creates a bubble without API');
-
-        await p.getByRole('button', { name: '发送短信', exact: true }).tap();
-        await p.getByText('Text received.', { exact: true }).waitFor();
-        check(await p.locator('.pp-sms-item').count() === 2, 'SMS UI sends and receives bubbles');
-        const smsCalls=await p.evaluate(()=>window.modelCalls);await p.locator('[data-sms-edit]').tap();await p.locator('[data-sms-edit-text]').fill('Edited SMS');await p.locator('[data-sms-edit-form] button[type="submit"]').tap();await p.getByText('Edited SMS',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===smsCalls,'SMS pencil is local');
-        await p.locator('[data-sms-reroll]').tap();await p.getByText('Text received.',{exact:true}).waitFor();check(await p.locator('.pp-sms-item').count()===2,'SMS reroll replaces one bubble without duplicating messages');
-
-        check(await p.evaluate(() => !window.smsInjection), 'SMS content renders as text, not HTML');
-        await p.waitForFunction(() => document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('[data-sms-draft]').value === '');
-        await p.evaluate(() => { window.smsHold = true; });
-        await p.locator('[data-sms-draft]').fill('A later message');
-        await p.getByRole('button', { name: '发送短信', exact: true }).tap();
-        await p.waitForFunction(() => typeof window.finishSMS === 'function');
-        await p.getByRole('button', { name: '回到桌面', exact: true }).tap();
-        await p.evaluate(() => { window.smsHold = false; window.finishSMS(); });
-        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
-        check(await p.locator('.pp-app-badge').textContent() === '1', 'SMS reply outside thread shows one unread badge');
-        await p.reload(); await p.locator('.pp-launcher').tap();
-        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
-        await p.locator('[data-app="messages"]').tap();
-        await p.locator('[data-sms-contact]').tap();
-        check(await p.locator('.pp-sms-item').count() === 4, 'SMS thread survives refresh');
-        await p.getByRole('button', { name: '回到桌面', exact: true }).tap();
-        await p.locator('[data-app="messages"] .pp-app-badge').waitFor({ state: 'detached' });
-        check(await p.evaluate(() => window.modelCalls) === 0, 'reading restored SMS does not call API');
-        await p.locator('[data-app="messages"]').tap();
-        await p.evaluate(() => { window.smsFail = true; });
-        await p.locator('[data-sms-draft]').fill('Do not duplicate this');
-        await p.getByRole('button', { name: '发送短信', exact: true }).tap();
-        await p.locator('[data-sms-retry]').waitFor();
-        await p.evaluate(() => { window.smsFail = false; });
-        await p.locator('[data-sms-retry]').tap();
-        await p.locator('.pp-sms-item[data-role="assistant"]').nth(2).waitFor();
-        check(await p.locator('.pp-sms-item[data-role="user"]').count() === 3, 'manual SMS retry does not duplicate outgoing bubble');
-        const syncResult = await p.evaluate(async () => {
-            const c = window.SillyTavern.getContext();
-            const callsBefore = window.modelCalls; const floorsBefore = c.chat.length;
-            await c.eventSource.emit('GENERATION_STARTED', 'normal');
-            await c.eventSource.emit('GENERATION_AFTER_COMMANDS', 'normal');
-            const prompt = c.extensionPrompts.durian_phone_continuity;
-            const result = { text: prompt.value, allowed: prompt.filter?.(), callsUnchanged: callsBefore === window.modelCalls, floorsUnchanged: floorsBefore === c.chat.length };
-            await c.eventSource.emit('GENERATION_ENDED');
-            result.cleared = c.extensionPrompts.durian_phone_continuity.value === '';
-            c.chat[0].mes = 'No phone numbers were exchanged.';
-            await c.eventSource.emit('MESSAGE_EDITED');
-            await c.eventSource.emit('GENERATION_STARTED', 'normal');
-            await c.eventSource.emit('GENERATION_AFTER_COMMANDS', 'normal');
-            result.rollbackCleared = c.extensionPrompts.durian_phone_continuity.value === '';
-            await c.eventSource.emit('GENERATION_ENDED');
-            return result;
-        });
-        check(syncResult.text.includes('Text received.') && syncResult.allowed, 'actual SMS history enters the next narrative prompt');
-        check(syncResult.callsUnchanged && syncResult.floorsUnchanged, 'continuity adds no model request or visible chat floor');
-        check(syncResult.cleared && syncResult.rollbackCleared, 'continuity context clears after generation and invalidated source');
-
-        await ctx.close();
-    }
-    {
-        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
-        await p.locator('#personal-pocket-phone-extension-settings').waitFor();
-        async function generateIncoming(text) {
-            await p.evaluate(async text => {
-                const c = window.SillyTavern.getContext(); window.allowIncoming = true; window.contactEvidence = text;
-                await c.eventSource.emit('GENERATION_STARTED', 'normal');
-                c.chat.push({name:'Alex',mes:text,is_user:false});
-                await window.finishProactiveBatch();
-            }, text);
-        }
-        await generateIncoming('Sam gave Alex their phone number. Alex leaves to go home.');
-        await p.locator('.pp-launcher-badge').waitFor({ state: 'visible' });
-        check(await p.locator('.pp-phone').isHidden(), 'incoming call adds badge without forcing the phone open');
-        await p.locator('.pp-launcher').tap();
-        await p.locator('[data-phone-answer]').waitFor();
-        check(await p.locator('.pp-call-turn').count() === 0, 'ringing screen has no speech before acceptance');
-        check(await p.evaluate(() => window.modelCalls) === 1, 'three character replies trigger exactly one incoming check');
-        await p.evaluate(()=>{window.proactiveReply={status:'none'};});
-        await p.locator('[data-phone-decline]').tap();
-        await p.getByText('已拒接', {exact:true}).waitFor();
-        await p.waitForFunction(()=>window.modelCalls===2);
-        check(await p.evaluate(() => window.modelCalls) === 2, 'declining lets AI decide whether to contact again');
-        await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
-        check(await p.locator('[data-app="phone"] .pp-app-badge').count() === 0, 'declined incoming badge clears');
-        await p.evaluate(() => { const c = window.SillyTavern.getContext(); for(let i=0;i<16;i++) c.chat.push({name:'Sam',mes:'Continue '+i,is_user:true}); });
-        await p.evaluate(()=>{delete window.proactiveReply;});
-        await generateIncoming('Alex has an urgent question about the meeting.');
-        await p.locator('[data-app="phone"] .pp-app-badge').waitFor();
-        await p.locator('[data-app="phone"]').tap();
-        await p.locator('[data-phone-answer]').tap();
-        await p.getByText('Hello?', {exact:true}).waitFor();
-        await p.locator('[data-phone-draft]').fill('Can you hear me?');
-        await p.getByRole('button', {name:'发送',exact:true}).tap();
-        await p.getByText('I can hear you.', {exact:true}).waitFor();
-        await p.evaluate(()=>{window.proactiveReply={status:'none'};});
-        await p.locator('[data-phone-hangup]').tap();
-        await p.getByText('来电 · 已结束', {exact:true}).waitFor();
-        check(await p.getByText('来电 · 已拒接', {exact:true}).count() === 1, 'incoming history distinguishes completed and declined calls');
-        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="phone"]').tap();
-        await p.getByText('来电 · 已结束', {exact:true}).waitFor();
-        check(await p.evaluate(() => window.modelCalls) <= 1, 'reload restores incoming history without re-ringing');
-        check(await p.locator('.pp-content').evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'incoming UI fits mobile width');
-        await ctx.close();
-    }
-    {
-        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
-        await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
-        await p.locator('[data-section="contact"]').tap();
-        check(await p.locator('.pp-content [data-setting]').count() === 1, 'proactive settings have only the master switch');
-        check(await p.locator('.pp-content .pp-footnote').count() === 0, 'removed proactive explanatory text');
-        await p.locator('[data-setting="proactiveEnabled"]').selectOption('false');
-        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap(); await p.locator('[data-section="contact"]').tap();
-        check(await p.locator('[data-setting="proactiveEnabled"]').inputValue() === 'false', 'proactive switch survives reload');
-        await p.locator('[data-setting="proactiveEnabled"]').selectOption('true');
-        await p.getByRole('button', {name:'回到桌面',exact:true}).tap();
-        await p.evaluate(async () => {
-            const c = window.SillyTavern.getContext();
-            await c.eventSource.emit('GENERATION_STARTED','normal');
-            c.chat[0].mes = 'Sam gave Alex their phone number.';
-            c.chat.push({mes:'Alex receives a changed meeting address to pass on.',name:'Alex',is_user:false});
-            window.proactiveReply = {status:'message',can_obtain_number:true,route:'known_number',channel:'',evidence:c.chat[0].mes,reason:'Changed address',reason_kind:'new_information',reason_evidence:c.chat[1].mes,text:'Meet at the library instead.'};
-            await window.finishProactiveBatch();
-        });
-        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();
-        check(await p.evaluate(() => window.modelCalls) === 1, 'one shared request produces proactive SMS');
-        await p.locator('[data-app="messages"]').tap(); await p.locator('[data-sms-contact]').tap();
-        await p.getByText('Meet at the library instead.', {exact:true}).waitFor();
-        check(await p.locator('.pp-sms-heading strong').textContent() === 'Alex', 'received SMS opens the sender thread');
-        await p.locator('[data-sms-draft]').fill('Got it.'); await p.getByRole('button', {name:'发送短信',exact:true}).tap();
-        await p.getByText('Text received.', {exact:true}).waitFor();
-        check(await p.locator('.pp-sms-item').count() === 3, 'user can reply in the incoming SMS thread');
-        await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="messages"]').tap(); await p.locator('[data-sms-contact]').tap();
-        check(await p.locator('.pp-sms-item').count() === 3, 'proactive SMS conversation survives reload');
-        const before = await p.evaluate(() => window.modelCalls);
-        await p.evaluate(async () => {
-            const c = window.SillyTavern.getContext(); await c.eventSource.emit('GENERATION_STARTED','normal');
-            c.chat.push({mes:'Continue',name:'Sam',is_user:true},{mes:'The story continues.',name:'Alex',is_user:false});
-            await window.finishProactiveBatch();
-        });
-        await p.waitForTimeout(100);
-        check(await p.evaluate(() => window.modelCalls) === before + 1, 'three new character replies request a fresh AI decision');
-        await p.waitForFunction(() => Object.values(window.SillyTavern.getContext().chatMetadata.durian_phone_history.events).some(e => e.changes.some(c => c.collection === 'messages' && c.value?.text === 'Meet at the library instead.')));
-        await p.waitForTimeout(100);
-        check(await p.locator('.pp-sms-item').count() === 3, 'AI may choose no contact after a fresh decision');
-        await ctx.close();
-    }
-    {
-        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-        const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
-        await p.locator('#personal-pocket-phone-extension-settings').waitFor();
-        await p.evaluate(async () => {
-            const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');
-            c.chat=[{mes:'Sam gave Alex their phone number.',is_user:true},{mes:'Sam tells Alex the relationship is over and leaves.',is_user:false,name:'Alex'},{mes:'Alex considers what happened.',is_user:false,name:'Alex'}];
-            window.proactiveReply={status:'ringing',can_obtain_number:true,route:'known_number',channel:'',evidence:c.chat[0].mes,reason:'Respond to the breakup',reason_kind:'urgent_question',reason_evidence:c.chat[1].mes,requires_live_conversation:true,event_action:'start',event_requires_response:true,event_evidence:c.chat[1].mes,event_reason:'An unresolved breakup.'};
-            await window.finishProactiveBatch();
-        });
-        await p.locator('.pp-launcher-badge').waitFor({state:'visible'});await p.locator('.pp-launcher').tap();
-        await p.locator('[data-phone-decline]').waitFor();
-        await p.evaluate(()=>{window.proactiveReply={...window.proactiveReply,event_action:'continue'};});
-        await p.locator('[data-phone-decline]').tap();
-        await p.waitForFunction(()=>window.modelCalls===2);
-        await p.locator('[data-phone-decline]').waitFor();
-        check(await p.getByText('来电中',{exact:true}).count()===1,'decline can lead to one more event call without waiting eight turns');
-        await p.locator('[data-block-channel="phone"]').tap();
-        await p.getByRole('button',{name:'取消拉黑',exact:true}).waitFor();
-        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-list]').tap();
-        await p.locator('[data-phone-tab="blocked"]').tap();
-        check(await p.getByText('已屏蔽电话',{exact:true}).count()===1,'telephone blacklist is inside phone app');
-        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();window.proactiveReply={...window.proactiveReply,status:'message',text:'Can we talk about this?'};await c.eventSource.emit('GENERATION_STARTED','normal');c.chat.push({mes:'Sam continues walking.',is_user:false,name:'Alex'});await window.finishProactiveBatch();});
-        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"] .pp-app-badge').waitFor();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
-        await p.getByText('Can we talk about this?',{exact:true}).waitFor();
-        await p.evaluate(()=>{window.proactiveReply={status:'none',event_action:'wait'};});
-        const unansweredCount=await p.evaluate(()=>window.modelCalls);
-        check(await p.locator('[data-sms-ignore]').count()===0,'no explicit silence button');
-        await p.waitForTimeout(100);check(await p.evaluate(()=>window.modelCalls)===unansweredCount,'leaving a message unanswered makes no API request');
-        await p.locator('[data-block-channel="messages"]').tap();
-        await p.getByText('此人的短信已被拉黑，取消后才能继续交流。',{exact:true}).waitFor();
-        check(await p.locator('[data-sms-draft]').isDisabled(),'SMS blacklist prevents sending into the blocked thread');
-        await p.locator('[data-sms-back]').tap();await p.locator('[data-sms-blocklist]').tap();
-        check(await p.getByText('已屏蔽短信',{exact:true}).count()===1,'SMS blacklist has its own management page');
-        await p.locator('[data-block-channel="messages"]').tap();await p.getByText('黑名单为空',{exact:true}).waitFor();
-        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'blacklist and reaction controls fit mobile width');
-        await ctx.close();
-    }
-    {
+    }    {
         const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
         const p = await ctx.newPage(); track(p); await p.goto(origin + '/phone-fixture');
         await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
@@ -648,6 +420,25 @@ try {
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();const events=c.chatMetadata.durian_phone_history.events;const o=events.flatMap(e=>e.changes).find(x=>x.value?.type==='order').value;const prose='快递员已把项链送到 Alex 的门口。';c.chat.push({name:'Alex',is_user:false,mes:prose+'<!--durian-delivery:'+JSON.stringify({id:o.id,arrived:true,evidence:prose})+'-->'});await c.eventSource.emit('GENERATION_ENDED');await c.saveMetadata();});await p.getByText('已送达',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===before+1,'delivery checks do not call a model');
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="amazon"]').tap();await p.locator('[data-shop-action="tab"][data-shop-id="orders"]').tap();await p.getByText('已送达',{exact:true}).waitFor();check(true,'orders and arrival survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});await p.getByText('运输中',{exact:true}).waitFor();check(true,'deleting actual arrival restores in-transit status');await ctx.close();
+    }    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');await p.locator('.pp-launcher').tap();
+        const injected=await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.groupId='';c.chat.push({name:'Alex',is_user:false,mes:'Alex is away on business.'});await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');return c.extensionPrompts.durian_phone_story_events.value;});
+        check(injected.includes('每三条角色正文一次')&&injected.includes('追求、听闻消息'),'normal narrative receives flexible proactive-contact instructions');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext(),prose='Alex texted Sam: How was your day?';c.chat.push({name:'Alex',is_user:false,mes:prose+'<!--durian-contact:'+JSON.stringify({recipient:'user',name:'Alex',kind:'sms',text:'How was your day?',evidence:prose})+'-->'});await c.eventSource.emit('GENERATION_ENDED');});
+        await p.locator('[data-app="messages"] .pp-app-badge').waitFor();check(await p.evaluate(()=>window.modelCalls)===0,'narrative SMS synchronization makes no independent API request');await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();await p.getByText('How was your day?',{exact:true}).waitFor();await p.locator('[data-sms-draft]').fill('Pretty good');await p.getByRole('button',{name:'发送短信',exact:true}).tap();await p.getByText('Text received.',{exact:true}).waitFor();
+        check(await p.evaluate(()=>window.modelCalls)===1,'user can reply to the actual narrative SMS');
+        const remembered=await p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');return c.extensionPrompts.durian_phone_continuity.value;});check(remembered.includes('How was your day?')&&remembered.includes('Pretty good'),'ordinary chat enters the character narrative memory');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext(),prose='Alex called Sam, who missed the call.';c.chat.push({name:'Alex',is_user:false,mes:prose+'<!--durian-contact:'+JSON.stringify({recipient:'user',name:'Alex',kind:'call',status:'missed',evidence:prose})+'-->'});await c.eventSource.emit('GENERATION_ENDED');});
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.getByText('来电 · 未接来电',{exact:true}).waitFor();await p.locator('[data-phone-record]').tap();await p.getByRole('button',{name:'回拨',exact:true}).tap();await p.getByText('Hello?',{exact:true}).waitFor();await p.locator('[data-phone-hangup]').tap();check(await p.evaluate(()=>window.modelCalls)===2,'narrative missed call supports callback without an automatic followup request');
+        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();check(await p.locator('[data-phone-record]').count()===2,'narrative and callback records survive reload');await ctx.close();
+    }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');await p.locator('.pp-launcher').tap();
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async o=>{window.modelCalls++;window.squarePrompt=o.quietPrompt;return JSON.stringify({posts:[{name:'Rowan',handle:'rowan',text:'the album reviews are getting heated',impact:{significant:true,topic:'Album debate',summary:'Music writers disagree publicly.',publicBasis:'Published album reviews',stakes:'Possible questions at the next interview.'}}]});};});
+        await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="square"]').tap();await p.getByRole('button',{name:'刷新广场',exact:true}).tap();await p.getByText('the album reviews are getting heated',{exact:true}).waitFor();check((await p.evaluate(()=>window.squarePrompt)).includes('禁止每条末尾统一缀两三个'),'square request includes varied regional style guidance');
+        const opinion=await p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');return c.extensionPrompts.durian_phone_public_opinion.value;});check(opinion.includes('Album debate')&&opinion.includes('等待自然时机'),'significant public discussion is available for later narrative');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();const data=c.chatMetadata.durian_phone_history.events.flatMap(e=>e.changes).find(x=>x.value?.type==='opinion').value;const evidence='Alex read the album debate and discussed the interview.';c.chat.push({name:'Alex',is_user:false,mes:evidence+'<!--durian-opinion:'+JSON.stringify({id:data.id,used:true,evidence})+'-->'});await c.eventSource.emit('GENERATION_ENDED');await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');});check(!(await p.evaluate(()=>window.SillyTavern.getContext().extensionPrompts.durian_phone_public_opinion.value)).includes('Album debate'),'adopted public issue does not repeatedly inject');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_ENDED');c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');});check((await p.evaluate(()=>window.SillyTavern.getContext().extensionPrompts.durian_phone_public_opinion.value)).includes('Album debate'),'deleting the narrative consequence restores pending public context');check(await p.evaluate(()=>window.modelCalls)===1,'public opinion handling adds no separate API calls');await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');

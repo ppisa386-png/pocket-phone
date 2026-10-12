@@ -1,4 +1,6 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.19.0';
+import { importStorySquare } from './x-opinion.js?v=0.20.0';
+import { importStoryPhone } from './story-phone.js?v=0.20.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.20.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -93,13 +95,16 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         snapshot.revisions = await revisionsFor(snapshot.signatures);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         const legacyRevisions = current.chat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(current.chat, true)) : null;
-        const { journal, removed, migrated } = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
-        if (removed || migrated) await save(snapshot, journal);
+        const reconciled = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
+        const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
+        const square=importStorySquare(imported.journal,snapshot.revisions,current.chat,current);
+        const journal=square.journal;
+        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
         notify();
-        if (removed) onRollback(removed);
+        if (reconciled.removed) onRollback(reconciled.removed);
         return snapshot;
     }
     function schedule(work) {
