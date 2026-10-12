@@ -154,3 +154,12 @@ test('one square refresh carries style instructions and records only substantial
  f.context.chat[0].mes='Changed starting scene';f.bus.emit('MESSAGE_EDITED');await f.memory.read();assert.equal(xItems(f.state(),'opinion').length,0);
  }finally{f.close();}
 });
+
+
+test('X Chinese display names retain follow status and original character identity',async()=>{
+ const f=setup();try{
+ const id=await account(f);ok(await f.x.follow(id,true));f.context.powerUserSettings={persona_description:'亚历克斯与 Sam 是朋友。'};
+ f.reply({accounts:[{name:'亚历克斯',aliases:['Alex'],handle:'alex',has_account:true},{name:'Alex',aliases:['亚历克斯'],handle:'another_handle',has_account:true}]});ok(await f.x.discover('Alex'));
+ const accounts=xItems(f.state(),'account');assert.equal(accounts.length,1);assert.equal(accounts[0].id,id);assert.equal(accounts[0].name,'亚历克斯');assert.equal(accounts[0].handle,'alex');assert.equal(accounts[0].following,true);assert.equal(accounts[0].characterId,'card:alex.png');assert.equal(f.state().x.profile.alias,'Moon');assert.match(f.prompt(),/不改变短信、帖子、对白/);
+ }finally{f.close();}
+});

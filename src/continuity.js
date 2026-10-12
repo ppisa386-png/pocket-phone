@@ -1,4 +1,5 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.20.1';
+import { nameAliases } from './names.js?v=0.20.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.20.2';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -26,8 +27,8 @@ function belongsTo(contact, speaker) {
     if (speaker.avatar && contact.id === 'card:' + speaker.avatar) return true;
     // Never rely on the saved numeric character index: the host may reorder it.
     // Name-only contacts can be resolved only when that name is unambiguous.
-    return speaker.nameIsUnique && normalized(contact.name) === normalized(speaker.name) &&
-        (contact.id === 'name:' + normalized(speaker.name) || (!speaker.avatar && contact.id === 'card:' + speaker.name));
+    return speaker.nameIsUnique && nameAliases(contact).some(name => normalized(name) === normalized(speaker.name)) &&
+        (contact.id?.startsWith('name:') || (!speaker.avatar && contact.id === 'card:' + speaker.name));
 }
 
 export function buildContinuityPrompt(state, speaker, { instruction, userName = 'user', budget = 8000 } = {}) {
@@ -52,7 +53,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         entries.push({ time: Number(call.createdAt) || 0, data: { channel: '电话', status: callLabels[call.status] || '已记录', turns } });
     }
     const social = Object.values(state.snapchat || {});
-    const matchesAccount=a=>a.type==='account'&&((speaker.avatar&&a.characterId==='card:'+speaker.avatar)||(!a.characterId&&speaker.nameIsUnique&&normalized(a.name)===normalized(speaker.name)));
+    const matchesAccount=a=>a.type==='account'&&((speaker.avatar&&a.characterId==='card:'+speaker.avatar)||(!a.characterId&&speaker.nameIsUnique&&nameAliases(a).some(name=>normalized(name)===normalized(speaker.name))));
     const snapAccounts=new Map(social.filter(matchesAccount).map(a=>[a.id,a]));
     const identity=(account,alias)=>({identityKnown:!!account.identityKnown,otherParty:account.identityKnown?userName:alias||'匿名账号',...(account.identityKnown?{}:{boundary:'只知道该网名，不知道现实身份；不得映射为正文中的 user'})});
     for (const item of social) {

@@ -157,3 +157,14 @@ test('changing setup while bulk contact request is pending discards the result',
  finish({contacts:[{name:'Bea',source:'persona',evidence:'Sam has a sister named Bea.',relationship:'sister',established:true}]});await pending;assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
  }finally{f.close();}
 });
+
+
+test('bilingual settings names prefer established Chinese and update old IDs without duplicating contacts',async()=>{
+ const f=fixture();try{
+ f.context.powerUserSettings.persona_description='Morgan is Sam’s lifelong enemy. 摩根是 Sam 的死对头。';
+ const row={name:'Morgan',relationship:'enemy',established:true,incidental:false,source:'persona',evidence:'Morgan is Sam’s lifelong enemy.',number:null};
+ f.reply(()=>({contacts:[row]}));await f.phone.addEstablishedContacts();const old=Object.values(f.phone.snapshot().contacts)[0];
+ f.reply(()=>({contacts:[{...row,name:'摩根',aliases:['Morgan']},{...row,aliases:['摩根']}]}));
+ await f.phone.addEstablishedContacts();const contacts=Object.values(f.phone.snapshot().contacts);assert.equal(contacts.length,1);assert.equal(contacts[0].id,old.id);assert.equal(contacts[0].name,'摩根');assert.ok(contacts[0].aliases.includes('Morgan'));assert.match(f.prompts.at(-1),/所有 App 共用/);assert.match(f.prompts.at(-1),/优先采用人物设定/);
+ }finally{f.close();}
+});

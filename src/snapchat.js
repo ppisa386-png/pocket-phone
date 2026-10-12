@@ -1,3 +1,4 @@
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.20.2';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
@@ -74,11 +75,12 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             const data=await ask(state,null,request,current,'当前任务：Snapchat 新增联系人。搜索 '+JSON.stringify(text(query,100))+'。可见剧情：'+JSON.stringify(visible)+
                 '\n根据当前设定判断哪些人物确实有 Snapchat 账号，不能因为是亲友或已有电话号码就自动添加；不合适用空数组。char 默认用真名、各只有一个账户。仅发现账号，不自动成为好友。可返回合理的待接受邀请。输出 {"accounts":[{"name":"姓名","handle":"唯一账号名","has_account":true,"invitation":"none 或 incoming"}]}，最多 10 个。',d=>{if(!Array.isArray(d.accounts)||d.accounts.length>10)throw new Error('账号搜索结果格式不正确。');return d.accounts;});
             const changes=[],used=new Set(),handles=new Set();
-            for(const item of data){if(item.has_account!==true)continue;const name=text(item.name,100),handle=text(item.handle,60).replace(/^@/,'');if(!name||!handle||/[\s<>]/.test(handle))continue;
-                const matches=(getContext().characters||[]).filter(c=>c.name===name);const characterId=matches.length===1?'card:'+matches[0].avatar:null;
-                const old=snapItems(state,'account').find(a=>(characterId&&a.characterId===characterId)||a.name===name||a.handle.toLowerCase()===handle.toLowerCase());
-                if(old||used.has(name)||handles.has(handle.toLowerCase())||name===getContext().name1)continue;used.add(name);handles.add(handle.toLowerCase());
-                changes.push(setSnap(newRecord('account',{name,handle,characterId,friend:item.invitation==='incoming'?'incoming':'none',identityKnown:false,blocked:false})));
+            for(const item of data){if(item.has_account!==true)continue;const identity=localizedPerson(item,getContext(),snapItems(state,'account')),name=identity.name,handle=text(item.handle,60).replace(/^@/,'');if(!name||!handle||/[\s<>]/.test(handle))continue;
+                const characterId=identity.cardId;
+                const old=snapItems(state,'account').find(a=>(characterId&&a.characterId===characterId)||sameNamedPerson(a,identity)||a.handle.toLowerCase()===handle.toLowerCase());
+                if(old){if(old.name!==name||(!old.characterId&&characterId)||identity.aliases.some(alias=>!old.aliases?.includes(alias))){const next={...old,name,aliases:identity.aliases,characterId:old.characterId||characterId};state.snapchat[old.id]=next;changes.push(setSnap(next));}continue;}
+                if(used.has(name)||handles.has(handle.toLowerCase())||name===getContext().name1)continue;used.add(name);handles.add(handle.toLowerCase());
+                const account=newRecord('account',{name,aliases:identity.aliases,handle,characterId,friend:item.invitation==='incoming'?'incoming':'none',identityKnown:false,blocked:false});state.snapchat[account.id]=account;changes.push(setSnap(account));
             }
             await commit(changes);return {added:changes.length};
         });},

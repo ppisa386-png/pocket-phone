@@ -111,3 +111,12 @@ test('failed Snapchat batches retry once without duplicate sent messages',async(
  const messages=snapItems(f.state(),'message');assert.ok(messages.every(m=>m.status==='failed'));f.reply({status:'reply',messages:[{text:'Okay.'}]});ok(await f.snap.retryMessage(messages[0].id));assert.equal(snapItems(f.state(),'message').length,3);assert.ok(snapItems(f.state(),'message').filter(m=>m.role==='user').every(m=>m.status==='answered'));
  }finally{f.close();}
 });
+
+
+test('Chinese friend display names preserve original character, friendship and account handle',async()=>{
+ const f=setup();try{
+ const id=await friend(f);f.context.powerUserSettings={persona_description:'亚历克斯是 Sam 的朋友。'};
+ f.reply({accounts:[{name:'亚历克斯',aliases:['Alex'],handle:'alex',has_account:true},{name:'Alex',aliases:['亚历克斯'],handle:'another_handle',has_account:true}]});ok(await f.snap.discover());
+ const accounts=snapItems(f.state(),'account');assert.equal(accounts.length,1);assert.equal(accounts[0].id,id);assert.equal(accounts[0].name,'亚历克斯');assert.equal(accounts[0].handle,'alex');assert.equal(accounts[0].friend,'friends');assert.equal(accounts[0].characterId,'card:alex.png');assert.equal(f.state().snapchat.profile.alias,'Moon');assert.match(f.prompt(),/name 填中文显示名/);
+ }finally{f.close();}
+});

@@ -1,5 +1,6 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.20.1';
-import { storyAnnotations } from './story-phone.js?v=0.20.1';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.20.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.20.2';
+import { storyAnnotations } from './story-phone.js?v=0.20.2';
 const text=(s,n=600)=>typeof s==='string'?s.trim().slice(0,n):'';
 const safe=v=>JSON.stringify(v).replace(/\{\{/g,'\\u007b\\u007b');
 export const OPINION_KEY='durian_phone_public_opinion';
@@ -20,10 +21,11 @@ export function importStorySquare(raw,revisions,chat,context){
     for(let i=0;i<chat.length;i++)for(const [n,row]of storyAnnotations(chat[i],'durian-square').slice(0,5).entries()){
         const eventId='story-square:'+revisions[i]+':'+n;if(journal?.events.some(e=>e.id===eventId))continue;
         if(!text(row.name,100)||!text(row.handle,60)||/[\s<>]/.test(row.handle)||!text(row.text,6000)||!row.prose.includes(row.text.trim())||!text(row.publicBasis))continue;
-        if(norm(row.name)===norm(context.name1)||(context.characters||[]).some(c=>norm(c.name)===norm(row.name)))continue;
+        const identity=localizedPerson(row,context,Object.values(state.x).filter(a=>a.type==='account'));
+        if(sameNamedPerson(identity,{name:context.name1})||(context.characters||[]).some(c=>sameNamedPerson(c,identity)))continue;
         const existing=Object.values(state.x).find(a=>a.type==='account'&&norm(a.handle)===norm(row.handle));if(existing&&(!existing.crowd||existing.blocked))continue;
         const now=Number(new Date(chat[i].send_date))||Date.now()+n;
-        const account=existing||{id:'account:'+eventId,type:'account',name:text(row.name,100),handle:text(row.handle,60),crowd:true,identityKnown:false,following:false,dmPolicy:'requests',createdAt:now};
+        const account=existing||{id:'account:'+eventId,type:'account',name:identity.name,aliases:identity.aliases,handle:text(row.handle,60),crowd:true,identityKnown:false,following:false,dmPolicy:'requests',createdAt:now};
         const post={id:eventId,type:'post',author:account.id,text:text(row.text,6000),feed:'square',origin:'narrative',createdAt:now,liked:false,reposted:false};
         const changes=[{collection:'x',key:account.id,value:account},{collection:'x',key:post.id,value:post}];
         const opinion=opinionFromPost(row.impact,post);if(opinion&&!Object.values(state.x).some(o=>o.type==='opinion'&&o.topic===opinion.topic&&o.summary===opinion.summary))changes.push({collection:'x',key:opinion.id,value:opinion});
@@ -45,7 +47,7 @@ export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
             const rev=await revisionsFor(signatures),legacy=chat.some(isMemoryHidden)?await revisionsFor(messageSignatures(chat,true)):null;
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],rev,legacy).journal);
             if(!current())return;
-            const prompt=buildOpinionPrompt(state,chat,getSettings().prompts.xOpinion)+'\n仅当本次正文实际展示了随机网友在 X 的公开帖子，才把该帖子同步广场：末尾附 <!--durian-square:{"name":"符合世界观的网友名字，不能是 user 或已有 char","handle":"网名","text":"正文逐字出现的帖子原文","publicBasis":"公众知情途径","evidence":"本次正文实际展示这条 X 帖子的连续逐字原句"}-->。没有展示帖子就不填，不为存手机记录额外编造帖子。若已形成实质舆情可附 impact:{significant:true,topic,summary,publicBasis,stakes}，只描述已经发生的公共讨论及可能影响；普通议论不附。'+getSettings().prompts.xStyle;
+            const prompt=CHINESE_NAME_RULE+buildOpinionPrompt(state,chat,getSettings().prompts.xOpinion)+'\n仅当本次正文实际展示了随机网友在 X 的公开帖子，才把该帖子同步广场：末尾附 <!--durian-square:{"name":"符合世界观的网友名字，不能是 user 或已有 char","handle":"网名","text":"正文逐字出现的帖子原文","publicBasis":"公众知情途径","evidence":"本次正文实际展示这条 X 帖子的连续逐字原句"}-->。没有展示帖子就不填，不为存手机记录额外编造帖子。若已形成实质舆情可附 impact:{significant:true,topic,summary,publicBasis,stakes}，只描述已经发生的公共讨论及可能影响；普通议论不附。'+getSettings().prompts.xStyle;
             c.setExtensionPrompt(OPINION_KEY,prompt,1,1,false,0,current);
         }catch(e){onError(e);}
     }

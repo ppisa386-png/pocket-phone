@@ -1,13 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.20.1';
-import { proactiveSources } from './proactive-evidence.js?v=0.20.1';
-import { phoneQuietOptions } from './api-context.js?v=0.20.1';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.20.1';
-export { validateContacts } from './contacts.js?v=0.20.1';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.20.1';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.20.1';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.20.1';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.20.1';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.20.1';
+import { isMemoryHidden } from './journal.js?v=0.20.2';
+import { CHINESE_NAME_RULE } from './names.js?v=0.20.2';
+import { proactiveSources } from './proactive-evidence.js?v=0.20.2';
+import { phoneQuietOptions } from './api-context.js?v=0.20.2';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.20.2';
+export { validateContacts } from './contacts.js?v=0.20.2';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.20.2';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.20.2';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.20.2';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.20.2';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.20.2';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -68,6 +69,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         emit();
     });
     async function request(prompt, validate, isCurrent, contact = null) {
+        prompt += CHINESE_NAME_RULE;
         const context = getContext();
         requestContactId = contact?.id ?? null;
         const independent = getSettings().api?.mode === 'independent';
@@ -383,15 +385,17 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const ticket = await memory.begin();
                 const prompt = establishedContactPrompt(getSettings().prompts.establishedContacts, context, sources, Object.values(view.state.contacts));
                 const contacts = await request(prompt, data => {
-                    const found = validateEstablishedContacts(data, chat, context, sources);
+                    const found = validateEstablishedContacts(data, chat, context, sources, Object.values(view.state.contacts));
                     if (data.contacts?.length && !found.length) throw new Error('未能核对联系人资料，请重试。');
                     return found;
                 }, valid);
                 if (!valid()) return;
                 const additions = contacts.filter(contact => !view.state.contacts[contact.id]);
-                if (additions.length) await memory.commit(ticket, additions.map(contact => set('contacts',contact.id,contact)));
+                const renamed = contacts.filter(contact => view.state.contacts[contact.id] && view.state.contacts[contact.id].name !== contact.name);
+                const changes = [...additions.map(contact => set('contacts',contact.id,contact)),...renamed.map(contact => set('contacts',contact.id,{...view.state.contacts[contact.id],name:contact.name,aliases:contact.aliases}))];
+                if (changes.length) await memory.commit(ticket, changes);
                 if (!valid()) return;
-                contactStatus = additions.length ? '已新增 ' + additions.length + ' 位联系人。' : '没有需要新增的联系人。';
+                contactStatus = additions.length ? '已新增 ' + additions.length + ' 位联系人。' : renamed.length ? '联系人已更新。' : '没有需要新增的联系人。';
                 return {added:additions.length};
             }, 'contacts');
         },
@@ -406,16 +410,16 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const ticket = await memory.begin();
                 const prompt = contactPrompt(getSettings().prompts.contacts, context, sources, Object.values(view.state.contacts));
                 const contacts = await request(prompt, data => {
-                    const found=validateContacts(data,chat,context,sources);
+                    const found=validateContacts(data,chat,context,sources,Object.values(view.state.contacts));
                     if(data.contacts?.length&&!found.length)throw new Error('未能核对返回的姓名或取号依据，请重试。');
                     return found;
                 }, valid);
                 if (!valid()) return;
                 const additions = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
                     const old = view.state.contacts[c.id];
-                    return !old || (c.number && old.number !== c.number && c.sourceIndex >= old.sourceIndex);
+                    return !old || old.name !== c.name || (c.number && old.number !== c.number && c.sourceIndex >= old.sourceIndex);
                 });
-                const batches = additions.map(contact => ({ sourceIndex: contact.sourceIndex, changes: [set('contacts', contact.id, contact)] }));
+                const batches = additions.map(contact => { const old=view.state.contacts[contact.id]; return { sourceIndex: contact.sourceIndex, changes: [set('contacts', contact.id, old && !contact.number ? {...old,name:contact.name,aliases:contact.aliases} : contact)] }; });
                 if (batches.length) await memory.commitBatch(ticket, batches);
                 if (!valid()) return;
                 const added = additions.filter(c => !view.state.contacts[c.id]).length;

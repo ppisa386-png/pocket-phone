@@ -1,4 +1,4 @@
-import { xItems, xProfile, xCounts } from './x.js?v=0.20.1';
+import { xItems, xProfile, xCounts } from './x.js?v=0.20.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;

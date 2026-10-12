@@ -1,4 +1,5 @@
-import { opinionFromPost } from './x-opinion.js?v=0.20.1';
+import { opinionFromPost } from './x-opinion.js?v=0.20.2';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.20.2';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
@@ -35,14 +36,14 @@ export function createX({memory,phone,getContext,getSettings}) {
     }
     const ask=(state,a,request,current,task,validate)=>request(prompt(state,a,task),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null);
     function register(state,item,changes,crowdOnly=false) {
-        const name=xText(item?.name,100),handle=xText(item?.handle,60).replace(/^@/,'');
+        const identity=localizedPerson(item,getContext(),xItems(state,'account')),name=identity.name,handle=xText(item?.handle,60).replace(/^@/,'');
         if(!name||!handle||/[\s<>]/.test(handle)||name===getContext().name1||item.has_account===false)return null;
         const normalize=s=>String(s||'').normalize('NFKC').trim().toLowerCase();
-        const cards=(getContext().characters||[]).filter(c=>normalize(c.name)===normalize(name));const characterId=cards.length===1?'card:'+cards[0].avatar:null;
-        const existing=xItems(state,'account').find(a=>(characterId&&a.characterId===characterId)||a.name===name||a.handle.toLowerCase()===handle.toLowerCase());
+        const cards=(getContext().characters||[]).filter(c=>sameNamedPerson(c,identity));const characterId=identity.cardId;
+        const existing=xItems(state,'account').find(a=>(characterId&&a.characterId===characterId)||sameNamedPerson(a,identity)||a.handle.toLowerCase()===handle.toLowerCase());
         if(crowdOnly&&(cards.length||normalize(name)===normalize(getContext().name1)||existing&&!existing.crowd))return null;
-        if(existing)return existing;
-        const a=xRecord('account',{name,handle,characterId,bio:xText(item.bio,500),dmPolicy:['open','requests','closed'].includes(item.dm_policy)?item.dm_policy:'requests',following:false,blocked:false,identityKnown:false,crowd:crowdOnly});
+        if(existing){if(existing.name!==name||(!existing.characterId&&characterId)||identity.aliases.some(alias=>!existing.aliases?.includes(alias))){const next={...existing,name,aliases:identity.aliases,characterId:existing.characterId||characterId};state.x[next.id]=next;changes.push(xSet(next));return next;}return existing;}
+        const a=xRecord('account',{name,aliases:identity.aliases,handle,characterId,bio:xText(item.bio,500),dmPolicy:['open','requests','closed'].includes(item.dm_policy)?item.dm_policy:'requests',following:false,blocked:false,identityKnown:false,crowd:crowdOnly});
         state.x[a.id]=a;changes.push(xSet(a));return a;
     }
     const list=(data,key,max)=>{if(!Array.isArray(data?.[key])||data[key].length>max)throw Error('返回内容格式不正确，请重试。');return data[key];};
