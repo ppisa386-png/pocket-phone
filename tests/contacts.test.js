@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { contactSources, validateContacts } from '../src/contacts.js';
+import { contactSources, validateContacts, establishedSources, validateEstablishedContacts } from '../src/contacts.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
@@ -124,4 +124,36 @@ test('partial-name retrieval retains adjacent handoff and accepts cross-floor pr
  assert.equal(found.length,1);assert.equal(found[0].id,'card:leon.png');assert.equal(found[0].number,null);assert.equal(found[0].sourceIndex,3);
  assert.equal(validateContacts({contacts:[{...entry('Other',owner),aliases:[]}]},chat,context,sources).length,0);
  assert.equal(validateContacts({contacts:[{...entry('里昂',owner),evidence:[owner,'Invented handoff evidence']} ]},chat,context,sources).length,0);
+});
+
+
+test('one-click settings contacts include hostile relationships without phone qualification and preserve existing records',async()=>{
+ const f=fixture();try{
+ f.context.powerUserSettings.persona_description='Sam has a sister named Bea. Morgan is Sam’s lifelong enemy. Taylor is a passerby Sam met once.';
+ const row=(name,evidence,relationship)=>({name,evidence,relationship,source:'persona',established:true,incidental:false,number:null});
+ f.reply(()=>({contacts:[row('Bea','Sam has a sister named Bea.','sister'),{...row('Morgan','Morgan is Sam’s lifelong enemy.','enemy'),can_use_phone:false,user_has_number:false},{...row('Taylor','Taylor is a passerby Sam met once.','passerby'),incidental:true}]}));
+ const result=await f.phone.addEstablishedContacts();assert.equal(result.ok,true);assert.deepEqual(result.value,{added:2});assert.deepEqual(Object.values(f.phone.snapshot().contacts).map(c=>c.name),['Bea','Morgan']);assert.equal(f.requests(),1);
+ assert.match(f.prompts[0],/不要进行号码是否交换/);assert.match(f.prompts[0],/正文开始后才认识/);
+ const before=structuredClone(f.phone.snapshot().contacts);await f.phone.addEstablishedContacts();assert.deepEqual(f.phone.snapshot().contacts,before);await f.phone.openMessages();assert.deepEqual(f.phone.snapshot().contacts,before);
+ assert.deepEqual((await f.memory.read()).state.snapchat,{});assert.deepEqual((await f.memory.read()).state.x,{});
+ f.context.chat.pop();await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
+ }finally{f.close();}
+});
+
+test('one-click sources use active setup only, reject narrative-only or invented people and support embedded settings',()=>{
+ const f=fixture();try{
+ f.context.characters[0].data={description:'Alex and Sam have been rivals since school.',character_book:{entries:[{enabled:true,content:'Robin is Sam’s father.'},{enabled:false,content:'Hidden is Sam’s mother.'}]}};
+ f.context.characters.push({name:'Unrelated',description:'Other is Sam’s uncle.'});
+ const sources=establishedSources(f.context);assert.ok(!JSON.stringify(sources).includes('Other is'));assert.ok(!JSON.stringify(sources).includes('Hidden is'));assert.ok(!JSON.stringify(sources).includes(quote));
+ const rows=[{name:'Alex',source:'card:0:description',evidence:'Alex and Sam have been rivals since school.',relationship:'rival'},{name:'Robin',source:'world:0:0',evidence:'Robin is Sam’s father.',relationship:'father'},{name:'New',source:'chat',evidence:'New met Sam today.',relationship:'friend'},{name:'Fake',source:'persona',evidence:'Fake is Sam’s mother.',relationship:'mother'}].map(r=>({...r,established:true,incidental:false,number:'12345678'}));
+ const contacts=validateEstablishedContacts({contacts:rows},f.context.chat,f.context,sources);assert.deepEqual(contacts.map(c=>c.name),['Alex','Robin']);assert.equal(contacts[0].id,'card:alex.png');assert.ok(contacts.every(c=>c.number===null));
+ }finally{f.close();}
+});
+
+test('changing setup while bulk contact request is pending discards the result',async()=>{
+ const f=fixture();try{
+ let finish,started;const ready=new Promise(r=>started=r);f.reply(()=>{started();return new Promise(r=>finish=r);});
+ const pending=f.phone.addEstablishedContacts();await ready;f.context.powerUserSettings.persona_description='Sam lives alone.';
+ finish({contacts:[{name:'Bea',source:'persona',evidence:'Sam has a sister named Bea.',relationship:'sister',established:true}]});await pending;assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
+ }finally{f.close();}
 });

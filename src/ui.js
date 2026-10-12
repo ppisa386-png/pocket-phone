@@ -1,15 +1,15 @@
-import { createAmazonPanel } from './amazon-view.js?v=0.20.0';
-import { bindComposerKeys } from './composer.js?v=0.20.0';
-import { createXPanel } from './x-view.js?v=0.20.0';
-import { xUnread } from './x.js?v=0.20.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.20.0';
-import { snapUnread } from './snapchat.js?v=0.20.0';
-import { createApiPanel } from './api-view.js?v=0.20.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.20.0';
-import { icon } from './icons.js?v=0.20.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.20.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.20.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.20.0';
+import { createAmazonPanel } from './amazon-view.js?v=0.20.1';
+import { bindComposerKeys } from './composer.js?v=0.20.1';
+import { createXPanel } from './x-view.js?v=0.20.1';
+import { xUnread } from './x.js?v=0.20.1';
+import { createSnapPanel } from './snapchat-view.js?v=0.20.1';
+import { snapUnread } from './snapchat.js?v=0.20.1';
+import { createApiPanel } from './api-view.js?v=0.20.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.20.1';
+import { icon } from './icons.js?v=0.20.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.20.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.20.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.20.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -370,6 +370,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
         if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; selectedCallId = null; renderPhone(); }
         if (target.hasAttribute('data-phone-sync')) openContactSearch();
+        if (target.hasAttribute('data-contact-bulk')) phoneAction(() => adapter.phone.addEstablishedContacts());
         if (target.dataset.phoneDial) phoneAction(() => adapter.phone.dial(target.dataset.phoneDial));
         if (target.dataset.phoneRecord) { selectedCallId = target.dataset.phoneRecord; callDraft = ''; renderPhone(); }
         if (target.hasAttribute('data-phone-list')) { selectedCallId = null; phoneTab = 'history'; renderPhone(); }

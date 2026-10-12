@@ -1,4 +1,4 @@
-import { opinionFromPost } from './x-opinion.js?v=0.20.0';
+import { opinionFromPost } from './x-opinion.js?v=0.20.1';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};

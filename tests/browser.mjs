@@ -440,6 +440,16 @@ try {
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();const data=c.chatMetadata.durian_phone_history.events.flatMap(e=>e.changes).find(x=>x.value?.type==='opinion').value;const evidence='Alex read the album debate and discussed the interview.';c.chat.push({name:'Alex',is_user:false,mes:evidence+'<!--durian-opinion:'+JSON.stringify({id:data.id,used:true,evidence})+'-->'});await c.eventSource.emit('GENERATION_ENDED');await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');});check(!(await p.evaluate(()=>window.SillyTavern.getContext().extensionPrompts.durian_phone_public_opinion.value)).includes('Album debate'),'adopted public issue does not repeatedly inject');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_ENDED');c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');});check((await p.evaluate(()=>window.SillyTavern.getContext().extensionPrompts.durian_phone_public_opinion.value)).includes('Album debate'),'deleting the narrative consequence restores pending public context');check(await p.evaluate(()=>window.modelCalls)===1,'public opinion handling adds no separate API calls');await ctx.close();
     }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings={persona_description:'Morgan is Sam’s lifelong enemy.'};c.generateQuietPrompt=async options=>{window.modelCalls++;return JSON.stringify({contacts:[{name:'Morgan',relationship:'enemy',established:true,incidental:false,source:'persona',evidence:'Morgan is Sam’s lifelong enemy.',number:null}]});};});
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();
+        await p.getByRole('button',{name:'一键新增',exact:true}).tap();await p.getByRole('button',{name:'拨打 Morgan',exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===1,'one-click phone contact import uses one request');
+        await p.getByText('已新增 1 位联系人。',{exact:true}).waitFor();await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-new]').tap();
+        await p.locator('[data-sms-contact]').filter({hasText:'Morgan'}).waitFor();await p.getByRole('button',{name:'一键新增',exact:true}).tap();await p.getByText('没有需要新增的联系人。',{exact:true}).waitFor();check(await p.locator('[data-sms-contact]').count()===1,'SMS shares bulk contacts without duplicates');
+        check(await p.locator('[data-sms-sync]').isVisible(),'individual contact search remains available');
+        const fits=await p.locator('.pp-phone-toolbar').evaluate(e=>e.scrollWidth<=e.clientWidth);check(fits,'contact toolbar fits mobile width');await ctx.close();
+    }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
 } catch (error) {

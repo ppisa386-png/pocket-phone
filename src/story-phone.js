@@ -1,6 +1,6 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.20.0';
-import { narrativeReplyCount } from './contact-policy.js?v=0.20.0';
-import { isBlocked } from './contact-events.js?v=0.20.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.20.1';
+import { narrativeReplyCount } from './contact-policy.js?v=0.20.1';
+import { isBlocked } from './contact-events.js?v=0.20.1';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});

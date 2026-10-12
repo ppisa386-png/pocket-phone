@@ -3,6 +3,52 @@ const visible = message => message && !message.is_system && !message.is_hidden &
 
 const searchName = value => normalizeName(value).replace(/[\s·.・'’_-]/g,'');
 const quoteText = value => String(value).normalize('NFKC').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,'');
+
+export function establishedSources(context) {
+    const names = { user: context.name1 || 'user', char: context.name2 || 'char' };
+    const expand = text => String(text || '').replace(/\{\{\s*(user|char)\s*\}\}/gi, (_, key) => names[key.toLowerCase()]);
+    const sources = [{ source: 'persona', text: expand(context.powerUserSettings?.persona_description) }];
+    const grouped = context.groupId != null && context.groupId !== '';
+    const members = grouped ? context.groups?.find(g => String(g.id) === String(context.groupId))?.members || [] : [];
+    for (const [index, card] of (context.characters || []).entries()) {
+        if (grouped ? !members.includes(card.avatar) : context.characterId == null || context.characterId === '' || index !== Number(context.characterId)) continue;
+        const data = card.data || card;
+        for (const field of ['description', 'personality', 'scenario']) sources.push({ source: 'card:' + index + ':' + field, text: expand(data[field]) });
+        for (const [entryIndex, entry] of (data.character_book?.entries || []).entries()) {
+            if (entry.enabled !== false) sources.push({ source: 'world:' + index + ':' + entryIndex, text: expand(entry.content) });
+        }
+    }
+    return sources.filter(source => source.text.trim());
+}
+
+export function establishedContactPrompt(instruction, context, sources, existing) {
+    return instruction + '\n当前任务：user 点击「一键新增」。仅提取正文开始之前，人物设定已明确与 user 建立关系的具名人物。父母、亲友、同事、熟人、前任、竞争对手、仇人、死对头等正面或负面关系均加入。不要进行号码是否交换、人物是否愿意、当前是否活着或有通信能力等资格判定。排除没有名字的人、仅一面之缘的路人、只与其他角色有关而与 user 无既有关系的人，以及正文开始后才认识的人。不能把资料中每个名字都当作 user 的熟人。' +
+        '\n仅以下设定资料可用于本次提取；请求上下文里的后续正文、手机交流、记忆摘要不能扩大名单。逐项引用设定中包含姓名及关系的原文，source 使用对应资料标识。别名可写 aliases。没有明确号码就 number=null，不编造数字；不新增社媒账号。不删除或覆盖已有联系人。不需要 user_has_number、can_use_phone 或生存状态判断。' +
+        '\nuser：' + context.name1 + '\n设定资料：' + JSON.stringify(sources) + '\n已有联系人：' + JSON.stringify(existing.map(c => ({name:c.name,id:c.id}))) +
+        '\n只输出 JSON：{"contacts":[{"name":"具名人物","aliases":[],"relationship":"与 user 的既有关系","established":true,"incidental":false,"source":"资料标识","number":null,"evidence":"设定原文"}]}。没有符合者返回空数组。';
+}
+
+export function validateEstablishedContacts(data, chat, context, sources) {
+    if (!Array.isArray(data.contacts) || data.contacts.length > 200) throw new Error('联系人结果格式不正确。');
+    const contacts = new Map();
+    for (const item of data.contacts) {
+        if (!item || typeof item.name !== 'string' || !item.name.trim() || item.established !== true || item.incidental === true || typeof item.relationship !== 'string' || !item.relationship.trim()) continue;
+        const name = item.name.trim().slice(0,100);
+        if (normalizeName(name) === normalizeName(context.name1)) continue;
+        const quotes = (Array.isArray(item.evidence) ? item.evidence : [item.evidence]).filter(q => typeof q === 'string' && q.trim().length >= 4);
+        const source = sources.find(s => s.source === item.source);
+        if (!source || !quotes.length || quotes.length > 6 || !quotes.every(q => quoteText(source.text).includes(quoteText(q)))) continue;
+        const evidence = quotes.join('\n');
+        const aliases = [name,...(Array.isArray(item.aliases) ? item.aliases : [])].filter(n => typeof n === 'string' && n.trim()).map(searchName);
+        if (!aliases.some(n => searchName(evidence).includes(n))) continue;
+        const matches = (context.characters || []).map((c,index) => ({c,index})).filter(({c}) => aliases.includes(searchName(c.name)));
+        const characterId = matches.length === 1 ? matches[0].index : null;
+        const id = characterId !== null ? 'card:' + (matches[0].c.avatar || name) : 'name:' + normalizeName(name);
+        const number = typeof item.number === 'string' && /^\+?[\d\s().-]{5,30}$/.test(item.number.trim()) && evidence.replace(/\D/g,'').includes(item.number.replace(/\D/g,'')) ? item.number.trim() : null;
+        contacts.set(id,{id,name,number,characterId,sourceKind:'established',sourceIndex:chat.length-1,evidence,relationship:item.relationship.trim().slice(0,100)});
+    }
+    return [...contacts.values()];
+}
 export function contactSources(chat, context, query = '') {
     const persona = typeof context.powerUserSettings?.persona_description === 'string' ? context.powerUserSettings.persona_description : '';
     const names = { user: context.name1 || 'user', char: context.name2 || 'char' };

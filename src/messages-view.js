@@ -1,7 +1,7 @@
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.20.0';
-import { isBlocked } from './contact-events.js?v=0.20.0';
-import { icon } from './icons.js?v=0.20.0';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.20.0';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.20.1';
+import { isBlocked } from './contact-events.js?v=0.20.1';
+import { icon } from './icons.js?v=0.20.1';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.20.1';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = value => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const replyLabels = { queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
@@ -29,7 +29,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
     let entries = Object.values(picking ? contacts : participants);
     if (picking) entries.sort((a, b) => a.name.localeCompare(b.name));
     else entries = entries.filter(item => threadMessages(messages, item.id).length).sort((a, b) => threadMessages(messages, b.id).at(-1).createdAt - threadMessages(messages, a.id).at(-1).createdAt);
-    return '<div class="pp-sms-list"><div class="pp-phone-toolbar"><h2>' + (picking ? '选择联系人' : '短信') + '</h2><button type="button" class="pp-text-button" ' + (picking ? 'data-sms-back' : 'data-sms-new') + '>' + (picking ? '取消' : '新建短信') + '</button>' + (picking ? '<button type="button" class="pp-text-button" data-sms-sync' + (busy ? ' disabled' : '') + '>新增联系人</button>' : '') + (!picking ? '<button type="button" class="pp-text-button" data-sms-blocklist>黑名单</button>' : '') + '</div>' +
+    return '<div class="pp-sms-list"><div class="pp-phone-toolbar"><h2>' + (picking ? '选择联系人' : '短信') + '</h2><button type="button" class="pp-text-button" ' + (picking ? 'data-sms-back' : 'data-sms-new') + '>' + (picking ? '取消' : '新建短信') + '</button>' + (picking ? '<button type="button" class="pp-text-button" data-sms-sync' + (busy ? ' disabled' : '') + '>新增联系人</button><button type="button" class="pp-text-button" data-contact-bulk' + (busy ? ' disabled' : '') + '>一键新增</button>' : '') + (!picking ? '<button type="button" class="pp-text-button" data-sms-blocklist>黑名单</button>' : '') + '</div>' +
         (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML + (contactStatus && picking ? '<p class="pp-contact-status" role="status">' + smsEscape(contactStatus) + '</p>' : '') +
         (entries.length ? entries.map(item => {
             const last = threadMessages(messages, item.id).at(-1);

@@ -1,13 +1,13 @@
-import { isMemoryHidden } from './journal.js?v=0.20.0';
-import { proactiveSources } from './proactive-evidence.js?v=0.20.0';
-import { phoneQuietOptions } from './api-context.js?v=0.20.0';
-import { contactSources, contactPrompt, validateContacts } from './contacts.js?v=0.20.0';
-export { validateContacts } from './contacts.js?v=0.20.0';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.20.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.20.0';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.20.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.20.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.20.0';
+import { isMemoryHidden } from './journal.js?v=0.20.1';
+import { proactiveSources } from './proactive-evidence.js?v=0.20.1';
+import { phoneQuietOptions } from './api-context.js?v=0.20.1';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.20.1';
+export { validateContacts } from './contacts.js?v=0.20.1';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.20.1';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.20.1';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.20.1';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.20.1';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.20.1';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -372,6 +372,28 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             }
             await memory.commit(ticket, changes);
             error = ''; emit();
+        },
+        addEstablishedContacts() {
+            contactStatus = '';
+            return task(async (view, current) => {
+                const context = getContext(), chat = clone(context.chat), sources = establishedSources(context);
+                if (!sources.length) { contactStatus = '未找到可添加的联系人。'; return {added:0}; }
+                const sourceKey = JSON.stringify(sources);
+                const valid = () => current() && sourceKey === JSON.stringify(establishedSources(getContext()));
+                const ticket = await memory.begin();
+                const prompt = establishedContactPrompt(getSettings().prompts.establishedContacts, context, sources, Object.values(view.state.contacts));
+                const contacts = await request(prompt, data => {
+                    const found = validateEstablishedContacts(data, chat, context, sources);
+                    if (data.contacts?.length && !found.length) throw new Error('未能核对联系人资料，请重试。');
+                    return found;
+                }, valid);
+                if (!valid()) return;
+                const additions = contacts.filter(contact => !view.state.contacts[contact.id]);
+                if (additions.length) await memory.commit(ticket, additions.map(contact => set('contacts',contact.id,contact)));
+                if (!valid()) return;
+                contactStatus = additions.length ? '已新增 ' + additions.length + ' 位联系人。' : '没有需要新增的联系人。';
+                return {added:additions.length};
+            }, 'contacts');
         },
         scan(query = '') {
             contactStatus = '';
