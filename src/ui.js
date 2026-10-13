@@ -1,16 +1,17 @@
-import { createAssetPanel } from './assets-view.js?v=0.21.0';
-import { createAmazonPanel } from './amazon-view.js?v=0.21.0';
-import { bindComposerKeys } from './composer.js?v=0.21.0';
-import { createXPanel } from './x-view.js?v=0.21.0';
-import { xUnread } from './x.js?v=0.21.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.21.0';
-import { snapUnread } from './snapchat.js?v=0.21.0';
-import { createApiPanel } from './api-view.js?v=0.21.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.21.0';
-import { icon } from './icons.js?v=0.21.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.21.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.21.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.21.0';
+import { storyTime } from './story-clock.js?v=0.21.1';
+import { createAssetPanel } from './assets-view.js?v=0.21.1';
+import { createAmazonPanel } from './amazon-view.js?v=0.21.1';
+import { bindComposerKeys } from './composer.js?v=0.21.1';
+import { createXPanel } from './x-view.js?v=0.21.1';
+import { xUnread } from './x.js?v=0.21.1';
+import { createSnapPanel } from './snapchat-view.js?v=0.21.1';
+import { snapUnread } from './snapchat.js?v=0.21.1';
+import { createApiPanel } from './api-view.js?v=0.21.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.21.1';
+import { icon } from './icons.js?v=0.21.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.21.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.21.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.21.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -303,6 +304,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (app?.id === 'amazon') renderAmazon();
         else if (app) renderEmptyApp(app.id);
         content.scrollTop = route === 'app:messages' && selectedSMSContactId ? content.scrollHeight : 0;
+        updateClock();
     }
 
     function navigate(next) {
@@ -323,8 +325,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened) return;
         lastFocused = document.activeElement;
         opened = true;
-        const incoming = phoneView.calls?.[phoneView.activeCallId];
-        if (settings.apps.phone && incoming?.status === 'ringing') { route = 'app:phone'; history = ['home']; selectedCallId = incoming.id; }
+        route = 'home'; history = []; selectedSMSContactId = null; pickingSMSContact = false; smsEditing = null; contactSearchOpen = false;
         phone.hidden = false;
         if(windowPosition){const point={...windowPosition};phone.style.height='';phone.style.bottom='';phone.style.top='';movePhone(point.x,point.y);}
         launcher.setAttribute('aria-expanded', 'true');
@@ -345,13 +346,13 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function updateClock() {
         if (!opened) return;
         for(const el of content.querySelectorAll('[data-snap-expiry]'))el.textContent=Date.now()-Number(el.dataset.snapExpiry)>=86400000?'已过期':'24 小时内';
-        const now = new Date();
-        const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+        const clockValue = storyTime(adapter.storyChat?.() || []);
+        const time = clockValue.time || '—';
         shadow.querySelector('.pp-status-time').textContent = time;
         const clock = content.querySelector('.pp-big-time');
         if (clock) clock.textContent = time;
         const date = content.querySelector('.pp-date');
-        if (date) date.textContent = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(now);
+        if (date) date.textContent = clockValue.date;
     }
 
     shadow.addEventListener('click', event => {
@@ -368,7 +369,14 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (action === 'clear-errors') {adapter.diagnostics?.clear();renderErrors();}
         if (action === 'close') close();
         if (action === 'home') { route = 'home'; history = []; render(); }
-        if (action === 'back') { route = history.pop() || 'home'; render(); }
+        if (action === 'back') {
+            if(contactSearchOpen){contactSearchOpen=false;render();}
+            else if(route==='app:messages'&&(selectedSMSContactId||pickingSMSContact)){
+                if(smsEditing){smsEditing=null;}else{selectedSMSContactId=null;pickingSMSContact=false;}
+                renderMessages();
+            }else if(route==='app:phone'&&selectedCallId){selectedCallId=null;phoneTab='history';renderPhone();}
+            else {route = history.pop() || 'home'; render();}
+        }
         if (target.dataset.app) navigate(target.dataset.app === 'settings' ? 'settings' : 'app:' + target.dataset.app);
         if (target.dataset.section) navigate(target.dataset.section);
         if (target.dataset.wallpaper && persist({ wallpaper: target.dataset.wallpaper })) {
@@ -609,6 +617,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened && route === 'app:assets') renderAssets();
         if (opened && route === 'app:amazon') renderAmazon();
         if (opened && route === 'home') renderHome();
+        updateClock();
     });
     const clockInterval = setInterval(updateClock, 15000);
     applyAppearance();

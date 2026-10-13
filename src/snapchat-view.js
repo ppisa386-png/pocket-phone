@@ -1,10 +1,11 @@
-import { icon } from './icons.js?v=0.21.0';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.21.0';
+import { displayStoryTime } from './story-clock.js?v=0.21.1';
+import { icon } from './icons.js?v=0.21.1';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.21.1';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
 const snapMoney = item => item.currency + ' ' + (item.amountMinor / 100).toFixed(2);
-const snapTime = item => new Date(item.createdAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const snapTime = item => displayStoryTime(item);
 
 export function createSnapPanel({adapter,getView,redraw,notice}) {
     let editingId=null;

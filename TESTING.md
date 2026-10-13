@@ -216,3 +216,8 @@ Node 测试覆盖 200→100 楼、同楼数编辑、前文变化、换回复、�
 - `python3 tools/build_preview.py`
 - 安装 Playwright 后运行 `node tests/browser.mjs`；也可通过 `CHROMIUM_EXECUTABLE` 指向已安装的 Chromium。
 - `QA_PART=integration` 可只运行模拟宿主集成部分。
+
+
+## v0.21.1 修复回归（2026-10-13）
+
+`node --test --test-concurrency=1 tests/*.test.js`：200 项通过。`tests/browser.mjs` 整套及 `tests/assets-browser.mjs` 均通过。新增测试在 continuity/story-phone/story-clock 中覆盖最终序列化请求和先注册的快照监听器含通信、重复挂钩不重复、dry-run/quiet/聊天切换隔离、按会话限制、原文不截断、双向短信与第三方排除、SDC 时钟及删楼；移动端新增返回两级和重开桌面。无真实模型/外部请求。

@@ -67,3 +67,23 @@ test('formatted evidence supports SMS and incoming calls when opening phone late
  await f.phone.openMessages();await f.phone.open();assert.equal(Object.keys(f.phone.snapshot().messages).length,1);const calls=Object.values(f.phone.snapshot().calls);assert.equal(calls.length,1);assert.equal(calls[0].name,'伊芙');assert.equal(calls[0].status,'missed');assert.equal(f.requests(),0);
  }finally{f.close();}
 });
+
+
+test('both directions in one floor import in order; third-party endpoints and invented outgoing text are rejected',async()=>{
+ const f=setup();try{
+ const prose='Sam received a text from Alex: Are you free? Sam sent Alex: After lunch. Bea sent Alex: My private news.';
+ const rows=[
+  {sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'Are you free?'},
+  {sender:'user',recipient:'Alex',name:'Alex',kind:'sms',text:'After lunch.'},
+  {sender:'Bea',recipient:'Alex',name:'Bea',kind:'sms',text:'My private news.'},
+  {sender:'Bea',recipient:'user',name:'Alex',kind:'sms',text:'wrong counterpart'},
+  {sender:'user',recipient:'Alex',name:'Alex',kind:'sms',text:'NEVER SAID THIS'},
+ ];
+ f.context.chat.push({is_user:false,send_date:'2024-01-01T00:00:00Z',mes:'<calendar>2020年5月4日 09:15 星期一</calendar>'+prose+rows.map(row=>'<!--durian-contact:'+JSON.stringify({...row,evidence:prose})+'-->').join('')});
+ await f.memory.read();const messages=Object.values(f.phone.snapshot().messages).sort((a,b)=>a.createdAt-b.createdAt);
+ assert.deepEqual(messages.map(m=>[m.role,m.text]),[['assistant','Are you free?'],['user','After lunch.']]);
+ assert.equal(messages[1].replyStatus,'sent');assert.equal(messages[0].storyTime.time,'09:15');assert.equal(f.requests(),0);
+ await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,2);
+ f.context.chat.pop();await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,0);
+ }finally{f.close();}
+});

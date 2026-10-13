@@ -1,6 +1,6 @@
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.21.0';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.0';
-import { storyAnnotations } from './story-phone.js?v=0.21.0';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.21.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.1';
+import { storyAnnotations } from './story-phone.js?v=0.21.1';
 const text=(s,n=600)=>typeof s==='string'?s.trim().slice(0,n):'';
 const safe=v=>JSON.stringify(v).replace(/\{\{/g,'\\u007b\\u007b');
 export const OPINION_KEY='durian_phone_public_opinion';

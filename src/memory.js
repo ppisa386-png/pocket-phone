@@ -1,7 +1,8 @@
-import { importStoryAssets } from './assets-story.js?v=0.21.0';
-import { importStorySquare } from './x-opinion.js?v=0.21.0';
-import { importStoryPhone } from './story-phone.js?v=0.21.0';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.21.0';
+import { storyTime } from './story-clock.js?v=0.21.1';
+import { importStoryAssets } from './assets-story.js?v=0.21.1';
+import { importStorySquare } from './x-opinion.js?v=0.21.1';
+import { importStoryPhone } from './story-phone.js?v=0.21.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.21.1';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -175,7 +176,18 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 for (const batch of batches) {
                     const index = batch.sourceIndex ?? snapshot.revisions.length - 1;
                     if (!Number.isInteger(index) || index < 0 || index >= snapshot.revisions.length) throw new Error('记录来源楼层无效。');
-                    next = appendChange(next, snapshot.revisions.slice(0, index + 1), batch.changes, batch.id);
+                    const state=replayJournal(next), clock=storyTime(snapshot.context.chat.slice(0,index+1));
+                    const changes=batch.changes.map(change=>{
+                        const v=change.value, old=state[change.collection]?.[change.key];
+                        const communication=['messages','calls'].includes(change.collection)||(['snapchat','x'].includes(change.collection)&&['message','call','post','story','clip','comment','transfer'].includes(v?.type));
+                        if(!v||!communication)return change;
+                        const value={...v};
+                        if(!old&&!Object.hasOwn(value,'storyTime'))value.storyTime=clock;
+                        if(old?.storyTime&&!value.storyTime)value.storyTime=old.storyTime;
+                        if(Array.isArray(value.turns))value.turns=value.turns.map((t,i)=>i<(old?.turns?.length||0)?t:{...t,storyTime:t.storyTime||clock});
+                        return {...change,value};
+                    });
+                    next = appendChange(next, snapshot.revisions.slice(0, index + 1), changes, batch.id);
                 }
                 await save(snapshot, next);
                 tickets.delete(ticket);

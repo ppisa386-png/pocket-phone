@@ -9,7 +9,12 @@ export function readStoryClock(chat, seed=null) {
     let day=seed?.day??null,hour=seed?.hour??null;
     for(const m of chat||[]){
         if(m.is_system&&!m.extra?.qianqianjieAutoHide)continue;
-        const text=String(m.mes||'').replace(/<!--[\s\S]*?-->/g,'').replace(/<(script|style|think|thinking)[^>]*>[\s\S]*?<\/\1>/gi,'').replace(/<[^>]*>/g,'\n');
+        const text=String(m.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(script|style|think|thinking)[^>]*>[\s\S]*?<\/\1>/gi,'')
+            .replace(/<!--\s*SDC-(?:start|end)\s*\|([\s\S]*?)-->/gi,(_,body)=>{
+                const date=body.match(/(?:^|\|)\s*date\s*=\s*([^|]+)/i)?.[1]?.trim();
+                const time=body.match(/(?:^|\|)\s*time\s*=\s*(\d{1,2}:\d{2})/i)?.[1];
+                return date?'\n'+date+(time?' '+time:'')+'\n':'';
+            }).replace(/<!--[\s\S]*?-->/g,'').replace(/<[^>]*>/g,'\n');
         const lines=text.split('\n').map(s=>s.replace(/^[\s*#|]+|[\s*|]+$/g,'')).filter(Boolean);
         for(const line of lines){
             const t=line.match(/^(?:(?:当前|剧情|故事)?(?:日期|时间)|Date|Time|Scene time)?\s*[:：]?\s*(\d{4})[-年/.](\d{1,2})[-月/.](\d{1,2})日?(?:\s|$|[T,，|])/i);
@@ -36,3 +41,10 @@ export function readStoryClock(chat, seed=null) {
     }
     return {day,hour};
 }
+
+// Stored story anchors are distinct from createdAt (local ordering only).
+export function storyTime(chat) {
+    const {day,hour}=readStoryClock(chat);
+    return {date:dayDate(day), time:hour==null?'':String(Math.floor(hour)).padStart(2,'0')+':'+String(Math.round((hour%1)*60)).padStart(2,'0'), precision:'scene'};
+}
+export const displayStoryTime = item => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(item?.storyTime?.time||'') ? item.storyTime.time : '—';

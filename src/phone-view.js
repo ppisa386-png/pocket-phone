@@ -1,5 +1,6 @@
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.21.0';
-import { icon } from './icons.js?v=0.21.0';
+import { displayStoryTime } from './story-clock.js?v=0.21.1';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.21.1';
+import { icon } from './icons.js?v=0.21.1';
 const phoneEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const statuses = { dialing: '正在拨号', connected: '通话中', ended: '已结束', interrupted: '已中断', ringing: '来电中', answering: '正在接听', missed: '未接来电', declined: '对方拒接', no_answer: '无人接听' };
 const callStatus = call => call.direction === 'incoming' && call.status === 'declined' ? '已拒接' : statuses[call.status];
@@ -24,7 +25,7 @@ export function renderPhoneScreen(view, tab, selectedCallId, draft) {
     let rows = '';
     if (tab === 'blocked') rows = renderBlockedList(view, 'phone');
     else if (tab === 'contacts') rows = sortedContacts.map(contact => '<div class="pp-contact-row"><span class="pp-contact-avatar">' + icon('person') + '</span><div><strong>' + phoneEscape(contact.name) + '</strong>' + (contact.number ? '<small>' + phoneEscape(contact.number) + '</small>' : '') + '</div><button type="button" data-phone-dial="' + phoneEscape(contact.id) + '" class="pp-dial-contact" aria-label="拨打 ' + phoneEscape(contact.name) + '"' + (busy ? ' disabled' : '') + '>' + icon('phone') + '</button>' + renderBlockButton(view, contact.id, 'phone') + '</div>').join('');
-    else rows = sortedCalls.map(item => '<button type="button" class="pp-call-row" data-phone-record="' + phoneEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('phone') + '</span><span><strong>' + phoneEscape(item.name) + '</strong><small>' + (item.direction === 'incoming' ? '来电' : '拨出') + ' · ' + callStatus(item) + '</small></span><time>' + new Date(item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '</time>' + icon('chevron') + '</button>').join('');
+    else rows = sortedCalls.map(item => '<button type="button" class="pp-call-row" data-phone-record="' + phoneEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('phone') + '</span><span><strong>' + phoneEscape(item.name) + '</strong><small>' + (item.direction === 'incoming' ? '来电' : '拨出') + ' · ' + callStatus(item) + '</small></span><time>' + displayStoryTime(item) + '</time>' + icon('chevron') + '</button>').join('');
     return '<div class="pp-phone-app"><div class="pp-phone-toolbar"><h2>' + (tab === 'blocked' ? '电话黑名单' : tab === 'contacts' ? '联系人' : '最近通话') + '</h2>' + (tab === 'contacts' ? '<button type="button" class="pp-text-button" data-phone-sync' + (busy ? ' disabled' : '') + '>新增联系人</button><button type="button" class="pp-text-button" data-contact-bulk' + (busy ? ' disabled' : '') + '>一键新增</button>' : '') + '</div>' +
         (error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试</button>' : '') +
         (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML + (contactStatus && tab === 'contacts' ? '<p class="pp-contact-status" role="status">' + phoneEscape(contactStatus) + '</p>' : '') +

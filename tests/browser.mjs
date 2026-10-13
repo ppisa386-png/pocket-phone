@@ -451,6 +451,29 @@ try {
         check(await p.locator('[data-sms-sync]').isVisible(),'individual contact search remains available');
         const fits=await p.locator('.pp-phone-toolbar').evaluate(e=>e.scrollWidth<=e.clientWidth);check(fits,'contact toolbar fits mobile width');await ctx.close();
     }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');await p.locator('.pp-launcher').tap();
+        await p.evaluate(async()=>{
+            const c=window.SillyTavern.getContext(),prose='Sam received a text from Alex: Meet at lunch? Sam sent Alex: Yes, see you there.';
+            const tags=[{sender:'Alex',recipient:'user',name:'Alex',text:'Meet at lunch?'},{sender:'user',recipient:'Alex',name:'Alex',text:'Yes, see you there.'}];
+            c.chat.push({is_user:false,mes:'<calendar>2017年6月8日 09:00 星期四</calendar>'+prose+tags.map(t=>'<!--durian-contact:'+JSON.stringify({...t,kind:'sms',evidence:prose})+'-->').join('')+'<!-- SDC-end | date=2017年6月8日 | time=09:12 -->'});
+            await c.eventSource.emit('GENERATION_ENDED');
+        });
+        await p.waitForFunction(()=>document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('.pp-status-time').textContent==='09:12');
+        await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
+        await p.getByText('Yes, see you there.',{exact:true}).waitFor();
+        check((await p.locator('.pp-sms-item[data-role="user"] small').textContent()).includes('09:12 · 已发送'),'outgoing narrative SMS has proper direction, status and story clock');
+        await p.locator('[data-action="back"]').tap();
+        check(await p.locator('[data-sms-new]').isVisible()&&!await p.locator('[data-app="messages"]').count(),'top arrow returns from thread to SMS list');
+        await p.locator('[data-action="back"]').tap();check(await p.locator('[data-app="messages"]').isVisible(),'second back returns to desktop');
+        await p.locator('[data-app="amazon"]').tap();await p.locator('[data-action="close"]').tap();
+        await p.locator('.pp-launcher').tap();check(await p.locator('[data-app="messages"]').isVisible(),'reopen after Amazon always starts on desktop');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});
+        await p.waitForFunction(()=>document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('.pp-status-time').textContent==='—');
+        check(await p.evaluate(()=>window.modelCalls)===0,'navigation, timestamp and narrative synchronization use no model calls');
+        await ctx.close();
+    }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
 } catch (error) {
