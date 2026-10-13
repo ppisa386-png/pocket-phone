@@ -1,14 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.20.2';
-import { CHINESE_NAME_RULE } from './names.js?v=0.20.2';
-import { proactiveSources } from './proactive-evidence.js?v=0.20.2';
-import { phoneQuietOptions } from './api-context.js?v=0.20.2';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.20.2';
-export { validateContacts } from './contacts.js?v=0.20.2';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.20.2';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.20.2';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.20.2';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.20.2';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.20.2';
+import { isMemoryHidden } from './journal.js?v=0.21.0';
+import { CHINESE_NAME_RULE } from './names.js?v=0.21.0';
+import { proactiveSources } from './proactive-evidence.js?v=0.21.0';
+import { phoneQuietOptions } from './api-context.js?v=0.21.0';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.21.0';
+export { validateContacts } from './contacts.js?v=0.21.0';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.21.0';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.21.0';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.21.0';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.21.0';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.21.0';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -32,6 +32,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
     const listeners = new Set();
     let state = { contacts: {}, calls: {}, profiles: {}, messages: {} };
     let scope;
+    let revision = null;
     let busy = false;
     let error = '';
     let contactStatus = '';
@@ -56,11 +57,12 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             if (!destroyed && getContext().chatMetadata === job.metadata) void api.checkIncoming(job.options);
         });
     }
-    const snapshot = () => clone({ ...state, busy, error, errorKind, activeCallId, contactStatus });
+    const snapshot = () => clone({ ...state, revision, busy, error, errorKind, activeCallId, contactStatus });
     const emit = () => { if (!destroyed) for (const listener of listeners) listener(snapshot()); };
     const unsubscribe = memory.subscribe(value => {
         if (scope !== value.scope) { operation++; activeCallId = null; error = ''; contactStatus = ''; scope = value.scope; }
         state = value.state;
+        revision = value.revision;
         if (activeCallId && !state.calls[activeCallId]) { operation++; activeCallId = null; }
         if (!activeCallId || finished(state.calls[activeCallId])) {
             const live = Object.values(state.calls).filter(call => call.origin === 'narrative' && !finished(call)).at(-1);
@@ -68,7 +70,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         }
         emit();
     });
-    async function request(prompt, validate, isCurrent, contact = null) {
+    async function request(prompt, validate, isCurrent, contact = null, options = {}) {
         prompt += CHINESE_NAME_RULE;
         const context = getContext();
         requestContactId = contact?.id ?? null;
@@ -83,7 +85,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         }
         // Capture before host quiet generation clears the plugin's prepared slot.
         prompt += preparedMemoryPrompt(readPreparedMemory(context, getSettings()));
-        const retries = Math.min(15, Math.max(0, getSettings().retries));
+        const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         for (let attempt = 0; attempt <= retries; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
             try {

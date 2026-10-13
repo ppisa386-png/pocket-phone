@@ -1,5 +1,5 @@
-import { icon } from './icons.js?v=0.20.2';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.20.2';
+import { icon } from './icons.js?v=0.21.0';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.21.0';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -41,7 +41,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             return '<article class="pp-snap-message '+(i.role==='user'?'is-user':'')+'"><small>'+(i.role==='user'?'你':snapEsc(a.name))+' · '+snapKind[i.kind]+' · '+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p>'+(i.role==='assistant'?messageTools(i)+(editingId===i.id?form('edit-message',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消'):''):'')+(i.status==='queued'?'<small>未发送</small>':'')+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id):i.status==='no_reply'?'<small>对方暂未回复</small>':'')+'</article>';
         }).join('');
         return button('list','‹ 聊天列表')+'<div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+'</small></div></div><div class="pp-snap-actions">'+(!a.blocked?button('voice','语音通话',a.id)+button('video','视频通话',a.id)+button('cash','转账',a.id)+(a.identityKnown?'':button('reveal','自我介绍',a.id))+button('block','拉黑',a.id):button('unblock','解除拉黑',a.id))+'</div><div class="pp-snap-thread">'+chat+'</div>'+
-            (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+field('currency','币种',profile().currency)+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
+            (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+'<input type="hidden" name="currency" value="USD"><p>美元 USD</p>'+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
     }
     function postHTML(item) {
         return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
@@ -55,7 +55,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     function html() {
         const state=getView();if(accountId&&!state.snapchat?.[accountId]){accountId=null;page='';}
         const a=state.snapchat?.[accountId];const p=profile();
-        let body=page==='profile'?button('list','‹ 返回')+form('profile',field('alias','网名',p.alias)+field('currency','默认币种',p.currency)+field('location','我分享的位置',p.location)+'<label class="pp-snap-check"><input name="sharing" data-snap-field="sharing" type="checkbox"'+(value('sharing',p.sharing)?' checked':'')+'>向好友共享此位置</label>','保存个人设置'):tab==='chat'?(a?threadHTML(state,a):accountsHTML(state)):feedsHTML(state);
+        let body=page==='profile'?button('list','‹ 返回')+form('profile',field('alias','网名',p.alias)+'<input type="hidden" name="currency" value="USD">'+field('location','我分享的位置',p.location)+'<label class="pp-snap-check"><input name="sharing" data-snap-field="sharing" type="checkbox"'+(value('sharing',p.sharing)?' checked':'')+'>向好友共享此位置</label>','保存个人设置'):tab==='chat'?(a?threadHTML(state,a):accountsHTML(state)):feedsHTML(state);
         return '<div class="pp-snap"><header class="pp-snap-top"><b>Snapchat</b>'+button('profile','我的账号')+'</header><p class="pp-snap-status" role="status">'+snapEsc(state.busy?'正在处理…':state.errorKind==='snapchat'&&state.error?state.error:status)+'</p>'+body+'<nav class="pp-snap-tabs" aria-label="Snapchat 页面">'+[['chat','聊天'],['stories','故事'],['spotlight','聚光灯'],['map','地图']].map(([id,label])=>'<button type="button" data-snap-action="tab" data-snap-id="'+id+'" aria-pressed="'+(tab===id)+'">'+label+'</button>').join('')+'</nav></div>';
     }
     async function perform(method,args=[],message='') {

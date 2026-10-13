@@ -14,7 +14,7 @@ function setup(){
  return {context,bus,settings,memory,phone,amazon,state:()=>phone.snapshot(),reply:r=>response=r,count:()=>count,prompt:()=>prompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
-async function fill(f){ok(await f.amazon.search('项链'));const p=shopItems(f.state(),'product')[0];ok(await f.amazon.add(p.id,'Gold',2));return p;}
+async function fill(f){const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:1000000,included:[],startDay:0}}]);ok(await f.amazon.search('项链'));const p=shopItems(f.state(),'product')[0];ok(await f.amazon.add(p.id,'Gold',2));return p;}
 test('shopping search uses one shared request, preserves cart snapshots across catalogs, and local checkout needs no API',async()=>{
  const f=setup();try{
  await f.amazon.open();assert.equal(f.count(),0);const p=await fill(f);assert.equal(f.count(),1);assert.match(f.prompt(),/消费水平/);assert.match(f.prompt(),/奢侈品必须/);
@@ -22,10 +22,10 @@ test('shopping search uses one shared request, preserves cart snapshots across c
  ok(await f.amazon.checkout());const order=shopItems(f.state(),'order')[0];assert.equal(order.totals.USD,560100);assert.equal(order.dueDay,dateDay('2026-10-13'));assert.equal(order.recipient.name,'Sam');assert.equal(f.state().orders.cart.items.length,0);assert.equal(f.count(),2);
  }finally{f.close();}
 });
-test('gift requires an existing telephone contact but not digits or address; currencies stay separate',async()=>{
+test('gift requires an existing telephone contact but not digits or address; legacy non-USD quotes cannot bypass USD balance',async()=>{
  const f=setup();try{
  await fill(f);assert.equal((await f.amazon.checkout('unknown')).ok,false);const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'contacts',key:'alex',value:{id:'alex',name:'Alex',number:null}}]);
- f.reply({products:[{...product,price:'50.25',currency:'EUR'}]});ok(await f.amazon.search('礼物'));const p=shopItems(f.state(),'product')[0];ok(await f.amazon.add(p.id,'Silver',1));ok(await f.amazon.checkout('alex'));const order=shopItems(f.state(),'order')[0];assert.deepEqual(order.totals,{USD:560100,EUR:5025});assert.equal(order.recipient.name,'Alex');assert.equal(f.count(),2);
+ f.reply({products:[{...product,price:'50.25',currency:'EUR'}]});assert.equal((await f.amazon.search('礼物')).ok,false);f.reply({products:[{...product,price:'50.25',currency:'USD'}]});ok(await f.amazon.search('礼物'));const p=shopItems(f.state(),'product')[0];ok(await f.amazon.add(p.id,'Silver',1));ok(await f.amazon.checkout('alex'));const order=shopItems(f.state(),'order')[0];assert.deepEqual(order.totals,{USD:565125});assert.equal(order.recipient.name,'Alex');assert.equal(f.count(),3);
  }finally{f.close();}
 });
 test('unknown date requires checkout date, quantities are constrained, disabled app cannot buy',async()=>{

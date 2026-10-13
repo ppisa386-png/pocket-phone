@@ -2,7 +2,7 @@
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { resolve, extname } from 'node:path';
+import { resolve, extname, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 
@@ -19,6 +19,7 @@ ctx.chatId = 'phone-test'; ctx.name1 = 'Sam'; ctx.name2 = 'Alex'; ctx.characterI
 const persistedChat = JSON.parse(localStorage.getItem('phone-test-data') || 'null');
 ctx.chat = persistedChat?.chat || [{name:'Alex',mes:'Alex gives you his number: +1 212 555 0123.'}];
 ctx.chatMetadata = persistedChat?.metadata || {};
+window.seedWallet=async()=>{const j=await import('/src/journal.js');const rev=await j.revisionsFor(j.messageSignatures(ctx.chat));ctx.chatMetadata[j.JOURNAL_KEY]=j.appendChange(j.readJournal(ctx.chatMetadata[j.JOURNAL_KEY]),rev,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:10000000,included:[],startDay:0}}]);await ctx.saveMetadata();await ctx.eventSource.emit('CHAT_CHANGED');};
 ctx.saveMetadata = async () => localStorage.setItem('phone-test-data', JSON.stringify({chat:ctx.chat,metadata:ctx.chatMetadata}));
 const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','GENERATE_AFTER_DATA','CHAT_COMPLETION_SETTINGS_READY'].map(n => [n,n]));
 ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},removeListener(type,fn){handlers[type]=(handlers[type]||[]).filter(f=>f!==fn);},async emit(type,...args) {for(const fn of [...(handlers[type] || [])]) {try{await fn(...args);}catch{}}}};
@@ -61,7 +62,7 @@ const server = createServer(async (req, res) => {
         if (url.pathname === '/phone-fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(phoneFixture()); return; }
         if (url.pathname === '/fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(fixture(url.searchParams.has('legacy'))); return; }
         const filename = url.pathname === '/preview' ? resolve(project, '..', 'deliverables/pocket-phone-preview.html') : resolve(project, '.' + url.pathname);
-        if (url.pathname !== '/preview' && !filename.startsWith(project + '/')) { res.writeHead(403).end(); return; }
+        if (url.pathname !== '/preview' && !filename.startsWith(project + sep)) { res.writeHead(403).end(); return; }
         res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' })[extname(filename)] || 'text/plain');
         res.end(await readFile(filename));
     } catch { res.writeHead(404).end(); }
@@ -88,7 +89,7 @@ try {
     await page.goto(origin + '/preview');
     const phone = page.locator('.pp-phone');
     await phone.waitFor({ state: 'visible' });
-    check(await page.locator('.pp-app').count() === 6, 'six desktop apps');
+    check(await page.locator('.pp-app').count() === 7, 'seven desktop apps including 小榴莲');
     await page.screenshot({ path: screenshotDir + '/desktop.png' });
     await page.getByRole('button', { name: '收起手机', exact: true }).click();
     const before = await page.locator('.pp-launcher').boundingBox();
@@ -296,7 +297,7 @@ try {
         const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
         const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async options=>{window.modelCalls++;const task=options.quietPrompt;return JSON.stringify(task.includes('当前任务：Snapchat 新增联系人')?{accounts:[{name:'Alex',handle:'alex',has_account:true,invitation:'incoming'}]}:task.includes('当前任务：仅重写')?{text:'Hey Moon!'}:task.includes('当前任务：Snapchat 聊天')?{status:'reply',messages:[{kind:'text',text:'Hey Moon!'},{kind:'text',text:'How are you?'}]}:task.includes('当前任务：Snapcash')?{status:'accepted'}:task.includes('通话')&&task.includes('当前任务：Snapchat 语音')?{status:'answered',text:'I can hear you.'}:task.includes('当前任务：Snapchat spotlight')?{items:[{name:'Traveler',text:'A walk along the beach.'}]}:task.includes('当前任务：Snapchat map')?{items:[{name:'Traveler',place:'Beach',text:'Public seaside view',shared:true}]}:{items:[]});};});
-        await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();
+        await p.evaluate(()=>window.seedWallet());await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();
         check(await p.evaluate(()=>window.modelCalls)===0,'opening Snapchat is local');
         await p.locator('[data-snap-action="profile"]').tap();await p.locator('[data-snap-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存个人设置',exact:true}).tap();await p.getByText('已保存个人设置',{exact:true}).waitFor();
         await p.locator('[data-snap-action="list"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-snap-action="accept"]').waitFor();await p.locator('[data-snap-action="accept"]').tap();await p.locator('[data-snap-action="thread"]').tap();
@@ -319,7 +320,7 @@ try {
         check(await p.locator('.pp-snap-clip').count()===1,'Spotlight renders a vertical text-video card');
         await p.locator('[data-snap-action="tab"][data-snap-id="map"]').tap();await p.getByRole('button',{name:'刷新共享位置与动态',exact:true}).tap();await p.getByText('Public seaside view',{exact:true}).waitFor();
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Snapchat fits mobile width');
-        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();await p.locator('[data-snap-action="thread"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('已收款',{exact:true}).waitFor();
+        await p.reload();await p.evaluate(()=>window.seedWallet());await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();await p.locator('[data-snap-action="thread"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('已收款',{exact:true}).waitFor();
         check(true,'Snapchat conversation and cash survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='Different story';await c.eventSource.emit('MESSAGE_EDITED');});
         await p.getByText('还没有 Snapchat 联系人。点「新增联系人」查找账号。',{exact:true}).waitFor();check(await p.locator('.pp-snap-cash').count()===0,'Snapchat UI rolls back after narrative edit');
@@ -373,7 +374,7 @@ try {
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async()=>{throw new Error('Test failure with key-A');};});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await addPhoneContact(p,'Alex');await p.getByText('Test failure with key-A',{exact:true}).waitFor();
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();const log=await p.locator('[data-error-log]').inputValue();check(log.includes('Test failure')&&!log.includes('key-A'),'runtime errors persist after reload with credentials removed');
-        await p.locator('[data-action="copy-errors"]').tap();await p.getByText('报错已复制。',{exact:true}).waitFor();check(await p.evaluate(()=>navigator.clipboard.readText())===log,'copy errors copies the displayed redacted history');
+        await p.locator('[data-action="copy-errors"]').tap();await p.getByText('报错已复制。',{exact:true}).waitFor();check((await p.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n')===log.replace(/\r\n/g,'\n'),'copy errors copies the displayed redacted history');
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'error history fits mobile width');await p.locator('[data-action="clear-errors"]').tap();check(await p.locator('[data-error-log]').inputValue()==='','error history can be cleared');await ctx.close();
     }
     {
@@ -410,7 +411,7 @@ try {
         const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
         await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await addPhoneContact(p,'Alex');await p.locator('[data-phone-dial]').waitFor();
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();(c.extensionSettings.personal_pocket_phone??={}).proactiveEnabled=false;c.chat.push({mes:'日期：2026-10-11 14:00',is_user:false,name:'Alex'});await c.eventSource.emit('GENERATION_ENDED');c.generateQuietPrompt=async()=>{window.modelCalls++;return JSON.stringify({products:[{name:'Alhambra necklace',brand:'Van Cleef & Arpels',luxury:true,price:'2800.50',currency:'USD',description:'Gold necklace with a clover motif.',variants:['Gold','Silver'],reviews:[{name:'Ivy',rating:4,text:'Lovely clasp.'}]}]});};});
-        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="amazon"]').tap();const before=await p.evaluate(()=>window.modelCalls);
+        await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.evaluate(()=>window.seedWallet());await p.locator('[data-app="amazon"]').tap();const before=await p.evaluate(()=>window.modelCalls);
         await p.locator('[data-shop-field="query"]').fill('项链');await p.getByRole('button',{name:'搜索商品',exact:true}).tap();await p.getByText('Van Cleef & Arpels',{exact:true}).waitFor();
         await p.getByRole('button',{name:'查看商品',exact:true}).tap();await p.getByText('Lovely clasp.',{exact:true}).waitFor();await p.locator('[data-shop-field="variant"]').selectOption('Silver');await p.locator('[data-shop-field="quantity"]').fill('2');await p.getByRole('button',{name:'加入购物车',exact:true}).tap();await p.getByText('已加入购物车',{exact:true}).waitFor();
         await p.locator('[data-shop-action="tab"][data-shop-id="cart"]').tap();await p.locator('[data-shop-field="recipient"]').selectOption({label:'Alex'});check(await p.locator('[data-shop-field="date"]').inputValue()==='2026-10-11','checkout uses story date');await p.getByRole('button',{name:'确认下单',exact:true}).tap();await p.getByText('待发货',{exact:true}).waitFor();await p.getByText('收件人：Alex',{exact:true}).waitFor();await p.getByText('预计 2026-10-13 白天送达',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===before+1,'search makes one request; cart and gift checkout are local');

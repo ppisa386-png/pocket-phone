@@ -1,5 +1,5 @@
-import { opinionFromPost } from './x-opinion.js?v=0.20.2';
-import { localizedPerson, sameNamedPerson } from './names.js?v=0.20.2';
+import { opinionFromPost } from './x-opinion.js?v=0.21.0';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.21.0';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};

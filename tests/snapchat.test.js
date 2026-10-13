@@ -56,14 +56,14 @@ test('story creation and expiry cost no requests; feeds accept only friends and 
 
 test('Snapcash uses integer minor units, settles once and rolls ledger and transfer back together',async()=>{
  assert.equal(snapAmount('0.10'),10);assert.throws(()=>snapAmount('1.001'));assert.throws(()=>snapAmount('-1'));assert.throws(()=>snapAmount('NaN'));
- const f=setup();const id=await friend(f);f.context.chat.push({mes:'We go shopping.'});await f.memory.read();const result=await f.snap.transfer(id,'12.30','USD','Lunch');ok(result);assert.equal(Object.keys(f.state().assets).length,0);
- f.reply({status:'accepted'});ok(await f.snap.settle(result.value));assert.equal(Object.values(f.state().assets)[0].deltaMinor,-1230);assert.equal((await f.snap.settle(result.value)).ok,false);assert.equal(Object.keys(f.state().assets).length,1);
- f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(Object.keys(f.state().assets).length,0);assert.equal(snapItems(f.state(),'transfer').length,0);assert.equal(snapItems(f.state(),'account').length,1);f.close();
+ const f=setup();const id=await friend(f);const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:1000000,included:[],startDay:0}}]);f.context.chat.push({mes:'We go shopping.'});await f.memory.read();const result=await f.snap.transfer(id,'12.30','USD','Lunch');ok(result);assert.equal(Object.values(f.state().assets).filter(x=>x.type==='cash_transaction').length,0);
+ f.reply({status:'accepted'});ok(await f.snap.settle(result.value));assert.equal(Object.values(f.state().assets).find(x=>x.type==='cash_transaction').deltaMinor,-1230);assert.equal((await f.snap.settle(result.value)).ok,false);assert.equal(Object.values(f.state().assets).filter(x=>x.type==='cash_transaction').length,1);
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(Object.values(f.state().assets).filter(x=>x.type==='cash_transaction').length,0);assert.equal(snapItems(f.state(),'transfer').length,0);assert.equal(snapItems(f.state(),'account').length,1);f.close();
 });
 
 test('incoming cash requires user acceptance; declining never creates asset credit',async()=>{
- const f=setup();const id=await friend(f);f.reply({status:'reply',text:'For you',transfer:{amount:'25',currency:'USD',memo:'Gift'}});ok(await f.snap.send(id,'text','Hello'));let t=snapItems(f.state(),'transfer')[0];assert.equal(Object.keys(f.state().assets).length,0);ok(await f.snap.settle(t.id,false));assert.equal(Object.keys(f.state().assets).length,0);
- ok(await f.snap.send(id,'text','Thanks'));t=snapItems(f.state(),'transfer').find(t=>t.status==='pending');ok(await f.snap.settle(t.id));assert.equal(Object.values(f.state().assets)[0].deltaMinor,2500);f.close();
+ const f=setup();const id=await friend(f);f.reply({status:'reply',text:'For you',transfer:{amount:'25',currency:'USD',memo:'Gift'}});ok(await f.snap.send(id,'text','Hello'));let t=snapItems(f.state(),'transfer')[0];assert.equal(Object.values(f.state().assets).filter(x=>x.type==='cash_transaction').length,0);ok(await f.snap.settle(t.id,false));assert.equal(Object.values(f.state().assets).filter(x=>x.type==='cash_transaction').length,0);
+ ok(await f.snap.send(id,'text','Thanks'));t=snapItems(f.state(),'transfer').find(t=>t.status==='pending');ok(await f.snap.settle(t.id));assert.equal(Object.values(f.state().assets).find(x=>x.type==='cash_transaction').deltaMinor,2500);f.close();
 });
 
 test('deleted narrative rejects late Snapchat output and rolls every app trace back',async()=>{
@@ -73,9 +73,9 @@ test('deleted narrative rejects late Snapchat output and rolls every app trace b
 });
 
 test('deleting only the settlement floor restores pending transfer and removes its ledger',async()=>{
- const f=setup();const id=await friend(f);const t=await f.snap.transfer(id,'5','USD','');ok(t);
+ const f=setup();const id=await friend(f);const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:1000000,included:[],startDay:0}}]);const t=await f.snap.transfer(id,'5','USD','');ok(t);
  f.context.chat.push({mes:'Later that afternoon.'});await f.memory.read();f.reply({status:'accepted'});ok(await f.snap.settle(t.value));
- f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.state().snapchat[t.value].status,'pending');assert.equal(Object.keys(f.state().assets).length,0);f.close();
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.state().snapchat[t.value].status,'pending');assert.equal(Object.values(f.state().assets).filter(x=>x.type==='cash_transaction').length,0);f.close();
 });
 
 test('both transports use identical quiet options and the selected group actor',async()=>{

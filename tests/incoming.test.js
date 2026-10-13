@@ -9,7 +9,8 @@ import { buildContinuityPrompt } from '../src/continuity.js';
 
 const evidence = 'Bea has Sam’s number and agrees to give it to Alex.';
 const incoming = { status: 'ringing', can_obtain_number: true, route: 'mutual_contact', channel: 'Bea', evidence, reason: 'Confirm the meeting.', reason_kind: 'commitment', reason_evidence: evidence, requires_live_conversation: true };
-const tick = () => new Promise(resolve => setTimeout(resolve, 15));
+// Allow one Windows timer quantum plus asynchronous journal reconciliation.
+const tick = () => new Promise(resolve => setTimeout(resolve, 50));
 function setup() {
     const bus = new EventEmitter();
     const types = Object.fromEntries(['CHAT_CHANGED', 'MESSAGE_DELETED', 'MESSAGE_EDITED', 'GENERATION_STARTED', 'GENERATION_ENDED', 'GENERATION_STOPPED', 'GROUP_WRAPPER_STARTED', 'GROUP_WRAPPER_FINISHED'].map(n => [n, n]));
@@ -82,7 +83,10 @@ test('foreground completion triggers once, quiet requests and stopped or unchang
     f.bus.emit('GENERATION_STARTED', 'normal'); f.bus.emit('GENERATION_ENDED'); await tick(); assert.equal(f.requests(), 0);
     for(let i=0;i<3;i++){
         f.bus.emit('GENERATION_STARTED', 'normal'); f.context.chat.push({ mes: 'Alex decides to check the meeting. '+i, name: 'Alex', is_user: false });
-        f.bus.emit('GENERATION_ENDED'); await tick();
+        f.bus.emit('GENERATION_ENDED'); await f.memory.read(); await tick();
+        // On Windows a 15ms delay can coincide with timer quantization. Wait for
+        // the scheduled threshold check before starting another simulated turn.
+        if(i===1)for(let n=0;n<100&&!f.requests();n++)await tick();
         if(i<2)assert.equal(f.requests(),0);
     }
     for (let i = 0; i < 20 && !f.phone.snapshot().activeCallId; i++) await tick();

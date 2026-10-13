@@ -1,6 +1,7 @@
-import { importStorySquare } from './x-opinion.js?v=0.20.2';
-import { importStoryPhone } from './story-phone.js?v=0.20.2';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.20.2';
+import { importStoryAssets } from './assets-story.js?v=0.21.0';
+import { importStorySquare } from './x-opinion.js?v=0.21.0';
+import { importStoryPhone } from './story-phone.js?v=0.21.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.21.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -28,7 +29,7 @@ export function hostGenerationState(doc = globalThis.document) {
     return null; // Older hosts / non-browser fixtures retain event-based checks.
 }
 
-export function createPhoneMemory({ getContext, onError = () => {}, onRollback = () => {}, getGenerationState = hostGenerationState }) {
+export function createPhoneMemory({ getContext, onError = () => {}, onRollback = () => {}, getGenerationState = hostGenerationState, assetEnabled = () => true }) {
     let queue = Promise.resolve();
     let disposed = false;
     let active = null;
@@ -51,7 +52,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
             diagnostic:JSON.stringify({code:unavailable,generationSource:getGenerationState.source||'compatibility',hostGenerating:lastHostState,startEventPending:generating,hasChatId:!!chatScope(current),hasMetadata:!!current?.chatMetadata,canSave:typeof current?.saveMetadata==='function',messageCount:Array.isArray(current?.chat)?current.chat.length:0,streamFinished:current?.streamingProcessor?.isFinished??null,streamStopped:current?.streamingProcessor?.isStopped??null})});
     }
     function notify() {
-        const value = { scope: active?.scope ?? null, state: replayJournal(active?.journal) };
+        const value = { scope: active?.scope ?? null, revision: active?.revisions?.at(-1) ?? null, state: replayJournal(active?.journal) };
         for (const listener of listeners) listener(structuredClone(value));
     }
     function sameChat(snapshot) {
@@ -98,8 +99,9 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const reconciled = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
         const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
         const square=importStorySquare(imported.journal,snapshot.revisions,current.chat,current);
-        const journal=square.journal;
-        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed) await save(snapshot, journal);
+        const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
+        const journal=finances.journal;
+        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
