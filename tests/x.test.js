@@ -80,7 +80,7 @@ test('square refresh needs no following and rejects character authors while crea
   const before=f.count();await f.x.open();assert.equal(f.count(),before);
   f.reply({posts:[{name:'Alex',handle:'alex_new',text:'Not a square author'},
     {name:'alex',handle:'a2',text:'Still the character'},
-    {name:'Juniper',handle:'juniper_walks',text:'The park is lovely today.',metrics:{likes:12,reposts:2,replies:6},publicBasis:'Park visit in current story',
+    {name:'Juniper',handle:'juniper_walks',text:'The park is lovely today.',metrics:{likes:12,reposts:2,replies:6},publicBasis:{access:'background',summary:'Ordinary local park visitor',involvesCharacters:false},
       comments:[{key:'one',name:'Rowan',handle:'rowan',text:'How crowded is it?'},{key:'two',isAuthor:true,replyTo:'one',text:'Quiet by the lake.'}]}]});
   ok(await f.x.refresh('square'));assert.equal(f.count(),before+1);
   const posts=xItems(f.state(),'post');assert.equal(posts.length,1);assert.equal(posts[0].feed,'square');
@@ -128,7 +128,7 @@ test('square contents and engagement roll back and unrelated crowd threads stay 
   f.reply({posts:[{accountId:id,text:'The park',comments:[{key:'a',name:'Bea',handle:'bea',text:'A friend remark'},{key:'b',isAuthor:true,replyTo:'a',text:'Reply only to Bea'}]}]});ok(await f.x.refresh(true));
   const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};
   assert.doesNotMatch(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Reply only to Bea/);
-  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'A local park report',metrics:{likes:15,reposts:4,replies:0}}]});ok(await f.x.refresh('square'));
+  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'A local park report',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},metrics:{likes:15,reposts:4,replies:0}}]});ok(await f.x.refresh('square'));
   const p=xItems(f.state(),'post').find(p=>p.feed==='square');ok(await f.x.react(p.id,'liked'));
   f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
   assert.equal(xItems(f.state(),'post').length,0);assert.equal(xItems(f.state(),'comment').length,0);
@@ -138,7 +138,7 @@ test('square contents and engagement roll back and unrelated crowd threads stay 
 
 test('reposted posts appear on the personal profile and canceling removes them',async()=>{
  const {createXPanel}=await import('../src/x-view.js');const f=setup();try{
-  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'My favorite park'}]});ok(await f.x.refresh('square'));
+  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'My favorite park',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false}}]});ok(await f.x.refresh('square'));
   const post=xItems(f.state(),'post')[0];ok(await f.x.react(post.id,'reposted'));
   const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:f.state,redraw(){},notice(){}});
   await panel.action('profile');assert.match(panel.html(),/你转发了/);assert.match(panel.html(),/My favorite park/);
@@ -146,11 +146,11 @@ test('reposted posts appear on the personal profile and canceling removes them',
  }finally{f.close();}
 });
 
-test('one square refresh carries style instructions and records only substantial opinion, all with rollback',async()=>{
+test('one square refresh carries style instructions and never records automatic opinion, all with rollback',async()=>{
  const f=setup();try{
  const impact={significant:true,topic:'The record',summary:'Critics debate the new album.',publicBasis:'Published reviews',stakes:'Possible interview questions'};
- f.reply({posts:[{name:'Rowan',handle:'r1',text:'nice park',impact:{...impact,significant:false}},{name:'Ivy',handle:'i1',text:'reviews are split',impact}]});ok(await f.x.refresh('square'));
- assert.equal(f.count(),1);assert.match(f.prompt(),/禁止每条末尾统一缀两三个/);assert.match(f.prompt(),/不擅自强制英语/);assert.equal(xItems(f.state(),'opinion').length,1);
+ f.reply({posts:[{name:'Rowan',handle:'r1',text:'nice park',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},impact:{...impact,significant:false}},{name:'Ivy',handle:'i1',text:'reviews are split',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},impact}]});ok(await f.x.refresh('square'));
+ assert.equal(f.count(),1);assert.match(f.prompt(),/禁止每条末尾统一缀两三个/);assert.match(f.prompt(),/不擅自强制英语/);assert.equal(xItems(f.state(),'opinion').length,0);
  f.context.chat[0].mes='Changed starting scene';f.bus.emit('MESSAGE_EDITED');await f.memory.read();assert.equal(xItems(f.state(),'opinion').length,0);
  }finally{f.close();}
 });

@@ -21,6 +21,10 @@ async function fixture(factory) {
         {collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:12345,included:[]}},
         {collection:'orders',key:'parcel',value:{id:'parcel',type:'order',sourceIndex:0,createdDay:dateDay('2026-01-01'),createdHour:10,dueDay:dateDay('2026-01-03'),recipient:{id:'self',name:'Sam'},items:[{product:{name:'衣服'},quantity:1}]}}
     ]);
+    if(factory===createOpinionBridge)c.chatMetadata[JOURNAL_KEY]=appendChange(c.chatMetadata[JOURNAL_KEY],rev,[
+        {collection:'x',key:'square-edition',value:{id:'square-edition',type:'edition',editionId:'one'}},
+        {collection:'x',key:'square-post',value:{id:'square-post',type:'post',feed:'square',text:'Local park opens.',publication:{editionId:'one',clock:{day:dateDay('2026-01-03'),hour:12},selected:true,selectedIndex:1,publicBasis:{summary:'Public notice'}}}}
+    ]);
     const settings = normalizeSettings({}); const errors=[];
     let copied;
     bus.on('CHAT_COMPLETION_PROMPT_READY',data=>{copied=structuredClone(data.chat);});

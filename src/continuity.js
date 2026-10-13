@@ -1,6 +1,6 @@
-import { storyTime } from './story-clock.js?v=0.21.2';
-import { nameAliases } from './names.js?v=0.21.2';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.21.2';
+import { storyTime } from './story-clock.js?v=0.22.0';
+import { nameAliases } from './names.js?v=0.22.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.22.0';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -82,10 +82,10 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
             const account=xAccounts.get(counterpart);
             if(post&&account&&(fromUser||addressedUser)){
                 const who=identity(account,record.alias||state.x?.profile?.alias);
-                entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',...who,speaker:fromUser?who.otherParty:account.name,text:record.text,post:post.text}});
+                entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',...who,speaker:fromUser?who.otherParty:account.name,text:record.text,post:post.feed==='square'?undefined:post.text}});
             }
         }
-        if(record.type==='post'&&xAccounts.has(record.author)){
+        if(record.type==='post'&&record.feed!=='square'&&xAccounts.has(record.author)){
             const who=identity(xAccounts.get(record.author),state.x?.profile?.alias);
             for(const kind of ['liked','reposted'])if(record[kind])entries.push({time:Number(record[kind+'At']||record.createdAt)||0,data:{channel:'X 公开互动',...who,speaker:who.otherParty,action:kind==='liked'?'点赞':'转发',post:record.text}});
         }

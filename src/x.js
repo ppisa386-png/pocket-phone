@@ -1,5 +1,5 @@
-import { opinionFromPost } from './x-opinion.js?v=0.21.2';
-import { localizedPerson, sameNamedPerson } from './names.js?v=0.21.2';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=0.22.0';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.22.0';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
@@ -34,7 +34,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             (a?'\n当前对方：'+JSON.stringify({name:a.name,handle:a.handle})+'。'+(a.identityKnown?'此前已确认 user 账号对应的真实身份，改网名不会遗忘。':'对方不知道此网名是谁。不能凭后台 user 对应关系、角色卡、人设、正文中的私人称呼或私下经历认出 user；只知道网名及本账号公开过或本私信提供的信息。'):'\n逐个人物区分知情范围，不把后台账号对应关系当作人物已知。')+
             '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(-15).map(({id,text})=>({id,text})))+'\nuser 最近公开转发（不代表赞同）：'+JSON.stringify(xItems(state,'post').filter(p=>p.reposted&&p.author!=='user').slice(-10).map(p=>({author:state.x[p.author]?.name,text:p.text})))+'\n'+task;
     }
-    const ask=(state,a,request,current,task,validate)=>request(prompt(state,a,task),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null);
+    const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,options);
     function register(state,item,changes,crowdOnly=false) {
         const identity=localizedPerson(item,getContext(),xItems(state,'account')),name=identity.name,handle=xText(item?.handle,60).replace(/^@/,'');
         if(!name||!handle||/[\s<>]/.test(handle)||name===getContext().name1||item.has_account===false)return null;
@@ -96,20 +96,28 @@ export function createX({memory,phone,getContext,getSettings}) {
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
         publish(value){return run(async(state,_c,_r,commit)=>{await commit([xSet(xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),liked:false,reposted:false}))]);});},
+        toggleInjection(id){return run(async(state,_c,_r,commit)=>{
+            const p=state.x[id],chat=getContext().chat;
+            if(p?.type!=='post'||p.feed!=='square'||squareStatus(p,state,chat)!=='active')throw Error('这条内容已采用、过期或时间不明确，无法注入。');
+            await commit([xSet({...p,publication:{...p.publication,selected:!p.publication.selected,selectedIndex:chat.length-1}})]);
+        });},
         refresh(following=false){const square=following==='square';following=following===true;return run(async(state,current,request,commit)=>{
+            const chat=structuredClone(getContext().chat||[]),prose=recentSquareProse(chat);
+            const edition=square?{id:'square-edition',type:'edition',editionId:crypto.randomUUID(),clock:squareClock(chat),postIds:[]}:null;
             const accounts=xItems(state,'account').filter(a=>!a.blocked&&(!following||a.following));
             if(following&&!accounts.length)return {added:0};
-            const task=square?'当前任务：X 广场。无需关注任何人。'+getSettings().prompts.xSquare+'禁止用作广场作者的角色姓名：'+JSON.stringify((getContext().characters||[]).map(c=>c.name)):
+            const task=square?'当前任务：X 广场。无需关注任何人。'+getSettings().prompts.xSquare+'\n'+SQUARE_RULES+'\nrecentProse：'+JSON.stringify(prose)+'禁止用作广场作者的角色姓名：'+JSON.stringify((getContext().characters||[]).map(c=>c.name)):
                 '当前任务：X 动态。'+(following?'仅生成已关注账号的公开帖子，不能添加列表外发帖账号；评论者不受关注列表限制。':'生成相关人物或陌生创作者的公开帖子。');
             const results=await ask(state,null,request,current,task+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(({id,name,handle,identityKnown,following,crowd})=>({id,name,handle,identityKnown,following,crowd})))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').slice(-20).map(p=>p.text))+
-                '\n已记录舆情（只生成新的进展，不重复制造同一舆情）：'+JSON.stringify(xItems(state,'opinion').slice(-5).map(o=>({topic:o.topic,summary:o.summary})))+'\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+'\n广场额外要求：每条帖子附 publicBasis，简述与近期剧情的联系及网友从何合理得知，仅作核验资料，不在帖子中显示。'+getSettings().prompts.xOpinion+'\n仅形成有实质影响的公共讨论时，相关帖子可附 impact:{significant:true,topic:"议题",summary:"已发生的舆情进展",publicBasis:"公众如何得知",stakes:"可能影响什么；不是保证未来会发生的剧情"}；普通议论、孤立吐槽不附 impact。',d=>({posts:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5)}));
+                '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:近期原文索引,evidence:"recentProse 中对应 assistant 原文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5)}),square?{retries:0}:undefined);
             state=structuredClone(state);state.x||={};const changes=[];let added=0;
             for(const item of results.posts){if(!xText(item?.text))continue;
+                const basis=square?squareBasis(item,prose):null;if(square&&!basis)continue;
                 const a=resolvePostAuthor(state,item,changes,following,square);if(!a)continue;
                 if(xItems(state,'post').some(p=>p.author===a.id&&p.text===xText(item.text)))continue;
                 const post=xRecord('post',{author:a.id,text:xText(item.text),liked:false,reposted:false,feed:square?'square':'home'});
+                if(square){post.publication={editionId:edition.editionId,clock:edition.clock,publicBasis:basis,selected:false,sourceIndex:chat.length-1};edition.postIds.push(post.id);}
                 state.x[post.id]=post;addEngagement(state,post,item,changes);
-                const opinion=opinionFromPost(item.impact,post);if(opinion&&!xItems(state,'opinion').some(o=>o.topic===opinion.topic&&o.summary===opinion.summary)){state.x[opinion.id]=opinion;changes.push(xSet(opinion));}
                 added++;
             }
             for(const item of square?[]:results.replies){
@@ -120,6 +128,7 @@ export function createX({memory,phone,getContext,getSettings}) {
                 a=known(state,a);state.x[a.id]=a;changes.push(xSet(a));
                 const reply=xRecord('comment',{postId:post.id,author:a.id,text:xText(item.text)});state.x[reply.id]=reply;changes.push(xSet(reply));
             }
+            if(square){if(results.posts.length&&!added)throw Error('这批帖子缺少有效公开依据，原广场已保留，请重试。');changes.push(xSet(edition));}
             await commit(changes);return {added};
         });},
         react(id,kind){return run(async(state,_c,_r,commit)=>{const p=state.x[id];if(p?.type!=='post'||!['liked','reposted'].includes(kind))throw Error('帖子不可用。');if(p.author!=='user')xAccount(state,p.author);await commit([xSet({...p,[kind]:!p[kind],[kind+'At']:Date.now()})]);});},
@@ -131,7 +140,9 @@ export function createX({memory,phone,getContext,getSettings}) {
             const targetId=parent?.author||p.author;
             const target=targetId==='user'?null:known(state,xAccount(state,targetId));
             const body=xRequired(value,'回复内容');const comment=xRecord('comment',{postId:id,author:'user',alias:profile(state).alias,text:body,replyTo:parent?.id||null});const changes=[xSet(comment)];
-            if(target){
+            // Square generation is refresh-only. Posting a comment is local;
+            // direct conversations and the regular home feed keep their replies.
+            if(target&&p.feed!=='square'){
                 const reply=await ask(state,target,request,current,'当前任务：X 评论。你是被回复的账号：'+JSON.stringify({name:target.name,handle:target.handle})+'；帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；公开帖子：'+JSON.stringify(p.text)+'；此前评论：'+JSON.stringify(xItems(state,'comment').filter(c=>c.postId===id).slice(-30).map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+'；user 回复的目标评论：'+JSON.stringify(parent?.text||null)+'；user 本次评论：'+JSON.stringify(body)+'。仅决定本账号是否回应 user，可保持沉默，不强制帖子作者出面。输出 {"text":"回复或空字符串"}。不得用私信或未公开剧情作为公众已知。'+engagementRules(),d=>{if(typeof d.text!=='string')throw Error('评论格式不正确。');return {text:xText(d.text)};});
                 changes.push(xSet(target));if(reply.text)changes.push(xSet(xRecord('comment',{postId:id,author:target.id,text:reply.text,replyTo:comment.id})));
             }

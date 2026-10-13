@@ -5,7 +5,7 @@ export function dateDay(value) {
     return d.getUTCFullYear()===+m[1]&&d.getUTCMonth()===+m[2]-1&&d.getUTCDate()===+m[3]?Math.floor(d.getTime()/86400000):null;
 }
 export const dayDate = day => Number.isInteger(day)?new Date(day*86400000).toISOString().slice(0,10):'';
-export function readStoryClock(chat, seed=null) {
+export function readStoryClock(chat, seed=null, { exact = false } = {}) {
     let day=seed?.day??null,hour=seed?.hour??null;
     for(const m of chat||[]){
         if(m.is_system&&!m.extra?.qianqianjieAutoHide)continue;
@@ -30,6 +30,7 @@ export function readStoryClock(chat, seed=null) {
             if(sceneLine){
                 const tm=line.match(/(?:\b|[T\s：:])(\d{1,2})[:：](\d{2})(?:\s*(AM|PM))?/i);
                 if(tm&&+tm[1]<24&&+tm[2]<60){let h=+tm[1];if(tm[3]){h=h%12+(/pm/i.test(tm[3])?12:0);}hour=h+(+tm[2]/60);}
+                else if(exact && /凌晨|半夜|晚上|夜晚|夜间|下午|午后|中午|正午|上午|早上|清晨|黎明|midnight|night|evening|afternoon|noon|morning|dawn/i.test(line))hour=null;
                 else if(/凌晨|半夜|midnight/i.test(line))hour=2;
                 else if(/晚上|夜晚|夜间|night|evening/i.test(line))hour=21;
                 else if(/下午|午后|afternoon/i.test(line))hour=15;
