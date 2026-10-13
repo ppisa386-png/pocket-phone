@@ -1,6 +1,6 @@
-import { requireCash } from './assets-core.js?v=0.21.1';
-import { readStoryClock } from './story-clock.js?v=0.21.1';
-import { localizedPerson, sameNamedPerson } from './names.js?v=0.21.1';
+import { requireCash } from './assets-core.js?v=0.21.2';
+import { readStoryClock } from './story-clock.js?v=0.21.2';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.21.2';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
@@ -160,7 +160,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
         });},
         transfer(id,amount,currency,memo){return run(async(state,_c,_r,commit)=>{friendBy(state,id);const t=newRecord('transfer',{accountId:id,direction:'outgoing',status:'pending',amountMinor:snapAmount(amount),currency:currencyOf(currency),memo:text(memo,300)});requireCash(state,t.amountMinor,t.currency);await commit([setSnap(t)]);return t.id;});},
         settle(id,accept=true){return run(async(state,current,request,commit)=>{
-            const t=state.snapchat[id];if(t?.type!=='transfer'||t.status!=='pending')throw new Error('这笔转账已处理。');const a=friendBy(state,t.accountId);
+            const t=state.snapchat[id];if(t?.type!=='transfer'||t.status!=='pending')throw new Error('这笔转账已处理。');const a=accept?friendBy(state,t.accountId):null;
             let status=accept?'accepted':'declined';
             if(accept&&t.currency!=='USD')throw Error('旧的非美元转账不自动换算，请取消并使用 USD。');
             if(t.direction==='outgoing'&&accept){requireCash(state,t.amountMinor,t.currency,t.id);const data=await ask(state,a,request,current,'当前任务：Snapcash 收款判断。user 转账 '+JSON.stringify({amount:t.amountMinor/100,currency:t.currency,memo:t.memo})+'。决定是否收下，输出 {"status":"accepted 或 declined 或 pending"}。',d=>{if(!['accepted','declined','pending'].includes(d.status))throw new Error('收款结果格式不正确。');return d;});status=data.status;}

@@ -7,8 +7,9 @@ import { createAssets, applyAssessment } from '../src/assets.js';
 import { createSnapchat } from '../src/snapchat.js';
 import { createAmazon } from '../src/amazon.js';
 import { cashBalance, reservedCash, assetRows, salaryPayments, requireCash, recentCash, debtEpisode } from '../src/assets-core.js';
-import { applyAssetChanges } from '../src/assets-events.js';
-import { buildAssetPrompt, createAssetBridge, ASSETS_KEY } from '../src/assets-story.js';
+import { applyAssetChanges, applyFinancialEvent, validateFinancialEvent } from '../src/assets-events.js';
+import { buildAssetPrompt, createAssetBridge, importStoryAssets, ASSETS_KEY } from '../src/assets-story.js';
+import { appendChange, revisionsFor, messageSignatures, replayJournal } from '../src/journal.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay } from '../src/story-clock.js';
 const day = dateDay;
@@ -30,6 +31,56 @@ function setup(date = '2026-01-01') {
 }
 const marker = row => '<!--durian-money:' + JSON.stringify(row) + '-->';
 const evaluation = date => ({ date, events: [], salaries: [], valuations: [], living: { total: 0, bookedIds: [] }, business: [] });
+
+test('distinct purchases in one prose sentence are each booked once', async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const evidence = 'Sam 买水花了5美元，又买面包花了8美元。';
+        const water = { kind: 'expense', name: '水', amount: 5, evidence };
+        const bread = { kind: 'expense', name: '面包', amount: 8, evidence };
+        await f.append(evidence + marker(water) + marker(bread) + marker(water), '2026-01-02');
+        assert.equal(cashBalance(f.state()), 98700);
+        await f.memory.read(); assert.equal(cashBalance(f.state()), 98700);
+        f.c.chat.pop(); await f.memory.read(); assert.equal(cashBalance(f.state()), 100000);
+    } finally { f.close(); }
+});
+
+test('old single-sentence event IDs migrate without charging the saved event again', async () => {
+    const evidence='Sam 买水花了5美元，又买面包花了8美元。';
+    const water={kind:'expense',name:'水',amount:5,evidence}, bread={kind:'expense',name:'面包',amount:8,evidence};
+    const chat=[{mes:'2026-01-01'},{mes:evidence+marker(water)+marker(bread)}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    let journal=appendChange(undefined,rev.slice(0,1),[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:100000,included:[],lastIndex:0}}]);
+    const id='money:'+rev[1]+':'+evidence;
+    journal=appendChange(journal,rev,applyFinancialEvent(replayJournal(journal),validateFinancialEvent(water,id,1)),id);
+    const imported=importStoryAssets(journal,rev,chat);
+    assert.equal(cashBalance(replayJournal(imported.journal)),98700);
+    assert.equal(assetRows(replayJournal(imported.journal),'cash_transaction').length,2);
+    assert.equal(importStoryAssets(imported.journal,rev,chat).changed,false);
+});
+
+test('Amazon receives actual available balance even after more than thirty ledger entries', async () => {
+    const f=setup(); try {
+        ok(await f.assets.update());
+        await f.memory.commit(await f.memory.begin(),Array.from({length:35},(_,i)=>({collection:'assets',key:'extra:'+i,value:{id:'extra:'+i,type:'cash_transaction',currency:'USD',deltaMinor:100}})));
+        f.reply({products:[]}); ok(await f.shop.search('外套'));
+        assert.match(f.prompt(),/"balanceUSD":1035/); assert.match(f.prompt(),/"availableUSD":1035/);
+        assert.doesNotMatch(f.prompt(),/extra:34/,'raw recent transactions are not mistaken for wealth');
+    } finally { f.close(); }
+});
+
+test('blocked pending transfer can be cancelled without model calls or debiting cash', async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        await f.memory.commit(await f.memory.begin(), [{collection:'snapchat',key:'friend',value:{id:'friend',type:'account',name:'Alex',friend:'friends',blocked:false}}]);
+        const sent = await f.snap.transfer('friend', '50', 'USD', '午餐'); ok(sent);
+        ok(await f.snap.block('friend', true)); const calls = f.count();
+        assert.equal((await f.snap.settle(sent.value, true)).ok, false);
+        ok(await f.snap.settle(sent.value, false));
+        assert.equal(reservedCash(f.state()), 0); assert.equal(cashBalance(f.state()), 100000); assert.equal(f.count(), calls);
+        assert.equal((await f.snap.settle(sent.value, false)).ok, false);
+    } finally { f.close(); }
+});
 
 test('opening is free; initialization is one call, persisted lock disallows reroll; deletion restores update eligibility', async () => {
     const f = setup(); try {

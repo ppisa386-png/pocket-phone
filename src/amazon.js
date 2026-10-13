@@ -1,5 +1,5 @@
-import { requireCash, assetSet, cashRecord } from './assets-core.js?v=0.21.1';
-import { dateDay, readStoryClock } from './story-clock.js?v=0.21.1';
+import { requireCash, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=0.21.2';
+import { dateDay, readStoryClock } from './story-clock.js?v=0.21.2';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>`${(minor/100).toLocaleString('zh-CN',{maximumFractionDigits:2})} ${currency}`;
@@ -25,8 +25,13 @@ export function createAmazon({memory,phone,getContext,getSettings}) {
         open:()=>memory.read(),
         search(query){return run(async(state,current,request,commit)=>{
             const q=shopText(query,300);if(!q)throw Error('请输入想买的分类或商品。');
+            const balance=cashBalance(state),reserved=reservedCash(state);
+            const economy={balanceUSD:balance===null?null:balance/100,reservedUSD:reserved/100,availableUSD:balance===null?null:(balance-reserved)/100,
+                pendingExpenses:assetRows(state,'story_event').some(e=>e.kind==='expense'&&!e.processed),
+                holdings:assetRows(state,'holding').filter(h=>h.active!==false).map(({name,category,valueMinor})=>({name,category,valueUSD:valueMinor==null?null:valueMinor/100})),
+                jobs:assetRows(state,'job').filter(j=>j.endDay==null).map(({name,monthlyMinor})=>({name,monthlySalaryUSD:monthlyMinor==null?null:monthlyMinor/100}))};
             const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.amazon+'\n'+getSettings().prompts.amazonShopping+
-                '\n当前任务：Amazon 商品搜索。价格统一美元 USD。购物需求：'+JSON.stringify(q)+'。已有资产记录（不是完整余额，不据此臆造财富）：'+JSON.stringify(Object.values(state.assets||{}).slice(-30))+
+                '\n当前任务：Amazon 商品搜索。价格统一美元 USD。购物需求：'+JSON.stringify(q)+'。当前经济资料：'+JSON.stringify(economy)+'。余额为 null 表示尚未建账，不能当成零或臆造已知余额；推荐档次结合人设、已有财产和可用资金，用户明确预算/偏好优先。'+
                 '\n给出 4—6 件可选择的具体商品，不需要生成图片。输出 {"products":[{"name":"款式/系列与品名","brand":"品牌名；无品牌商品可空","luxury":false,"description":"材质、特点与商品说明","price":"单件价格数字，最多两位小数","currency":"符合剧情的货币","variants":["规格/颜色/尺寸，可选项均为同一价格"],"reviews":[{"name":"买家网名","rating":5,"text":"简短买家评价"}]}]}。不返回 user 已购买、付款、收货或新增资产等结论，不替 user 决定。';
             const products=await request(prompt,validateProducts,current);
             const changes=shopItems(state,'product').map(p=>({collection:'orders',key:p.id,value:null}));

@@ -9,6 +9,16 @@ const order={id:'order-1',type:'order',sourceIndex:0,createdDay:dateDay('2026-10
 const receipt='快递员已把这件外套送到门口。';
 const arrived=()=>msg(receipt+'<!--durian-delivery:'+JSON.stringify({id:order.id,arrived:true,evidence:receipt})+'-->');
 const base=()=>[msg('日期：2026-10-11 14:00')];
+
+test('delivery ignores receipts inside thought, script, style and code regions',()=>{
+ const chat=[...base(),msg('2026-10-13 10:00')];
+ for(const tag of ['think','thinking','script','style']) {
+  assert.equal(deliveryReceipt(order,[...chat,msg(`<${tag}>${arrived().mes}</${tag}>正文中包裹仍在路上。`)]),null,tag);
+  assert.equal(deliveryReceipt(order,[...chat,msg(`<${tag}>${receipt}</${tag}>`+arrived().mes.slice(receipt.length))]),null,tag+' evidence');
+ }
+ assert.equal(deliveryReceipt(order,[...chat,msg('```html\n'+arrived().mes+'\n```')]),null);
+ assert.ok(deliveryReceipt(order,[...chat,arrived()]));
+});
 test('story clock handles scene dates, relative days and leap boundaries without real time',()=>{
  assert.deepEqual(readStoryClock([msg('“2026-10-13 12:00 是约定的日期。”')]),{day:null,hour:null});
  assert.equal(dateDay('2026-02-29'),null);assert.equal(dayDate(dateDay('2024-02-28')+2),'2024-03-01');

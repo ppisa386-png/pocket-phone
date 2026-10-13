@@ -1,8 +1,9 @@
-import { storyTime } from './story-clock.js?v=0.21.1';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.1';
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.21.1';
-import { narrativeReplyCount } from './contact-policy.js?v=0.21.1';
-import { isBlocked } from './contact-events.js?v=0.21.1';
+import { storyTime } from './story-clock.js?v=0.21.2';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.21.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.2';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.21.2';
+import { narrativeReplyCount } from './contact-policy.js?v=0.21.2';
+import { isBlocked } from './contact-events.js?v=0.21.2';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});
@@ -88,7 +89,8 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
 export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
     const first=getContext(),bus=first?.eventSource,types=first?.event_types??first?.eventTypes??{},hooks=[];
     let generation=0,disposed=false;
-    const clear=()=>{generation++;getContext()?.setExtensionPrompt?.(STORY_PHONE_KEY,'',1,0,false,0);};
+    const output=createNarrativePrompt({getContext,key:STORY_PHONE_KEY});
+    const clear=()=>{generation++;output.clear();};
     const listen=(name,fn)=>{if(types[name]&&bus?.on){bus.on(types[name],fn);hooks.push([types[name],fn]);}};
     async function prepare(type='normal',_options,dryRun){
         if(dryRun)return;clear();if(disposed||['quiet','impersonate'].includes(type))return;
@@ -99,12 +101,12 @@ export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
         try{
             const revisions=await revisionsFor(signatures),legacy=chat.some(isMemoryHidden)?await revisionsFor(messageSignatures(chat,true)):null;
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],revisions,legacy).journal);
-            if(!current())return;const text=buildStoryPhonePrompt(state,c,getSettings(),chat);if(text)c.setExtensionPrompt(STORY_PHONE_KEY,text,1,0,false,0,current);
+            if(!current())return;const text=buildStoryPhonePrompt(state,c,getSettings(),chat);if(text)output.set(text,current);
         }catch(e){onError(e);}
     }
     if(first?.setExtensionPrompt&&bus?.on){
         if(types.GENERATION_AFTER_COMMANDS){listen('GENERATION_STARTED',(type,o,dry)=>{if(!dry)clear();});listen('GENERATION_AFTER_COMMANDS',prepare);}else listen('GENERATION_STARTED',prepare);
         for(const n of ['GENERATION_ENDED','GENERATION_STOPPED','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','MESSAGE_SWIPED','GROUP_WRAPPER_FINISHED'])listen(n,clear);
     }
-    return {prepare,destroy(){clear();disposed=true;for(const[n,fn]of hooks)bus.removeListener?.(n,fn);}};
+    return {prepare,destroy(){clear();disposed=true;output.destroy();for(const[n,fn]of hooks)bus.removeListener?.(n,fn);}};
 }

@@ -1,8 +1,9 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.1';
-import { storyAnnotations } from './story-phone.js?v=0.21.1';
-import { readStoryClock } from './story-clock.js?v=0.21.1';
-import { assetRows, assetSet, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.21.1';
-import { validateFinancialEvent, applyFinancialEvent } from './assets-events.js?v=0.21.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.2';
+import { storyAnnotations } from './story-phone.js?v=0.21.2';
+import { readStoryClock } from './story-clock.js?v=0.21.2';
+import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.21.2';
+import { validateFinancialEvent, applyFinancialEvent } from './assets-events.js?v=0.21.2';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.21.2';
 
 export const ASSETS_KEY = 'durian_phone_finances';
 const safe = x => JSON.stringify(x).replace(/\{\{/g, '\\u007b\\u007b');
@@ -12,8 +13,10 @@ export function importStoryAssets(journal, revisions, chat) {
     for (let index = 0; index < chat.length; index++) {
         clock = readStoryClock([chat[index]], clock);
         for (const row of storyAnnotations(chat[index], 'durian-money')) {
-            const id = 'money:' + revisions[index] + ':' + row.evidence.trim();
-            if (state.assets[id] || state.assets.wallet?.lastIndex >= index) continue;
+            const legacyId = 'money:' + revisions[index] + ':' + row.evidence.trim();
+            const id = legacyId + ':' + JSON.stringify([row.kind, assetText(row.name), row.action || (row.kind === 'job' ? 'start' : 'acquire')]);
+            const legacy = state.assets[legacyId];
+            if (state.assets[id] || (legacy && legacy.kind === row.kind && legacy.name === assetText(row.name)) || state.assets.wallet?.lastIndex >= index) continue;
             // Existing app orders/transfers are already booked; prose must not
             // charge again when it merely acknowledges them.
             if (row.ref && (state.orders?.[row.ref] || state.snapchat?.[row.ref] || state.assets?.[row.ref])) continue;
@@ -56,7 +59,8 @@ export function buildAssetPrompt(state, settings) {
 export function createAssetBridge({ getContext, getSettings, onError = () => {} }) {
     const first = getContext(), bus = first?.eventSource, types = first?.event_types ?? first?.eventTypes ?? {}, hooks = [];
     let generation = 0, disposed = false;
-    const clear = () => { generation++; getContext()?.setExtensionPrompt?.(ASSETS_KEY, '', 1, 0, false, 0); };
+    const output = createNarrativePrompt({getContext, key: ASSETS_KEY});
+    const clear = () => { generation++; output.clear(); };
     const listen = (name, fn) => { if (types[name] && bus?.on) { bus.on(types[name], fn); hooks.push([types[name], fn]); } };
     async function prepare(type = 'normal', options, dryRun) {
         if (dryRun) return;
@@ -69,7 +73,7 @@ export function createAssetBridge({ getContext, getSettings, onError = () => {} 
         try {
             const revisions = await revisionsFor(signatures), legacy = chat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(chat, true)) : null;
             const state = replayJournal(reconcileJournal(metadata[JOURNAL_KEY], revisions, legacy).journal);
-            if (current()) c.setExtensionPrompt(ASSETS_KEY, buildAssetPrompt(state, getSettings()), 1, 0, false, 0, current);
+            if (current()) output.set(buildAssetPrompt(state, getSettings()), current);
         } catch (e) { onError(e); }
     }
     if (first?.setExtensionPrompt && bus?.on) {
@@ -77,5 +81,5 @@ export function createAssetBridge({ getContext, getSettings, onError = () => {} 
         else listen('GENERATION_STARTED', prepare);
         for (const n of ['GENERATION_ENDED', 'GENERATION_STOPPED', 'CHAT_CHANGED', 'CHAT_LOADED', 'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'GROUP_MEMBER_DRAFTED', 'GROUP_WRAPPER_FINISHED']) listen(n, clear);
     }
-    return { prepare, destroy() { clear(); disposed = true; for (const [n, fn] of hooks) bus.removeListener?.(n, fn); } };
+    return { prepare, destroy() { clear(); disposed = true; output.destroy(); for (const [n, fn] of hooks) bus.removeListener?.(n, fn); } };
 }

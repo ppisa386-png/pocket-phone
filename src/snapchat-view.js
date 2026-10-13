@@ -1,6 +1,6 @@
-import { displayStoryTime } from './story-clock.js?v=0.21.1';
-import { icon } from './icons.js?v=0.21.1';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.21.1';
+import { displayStoryTime } from './story-clock.js?v=0.21.2';
+import { icon } from './icons.js?v=0.21.2';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.21.2';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -27,17 +27,17 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             const unread=snapItems(state,'message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
             const label=a.blocked?'已拉黑':({none:'尚未添加',incoming:'邀请你成为好友',pending:'等待通过',declined:'邀请未通过',friends:'好友'})[a.friend];
             return '<article class="pp-snap-card"><div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+label+(unread?' · '+unread+' 条未读':'')+'</small></div></div><div class="pp-snap-actions">'+
-                (a.blocked?button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
+                (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
         }).join('')+(accounts.length?'':empty('还没有 Snapchat 联系人。点「新增联系人」查找账号。'));
     }
-    function transferHTML(t) {
-        return '<article class="pp-snap-cash"><strong>Snapcash · '+(t.direction==='incoming'?'对方转来':'你转出')+'</strong><b>'+snapMoney(t)+'</b><p>'+snapEsc(t.memo)+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已拒收／取消'})[t.status]+'</small><div class="pp-snap-actions">'+(t.status==='pending'?button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id)+button('cancel',t.direction==='incoming'?'拒收':'取消转账',t.id):'')+'</div></article>';
+    function transferHTML(t,blocked) {
+        return '<article class="pp-snap-cash"><strong>Snapcash · '+(t.direction==='incoming'?'对方转来':'你转出')+'</strong><b>'+snapMoney(t)+'</b><p>'+snapEsc(t.memo)+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已拒收／取消'})[t.status]+'</small><div class="pp-snap-actions">'+(t.status==='pending'?(blocked?'':button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id))+button('cancel',t.direction==='incoming'?'拒收':'取消转账',t.id):'')+'</div></article>';
     }
     function threadHTML(state,a) {
         const items=Object.values(state.snapchat||{}).filter(i=>i.accountId===a.id&&['message','call','transfer'].includes(i.type)).sort((a,b)=>a.createdAt-b.createdAt);
         const active=items.find(i=>i.type==='call'&&i.status==='connected');
         const chat=items.map(i=>{
-            if(i.type==='transfer')return transferHTML(i);
+            if(i.type==='transfer')return transferHTML(i,a.blocked);
             if(i.type==='call')return '<article class="pp-snap-card"><strong>'+snapKind[i.mode]+'通话 · '+({connected:'通话中',ended:'已结束',no_answer:'未接听'})[i.status]+'</strong>'+i.turns.map(t=>'<p class="pp-snap-copy"><b>'+(t.role==='user'?'你':snapEsc(a.name))+'：</b>'+snapEsc(t.text)+'</p>').join('')+'</article>';
             return '<article class="pp-snap-message '+(i.role==='user'?'is-user':'')+'"><small>'+(i.role==='user'?'你':snapEsc(a.name))+' · '+snapKind[i.kind]+' · '+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p>'+(i.role==='assistant'?messageTools(i)+(editingId===i.id?form('edit-message',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消'):''):'')+(i.status==='queued'?'<small>未发送</small>':'')+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id):i.status==='no_reply'?'<small>对方暂未回复</small>':'')+'</article>';
         }).join('');

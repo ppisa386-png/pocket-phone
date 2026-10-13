@@ -27,6 +27,21 @@ function setup() {
     return { service, memory, context, settings, bus, requests: () => requests, reply: fn => { reply = fn; }, close() { service.destroy(); memory.destroy(); } };
 }
 
+test('disabling SMS prevents requests and discards a late reply without automatic retries', async () => {
+    const f=setup(); try {
+        await f.service.scan(); const before=f.requests(); f.settings.apps.messages=false;
+        assert.equal((await f.service.sendMessage('card:alex.png','不能发送')).ok,false);
+        assert.equal(f.requests(),before); assert.equal(Object.keys(f.service.snapshot().messages).length,0);
+        f.settings.apps.messages=true;
+        f.reply(()=>{f.settings.apps.messages=false;return '{"status":"reply","text":"迟到的回复"}';});
+        await f.service.sendMessage('card:alex.png','已发送');
+        const messages=Object.values(f.service.snapshot().messages);
+        assert.equal(messages.length,1); assert.equal(messages[0].replyStatus,'failed'); assert.equal(f.requests(),before+1);
+        f.settings.apps.messages=true; f.reply(()=>'{"status":"reply","text":"恢复后的回复"}');
+        await f.service.retryMessage(messages[0].id); assert.equal(Object.keys(f.service.snapshot().messages).length,2);
+    } finally {f.close();}
+});
+
 test('SMS shares discovered phone contacts and sends, receives, persists and marks read', async () => {
     const f = setup(); await f.service.openMessages(); await f.service.scan(); assert.equal(f.requests(), 1);
     await f.service.open(); assert.equal(f.requests(), 1);

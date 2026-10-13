@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.21.1</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
+</style></head><body><main><small>POCKET PHONE · 0.21.2</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
 function dateDay(value) {
     const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return null;
     const d=new Date(0);d.setUTCFullYear(+m[1],+m[2]-1,+m[3]);d.setUTCHours(0,0,0,0);
@@ -80,7 +80,7 @@ function localizedPerson(item, context, existing = []) {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.21.1';
+const VERSION = '0.21.2';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -765,17 +765,17 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
             const unread=snapItems(state,'message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
             const label=a.blocked?'已拉黑':({none:'尚未添加',incoming:'邀请你成为好友',pending:'等待通过',declined:'邀请未通过',friends:'好友'})[a.friend];
             return '<article class="pp-snap-card"><div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+label+(unread?' · '+unread+' 条未读':'')+'</small></div></div><div class="pp-snap-actions">'+
-                (a.blocked?button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
+                (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
         }).join('')+(accounts.length?'':empty('还没有 Snapchat 联系人。点「新增联系人」查找账号。'));
     }
-    function transferHTML(t) {
-        return '<article class="pp-snap-cash"><strong>Snapcash · '+(t.direction==='incoming'?'对方转来':'你转出')+'</strong><b>'+snapMoney(t)+'</b><p>'+snapEsc(t.memo)+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已拒收／取消'})[t.status]+'</small><div class="pp-snap-actions">'+(t.status==='pending'?button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id)+button('cancel',t.direction==='incoming'?'拒收':'取消转账',t.id):'')+'</div></article>';
+    function transferHTML(t,blocked) {
+        return '<article class="pp-snap-cash"><strong>Snapcash · '+(t.direction==='incoming'?'对方转来':'你转出')+'</strong><b>'+snapMoney(t)+'</b><p>'+snapEsc(t.memo)+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已拒收／取消'})[t.status]+'</small><div class="pp-snap-actions">'+(t.status==='pending'?(blocked?'':button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id))+button('cancel',t.direction==='incoming'?'拒收':'取消转账',t.id):'')+'</div></article>';
     }
     function threadHTML(state,a) {
         const items=Object.values(state.snapchat||{}).filter(i=>i.accountId===a.id&&['message','call','transfer'].includes(i.type)).sort((a,b)=>a.createdAt-b.createdAt);
         const active=items.find(i=>i.type==='call'&&i.status==='connected');
         const chat=items.map(i=>{
-            if(i.type==='transfer')return transferHTML(i);
+            if(i.type==='transfer')return transferHTML(i,a.blocked);
             if(i.type==='call')return '<article class="pp-snap-card"><strong>'+snapKind[i.mode]+'通话 · '+({connected:'通话中',ended:'已结束',no_answer:'未接听'})[i.status]+'</strong>'+i.turns.map(t=>'<p class="pp-snap-copy"><b>'+(t.role==='user'?'你':snapEsc(a.name))+'：</b>'+snapEsc(t.text)+'</p>').join('')+'</article>';
             return '<article class="pp-snap-message '+(i.role==='user'?'is-user':'')+'"><small>'+(i.role==='user'?'你':snapEsc(a.name))+' · '+snapKind[i.kind]+' · '+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p>'+(i.role==='assistant'?messageTools(i)+(editingId===i.id?form('edit-message',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消'):''):'')+(i.status==='queued'?'<small>未发送</small>':'')+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id):i.status==='no_reply'?'<small>对方暂未回复</small>':'')+'</article>';
         }).join('');
@@ -980,7 +980,7 @@ function deliveryReceipt(order,chat){
     for(let i=order.sourceIndex+1;i<(chat||[]).length;i++){
         const m=chat[i];clock=readStoryClock([m],clock);if(m.is_user||(m.is_system&&!isMemoryHidden(m)))continue;
         if(clock.day<order.dueDay||clock.hour===null||clock.hour<9||clock.hour>=18)continue;
-        const text=String(m.mes||'').replace(/```[\s\S]*?```/g,'');
+        const text=String(m.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(think|thinking|script|style)[^>]*>[\s\S]*?<\/\1>/gi,'');
         const prose=text.replace(/<!--[\s\S]*?-->/g,'').trim();
         for(const match of text.matchAll(/<!--\s*durian-delivery\s*:\s*([\s\S]*?)-->/g)){
             try{const receipt=JSON.parse(match[1]);

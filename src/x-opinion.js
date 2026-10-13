@@ -1,6 +1,7 @@
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.21.1';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.1';
-import { storyAnnotations } from './story-phone.js?v=0.21.1';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.21.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.21.2';
+import { storyAnnotations } from './story-phone.js?v=0.21.2';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.21.2';
 const text=(s,n=600)=>typeof s==='string'?s.trim().slice(0,n):'';
 const safe=v=>JSON.stringify(v).replace(/\{\{/g,'\\u007b\\u007b');
 export const OPINION_KEY='durian_phone_public_opinion';
@@ -35,7 +36,8 @@ export function importStorySquare(raw,revisions,chat,context){
 }
 export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
     const c=getContext(),bus=c?.eventSource,types=c?.event_types??c?.eventTypes??{},hooks=[];let token=0,disposed=false;
-    const clear=()=>{token++;getContext()?.setExtensionPrompt?.(OPINION_KEY,'',1,1,false,0);};
+    const output=createNarrativePrompt({getContext,key:OPINION_KEY,depth:1});
+    const clear=()=>{token++;output.clear();};
     const listen=(n,f)=>{if(types[n]&&bus?.on){bus.on(types[n],f);hooks.push([types[n],f]);}};
     async function prepare(type='normal',_o,dry){
         if(dry)return;clear();if(disposed||['quiet','impersonate'].includes(type)||!getSettings().apps.x)return;
@@ -48,9 +50,9 @@ export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],rev,legacy).journal);
             if(!current())return;
             const prompt=CHINESE_NAME_RULE+buildOpinionPrompt(state,chat,getSettings().prompts.xOpinion)+'\n仅当本次正文实际展示了随机网友在 X 的公开帖子，才把该帖子同步广场：末尾附 <!--durian-square:{"name":"符合世界观的网友名字，不能是 user 或已有 char","handle":"网名","text":"正文逐字出现的帖子原文","publicBasis":"公众知情途径","evidence":"本次正文实际展示这条 X 帖子的连续逐字原句"}-->。没有展示帖子就不填，不为存手机记录额外编造帖子。若已形成实质舆情可附 impact:{significant:true,topic,summary,publicBasis,stakes}，只描述已经发生的公共讨论及可能影响；普通议论不附。'+getSettings().prompts.xStyle;
-            c.setExtensionPrompt(OPINION_KEY,prompt,1,1,false,0,current);
+            output.set(prompt,current);
         }catch(e){onError(e);}
     }
     if(c?.setExtensionPrompt&&bus?.on){if(types.GENERATION_AFTER_COMMANDS){listen('GENERATION_STARTED',(_t,_o,dry)=>{if(!dry)clear();});listen('GENERATION_AFTER_COMMANDS',prepare);}else listen('GENERATION_STARTED',prepare);for(const n of ['GENERATION_ENDED','GENERATION_STOPPED','CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','MESSAGE_SWIPED','GROUP_WRAPPER_FINISHED'])listen(n,clear);}
-    return {prepare,destroy(){clear();disposed=true;for(const[n,f]of hooks)bus.removeListener?.(n,f);}};
+    return {prepare,destroy(){clear();disposed=true;output.destroy();for(const[n,f]of hooks)bus.removeListener?.(n,f);}};
 }

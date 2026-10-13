@@ -64,5 +64,21 @@ try {
     await p.getByText('$8,895.00', { exact: true }).waitFor(); assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(), true); assert.equal(await p.evaluate(() => window.calls), 0);
     await p.evaluate(async () => { const c = window.SillyTavern.getContext(); c.chat.pop(); await c.eventSource.emit('MESSAGE_DELETED'); });
     await p.getByText('$4,995.00', { exact: true }).waitFor(); assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(), false);
-    assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, 320px layout, no external requests');
+    await p.evaluate(async () => {
+        const c=window.SillyTavern.getContext(), j=await import('/src/journal.js');
+        const rev=await j.revisionsFor(j.messageSignatures(c.chat));
+        c.chatMetadata[j.JOURNAL_KEY]=j.appendChange(c.chatMetadata[j.JOURNAL_KEY],rev,[
+            {collection:'snapchat',key:'blocked-friend',value:{id:'blocked-friend',type:'account',name:'阿历克斯',handle:'alex',friend:'friends',blocked:true}},
+            {collection:'snapchat',key:'pending-transfer',value:{id:'pending-transfer',type:'transfer',accountId:'blocked-friend',direction:'outgoing',status:'pending',currency:'USD',amountMinor:2000,memo:'测试转账'}}
+        ]);
+        await c.eventSource.emit('GENERATION_ENDED');
+    });
+    await p.locator('[data-action="home"]').tap(); await p.locator('[data-app="snapchat"]').tap();
+    await p.getByRole('button',{name:'聊天记录',exact:true}).tap();
+    assert.equal(await p.locator('[data-snap-action="settle"]').count(),0,'blocked account cannot settle');
+    await p.getByRole('button',{name:'取消转账',exact:true}).tap(); await p.getByText('已拒收／取消',{exact:true}).waitFor();
+    assert.equal(await p.evaluate(()=>window.calls),0,'cancellation is local');
+    await p.locator('[data-action="home"]').tap(); await p.locator('[data-app="assets"]').tap();
+    await p.getByText('$4,995.00',{exact:true}).waitFor();
+    assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }
