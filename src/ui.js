@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.23.1';
-import { storyTime } from './story-clock.js?v=0.23.1';
-import { createAssetPanel } from './assets-view.js?v=0.23.1';
-import { createAmazonPanel } from './amazon-view.js?v=0.23.1';
-import { bindComposerKeys } from './composer.js?v=0.23.1';
-import { createXPanel } from './x-view.js?v=0.23.1';
-import { xUnread } from './x.js?v=0.23.1';
-import { createSnapPanel } from './snapchat-view.js?v=0.23.1';
-import { snapUnread } from './snapchat.js?v=0.23.1';
-import { createApiPanel } from './api-view.js?v=0.23.1';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.23.1';
-import { icon } from './icons.js?v=0.23.1';
-import { renderMessagesScreen } from './messages-view.js?v=0.23.1';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.23.1';
-import { renderPhoneScreen } from './phone-view.js?v=0.23.1';
+import { createDailyPanel } from './daily-view.js?v=0.23.2';
+import { storyTime } from './story-clock.js?v=0.23.2';
+import { createAssetPanel } from './assets-view.js?v=0.23.2';
+import { createAmazonPanel } from './amazon-view.js?v=0.23.2';
+import { bindComposerKeys } from './composer.js?v=0.23.2';
+import { createXPanel } from './x-view.js?v=0.23.2';
+import { xUnread } from './x.js?v=0.23.2';
+import { createSnapPanel } from './snapchat-view.js?v=0.23.2';
+import { snapUnread } from './snapchat.js?v=0.23.2';
+import { createApiPanel } from './api-view.js?v=0.23.2';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.23.2';
+import { icon } from './icons.js?v=0.23.2';
+import { renderMessagesScreen } from './messages-view.js?v=0.23.2';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.23.2';
+import { renderPhoneScreen } from './phone-view.js?v=0.23.2';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -109,7 +109,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const dailyPanel=createDailyPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice});
     function renderDaily(){const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
     const assetPanel=createAssetPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:assets')renderAssets();},notice});
-    function renderAssets(){const scroll=content.scrollTop;content.innerHTML=assetPanel.html();content.scrollTop=scroll;}
+    function renderAssets(){
+        const old=content.querySelector('.pp-asset-body'), scroll=old?.scrollTop||0, page=old?.dataset.assetPage;
+        content.innerHTML=assetPanel.html();
+        const body=content.querySelector('.pp-asset-body');
+        if(body?.dataset.assetPage===page)body.scrollTop=scroll;
+    }
     const shopPanel=createAmazonPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:amazon')renderAmazon();},notice});
     function renderAmazon(){
         const active=shadow.activeElement,field=active?.dataset.shopField;

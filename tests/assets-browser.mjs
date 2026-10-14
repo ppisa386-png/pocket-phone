@@ -36,11 +36,21 @@ try {
     const p = await ctx.newPage(); p.on('pageerror', e => errors.push(e.message));
     await p.route('**/*', route => { if (route.request().url().startsWith(origin)) return route.continue(); external.push(route.request().url()); return route.abort(); });
     await p.goto(origin); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="assets"]').tap();
+    async function checkBottom() {
+        const box=await p.locator('.pp-assets').evaluate(el=>{
+            const nav=el.querySelector('.pp-asset-tabs').getBoundingClientRect(),body=el.querySelector('.pp-asset-body').getBoundingClientRect(),content=el.parentElement.getBoundingClientRect();
+            return {bottom:nav.bottom,expected:content.bottom,top:nav.top,bodyBottom:body.bottom,width:el.scrollWidth,client:el.clientWidth};
+        });
+        assert.ok(Math.abs(box.bottom-box.expected)<2,'tabs align with bottom of phone content');
+        assert.ok(box.bodyBottom<=box.top+1,'scrolling content does not cover tabs');
+        assert.ok(box.width<=box.client+1,'no horizontal overflow');
+    }
+    await checkBottom();
     assert.equal(await p.evaluate(() => window.calls), 0, 'open does not request');
     await p.getByRole('button', { name: '一键更新', exact: true }).tap(); await p.getByText('$5,000.00', { exact: true }).waitFor();
     assert.equal(await p.evaluate(() => window.calls), 1); assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(), true);
     for (const [tab, text] of [['fixed', '凯迪拉克 XT5'], ['luxury', '复古名表'], ['investment', '小理发店']]) {
-        await p.locator('[data-asset-tab="' + tab + '"]').tap(); await p.getByText(text, { exact: true }).waitFor();
+        await p.locator('[data-asset-tab="' + tab + '"]').tap(); await p.getByText(text, { exact: true }).waitFor();await checkBottom();
     }
     assert.equal(await p.evaluate(() => window.calls), 1, 'tabs do not request');
     await p.locator('[data-asset-tab="cash"]').tap();
@@ -58,6 +68,13 @@ try {
     await p.getByRole('button', { name: '一键更新', exact: true }).tap(); await p.getByText('$8,895.00', { exact: true }).waitFor();
     await p.locator('summary').filter({ hasText: '最近收支' }).tap(); await p.getByText('设计师 · 2026-02-15 工资', { exact: true }).waitFor();
     await p.setViewportSize({ width: 320, height: 640 });
+    await checkBottom();
+    await p.locator('.pp-asset-body').evaluate(el=>{
+        const row=el.querySelector('.pp-asset-row');for(let i=0;i<30;i++)el.append(row.cloneNode(true));
+        el.scrollTop=el.scrollHeight;
+    });
+    await checkBottom();
+    assert.ok(await p.locator('.pp-asset-body').evaluate(el=>el.scrollTop>0),'long list scrolls within body');
     assert.ok(await p.locator('.pp-content').evaluate(el => el.scrollWidth <= el.clientWidth + 1));
     await p.screenshot({ path: resolve(root, '../qa-results/assets-320.png') });
     await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="assets"]').tap();
@@ -93,7 +110,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 0.23.1/);
+    assert.match(log,/当前运行版本：榴莲手机 0.23.2/);
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -105,7 +122,9 @@ try {
         };
     });
     await p.getByRole('button',{name:'一键更新',exact:true}).tap();
-    await p.getByText('literal <analysis> text',{exact:true}).waitFor();
+    await p.getByText('账本已更新',{exact:true}).waitFor();
+    assert.equal(await p.getByText('literal <analysis> text',{exact:true}).count(),0,'assessment explanation is not displayed');
+    assert.equal(await p.getByText(/更新账本时结算|本轮已更新/).count(),0,'no internal timing explanation');
     assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
     assert.equal(await p.evaluate(()=>window.calls),2,'success uses one new manual request');
 
