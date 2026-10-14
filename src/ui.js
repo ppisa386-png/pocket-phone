@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.23.2';
-import { storyTime } from './story-clock.js?v=0.23.2';
-import { createAssetPanel } from './assets-view.js?v=0.23.2';
-import { createAmazonPanel } from './amazon-view.js?v=0.23.2';
-import { bindComposerKeys } from './composer.js?v=0.23.2';
-import { createXPanel } from './x-view.js?v=0.23.2';
-import { xUnread } from './x.js?v=0.23.2';
-import { createSnapPanel } from './snapchat-view.js?v=0.23.2';
-import { snapUnread } from './snapchat.js?v=0.23.2';
-import { createApiPanel } from './api-view.js?v=0.23.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.23.2';
-import { icon } from './icons.js?v=0.23.2';
-import { renderMessagesScreen } from './messages-view.js?v=0.23.2';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.23.2';
-import { renderPhoneScreen } from './phone-view.js?v=0.23.2';
+import { createDailyPanel } from './daily-view.js?v=0.24.0';
+import { storyTime } from './story-clock.js?v=0.24.0';
+import { createAssetPanel } from './assets-view.js?v=0.24.0';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.0';
+import { bindComposerKeys } from './composer.js?v=0.24.0';
+import { createXPanel } from './x-view.js?v=0.24.0';
+import { xUnread } from './x.js?v=0.24.0';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.0';
+import { snapUnread } from './snapchat.js?v=0.24.0';
+import { createApiPanel } from './api-view.js?v=0.24.0';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.0';
+import { icon } from './icons.js?v=0.24.0';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.0';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.0';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.0';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -115,11 +115,15 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const body=content.querySelector('.pp-asset-body');
         if(body?.dataset.assetPage===page)body.scrollTop=scroll;
     }
+    const shopScroll=new Map();
     const shopPanel=createAmazonPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:amazon')renderAmazon();},notice});
     function renderAmazon(){
         const active=shadow.activeElement,field=active?.dataset.shopField;
         const selection=field&&active.type==='text'?[active.selectionStart,active.selectionEnd]:null;
-        const scroll=content.scrollTop;content.innerHTML=shopPanel.html();content.scrollTop=scroll;
+        const old=content.querySelector('.pp-shop-body');
+        if(old)shopScroll.set(old.dataset.shopPage,old.scrollTop);
+        content.innerHTML=shopPanel.html();
+        const body=content.querySelector('.pp-shop-body');if(body)body.scrollTop=shopScroll.get(body.dataset.shopPage)||0;
         const next=field?Array.from(content.querySelectorAll('[data-shop-field]')).find(el=>el.dataset.shopField===field):null;
         if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
     }
@@ -393,7 +397,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             else if(route==='app:messages'&&(selectedSMSContactId||pickingSMSContact)){
                 if(smsEditing){smsEditing=null;}else{selectedSMSContactId=null;pickingSMSContact=false;}
                 renderMessages();
-            }else if(route==='app:phone'&&selectedCallId){selectedCallId=null;phoneTab='history';renderPhone();}
+            }else if(route==='app:amazon'&&shopPanel.back()){return;}
+            else if(route==='app:phone'&&selectedCallId){selectedCallId=null;phoneTab='history';renderPhone();}
             else {route = history.pop() || 'home'; render();}
         }
         if (target.dataset.app) navigate(target.dataset.app === 'settings' ? 'settings' : 'app:' + target.dataset.app);
@@ -619,7 +624,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (scope !== lastScope) {
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
-            snapPanel.reset();xPanel.reset();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
+            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }

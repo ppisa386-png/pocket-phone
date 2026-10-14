@@ -1,6 +1,6 @@
-import { shopItems, shopMoney } from './amazon.js?v=0.23.2';
-import { dayDate, readStoryClock } from './story-clock.js?v=0.23.2';
-import { deliveryStatus } from './delivery.js?v=0.23.2';
+import { shopItems, shopMoney } from './amazon.js?v=0.24.0';
+import { dayDate, readStoryClock } from './story-clock.js?v=0.24.0';
+import { deliveryStatus } from './delivery.js?v=0.24.0';
 const shopEscape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createAmazonPanel({adapter,getView,redraw,notice}){
     let tab='shop',selected=null,status='',working=false,epoch=0,drafts={};
@@ -27,7 +27,7 @@ export function createAmazonPanel({adapter,getView,redraw,notice}){
         }else{
             body=shopItems(state,'order').reverse().map(o=>{const delivery=deliveryStatus(o,chat());return '<article class="pp-shop-product"><strong>'+delivery.label+'</strong><p>收件人：'+shopEscape(o.recipient.name)+'</p><small>预计 '+dayDate(o.dueDay)+' 白天送达</small>'+o.items.map(itemHTML).join('')+'<b>合计 '+shopEscape(Object.entries(o.totals).map(([c,v])=>shopMoney(v,c)).join(' + '))+'</b></article>';}).join('')||'<p class="pp-snap-empty">暂无订单</p>';
         }
-        return '<div class="pp-snap pp-shop"><header class="pp-snap-top"><b>amazon</b></header><p class="pp-snap-status" role="status">'+shopEscape(working||state.busy?'正在处理…':state.errorKind==='amazon'&&state.error?state.error:status)+'</p>'+body+'<nav class="pp-snap-tabs pp-shop-tabs" aria-label="Amazon 页面">'+[['shop','商品'],['cart','购物车'+(cart.length?' '+cart.length:'')],['orders','订单']].map(([id,label])=>'<button type="button" data-shop-action="tab" data-shop-id="'+id+'" aria-pressed="'+(tab===id)+'">'+label+'</button>').join('')+'</nav></div>';
+        return '<div class="pp-snap pp-shop"><div class="pp-shop-body" data-shop-page="'+shopEscape(tab+':'+(selected||''))+'"><header class="pp-snap-top"><b>amazon</b></header><p class="pp-snap-status" role="status">'+shopEscape(working||state.busy?'正在处理…':state.errorKind==='amazon'&&state.error?state.error:status)+'</p>'+body+'</div><nav class="pp-snap-tabs pp-shop-tabs" aria-label="Amazon 页面">'+[['shop','商品'],['cart','购物车'+(cart.length?' '+cart.length:'')],['orders','订单']].map(([id,label])=>'<button type="button" data-shop-action="tab" data-shop-id="'+id+'" aria-pressed="'+(tab===id)+'">'+label+'</button>').join('')+'</nav></div>';
     }
     async function perform(method,args,message=''){
         if(!adapter.amazon){notice('请在酒馆内使用 Amazon。');return null;}if(working||getView().busy)return null;
@@ -35,7 +35,7 @@ export function createAmazonPanel({adapter,getView,redraw,notice}){
         try{const r=await adapter.amazon[method](...args);if(token!==epoch)return null;status=r?.ok?message:r?.error||'请重试。';return r;}
         catch(e){if(token===epoch)status=e.message;return null;}finally{working=false;redraw();}
     }
-    return {html,reset(){epoch++;tab='shop';selected=null;drafts={};status='';},input(el){drafts[el.dataset.shopField]=el.value;},
+    return {html,back(){if(tab==='shop'&&selected){selected=null;redraw();return true;}return false;},reset(){epoch++;tab='shop';selected=null;drafts={};status='';},input(el){drafts[el.dataset.shopField]=el.value;},
         async action(action,id){if(action==='tab'){tab=id;selected=null;status='';redraw();return;}if(action==='product'){selected=id;delete drafts.variant;drafts.quantity=1;redraw();return;}if(action==='back'){selected=null;redraw();return;}if(action==='remove')await perform('remove',[id]);},
         async submit(form){const v=Object.fromEntries(new FormData(form)),kind=form.dataset.shopForm;
             if(kind==='search')await perform('search',[v.query]);

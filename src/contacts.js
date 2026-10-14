@@ -1,4 +1,4 @@
-import { localizedPerson } from './names.js?v=0.23.2';
+import { localizedPerson } from './names.js?v=0.24.0';
 const normalizeName = value => String(value).normalize('NFKC').trim().toLowerCase();
 const visible = message => message && !message.is_system && !message.is_hidden && !message.hidden;
 

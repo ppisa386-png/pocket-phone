@@ -273,3 +273,25 @@ h2, p { margin: 0; }
 
 .pp-square-edition{display:flex;justify-content:flex-end;margin:8px 0 14px;font-size:12px;opacity:.85}.pp-square-expired{color:#db4444;border:2px solid currentColor;border-radius:4px;padding:3px 10px;font-weight:800;transform:rotate(-5deg)}.pp-square-inject{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;margin:2px 0 7px}.pp-square-inject[aria-pressed="true"]{color:#81ad54;background:#81ad5414}.pp-square-inject:disabled{opacity:.45;cursor:default}
 .pp-daily{background:#f5f0e5;color:#302c27;border-radius:12px;padding:19px 15px 12px;min-height:100%;font-family:Georgia,'Noto Serif SC','SimSun',serif;overflow-wrap:anywhere}.pp-daily-masthead{text-align:center;border-bottom:3px double #574c3e;padding-bottom:12px}.pp-daily-masthead>small{font:10px/1.5 system-ui,sans-serif;letter-spacing:3px;color:#766b5e}.pp-daily-masthead h2{font-size:32px;letter-spacing:5px;margin:8px 0 14px;color:inherit}.pp-daily-masthead>div{display:flex;justify-content:space-between;gap:12px;font:10px/1.6 system-ui,sans-serif}.pp-daily-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0 4px;font:12px/1.6 system-ui,sans-serif}.pp-daily button{font:12px/1.5 system-ui,sans-serif;cursor:pointer;color:inherit;background:transparent;border:0;padding:8px 0;min-height:34px}.pp-daily button:focus-visible{outline:2px solid #925231;outline-offset:3px}.pp-daily .pp-daily-refresh{background:#302c27;color:#fff9ed;border-radius:5px;padding:8px 13px;white-space:nowrap}.pp-daily-status{font:12px/1.6 system-ui,sans-serif;color:#895338;margin:0 0 10px;white-space:pre-wrap}.pp-daily-status:empty{display:none}.pp-daily-expired{color:#b3372d;border:2px solid currentColor;padding:3px 8px;display:inline-block;transform:rotate(-5deg);letter-spacing:2px}.pp-daily-article{padding:18px 0;border-top:1px solid #c6bcab}.pp-daily-article h3{margin:9px 0 10px;font-size:22px;line-height:1.4;color:inherit}.pp-daily-lead h3{font-size:28px;line-height:1.3;letter-spacing:-.5px}.pp-daily-lead{border-top:0}.pp-daily-brief h3{font-size:18px}.pp-daily-byline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;font:10px/1.6 system-ui,sans-serif;color:#746451}.pp-daily-byline>span:first-child{color:#a44b2f;font-weight:700;letter-spacing:1px}.pp-daily-deck{font-size:14px;line-height:1.8;margin:0;color:#63584c}.pp-daily-body{font-size:15px;line-height:1.9;white-space:pre-wrap;margin:14px 0;color:#302c27}.pp-daily-article footer{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}.pp-daily .pp-daily-inject{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid #998a75;border-radius:5px}.pp-daily-inject[aria-pressed=true]{background:#e0e8d4;color:#425c2a;border-color:#6d8152}.pp-daily button:disabled{opacity:.45;cursor:default}.pp-daily-empty{text-align:center;color:#887b67;padding:42px 4px;font-size:14px}.pp-daily-empty>span{font-size:44px;display:block;margin-bottom:18px}.pp-daily-end{border-top:3px double #c6bcab;margin-top:8px;padding-top:13px;text-align:center;font:10px/1.6 system-ui,sans-serif;color:#8c7d66;letter-spacing:1px}
+
+/* Amazon keeps its navigation outside the product scroll area. */
+.pp-shop{display:flex;flex-direction:column;height:100%;min-height:0;padding:0;overflow:hidden}.pp-shop-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 14px;scrollbar-width:thin}.pp-shop .pp-shop-tabs{position:static;flex:0 0 auto;margin:0}
+
+/* Daily newspaper: full-width lead, variable columns, expanded reading spans the page. */
+.pp-daily{padding:16px 12px 12px;border-radius:5px}
+.pp-daily-masthead h2{font-size:clamp(24px,7vw,34px);letter-spacing:1px;line-height:1.2;margin:10px 0 14px}
+.pp-daily-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:16px;align-items:start;border-top:1px solid #574c3e}
+.pp-daily-article{min-width:0;padding:14px 0;border-top:1px solid #b7aa94}
+.pp-daily-wide,.pp-daily-expanded{grid-column:1/-1}
+.pp-daily-article h3{font-size:17px;line-height:1.4;margin:7px 0 9px}
+.pp-daily-lead h3{font-size:26px;line-height:1.25}
+.pp-daily-brief h3{font-size:15px}
+.pp-daily-lead{border-top:0;border-bottom:3px double #8c7d66;padding-bottom:16px}
+.pp-daily-byline{font-size:10px}
+.pp-daily-byline>span:last-child{display:none}
+.pp-daily-deck{font-size:12px;line-height:1.75;color:#574c3e}
+.pp-daily-lead .pp-daily-deck{font-size:14px}
+.pp-daily-article footer{gap:3px 8px;margin-top:9px}
+.pp-daily-article button{font-size:11px;min-height:36px}
+.pp-daily .pp-daily-inject{padding:4px 6px}
+.pp-daily-body{font-size:14px;line-height:1.9}
