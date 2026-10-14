@@ -310,3 +310,69 @@ h2, p { margin: 0; }
 .pp-daily-empty{text-align:center;color:#88704c;padding:42px 4px;font-size:14px}
 .pp-daily-empty>span{font-size:44px;display:block;margin-bottom:18px}
 .pp-daily-end{border-top:3px double var(--pp-rule);margin-top:8px;padding-top:10px;text-align:center;font:10px/1.6 Georgia,'SimSun',serif;color:#75603f;letter-spacing:1px}
+
+/* System-style phone and SMS. Local palette never leaks into other apps. */
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]){--pp-bg:#fff;--pp-card:#f2f2f7;--pp-text:#1c1c1e;--pp-muted:#72727a;--pp-line:#e5e5ea;--pp-accent:#007aff;--pp-input:#fff;background:var(--pp-bg);color:var(--pp-text);color-scheme:light}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-header{background:#fafafc;border-bottom:1px solid var(--pp-line)}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-header .pp-icon-button{color:var(--pp-accent)}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-footer{background:#fafafc}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-footer span{background:#222;opacity:.7}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-phone-toolbar{padding:18px 18px 12px;gap:4px 15px;justify-content:flex-start}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-phone-toolbar h2{flex-basis:100%;font-size:1.9em;font-weight:750;letter-spacing:-.6px;margin-bottom:3px}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-text-button{font-size:.82em;min-height:36px}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-contact-avatar{width:42px;height:42px;background:linear-gradient(145deg,#c1c8d3,#97a1b1);color:#fff}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-contact-avatar svg{width:23px;height:23px}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-block-button{font-size:10px;color:var(--pp-muted);padding:6px 2px}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-contact-status{color:#24804b}
+.pp-phone[data-active-app="phone"] .pp-phone-app{min-height:0;overflow:hidden}
+.pp-phone[data-active-app="phone"] .pp-phone-list{min-height:0;padding:0 18px}
+.pp-phone[data-active-app="phone"] .pp-contact-row{gap:9px;padding:13px 0}
+.pp-phone[data-active-app="phone"] .pp-dial-contact{width:36px;height:36px;background:#e7f6ec;color:#24844d}
+.pp-phone[data-active-app="phone"] .pp-dial-contact svg{width:20px;height:20px}
+.pp-phone[data-active-app="phone"] .pp-call-row{gap:10px;padding:14px 0}
+.pp-phone[data-active-app="phone"] .pp-call-row .pp-contact-avatar{background:#f0f2f6;color:#7c8694}
+.pp-phone[data-active-app="phone"] .pp-call-row[data-call-status="missed"] strong{color:#d73545}
+.pp-phone[data-active-app="phone"] .pp-phone-tabs{flex-shrink:0;background:#fafafc;padding:7px 8px 0}
+.pp-phone[data-active-app="phone"] .pp-phone-tabs button{flex:1;min-width:0;font-size:10px;gap:4px;padding:4px 8px}
+.pp-phone[data-active-app="phone"] .pp-phone-tabs svg{width:23px;height:23px}
+.pp-phone[data-active-app="phone"] .pp-call-page{min-height:100%;background:linear-gradient(#f4f7fb,#fff 260px);padding:6px 18px 24px}
+.pp-phone[data-active-app="phone"] .pp-call-heading{padding:18px 0 24px}
+.pp-phone[data-active-app="phone"] .pp-call-heading .pp-contact-avatar{width:72px;height:72px;margin-bottom:14px}
+.pp-phone[data-active-app="phone"] .pp-call-heading .pp-contact-avatar svg{width:38px;height:38px}
+.pp-phone[data-active-app="phone"] .pp-call-heading h2{font-size:1.7em;font-weight:600}
+.pp-phone[data-active-app="phone"] .pp-call-turn{border:0;background:#f0f1f4;border-radius:18px}
+.pp-phone[data-active-app="phone"] .pp-call-turn[data-role="user"]{background:#e6f2ec}
+.pp-phone[data-active-app="phone"] .pp-call-compose{grid-template-columns:minmax(0,1fr) auto}
+.pp-phone[data-active-app="phone"] .pp-call-compose textarea{border-radius:20px;resize:none}
+.pp-phone[data-active-app="phone"] .pp-call-compose button{background:#24844d;color:#fff;border-radius:20px}
+.pp-phone[data-active-app="phone"] .pp-incoming-actions{gap:55px}
+.pp-phone[data-active-app="phone"] .pp-answer,.pp-phone[data-active-app="phone"] .pp-incoming-actions .pp-hangup{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:66px;height:66px;padding:0;border-radius:50%;font-size:11px}
+.pp-phone[data-active-app="phone"] .pp-answer{background:#24844d}
+.pp-phone[data-active-app="phone"] [data-contact-search]{flex:0 0 auto;margin:0 18px 12px}
+.pp-phone[data-active-app="messages"] .pp-sms-list{padding:0 18px 20px}
+.pp-phone[data-active-app="messages"] .pp-sms-list .pp-phone-toolbar{padding-left:0;padding-right:0}
+.pp-phone[data-active-app="messages"] .pp-sms-row{gap:10px;padding:15px 0}
+.pp-phone[data-active-app="messages"] .pp-sms-row-text strong{font-weight:650}
+.pp-phone[data-active-app="messages"] .pp-sms-row-text small{font-size:.84em}
+.pp-sms-row-meta{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:0 0 auto;color:var(--pp-muted)}
+.pp-sms-row-meta time{font-size:10px;max-width:70px;overflow-wrap:anywhere;text-align:right}
+.pp-sms-row-meta>svg{width:12px;height:12px}
+.pp-phone[data-active-app="messages"] .pp-unread-count{background:#007aff;min-width:18px;height:18px;font-size:10px}
+.pp-phone[data-active-app="messages"] .pp-sms-thread{display:flex;flex-direction:column;height:100%;min-height:0;padding:0;overflow:hidden}
+.pp-phone[data-active-app="messages"] .pp-sms-heading{flex:0 0 auto;background:#fafafc;border-bottom:1px solid var(--pp-line);padding:8px 14px;gap:6px}
+.pp-phone[data-active-app="messages"] .pp-sms-heading>[data-sms-back]{width:32px;height:36px;color:var(--pp-accent)}
+.pp-phone[data-active-app="messages"] .pp-sms-heading strong{font-size:.96em;font-weight:650}
+.pp-phone[data-active-app="messages"] .pp-sms-bubbles{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px 14px 6px;scrollbar-width:thin}
+.pp-phone[data-active-app="messages"] .pp-sms-item{margin-bottom:14px}
+.pp-phone[data-active-app="messages"] .pp-sms-bubble{border:0;background:#e9e9eb;color:#1c1c1e;max-width:88%;padding:10px 14px;line-height:1.55;border-radius:20px 20px 20px 5px}
+.pp-phone[data-active-app="messages"] .pp-sms-item[data-role="user"] .pp-sms-bubble{background:#24844d;color:#fff;border-radius:20px 20px 5px 20px}
+.pp-phone[data-active-app="messages"] .pp-message-tools{gap:1px;margin-top:2px;color:#8b8b93}
+.pp-phone[data-active-app="messages"] .pp-message-tools .pp-icon-button{width:30px;height:30px;padding:7px}
+.pp-phone[data-active-app="messages"] .pp-message-tools svg{width:15px;height:15px}
+.pp-phone[data-active-app="messages"] .pp-sms-compose{flex:0 0 auto;margin:0;padding:10px 12px 8px;background:#fafafc;border-top:1px solid var(--pp-line);gap:8px}
+.pp-phone[data-active-app="messages"] .pp-sms-compose label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.pp-phone[data-active-app="messages"] .pp-sms-compose textarea{height:42px;min-height:42px;max-height:110px;border-radius:22px;padding:9px 14px;resize:none;line-height:22px;font-size:15px}
+.pp-phone[data-active-app="messages"] .pp-sms-compose button{display:grid;place-items:center;min-height:36px;width:36px;height:36px;margin-bottom:3px;padding:0;border-radius:50%;background:#24844d}
+.pp-phone[data-active-app="messages"] .pp-sms-compose button svg{width:21px;height:21px;transform:rotate(-90deg)}
+.pp-phone[data-active-app="messages"] .pp-sms-thread>.pp-call-error{flex-shrink:0;max-height:100px;overflow-y:auto}
+.pp-phone[data-active-app="messages"] .pp-sms-thread>.pp-footnote{margin:4px 14px;font-size:11px}

@@ -285,6 +285,7 @@ try {
         check(await p.evaluate(()=>window.modelCalls)===0,'persona relatives are not fetched automatically');
         await addPhoneContact(p,'Bea');await p.getByText('已新增 1 位联系人。',{exact:true}).waitFor();
         check(await p.locator('.pp-contact-row').count()===1,'manual persona scan displays one phone contact');
+        await p.screenshot({path:resolve(screenshotDir,'phone-system-390.png')});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-new]').tap();
         check(await p.locator('[data-sms-contact]').count()===1,'SMS shares the manually added persona contact');
         check(await p.evaluate(()=>window.modelCalls)===1,'SMS contact picker makes no additional API request');
@@ -488,6 +489,23 @@ try {
         await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
         await p.getByText('Yes, see you there.',{exact:true}).waitFor();
         check((await p.locator('.pp-sms-item[data-role="user"] small').textContent()).includes('09:12 · 已发送'),'outgoing narrative SMS has proper direction, status and story clock');
+        // The system-style SMS composer stays reachable while long history scrolls.
+        for(const width of [390,320]) {
+            await p.setViewportSize({width,height:740});
+            check(await p.locator('.pp-content').evaluate(el=>{
+                const box=el.getBoundingClientRect(),form=el.querySelector('.pp-sms-compose').getBoundingClientRect();
+                return Math.abs(box.bottom-form.bottom)<2 && el.scrollWidth<=el.clientWidth+1;
+            }),'SMS input pinned and fits '+width+'px');
+        }
+        await p.screenshot({path:resolve(screenshotDir,'sms-system-320.png')});
+        await p.locator('.pp-sms-bubbles').evaluate(el=>{
+            for(let i=0;i<25;i++){const row=el.firstElementChild.cloneNode(true);row.dataset.qaClone='true';el.append(row);}
+            el.scrollTop=el.scrollHeight;
+        });
+        check(await p.locator('.pp-sms-compose').evaluate(el=>{
+            const b=el.getBoundingClientRect(),p=el.closest('.pp-content').getBoundingClientRect();return b.top>=p.top&&Math.abs(b.bottom-p.bottom)<2;
+        }),'long SMS history cannot push input off screen');
+        await p.locator('[data-qa-clone]').evaluateAll(es=>es.forEach(e=>e.remove()));
         p.once('dialog', dialog => dialog.dismiss());
         await p.locator('[data-sms-delete]').tap();
         check(await p.getByText('Meet at lunch?',{exact:true}).count()===1,'cancel deletion preserves SMS');

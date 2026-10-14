@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.2';
-import { storyTime } from './story-clock.js?v=0.24.2';
-import { createAssetPanel } from './assets-view.js?v=0.24.2';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.2';
-import { bindComposerKeys } from './composer.js?v=0.24.2';
-import { createXPanel } from './x-view.js?v=0.24.2';
-import { xUnread } from './x.js?v=0.24.2';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.2';
-import { snapUnread } from './snapchat.js?v=0.24.2';
-import { createApiPanel } from './api-view.js?v=0.24.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.2';
-import { icon } from './icons.js?v=0.24.2';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.2';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.2';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.2';
+import { createDailyPanel } from './daily-view.js?v=0.24.3';
+import { storyTime } from './story-clock.js?v=0.24.3';
+import { createAssetPanel } from './assets-view.js?v=0.24.3';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.3';
+import { bindComposerKeys } from './composer.js?v=0.24.3';
+import { createXPanel } from './x-view.js?v=0.24.3';
+import { xUnread } from './x.js?v=0.24.3';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.3';
+import { snapUnread } from './snapchat.js?v=0.24.3';
+import { createApiPanel } from './api-view.js?v=0.24.3';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.3';
+import { icon } from './icons.js?v=0.24.3';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.3';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.3';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.3';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -252,7 +252,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const selection = input ? [input.selectionStart, input.selectionEnd] : null;
         const scroll = content.scrollTop;
         content.innerHTML = renderPhoneScreen(phoneView, phoneTab, selectedCallId, callDraft);
-        if(phoneTab==='contacts')content.insertAdjacentHTML('afterbegin',contactSearchHTML());
+        if(phoneTab==='contacts')content.querySelector('.pp-phone-toolbar')?.insertAdjacentHTML('afterend',contactSearchHTML());
         content.scrollTop = scroll;
         const next = shadow.querySelector('[data-phone-draft]');
         if (focused && next) { next.focus({ preventScroll: true }); next.setSelectionRange(...selection); }
@@ -262,12 +262,13 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const input = shadow.querySelector('[data-sms-draft]');
         const focused = input && shadow.activeElement === input;
         const selection = input ? [input.selectionStart, input.selectionEnd] : null;
-        const scroll = content.scrollTop;
+        const scroll = (content.querySelector('.pp-sms-bubbles') || content).scrollTop;
         const count = Object.values(phoneView.messages || {}).filter(item => item.contactId === selectedSMSContactId).length;
         const key = selectedSMSContactId + ':' + count;
         content.innerHTML = renderMessagesScreen(phoneView, selectedSMSContactId, pickingSMSContact, smsDrafts, smsEditing);
         if(pickingSMSContact===true)content.insertAdjacentHTML('afterbegin',contactSearchHTML());
-        content.scrollTop = key === smsRenderKey ? scroll : content.scrollHeight;
+        const scroller = content.querySelector('.pp-sms-bubbles') || content;
+        scroller.scrollTop = key === smsRenderKey ? scroll : scroller.scrollHeight;
         smsRenderKey = key;
         const next = shadow.querySelector('[data-sms-draft]');
         if (focused && next && !next.disabled) { next.focus({ preventScroll: true }); next.setSelectionRange(...selection); }
@@ -297,6 +298,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function render() {
         if (destroyed) return;
         phone.dataset.home = String(route === 'home');
+        phone.dataset.activeApp = route.startsWith('app:') ? route.slice(4) : '';
         shadow.querySelector('[data-action="back"]').hidden = route === 'home';
         const app = APPS.find(item => route === 'app:' + item.id);
         title.textContent = route === 'home' ? '' : route === 'settings' ? '设置' : app ? app.name : SECTIONS.find(section => section.id === route)?.name || '';

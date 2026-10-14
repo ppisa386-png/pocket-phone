@@ -1,8 +1,8 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.2';
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.24.2';
-import { isBlocked } from './contact-events.js?v=0.24.2';
-import { icon } from './icons.js?v=0.24.2';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.24.2';
+import { displayStoryTime } from './story-clock.js?v=0.24.3';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.24.3';
+import { isBlocked } from './contact-events.js?v=0.24.3';
+import { icon } from './icons.js?v=0.24.3';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.24.3';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = displayStoryTime;
 const replyLabels = { sent: '已发送', queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
@@ -25,7 +25,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
             (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML +
             (phoneOnly ? '<p class="pp-footnote">此号码不支持短信。</p>' : '') +
             (blocked ? '<p class="pp-footnote">此人的短信已被拉黑，取消后才能继续交流。</p>' : '') +
-            '<form data-sms-form class="pp-sms-compose"><label for="pp-sms-input">短信内容</label><textarea id="pp-sms-input" data-sms-draft enterkeyhint="enter" rows="2" maxlength="6000" placeholder="短信…"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>' + smsEscape(drafts[contact.id] || '') + '</textarea><button type="submit" aria-label="发送短信"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>发送</button></form></div>';
+            '<form data-sms-form class="pp-sms-compose"><label for="pp-sms-input">短信内容</label><textarea id="pp-sms-input" data-sms-draft enterkeyhint="enter" rows="2" maxlength="6000" placeholder="短信…"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>' + smsEscape(drafts[contact.id] || '') + '</textarea><button type="submit" aria-label="发送短信"' + (busy || blocked || phoneOnly ? ' disabled' : '') + '>'+icon('send')+'</button></form></div>';
     }
     let entries = Object.values(picking ? contacts : participants);
     if (picking) entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -35,7 +35,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
         (entries.length ? entries.map(item => {
             const last = threadMessages(messages, item.id).at(-1);
             const unread = unreadMessages(messages, item.id);
-            return '<button type="button" class="pp-sms-row" data-sms-contact="' + smsEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('person') + '</span><span class="pp-sms-row-text"><strong>' + smsEscape(item.name) + '</strong>' + (picking ? (item.number ? '<small>' + smsEscape(item.number) + '</small>' : '') : '<small>' + smsEscape(last.text) + '</small>') + '</span>' + (unread && !picking ? '<span class="pp-unread-count">' + unread + '</span>' : '') + icon('chevron') + '</button>';
+            return '<button type="button" class="pp-sms-row" data-sms-contact="' + smsEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('person') + '</span><span class="pp-sms-row-text"><strong>' + smsEscape(item.name) + '</strong>' + (picking ? (item.number ? '<small>' + smsEscape(item.number) + '</small>' : '') : '<small>' + smsEscape(last.text) + '</small>') + '</span>' + (!picking ? '<span class="pp-sms-row-meta"><time>'+smsTime(last)+'</time>' : '<span class="pp-sms-row-meta">') + (unread && !picking ? '<span class="pp-unread-count">' + unread + '</span>' : '') + icon('chevron') + '</span></button>';
         }).join('') : '<div class="pp-empty"><h2>' + (picking ? '暂无联系人' : '暂无短信') + '</h2><p>' + (picking ? '点击「新增联系人」添加。' : '点击「新建短信」，选择联系人开始交流。') + '</p></div>') +
         '</div>';
 }
