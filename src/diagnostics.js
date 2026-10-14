@@ -27,6 +27,6 @@ export function createDiagnostics({storage, version = '', getSecrets = () => []}
         list: () => structuredClone(entries).reverse(),
         persistent: () => persisted,
         clear() { entries=[];save(); },
-        text() { return entries.slice().reverse().map(e=>'['+e.time+'] 榴莲手机 '+e.version+' · '+e.source+'\n'+e.message).join('\n\n'); },
+        text() { return (entries.length ? '当前运行版本：榴莲手机 ' + version + '\n（以下每条版本为报错发生时的版本；更新插件后请刷新酒馆页面。）\n\n' : '') + entries.slice().reverse().map(e=>'['+e.time+'] 榴莲手机 '+e.version+' · '+e.source+'\n'+e.message).join('\n\n'); },
     };
 }

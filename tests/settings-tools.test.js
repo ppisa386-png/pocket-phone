@@ -32,3 +32,15 @@ test('diagnostics persist bounded, redacted history and clear it',()=>{
  for(let i=0;i<110;i++)d.add('failure '+i,'X');assert.equal(d.list().length,100);assert.match(d.list()[0].message,/109/);d.clear();assert.equal(createDiagnostics(options).list().length,0);
  const disabled=createDiagnostics({storage:null});disabled.add('Error');assert.equal(disabled.persistent(),false);assert.equal(disabled.list().length,1);
 });
+
+test('copied diagnostics distinguish current version from historical error versions',()=>{
+ const values=new Map(),local={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
+ createDiagnostics({storage:local,version:'0.21.2'}).add(Error('旧错误'),'assets');
+ const current=createDiagnostics({storage:local,version:'0.23.1'});
+ assert.match(current.text(),/^当前运行版本：榴莲手机 0.23.1/);
+ assert.match(current.text(),/榴莲手机 0.21.2 · assets/);
+ current.add(Object.assign(Error('新的格式错误'),{diagnostic:'阶段：解析；Authorization: Bearer sk-test-secret'}),'assets');
+ assert.ok(!current.text().includes('sk-test-secret'));
+ assert.match(createDiagnostics({storage:local,version:'0.23.1'}).text(),/阶段：解析/);
+ current.clear();assert.equal(current.text(),'');
+});

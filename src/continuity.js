@@ -1,6 +1,6 @@
-import { storyTime } from './story-clock.js?v=0.23.0';
-import { nameAliases } from './names.js?v=0.23.0';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.23.0';
+import { storyTime } from './story-clock.js?v=0.23.1';
+import { nameAliases } from './names.js?v=0.23.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.23.1';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();

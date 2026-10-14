@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.23.0';
-import { storyTime } from './story-clock.js?v=0.23.0';
-import { createAssetPanel } from './assets-view.js?v=0.23.0';
-import { createAmazonPanel } from './amazon-view.js?v=0.23.0';
-import { bindComposerKeys } from './composer.js?v=0.23.0';
-import { createXPanel } from './x-view.js?v=0.23.0';
-import { xUnread } from './x.js?v=0.23.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.23.0';
-import { snapUnread } from './snapchat.js?v=0.23.0';
-import { createApiPanel } from './api-view.js?v=0.23.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.23.0';
-import { icon } from './icons.js?v=0.23.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.23.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.23.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.23.0';
+import { createDailyPanel } from './daily-view.js?v=0.23.1';
+import { storyTime } from './story-clock.js?v=0.23.1';
+import { createAssetPanel } from './assets-view.js?v=0.23.1';
+import { createAmazonPanel } from './amazon-view.js?v=0.23.1';
+import { bindComposerKeys } from './composer.js?v=0.23.1';
+import { createXPanel } from './x-view.js?v=0.23.1';
+import { xUnread } from './x.js?v=0.23.1';
+import { createSnapPanel } from './snapchat-view.js?v=0.23.1';
+import { snapUnread } from './snapchat.js?v=0.23.1';
+import { createApiPanel } from './api-view.js?v=0.23.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.23.1';
+import { icon } from './icons.js?v=0.23.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.23.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.23.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.23.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -199,7 +199,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderErrors() {
         const log=adapter.diagnostics?.text()||'';
-        content.innerHTML='<div class="pp-page"><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近 100 条报错。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
+        content.innerHTML='<div class="pp-page"><p class="pp-footnote" data-running-version>当前运行：榴莲手机 '+VERSION+'。历史报错可能来自旧版本；更新插件后请刷新酒馆页面。</p><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近 100 条报错。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
     }
     async function copyErrors() {
         const text=adapter.diagnostics?.text()||'';

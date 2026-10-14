@@ -12,3 +12,15 @@ test('asset parser rejects incomplete, competing and array results without leaki
   assert.ok(failure);assert.match(failure.diagnostic,/返回字符数/);assert.ok(!failure.diagnostic.includes('private content'));
  }
 });
+
+
+test('presentation tags inside JSON strings are data, never removed or interpreted',()=>{
+ const value={date:'2026-01-01',initial:{balance:100,holdings:[],jobs:[]},note:'literal <!--keep--> <think>keep</think> <script>keep</script> <analysis>unclosed'};
+ for(const raw of [JSON.stringify(value),'说明：<content>'+JSON.stringify(value)+'</content>','<think>{"discard":true}</think>'+JSON.stringify(value)]) assert.deepEqual(parseModelObject(raw),value);
+});
+
+test('parser errors distinguish empty, syntax, truncation, competing and wrong-type responses',()=>{
+ for(const [raw,code,reason] of [['','MODEL_JSON_EMPTY','没有返回文字'],['not JSON','MODEL_JSON_MISSING','未返回 JSON'],['{"balance":','MODEL_JSON_TRUNCATED','不完整'],['{"a":1,}','MODEL_JSON_SYNTAX','语法'],['{}{}','MODEL_JSON_AMBIGUOUS','多个'],['[]','MODEL_JSON_TYPE','单个 JSON'],['<think>secret','MODEL_JSON_REASONING','思考标签']]) {
+  assert.throws(()=>parseModelObject(raw),e=>e.code===code&&e.message.includes(reason)&&e.diagnostic.includes(code)&&!e.diagnostic.includes('secret'));
+ }
+});

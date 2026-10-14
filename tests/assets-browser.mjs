@@ -80,5 +80,34 @@ try {
     assert.equal(await p.evaluate(()=>window.calls),0,'cancellation is local');
     await p.locator('[data-action="home"]').tap(); await p.locator('[data-app="assets"]').tap();
     await p.getByText('$4,995.00',{exact:true}).waitFor();
+
+    await p.evaluate(()=>{
+        const c=window.SillyTavern.getContext();
+        c.generateQuietPrompt=async()=>{window.calls++;return '<content>{"date":"2026-01-16","living":';};
+    });
+    await p.getByRole('button',{name:'一键更新',exact:true}).tap();
+    await p.getByText(/账本返回格式不正确：JSON 不完整/).waitFor();
+    assert.equal(await p.evaluate(()=>window.calls),1,'format failure is one request');
+    assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),false);
+    await p.getByText('$4,995.00',{exact:true}).waitFor();
+    await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
+    await p.locator('[data-running-version]').waitFor();
+    const log=await p.locator('[data-error-log]').inputValue();
+    assert.match(log,/当前运行版本：榴莲手机 0.23.1/);
+    assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
+    assert.ok(!log.includes('<content>'),'no raw response saved');
+    assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    await p.screenshot({path:resolve(root,'../qa-results/assets-error-320.png')});
+    await p.locator('[data-action="home"]').tap();await p.locator('[data-app="assets"]').tap();
+    await p.evaluate(()=>{
+        window.SillyTavern.getContext().generateQuietPrompt=async()=>{
+            window.calls++;return '<content>'+JSON.stringify({date:'2026-01-16',events:[],living:{total:0,bookedIds:[]},business:[],note:'literal <analysis> text'})+'</content>';
+        };
+    });
+    await p.getByRole('button',{name:'一键更新',exact:true}).tap();
+    await p.getByText('literal <analysis> text',{exact:true}).waitFor();
+    assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
+    assert.equal(await p.evaluate(()=>window.calls),2,'success uses one new manual request');
+
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

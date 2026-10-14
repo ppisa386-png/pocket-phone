@@ -303,3 +303,36 @@ test('truncated or ambiguous asset JSON never changes wallet and never silently 
   }
  }finally{f.close();}
 });
+
+test('asset errors include transport, stage and amount field but never persist raw replies',async()=>{
+ const f=setup(), errors=[]; f.phone.destroy();
+ const phone=createPhoneService({memory:f.memory,getContext:()=>f.c,getSettings:()=>f.settings,onError:e=>errors.push(e)});
+ const assets=createAssets({memory:f.memory,phone,getContext:()=>f.c,getSettings:()=>f.settings});
+ try {
+  f.reply(()=>'<content>{"date":"2026-01-01","initial":');
+  let result=await assets.update();
+  assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_TRUNCATED');
+  assert.match(errors.at(-1).diagnostic,/跟随酒馆.*解析返回格式.*本次请求次数：1/);
+  f.reply({...initial(),initial:{balance:'$1,000 secret-scene',holdings:[],jobs:[]}});
+  result=await assets.update();assert.equal(result.code,'ASSET_MONEY_INVALID');
+  assert.match(result.error,/initial.balance/);assert.match(errors.at(-1).diagnostic,/校验业务数据/);
+  assert.match(errors.at(-1).diagnostic,/收到类型：string/);
+  assert.ok(!JSON.stringify(errors.map(e=>({message:e.message,diagnostic:e.diagnostic}))).includes('secret-scene'));
+  assert.equal(phone.snapshot().assets.wallet,undefined);assert.equal(f.count(),2);
+  f.reply(()=>{throw Error('network failed');});
+  await assets.update();assert.match(errors.at(-1).diagnostic,/失败阶段：请求模型/);assert.equal(f.count(),3);
+  f.reply(initial());ok(await assets.update());assert.equal(cashBalance(phone.snapshot()),100000);
+ } finally {phone.destroy();f.memory.destroy();}
+});
+
+test('wrapped asset JSON preserves quoted annotation text and rejects unsafe amount formats atomically',async()=>{
+ const f=setup();try{
+  const data={...initial(),note:'literal <analysis> is text'};
+  f.reply(()=>'<content>'+JSON.stringify(data)+'</content>');
+  ok(await f.assets.update());assert.equal(f.state().assets.wallet.note,data.note);
+  await f.append('Another day.','2026-01-02');
+  f.reply({...evaluation('2026-01-02'),living:{total:'1,000',bookedIds:[]}});
+  const result=await f.assets.update();assert.equal(result.ok,false);assert.match(result.error,/living.total/);
+  assert.equal(cashBalance(f.state()),100000);assert.equal(f.count(),2);
+ }finally{f.close();}
+});
