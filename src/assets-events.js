@@ -1,5 +1,5 @@
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=0.22.1';
-import { dateDay, dayDate } from './story-clock.js?v=0.22.1';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=0.23.0';
+import { dateDay, dayDate } from './story-clock.js?v=0.23.0';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
 export function validateFinancialEvent(row, id, index, fallbackDay = null) {

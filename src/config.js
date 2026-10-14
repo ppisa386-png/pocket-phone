@@ -1,15 +1,18 @@
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '0.22.1';
+export const VERSION = '0.23.0';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
     { id: 'snapchat', name: 'Snapchat', color: '#ffe34d' },
     { id: 'x', name: 'X', color: '#252733' },
+    { id: 'daily', name: '榴莲日报', color: '#b66b3e' },
     { id: 'assets', name: '小榴莲', color: '#739c45' },
     { id: 'amazon', name: 'Amazon', color: '#e89947' },
 ];
 export const PROMPTS = {
+    daily: {name:'榴莲日报 · 新闻选编',text:'按当前剧情地域、年代和公开事件编排日报，媒体来源和版面大小与人物知名度及事件价值相符。普通人不强行上报，优先报道相关地点、机构和公众人物。内容不以 user 为中心，保持隐私和公众知情边界，语言跟随预设。'},
+    dailyStory: {name:'榴莲日报 · 已选报道与正文',text:'仅把 user 手动选中的有效报道作为参考，人物按合理知情途径择机回应。允许暂缓，不强制反应；媒体观点不等于事实，不重复已采用的内容。'},
     assetStory: {name:'小榴莲 · 正文记账',text:'出行、衣着及新增消费参考当前经济情况，保留人设和历史明确支持的已有财物，不把现金少等同于没有资产。可用资金不足时不写成已付清，确有借贷依据才写欠款。只记录本次正文已发生的 user 收支、财产和工作变化；不为记账添加交易，不估价、不计算盈亏，金额不明留空。有变化才记录，无事不写。'},
     assetAssessment: {name:'小榴莲 · 账本评估',text:'根据人设、性格、年代、地区、剧情日期和有效记忆合理评估财富。普通生活开销包含饮食、交通和有依据的居住费用，节省者少、奢侈者适度多；奢侈品购置单独记账。没有房产不自动认定租房。投资收益不强制为正，不预测当前剧情日期以后的历史。只更新确有变化的项目，避免重复收支。'},
     establishedContacts: {name:'一键新增联系人',text:'批量加入人物设定中在故事开始前就与 user 存在明确关系的具名人物，正面和负面关系一视同仁。不要求交换号码剧情，不审查取号资格；排除无名人物和仅一面之缘的路人。没有提供号码数字时保留空号码，不编造。'},

@@ -89,7 +89,7 @@ try {
     await page.goto(origin + '/preview');
     const phone = page.locator('.pp-phone');
     await phone.waitFor({ state: 'visible' });
-    check(await page.locator('.pp-app').count() === 7, 'seven desktop apps including 小榴莲');
+    check(await page.locator('.pp-app').count() === 8, 'eight desktop apps including 榴莲日报');
     await page.screenshot({ path: screenshotDir + '/desktop.png' });
     await page.getByRole('button', { name: '收起手机', exact: true }).click();
     const before = await page.locator('.pp-launcher').boundingBox();

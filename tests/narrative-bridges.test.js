@@ -1,3 +1,4 @@
+import { createDailyBridge, DAILY_KEY } from '../src/daily-story.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HostEvents } from './host-fixture.js';
@@ -25,6 +26,10 @@ async function fixture(factory) {
         {collection:'x',key:'square-edition',value:{id:'square-edition',type:'edition',editionId:'one'}},
         {collection:'x',key:'square-post',value:{id:'square-post',type:'post',feed:'square',text:'Local park opens.',publication:{editionId:'one',clock:{day:dateDay('2026-01-03'),hour:12},selected:true,selectedIndex:1,publicBasis:{summary:'Public notice'}}}}
     ]);
+    if(factory===createDailyBridge)c.chatMetadata[JOURNAL_KEY]=appendChange(c.chatMetadata[JOURNAL_KEY],rev,[
+        {collection:'daily',key:'edition',value:{id:'edition',type:'edition',editionId:'daily-one',day:dateDay('2026-01-03')}},
+        {collection:'daily',key:'article',value:{id:'article',type:'article',editionId:'daily-one',headline:'Park opening',outlet:'Local Press',body:'A public park opens.',selected:true,selectedIndex:1,publicBasis:{summary:'Public notice'}}}
+    ]);
     const settings = normalizeSettings({}); const errors=[];
     let copied;
     bus.on('CHAT_COMPLETION_PROMPT_READY',data=>{copied=structuredClone(data.chat);});
@@ -32,7 +37,7 @@ async function fixture(factory) {
     return {c,bus,settings,bridge,errors,copied:()=>copied};
 }
 
-for (const [name, factory, key] of [['balance',createAssetBridge,ASSETS_KEY],['delivery',createDeliveryBridge,DELIVERY_KEY],['opinion',createOpinionBridge,OPINION_KEY],['phone facts',createStoryPhoneBridge,STORY_PHONE_KEY]]) {
+for (const [name, factory, key] of [['daily',createDailyBridge,DAILY_KEY],['balance',createAssetBridge,ASSETS_KEY],['delivery',createDeliveryBridge,DELIVERY_KEY],['opinion',createOpinionBridge,OPINION_KEY],['phone facts',createStoryPhoneBridge,STORY_PHONE_KEY]]) {
     test(name+' reaches outgoing messages even when preset omits the extension slot; no duplication or stale injection',async()=>{
         const f=await fixture(factory); try {
             await f.bridge.prepare('normal'); const prompt=f.c.extensionPrompts[key].value; assert.ok(prompt);

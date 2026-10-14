@@ -1,6 +1,6 @@
 // Small, chat-local event journal. It stores phone changes, never a copy of prose.
 export const JOURNAL_KEY = 'durian_phone_history';
-export const COLLECTIONS = ['profiles', 'contacts', 'calls', 'messages', 'snapchat', 'x', 'orders', 'assets'];
+export const COLLECTIONS = ['profiles', 'contacts', 'calls', 'messages', 'snapchat', 'x', 'orders', 'assets', 'daily'];
 const SCHEMA = 1;
 const EMPTY_REVISION = 'root';
 const copy = value => JSON.parse(JSON.stringify(value));
