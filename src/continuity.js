@@ -1,6 +1,6 @@
-import { storyTime } from './story-clock.js?v=0.22.0';
-import { nameAliases } from './names.js?v=0.22.0';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.22.0';
+import { storyTime } from './story-clock.js?v=0.22.1';
+import { nameAliases } from './names.js?v=0.22.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.22.1';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -149,14 +149,15 @@ export function createContinuityBridge({ getContext, getSettings, onError = () =
             if (!speaker || !Array.isArray(current.chat) || !current.chatMetadata?.[JOURNAL_KEY]) return;
             const metadata = current.chatMetadata;
             const signatures = messageSignatures(effectiveChat(current.chat, type));
-            const raw = structuredClone(metadata[JOURNAL_KEY]);
+            const journalReference = metadata[JOURNAL_KEY];
+            const raw = structuredClone(journalReference);
             const revisions = await revisionsFor(signatures);
             const legacyChat = effectiveChat(current.chat, type);
             const legacyRevisions = legacyChat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(legacyChat, true)) : null;
             function stillCurrent() {
                 if (disposed || generation !== token) return false;
                 const now = getContext();
-                if (now.chatMetadata !== metadata || serialize(resolveSpeaker(now)) !== serialize(speaker)) return false;
+                if (now.chatMetadata !== metadata || metadata[JOURNAL_KEY] !== journalReference || serialize(resolveSpeaker(now)) !== serialize(speaker)) return false;
                 // Normal generation appends a user turn after the hook; allow that,
                 // but reject changes to any existing source floor while preparing.
                 const prefix = messageSignatures(now.chat ?? []).slice(0, signatures.length);
@@ -189,6 +190,8 @@ export function createContinuityBridge({ getContext, getSettings, onError = () =
     }
     if (supported) {
         clear();
+        bus.on('durian-phone-records-erased', clear);
+        subscriptions.push(['durian-phone-records-erased', clear]);
         if(types.CHAT_COMPLETION_PROMPT_READY){
             (typeof bus.makeFirst==='function'?bus.makeFirst.bind(bus):bus.on.bind(bus))(types.CHAT_COMPLETION_PROMPT_READY,promptReady);
             subscriptions.push([types.CHAT_COMPLETION_PROMPT_READY,promptReady]);

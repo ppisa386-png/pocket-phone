@@ -1,14 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.22.0';
-import { CHINESE_NAME_RULE } from './names.js?v=0.22.0';
-import { proactiveSources } from './proactive-evidence.js?v=0.22.0';
-import { phoneQuietOptions } from './api-context.js?v=0.22.0';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.22.0';
-export { validateContacts } from './contacts.js?v=0.22.0';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.22.0';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.22.0';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.22.0';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.22.0';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.22.0';
+import { isMemoryHidden } from './journal.js?v=0.22.1';
+import { CHINESE_NAME_RULE } from './names.js?v=0.22.1';
+import { proactiveSources } from './proactive-evidence.js?v=0.22.1';
+import { phoneQuietOptions } from './api-context.js?v=0.22.1';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.22.1';
+export { validateContacts } from './contacts.js?v=0.22.1';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.22.1';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.22.1';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.22.1';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.22.1';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.22.1';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -87,6 +87,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         }
         // Capture before host quiet generation clears the plugin's prepared slot.
         prompt += preparedMemoryPrompt(readPreparedMemory(context, getSettings()));
+        if (options.outputContract) prompt += '\n' + options.outputContract;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         for (let attempt = 0; attempt <= retries; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
@@ -95,7 +96,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const text = independent ? await modelClient.generate(prompt, contact, isCurrent) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 checkEnabled();
-                return validate(parseJSON(text));
+                return validate((options.parseResponse || parseJSON)(text));
             } catch (failure) {
                 if (!isCurrent() || failure.retryable === false || attempt === retries) throw failure;
             }
@@ -395,7 +396,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const found = validateEstablishedContacts(data, chat, context, sources, Object.values(view.state.contacts));
                     if (data.contacts?.length && !found.length) throw new Error('未能核对联系人资料，请重试。');
                     return found;
-                }, valid);
+                }, valid, null, { retries: 0 });
                 if (!valid()) return;
                 const additions = contacts.filter(contact => !view.state.contacts[contact.id]);
                 const renamed = contacts.filter(contact => view.state.contacts[contact.id] && view.state.contacts[contact.id].name !== contact.name);
@@ -521,6 +522,12 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (latest?.id !== message.id&&(!message.batchId||latest?.batchId!==message.batchId)) throw new Error('请重试最新一条短信。');
                 await smsResponse(latest, current);
             }, 'messages');
+        },
+        deleteMessage(messageId) {
+            return task(async view => {
+                if(view.state.messages[messageId]?.role!=='assistant')throw new Error('只能删除对方的短信。');
+                await memory.eraseMessage(await memory.begin(),messageId);
+            },'messages');
         },
         editMessage(messageId,text) {
             return task(async(view)=>{

@@ -1,4 +1,4 @@
-import { localizedPerson } from './names.js?v=0.22.0';
+import { localizedPerson } from './names.js?v=0.22.1';
 const normalizeName = value => String(value).normalize('NFKC').trim().toLowerCase();
 const visible = message => message && !message.is_system && !message.is_hidden && !message.hidden;
 
@@ -25,6 +25,7 @@ export function establishedSources(context) {
 export function establishedContactPrompt(instruction, context, sources, existing) {
     return instruction + '\n当前任务：user 点击「一键新增」。仅提取正文开始之前，人物设定已明确与 user 建立关系的具名人物。父母、亲友、同事、熟人、前任、竞争对手、仇人、死对头等正面或负面关系均加入。不要进行号码是否交换、人物是否愿意、当前是否活着或有通信能力等资格判定。排除没有名字的人、仅一面之缘的路人、只与其他角色有关而与 user 无既有关系的人，以及正文开始后才认识的人。不能把资料中每个名字都当作 user 的熟人。' +
         '\n仅以下设定资料可用于本次提取；请求上下文里的后续正文、手机交流、记忆摘要不能扩大名单。逐项引用设定中包含姓名及关系的原文，source 使用对应资料标识。别名可写 aliases。没有明确号码就 number=null，不编造数字；不新增社媒账号。已有联系人若需改成设定中的中文姓名，也返回该项及原文 aliases，仅更新显示姓名，不改号码或其他资料。不需要 user_has_number、can_use_phone 或生存状态判断。' +
+        '\n姓名要求：优先保存完整中文姓名，西式姓名用中点 · 连接名与姓，不要只摘父母的名。先采用设定已有完整姓名及中译；只有短名时，结合 user 的完整姓名、亲属关系、原生家庭姓氏与当地命名习惯合理推理补全。若设定支持同一原生家庭、当地通常共用姓氏且没有反例，可用明确的家族姓氏补全父母姓名；不要机械把 user 婚后姓赋给其父母，也不要强迫不同姓氏、保留婚前姓、收养或不同文化的人同姓。不凭空编中间名；确实无法可靠推理才保留名或外号。aliases 必须保留设定中的短名及原文名，使完整姓名可对应原文；evidence 仍逐字引用，不把补全姓名伪装成原文。已有短名联系人也返回完整姓名和旧名 aliases 以更新原条目。' +
         '\nuser：' + context.name1 + '\n设定资料：' + JSON.stringify(sources) + '\n已有联系人：' + JSON.stringify(existing.map(c => ({name:c.name,id:c.id}))) +
         '\n只输出 JSON：{"contacts":[{"name":"具名人物","aliases":[],"relationship":"与 user 的既有关系","established":true,"incidental":false,"source":"资料标识","number":null,"evidence":"设定原文"}]}。没有符合者返回空数组。';
 }

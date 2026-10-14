@@ -1,17 +1,17 @@
-import { storyTime } from './story-clock.js?v=0.22.0';
-import { createAssetPanel } from './assets-view.js?v=0.22.0';
-import { createAmazonPanel } from './amazon-view.js?v=0.22.0';
-import { bindComposerKeys } from './composer.js?v=0.22.0';
-import { createXPanel } from './x-view.js?v=0.22.0';
-import { xUnread } from './x.js?v=0.22.0';
-import { createSnapPanel } from './snapchat-view.js?v=0.22.0';
-import { snapUnread } from './snapchat.js?v=0.22.0';
-import { createApiPanel } from './api-view.js?v=0.22.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.22.0';
-import { icon } from './icons.js?v=0.22.0';
-import { renderMessagesScreen } from './messages-view.js?v=0.22.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.22.0';
-import { renderPhoneScreen } from './phone-view.js?v=0.22.0';
+import { storyTime } from './story-clock.js?v=0.22.1';
+import { createAssetPanel } from './assets-view.js?v=0.22.1';
+import { createAmazonPanel } from './amazon-view.js?v=0.22.1';
+import { bindComposerKeys } from './composer.js?v=0.22.1';
+import { createXPanel } from './x-view.js?v=0.22.1';
+import { xUnread } from './x.js?v=0.22.1';
+import { createSnapPanel } from './snapchat-view.js?v=0.22.1';
+import { snapUnread } from './snapchat.js?v=0.22.1';
+import { createApiPanel } from './api-view.js?v=0.22.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.22.1';
+import { icon } from './icons.js?v=0.22.1';
+import { renderMessagesScreen } from './messages-view.js?v=0.22.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.22.1';
+import { renderPhoneScreen } from './phone-view.js?v=0.22.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -46,6 +46,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let lastFocused = null;
     let dragging = null;
     let suppressClickUntil = 0;
+    let pendingLauncherClick = false;
     let destroyed = false;
     let noticeTimeout;
     const lifetime = new AbortController();
@@ -355,6 +356,13 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (date) date.textContent = clockValue.date;
     }
 
+    shadow.addEventListener('pointerdown', () => { pendingLauncherClick = false; }, { capture: true, signal: lifetime.signal });
+    shadow.addEventListener('click', event => {
+        if (pendingLauncherClick && Date.now() < suppressClickUntil) {
+            pendingLauncherClick = false; event.preventDefault(); event.stopImmediatePropagation();
+        }
+    }, { capture: true, signal: lifetime.signal });
+
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
@@ -402,6 +410,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(target.hasAttribute('data-contact-cancel')){contactSearchOpen=false;render();}
         if(target.dataset.smsEdit){smsEditing={id:target.dataset.smsEdit,text:phoneView.messages[target.dataset.smsEdit]?.text||''};renderMessages();}
         if(target.hasAttribute('data-sms-edit-cancel')){smsEditing=null;renderMessages();}
+        if(target.dataset.smsDelete && window.confirm('确认删除这条短信？删除后将从手机记录和手机记忆中移除，无法恢复。')) {
+            if(smsEditing?.id===target.dataset.smsDelete)smsEditing=null;
+            phoneAction(()=>adapter.phone.deleteMessage(target.dataset.smsDelete));
+        }
         if(target.dataset.smsReroll)phoneAction(()=>adapter.phone.rerollMessage(target.dataset.smsReroll));
         if (target.dataset.smsRetry) phoneAction(() => adapter.phone.retryMessage(target.dataset.smsRetry));
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
@@ -540,6 +552,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             // Handle a tap here: Android browsers may omit the later click.
             opened ? close() : open();
         }
+        pendingLauncherClick = true;
         suppressClickUntil = Date.now() + 750;
         event.stopPropagation();
         if (launcher.hasPointerCapture(event.pointerId)) launcher.releasePointerCapture(event.pointerId);

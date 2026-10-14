@@ -153,3 +153,47 @@ test('SMS queued bubbles stay out of AI context; send batches and retries never 
  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();thread=threadMessages(f.service.snapshot().messages,id);assert.equal(thread.length,2);assert.ok(thread.every(m=>m.replyStatus==='queued'));
  }finally{f.close();}
 });
+
+test('SMS erase purges every edited version, both history readers and unread state, permanently across rollback', async () => {
+    const f=setup(); try {
+        await f.service.scan(); await f.service.sendMessage('card:alex.png','Keep my question');
+        const id=Object.values(f.service.snapshot().messages).find(m=>m.role==='assistant').id;
+        f.context.chat.push({mes:'Later scene.'}); await f.memory.read();
+        await f.service.editMessage(id,'Edited reply to erase');
+        const calls=f.requests();
+        assert.equal((await f.service.deleteMessage(id)).ok,true);
+        assert.equal(f.requests(),calls);
+        assert.equal(unreadMessages(f.service.snapshot().messages),0);
+        assert.ok(!JSON.stringify(f.context.chatMetadata).includes('Got your message.'));
+        assert.ok(!JSON.stringify(f.context.chatMetadata).includes('Edited reply to erase'));
+        f.context.chat.pop();await f.memory.read();
+        assert.equal(f.service.snapshot().messages[id],undefined);
+        assert.equal(Object.values(f.service.snapshot().messages).length,1);
+        f.reply(o=>{assert.ok(!o.quietPrompt.includes('Edited reply to erase'));assert.ok(!o.quietPrompt.includes('Got your message.'));return '{"status":"reply","text":"New response"}';});
+        await f.service.sendMessage('card:alex.png','New question');
+    } finally {f.close();}
+});
+
+test('erase narrative SMS keeps import consumed, survives reload and preserves other records',async()=>{
+    const f=setup();try{
+        const evidence='Alex sent Sam a text.';
+        f.context.chat.push({is_user:false,mes:evidence+'<!--durian-contact:'+JSON.stringify({name:'Alex',sender:'Alex',recipient:'user',kind:'sms',evidence,text:'NARRATIVE_ERASE'})+'-->'});
+        await f.memory.read();const id=Object.values(f.service.snapshot().messages)[0].id;
+        assert.equal((await f.service.deleteMessage(id)).ok,true);
+        await f.memory.read();await f.memory.refresh();
+        assert.equal(f.service.snapshot().messages[id],undefined);
+        assert.ok(!JSON.stringify(f.context.chatMetadata).includes('NARRATIVE_ERASE'));
+        const reload=createPhoneMemory({getContext:()=>f.context});try{assert.deepEqual((await reload.read()).state.messages,{});}finally{reload.destroy();}
+        assert.equal(f.requests(),0);
+    }finally{f.close();}
+});
+
+test('failed erase save leaves message and history intact',async()=>{
+ const f=setup();try{
+  await f.service.scan();await f.service.sendMessage('card:alex.png','Question');
+  const id=Object.values(f.service.snapshot().messages).find(m=>m.role==='assistant').id;
+  f.context.saveMetadata=async()=>{throw Error('disk full');};
+  assert.equal((await f.service.deleteMessage(id)).ok,false);
+  assert.equal((await f.memory.read()).state.messages[id].text,'Got your message.');
+ }finally{f.close();}
+});

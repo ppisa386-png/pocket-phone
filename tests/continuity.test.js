@@ -198,3 +198,17 @@ test('ten per conversation counts both sides and ordinary NPC messages do not ne
  assert.equal(records.filter(r=>r.speaker==='user').length,10);assert.ok(!records.some(r=>r.text==='a0'));
  assert.match(text,/不得编造 user 曾发过的消息/);assert.match(text,/剩余时间、已过时间与总时长/);
 });
+
+test('erased SMS clears prepared slot and is absent from next actual narrative payload',async()=>{
+ const f=await fixture({withMemory:true});try{
+  await f.memory.read();await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/B_PRIVATE_PLAN/);
+  // End generation so the user can make a local edit.
+  await f.bus.emit('GENERATION_ENDED');
+  await f.memory.eraseMessage(await f.memory.begin(),'b');
+  assert.equal(f.prompts[CONTINUITY_KEY].value,'');
+  await f.generate();const data={chat:[{role:'user',content:'Continue'}]};
+  await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',data);
+  assert.ok(!JSON.stringify(data).includes('B_PRIVATE_PLAN'));
+  assert.match(JSON.stringify(data),/A_PRIVATE_MEETING/);
+ }finally{f.close();}
+});

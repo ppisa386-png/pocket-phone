@@ -1,6 +1,6 @@
-import { requireCash } from './assets-core.js?v=0.22.0';
-import { readStoryClock } from './story-clock.js?v=0.22.0';
-import { localizedPerson, sameNamedPerson } from './names.js?v=0.22.0';
+import { requireCash } from './assets-core.js?v=0.22.1';
+import { readStoryClock } from './story-clock.js?v=0.22.1';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.22.1';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);

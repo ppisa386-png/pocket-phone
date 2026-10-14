@@ -168,3 +168,21 @@ test('bilingual settings names prefer established Chinese and update old IDs wit
  await f.phone.addEstablishedContacts();const contacts=Object.values(f.phone.snapshot().contacts);assert.equal(contacts.length,1);assert.equal(contacts[0].id,old.id);assert.equal(contacts[0].name,'摩根');assert.ok(contacts[0].aliases.includes('Morgan'));assert.match(f.prompts.at(-1),/所有 App 共用/);assert.match(f.prompts.at(-1),/优先采用人物设定/);
  }finally{f.close();}
 });
+
+test('bulk full family names survive short-name source preference and upgrade existing IDs in one request',async()=>{
+ const f=fixture();try{
+  f.context.name1='艾米·沃克';f.context.powerUserSettings.persona_description='艾米·沃克来自沃克家族。父亲名为彼得，母亲名为海伦。';
+  const row=(name,aliases=[])=>({name,aliases,source:'persona',evidence:f.context.powerUserSettings.persona_description,established:true,relationship:'父母',incidental:false});
+  f.reply(()=>({contacts:[row('彼得'),row('海伦')]}));await f.phone.addEstablishedContacts();
+  const ids=Object.keys(f.phone.snapshot().contacts);let before=f.requests();
+  f.reply(()=>({contacts:[row('彼得·沃克',['彼得']),row('海伦·沃克',['海伦'])]}));
+  assert.equal((await f.phone.addEstablishedContacts()).ok,true);assert.equal(f.requests(),before+1);
+  assert.deepEqual(Object.keys(f.phone.snapshot().contacts),ids);
+  assert.deepEqual(Object.values(f.phone.snapshot().contacts).map(c=>c.name),['彼得·沃克','海伦·沃克']);
+  f.reply(()=>({contacts:[row('彼得'),row('海伦')]}));await f.phone.addEstablishedContacts();
+  assert.deepEqual(Object.values(f.phone.snapshot().contacts).map(c=>c.name),['彼得·沃克','海伦·沃克']);
+  assert.match(f.prompts.at(-1),/婚后姓/);assert.match(f.prompts.at(-1),/确实无法可靠推理才保留名或外号/);
+  f.settings.retries=15;f.reply(()=>{throw Error('offline');});before=f.requests();
+  assert.equal((await f.phone.addEstablishedContacts()).ok,false);assert.equal(f.requests(),before+1);
+ }finally{f.close();}
+});

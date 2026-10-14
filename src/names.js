@@ -19,6 +19,8 @@ export function localizedPerson(item, context, existing = []) {
         return [c.name,d.description,d.personality,d.scenario,...(d.character_book?.entries || []).filter(e => e.enabled !== false).map(e => e.content)];
     })].filter(Boolean).join('\n');
     const chinese = aliases.filter(han);
-    const name = (han(card?.c.name) ? card.c.name : null) || chinese.find(n => material.includes(n)) || (han(known?.name) ? known.name : null) || chinese[0] || aliases[0] || '';
+    let name = (han(card?.c.name) ? card.c.name : null) || chinese.find(n => material.includes(n)) || (han(known?.name) ? known.name : null) || chinese[0] || aliases[0] || '';
+    const complete = [...chinese, ...nameAliases(known).filter(han)].find(n => n.startsWith(name + '·') && (n === known?.name || material.concat('\n',context.name1 || '').includes(n.slice(name.length + 1))));
+    if (complete) name = complete;
     return {name,aliases:[...new Set([...aliases,...nameAliases(known),...(card ? [card.c.name] : []),name])],cardIndex:card?.index ?? null,cardId:card ? 'card:' + (card.c.avatar || card.c.name) : null,existingId:known?.id ?? null};
 }

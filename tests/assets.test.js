@@ -284,3 +284,22 @@ test('no narrative time elapsed means no invented operating income or living cha
         f.c.saveMetadata = async () => {}; ok(await f.assets.update());
     } finally { f.close(); }
 });
+
+test('asset update accepts a single JSON in reasoning/markdown wrappers, one request and correct initialization contract',async()=>{
+ const f=setup();try{
+  f.reply(()=>'<think>{"example":"not the result"}</think>\n评估结果：\n```json\n'+JSON.stringify(initial())+'\n```\n');
+  ok(await f.assets.update());assert.equal(f.count(),1);assert.equal(cashBalance(f.state()),100000);
+  assert.match(f.prompt(),/本次首次建账：只使用首次格式/);
+  await f.append('Another day.','2026-01-02');f.reply(()=>'<content>'+JSON.stringify(evaluation('2026-01-02'))+'</content>');
+  ok(await f.assets.update());assert.equal(f.count(),2);assert.match(f.prompt(),/本次已有账本：只使用后续格式/);
+ }finally{f.close();}
+});
+
+test('truncated or ambiguous asset JSON never changes wallet and never silently retries',async()=>{
+ const f=setup();try{
+  for(const text of [JSON.stringify(initial()).slice(0,-1),JSON.stringify(initial())+'\n'+JSON.stringify(initial()),'这里没有账本 JSON']){
+   f.reply(()=>text);const before=f.count();const result=await f.assets.update();
+   assert.equal(result.ok,false);assert.match(result.error,/格式不正确/);assert.equal(f.count(),before+1);assert.equal(cashBalance(f.state()),null);
+  }
+ }finally{f.close();}
+});

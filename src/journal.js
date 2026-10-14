@@ -87,3 +87,14 @@ export function replayJournal(journal) {
     }
     return Object.fromEntries(COLLECTIONS.map(name => [name, Object.fromEntries(maps[name])]));
 }
+
+// A manual erase is permanent for this phone history, unlike a story action.
+// Keep event IDs/source anchors with null changes so imports cannot resurrect it.
+export function eraseMessageFromJournal(raw, messageId) {
+    const journal = readJournal(raw);
+    for (const event of journal.events) for (const change of event.changes) {
+        if (change.collection === 'messages' && change.key === messageId) change.value = null;
+        else if (change.collection === 'messages' && change.value?.replyTo === messageId) delete change.value.replyTo;
+    }
+    return journal;
+}

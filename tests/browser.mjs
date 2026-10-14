@@ -477,11 +477,33 @@ try {
         await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
         await p.getByText('Yes, see you there.',{exact:true}).waitFor();
         check((await p.locator('.pp-sms-item[data-role="user"] small').textContent()).includes('09:12 · 已发送'),'outgoing narrative SMS has proper direction, status and story clock');
+        p.once('dialog', dialog => dialog.dismiss());
+        await p.locator('[data-sms-delete]').tap();
+        check(await p.getByText('Meet at lunch?',{exact:true}).count()===1,'cancel deletion preserves SMS');
+        p.once('dialog', dialog => dialog.accept());
+        await p.locator('[data-sms-delete]').tap();
+        await p.getByText('Meet at lunch?',{exact:true}).waitFor({state:'detached'});
+        check(await p.getByText('Yes, see you there.',{exact:true}).count()===1,'confirm deletes only selected char SMS');
+        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
+        check(await p.getByText('Meet at lunch?',{exact:true}).count()===0,'deleted narrative SMS is not reimported after reload');
         await p.locator('[data-action="back"]').tap();
         check(await p.locator('[data-sms-new]').isVisible()&&!await p.locator('[data-app="messages"]').count(),'top arrow returns from thread to SMS list');
         await p.locator('[data-action="back"]').tap();check(await p.locator('[data-app="messages"]').isVisible(),'second back returns to desktop');
         await p.locator('[data-app="amazon"]').tap();await p.locator('[data-action="close"]').tap();
         await p.locator('.pp-launcher').tap();check(await p.locator('[data-app="messages"]').isVisible(),'reopen after Amazon always starts on desktop');
+        await p.locator('[data-app="assets"]').tap();await p.locator('[data-action="close"]').tap();
+        await p.evaluate(()=>{
+            const root=document.querySelector('#personal-pocket-phone-root').shadowRoot, launcher=root.querySelector('.pp-launcher');
+            launcher.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:71,button:0,isPrimary:true,pointerType:'touch'}));
+            launcher.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:71,button:0,isPrimary:true,pointerType:'touch'}));
+            // Mobile compatibility click can be retargeted to the newly revealed icon.
+            root.querySelector('[data-app="assets"]').dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail:1}));
+        });
+        check(await p.locator('[data-app="messages"]').isVisible(),'retargeted launcher compatibility click cannot enter assets');
+        await p.locator('[data-app="assets"]').tap();
+        check(await p.locator('[data-asset-action="update"]').isVisible(),'fresh intentional tap still opens assets');
+        await p.locator('[data-action="close"]').tap();await p.locator('.pp-launcher').tap();
+        check(await p.locator('[data-app="assets"]').isVisible(),'reopen after assets remains desktop');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});
         await p.waitForFunction(()=>document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('.pp-status-time').textContent==='—');
         check(await p.evaluate(()=>window.modelCalls)===0,'navigation, timestamp and narrative synchronization use no model calls');

@@ -1,8 +1,8 @@
-import { storyTime } from './story-clock.js?v=0.22.0';
-import { importStoryAssets } from './assets-story.js?v=0.22.0';
-import { importStorySquare } from './x-opinion.js?v=0.22.0';
-import { importStoryPhone } from './story-phone.js?v=0.22.0';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, isMemoryHidden } from './journal.js?v=0.22.0';
+import { storyTime } from './story-clock.js?v=0.22.1';
+import { importStoryAssets } from './assets-story.js?v=0.22.1';
+import { importStorySquare } from './x-opinion.js?v=0.22.1';
+import { importStoryPhone } from './story-phone.js?v=0.22.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.22.1';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -159,6 +159,19 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 const ticket = {};
                 tickets.set(ticket, { scope: snapshot.scope, metadata: snapshot.metadata, revision: snapshot.revisions.at(-1), generation });
                 return ticket;
+            });
+        },
+        eraseMessage(ticket, messageId) {
+            return schedule(async () => {
+                const basis = tickets.get(ticket), snapshot = await sync();
+                if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
+                    basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
+                if (replayJournal(snapshot.journal).messages[messageId]?.role !== 'assistant') throw new Error('这条短信已不存在。');
+                const next = eraseMessageFromJournal(snapshot.journal, messageId);
+                await save(snapshot, next);
+                tickets.delete(ticket); generation++;
+                await bus?.emit?.('durian-phone-records-erased');
+                if (sameChat(snapshot)) { active = { ...snapshot, journal: next }; notify(); }
             });
         },
         commit(ticket, changes, operationId) {
