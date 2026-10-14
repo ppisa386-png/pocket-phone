@@ -16,7 +16,7 @@ window.response={location:'洛杉矶',articles:[
 {headline:'新人歌手推出首支单曲',outlet:'南岸音乐通讯',section:'音乐短讯',placement:'brief',summary:'本地创作者的首支作品开始在小范围听众中流传。',body:'作品上线后，几位乐迷分享了自己的试听感受。',publicBasis:basis},{headline:'社区诊所增设周末门诊',outlet:'洛城晚报',section:'健康',placement:'feature',summary:'预约窗口将在周五开放，新增时段面向附近街区居民。医院同时计划加强与社区机构的合作，为夜间工作者提供更灵活的就诊选择。',body:'相关安排将先试行一个月，后续根据居民反馈调整。',publicBasis:basis},
 {headline:'滨河步道修缮完成',outlet:'洛城晚报',section:'城市短讯',placement:'brief',summary:'沿河步道重新开放，新增指示牌。',body:'维护人员提醒市民爱护沿线设施。',publicBasis:basis}]};
 window.response.publication='Los Angeles Times';
-window.response.articles=window.response.articles.map(a=>({...a,subject:'world',topic:'civic',newsValue:'公共服务和文化消息',contextAnchor:{keyword:'洛杉矶',sourceIndex:0,evidence:'洛杉矶'}}));
+window.response.articles=window.response.articles.map(({publicBasis,...a})=>a);
 const handlers={};const c={chatId:'daily',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'a'}],mainApi:'openai',onlineStatus:'connected',
 extensionSettings:JSON.parse(localStorage.getItem('daily-settings')||'{}'),saveSettingsDebounced(){localStorage.setItem('daily-settings',JSON.stringify(c.extensionSettings));},
 chat:stored?.chat||[{mes:'2003-07-24\\n普通学生在洛杉矶的家中休息。',is_user:false}],chatMetadata:stored?.metadata||{},saveMetadata:async()=>localStorage.setItem('daily-test',JSON.stringify({chat:c.chat,metadata:c.chatMetadata})),

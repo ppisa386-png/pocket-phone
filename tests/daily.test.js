@@ -84,12 +84,19 @@ test('new edition retires previous selections and rollback restores prior editio
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(first(f).id,old.id);assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);
  }finally{f.close();}
 });
-test('repeated unchanged articles and ambiguous multiple-headline editions do not replace saved content',async()=>{
- const f=setup();try{ok(await f.daily.update());const edition=f.state().daily.edition;assert.equal((await f.daily.update()).ok,false);assert.deepEqual(f.state().daily.edition,edition);
-  f.reply({articles:[article('头条一'),article('头条二')]});assert.equal((await f.daily.update()).ok,false);assert.deepEqual(f.state().daily.edition,edition);
-  f.reply({articles:[]});assert.equal((await f.daily.update()).ok,false);assert.deepEqual(f.state().daily.edition,edition);
+test('reprinting a story preserves identity and adoption, multiple lead labels are normalized',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());const old=first(f);ok(await f.daily.toggle(old.id));
+  const evidence='Alex 阅读了音乐节报道。';
+  f.c.chat.push({mes:evidence+'<!--durian-daily-used:'+JSON.stringify({id:old.id,used:true,evidence})+'-->'});await f.memory.read();
+  ok(await f.daily.update());assert.equal(first(f).id,old.id);assert.equal(dailyStatus(first(f),f.state(),f.c.chat),'used');
+  assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
+  f.reply({articles:[article('头条一'),article('头条二')]});ok(await f.daily.update());
+  assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='lead').length,1);
+  const edition=f.state().daily.edition;f.reply({articles:[]});assert.equal((await f.daily.update()).ok,false);assert.deepEqual(f.state().daily.edition,edition);
  }finally{f.close();}
 });
+
 test('wrapper JSON is accepted, truncated JSON fails atomically with a newspaper error',async()=>{
  const f=setup();try{f.reply(()=>'<think>prepare</think>\n```json\n'+JSON.stringify(complete({articles:[article()]}))+'\n```');ok(await f.daily.update());const old=first(f);
   f.reply(()=>'SECRET_TEXT {"articles":[');const r=await f.daily.update();assert.equal(r.ok,false);assert.match(r.error,/日报/);assert.doesNotMatch(r.error,/SECRET_TEXT|账本/);assert.equal(first(f).id,old.id);assert.equal(f.calls(),2);
@@ -144,7 +151,6 @@ test('new editions require four to six valid unique stories and a newspaper titl
    {...valid,publication:'榴莲日报'},
    {...valid,articles:valid.articles.map(a=>({...a,subject:'character'}))},
    {...valid,articles:valid.articles.map(a=>({...a,topic:'private_life'}))},
-   {...valid,articles:valid.articles.map(a=>({...a,contextAnchor:{keyword:'不存在的地点',sourceIndex:0,evidence:'不存在的地点'}}))},
    {...valid,articles:valid.articles.map(a=>({...a,publicBasis:{...background,involvesCharacters:true}}))}
   ]) {
    f.reply(()=>JSON.stringify(bad));const count=f.calls();assert.equal((await f.daily.update()).ok,false);
@@ -158,4 +164,36 @@ test('legacy editions remain readable, with their recorded outlet as the masthea
  const panel=createDailyPanel({adapter:{storyChat:()=>[{mes:'2003-07-24'}]},getView:()=>old,redraw(){},notice(){}});
  assert.match(panel.html(),/<h2>城中日报<\/h2>/);
  assert.match(panel.html(),/城市音乐节开幕/);assert.equal(dailyArticles(old).length,1);
+});
+
+test('world newspaper accepts four finished stories without technical selection metadata',async()=>{
+ const f=setup();try{
+  const rows=Array.from({length:4},(_,i)=>({headline:'世界新闻 '+i,body:'根据城市与行业背景展开的新事件。'.repeat(25)}));
+  f.reply(()=>JSON.stringify({publication:'Los Angeles Times',articles:rows}));
+  ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,4);
+  assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='lead').length,1);
+  assert.equal(f.calls(),1);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
+  assert.match(f.prompt(),/至少4条/);
+ }finally{f.close();}
+});
+
+test('world articles survive optional metadata mistakes and long text without silent filtering',async()=>{
+ const f=setup();try{
+  const data=complete({articles:[article('较长新闻')]});
+  data.articles=data.articles.map(a=>({...a,topic:'地方资讯',newsValue:undefined,contextAnchor:{keyword:'并非逐字摘录'},summary:'介绍'.repeat(200),body:'报道'.repeat(1500),placement:'普通版面'}));
+  f.reply(data);ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,4);assert.equal(first(f).body.length,3000);assert.equal(f.calls(),1);
+ }finally{f.close();}
+});
+
+test('missing article contents report item and field without private excerpts',()=>{
+ const data=complete({articles:[article('PRIVATE_HEADLINE')]});delete data.articles[1].body;
+ assert.throws(()=>dailyChanges(data,{prose:[],day:1,sourceIndex:0}),e=>e.code==='DAILY_ARTICLE_FIELDS'&&/第2条：缺少正文/.test(e.diagnostic)&&!e.diagnostic.includes('PRIVATE_HEADLINE'));
+});
+
+test('reprinting on a later day does not reactivate a previously expired pending selection',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());ok(await f.daily.toggle(first(f).id));
+  f.c.chat.push({mes:'2003-07-25'});await f.memory.read();ok(await f.daily.update());
+  assert.equal(first(f).selected,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
+ }finally{f.close();}
 });

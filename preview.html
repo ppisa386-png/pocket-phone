@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.24.0</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
+</style></head><body><main><small>POCKET PHONE · 0.24.1</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
 function dateDay(value) {
     const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return null;
     const d=new Date(0);d.setUTCFullYear(+m[1],+m[2]-1,+m[3]);d.setUTCHours(0,0,0,0);
@@ -83,7 +83,7 @@ function localizedPerson(item, context, existing = []) {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.24.0';
+const VERSION = '0.24.1';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -1278,38 +1278,48 @@ function dailyStatus(article, state, chat) {
     return dailyExpiry(state.daily.edition, chat);
 }
 const dailyText = (value, max) => typeof value === 'string' && value.trim().length <= max ? value.trim() : '';
-// A world-news anchor establishes context, not proof that the invented event happened.
+// World news is creative output, not a fact-extraction task. Only declared
+// character/private stories need the existing public-evidence check.
 function dailyBasis(row, prose) {
-    if (!['civic','business','culture','science','sport','public_figure'].includes(row?.topic)
-        || !dailyText(row.newsValue, 400)) return null;
-    if (row.subject === 'character') {
-        if (!['public','limited'].includes(row.publicBasis?.access)) return null;
-        return squareBasis(row, prose);
-    }
-    if (row.subject !== 'world' || row.publicBasis?.access !== 'background'
-        || row.publicBasis.involvesCharacters !== false) return null;
-    const anchor = row.contextAnchor, keyword = dailyText(anchor?.keyword, 100), evidence = dailyText(anchor?.evidence, 1000);
-    const source = prose.find(p => p.index === anchor?.sourceIndex);
-    if (!keyword || !evidence || !source || !evidence.includes(keyword) || !source.text.includes(evidence)) return null;
-    const basis = squareBasis(row, prose);
-    return basis ? {...basis, fictional:true, contextAnchor:{keyword,evidence,sourceIndex:source.index}} : null;
+    const access = row?.publicBasis?.access;
+    if (access === 'private' || row?.topic === 'private_life') return null;
+    const character = row?.subject === 'character' || row?.publicBasis?.involvesCharacters === true
+        || ['public','limited'].includes(access);
+    if (character) {const basis=squareBasis(row,prose);return basis?.access==='background'?null:basis;}
+    if (row?.subject && row.subject !== 'world') return null;
+    return {access:'background', fictional:true, summary:'依据故事地域、年代与行业背景创作的世界新闻候选。'};
 }
-function dailyChanges(data, {prose, day, sourceIndex, existing=[]}) {
-    if (!Array.isArray(data.articles) || data.articles.length < 4 || data.articles.length > 6) throw Error('本期需要4～6条新闻，上一期已保留。');
+function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[]}) {
+    const rows = data?.articles;
+    const fail = (code, message, detail='') => { throw Object.assign(Error(message), {
+        code, diagnostic:'任务：日报选编；错误代码：'+code+'；收到篇数：'+(Array.isArray(rows)?rows.length:'非数组')+(detail?'；'+detail:''),
+    }); };
+    if (!Array.isArray(rows) || rows.length < 4 || rows.length > 6)
+        fail('DAILY_ARTICLE_COUNT','模型实际返回的新闻数量不是4～6条，本次未替换报纸。');
     const publication=dailyText(data.publication,100);
-    if (!publication || /^(榴莲日报|durian\s*daily)$/i.test(publication)) throw Error('缺少本期实际报刊名称，上一期已保留。');
-    const editionId = crypto.randomUUID(), articles = [], seen = new Set();
-    for (const row of data.articles) {
-        const headline = dailyText(row?.headline, 140), outlet = publication, summary = dailyText(row?.summary, 360), body = dailyText(row?.body, 2400);
+    if (!publication || /^(榴莲日报|durian\s*daily)$/i.test(publication)) fail('DAILY_PUBLICATION','缺少本期实际报刊名称，上一期已保留。');
+    const editionId = crypto.randomUUID(), articles = [], seen = new Set(), rejected=[];
+    for (const [index,row] of rows.entries()) {
+        // Layout limits must not silently discard otherwise complete articles.
+        const headline = dailyText(row?.headline, 500), outlet = publication, body = dailyText(row?.body, 20000);
+        const summary = dailyText(row?.summary, 2000) || body.slice(0,180);
+        if (!headline || !body) {rejected.push('第'+(index+1)+'条：'+(!headline?'缺少标题/超过500字':'缺少正文/超过20000字'));continue;}
         const basis = dailyBasis(row, prose);
-        if (!headline || !outlet || !summary || !body || !basis || !['lead','feature','brief'].includes(row.placement)) continue;
+        if (!basis) {rejected.push('第'+(index+1)+'条：人物公开依据缺失或声明为私事');continue;}
         const key = (outlet + '\n' + headline).normalize('NFKC').toLowerCase();
-        if (seen.has(key) || existing.some(a=>a.type==='article'&&a.outlet===outlet&&a.headline===headline&&a.body===body)) continue; seen.add(key);
-        articles.push({id:crypto.randomUUID(), type:'article', editionId, headline, outlet, summary, body,
-            section:dailyText(row.section, 40), placement:row.placement, subject:row.subject, topic:row.topic, newsValue:dailyText(row.newsValue,400), publicBasis:basis, selected:false, sourceIndex});
+        if (seen.has(key)) {rejected.push('第'+(index+1)+'条：本期标题重复');continue;} seen.add(key);
+        // A repeated story can be printed again, but is still the same selectable
+        // item, retaining its previous selection/adoption rather than rerolling it.
+        const prior = existing.find(a=>a.type==='article'&&a.outlet===outlet&&a.headline===headline&&a.body===body);
+        articles.push({id:prior?.id||crypto.randomUUID(), type:'article', editionId, headline, outlet, summary, body,
+            section:dailyText(row.section, 80), placement:row.placement, subject:basis.fictional?'world':'character',
+            publicBasis:basis, selected:!!prior&&(dailyUsed(prior,chat)||(prior.selected===true&&existing.some(e=>e.type==='edition'&&e.editionId===prior.editionId&&e.day===day))),
+            ...(Number.isInteger(prior?.selectedIndex)?{selectedIndex:prior.selectedIndex}:{}),sourceIndex});
     }
-    if (articles.length < 4) throw Error('有效新闻不足4条（重复、依据或选题格式不合要求），上一期已保留。');
-    if (articles.filter(a => a.placement === 'lead').length !== 1) throw Error('本期须有且仅有一条头条，上一期已保留，请重试。');
+    if (articles.length < 4) fail('DAILY_ARTICLE_FIELDS','模型返回了'+rows.length+'条，其中'+rejected.length+'条有内容问题，本次未替换报纸。',rejected.join('；'));
+    // Placement is presentation, not a reason to discard news.
+    const lead = articles.find(a=>a.placement==='lead') || articles[0];
+    for(const a of articles) a.placement=a===lead?'lead':a.placement==='brief'?'brief':a.placement==='feature'?'feature':a.body.length<160?'brief':'feature';
     const rank = {lead:0, feature:1, brief:2}; articles.sort((a,b) => rank[a.placement] - rank[b.placement]);
     const edition = {id:'edition', type:'edition', editionId, day, sourceIndex, publication, location:dailyText(data.location, 80), articleIds:articles.map(a=>a.id)};
     return [edition, ...articles].map(value => ({collection:'daily', key:value.id, value}));
