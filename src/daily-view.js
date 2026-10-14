@@ -1,5 +1,5 @@
-import { dailyArticles, dailyExpiry, dailyStatus } from './daily-core.js?v=0.24.1';
-import { dayDate } from './story-clock.js?v=0.24.1';
+import { dailyArticles, dailyExpiry, dailyStatus } from './daily-core.js?v=0.24.2';
+import { dayDate } from './story-clock.js?v=0.24.2';
 const dailyEscape = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createDailyPanel({adapter,getView,redraw,notice}) {
     let working=false,status='',epoch=0;
@@ -16,7 +16,7 @@ export function createDailyPanel({adapter,getView,redraw,notice}) {
                 const used=dailyStatus(a,state,chat),label=used==='used'?'已采用':used==='expired'?'已过期':used==='unknown'?'日期不明确':used==='old'?'旧报道':a.selected?'已选 · 取消注入':'注入正文';
                 return '<article class="pp-daily-article pp-daily-'+a.placement+(a.placement==='lead'||a.body.length>500?' pp-daily-wide':'')+(expanded.has(a.id)?' pp-daily-expanded':'')+'" data-daily-article="'+dailyEscape(a.id)+'"><div class="pp-daily-byline"><span>'+dailyEscape(a.section||(a.placement==='lead'?'头条':a.placement==='brief'?'短讯':'报道'))+'</span><span>'+dailyEscape(a.outlet)+'</span></div><h3>'+dailyEscape(a.headline)+'</h3><p class="pp-daily-deck">'+dailyEscape(a.summary)+'</p>'
                     +(expanded.has(a.id)?'<div class="pp-daily-body">'+dailyEscape(a.body)+'</div>':'')
-                    +'<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+expanded.has(a.id)+'">'+(expanded.has(a.id)?'收起全文':'阅读全文')+'</button><button type="button" data-daily-action="inject" data-daily-id="'+dailyEscape(a.id)+'" class="pp-daily-inject" aria-label="'+label+'" aria-pressed="'+(used==='active'&&a.selected)+'"'+(busy||used!=='active'?' disabled':'')+'><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H5v18h14V8M14 3v5h5M8 13h8m-4-3 3 3-3 3"/></svg>'+label+'</button></footer></article>';
+                    +'<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+expanded.has(a.id)+'">'+(expanded.has(a.id)?'收起全文':'阅读全文')+'</button><button type="button" data-daily-action="inject" data-daily-id="'+dailyEscape(a.id)+'" class="pp-daily-inject" aria-label="'+label+'" title="'+label+'" aria-pressed="'+(used==='active'&&a.selected)+'"'+(busy||used!=='active'?' disabled':'')+'><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H5v18h14V8M14 3v5h5M8 13h8m-4-3 3 3-3 3"/></svg></button></footer></article>';
             }).join('')+'</div>')+'<div class="pp-daily-end">'+dailyEscape(publication)+' · '+dailyEscape(edition?.location||'今日选读')+'</div></section>';
     }
     return {html,reset(){epoch++;working=false;status='';expanded.clear();},async action(action,id){
