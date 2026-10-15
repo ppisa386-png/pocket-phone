@@ -1,4 +1,6 @@
 const paths = {
+    cart: '<path d="M2 3h3l3 12h11l3-9H6M9 19h.01M18 19h.01"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/>',
+    parcel: '<path d="m3 7 9-4 9 4v10l-9 4-9-4V7Zm0 0 9 4 9-4M12 11v10M7.5 5 16.5 9v4"/>',
     heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
     repost: '<path d="m3 7 3-3 3 3M6 4v12a2 2 0 0 0 2 2h4m9-1-3 3-3-3m3 3V8a2 2 0 0 0-2-2h-4"/>',
     search: '<circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/>',
