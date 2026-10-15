@@ -1,14 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.24.4';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.4';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.4';
-import { phoneQuietOptions } from './api-context.js?v=0.24.4';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.4';
-export { validateContacts } from './contacts.js?v=0.24.4';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.4';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.4';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.4';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.4';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.4';
+import { isMemoryHidden } from './journal.js?v=0.24.5';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.5';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.5';
+import { phoneQuietOptions } from './api-context.js?v=0.24.5';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.5';
+export { validateContacts } from './contacts.js?v=0.24.5';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.5';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.5';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.5';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.5';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.5';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {

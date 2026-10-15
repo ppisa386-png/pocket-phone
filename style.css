@@ -440,3 +440,73 @@ h2, p { margin: 0; }
 .pp-snapchat .pp-snap-map>strong{font-size:1.3em}
 .pp-snapchat .pp-snap-map>p{color:#4a685b;margin-top:4px}
 .pp-snapchat .pp-snap-pins>span{background:#fff;border:1px solid #dbe6dd;box-shadow:0 3px 9px #3054471c;border-radius:16px;padding:9px 11px;font-weight:550}
+
+/* X: white timeline, monochrome chrome and blue actions. */
+.pp-phone[data-active-app="x"]{--pp-bg:#fff;--pp-card:#f7f9f9;--pp-text:#0f1419;--pp-muted:#536471;--pp-line:#eff3f4;--pp-accent:#087cbd;--pp-input:#f7f9f9;background:#fff;color:var(--pp-text);color-scheme:light}
+.pp-phone[data-active-app="x"] .pp-header,.pp-phone[data-active-app="x"] .pp-footer{background:#fff;color:#0f1419}
+.pp-phone[data-active-app="x"] .pp-header{border-bottom:1px solid var(--pp-line)}
+.pp-x{height:100%;min-height:0;display:flex;flex-direction:column;padding:0;overflow:hidden;background:#fff}
+.pp-x .pp-snap-top{flex:0 0 auto;min-height:48px;padding:5px 16px;border:0;border-bottom:1px solid var(--pp-line);position:relative;justify-content:center}
+.pp-x .pp-snap-top>b>svg{width:26px;height:26px;stroke-width:2}
+.pp-x .pp-snap-top>[data-x-action="profile"]{position:absolute;left:14px;display:grid;place-items:center;border:0;background:#eff3f4;width:34px;height:34px;border-radius:50%;padding:7px}
+.pp-x .pp-snap-top>[data-x-action="profile"]>svg{width:20px;height:20px}
+.pp-x-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px;scrollbar-width:thin}
+.pp-x .pp-snap-status{min-height:0;font-size:12px;color:#087cbd;margin:8px 0}
+.pp-x .pp-snap-status:empty{display:none}
+.pp-x .pp-x-tabs{position:static;flex:0 0 auto;margin:0;padding:6px 8px 2px;background:#fff;border-top:1px solid var(--pp-line)}
+.pp-x .pp-x-tabs button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;font-size:10px;color:#536471;border-radius:0}
+.pp-x .pp-x-tabs svg{width:23px;height:23px}
+.pp-x .pp-x-tabs button[aria-pressed="true"]{background:transparent;color:#0f1419;font-weight:700}
+.pp-x .pp-x-tabs button[aria-pressed="true"] svg{stroke-width:2.7}
+.pp-x .pp-x-tabs button[aria-pressed="true"] span{color:#087cbd}
+.pp-x .pp-snap-button{background:transparent;border:1px solid #cfd9de;border-radius:20px;padding:7px 13px;font-size:12px;color:#0f1419;min-height:34px}
+.pp-x .pp-snap-primary{justify-self:end;background:#1d9bf0;color:#fff;border-radius:22px;padding:9px 20px;min-height:36px;font-size:13px}
+.pp-x [data-x-action="follow"]{background:#0f1419;border-color:#0f1419;color:#fff;font-weight:650}
+.pp-x [data-x-action="block"]{color:#a83e47;border-color:transparent}
+.pp-x .pp-snap-form{padding:14px 0;border-bottom:1px solid var(--pp-line)}
+.pp-x .pp-snap-form input,.pp-x .pp-snap-form textarea{border-color:#cfd9de;border-radius:18px;font-size:14px;resize:none}
+.pp-x [data-x-form="search"]{grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}
+.pp-x [data-x-form="search"] input{border:0;background:#eff3f4;border-radius:22px;padding:11px 14px}
+.pp-x [data-x-form="search"] .pp-field>span{font-size:11px}
+.pp-x .pp-x-feed-tabs{margin:0 -16px;padding:0 10px;border-bottom:1px solid var(--pp-line);gap:0;align-items:center}
+.pp-x .pp-x-feed-tabs>[data-x-action="all"],.pp-x .pp-x-feed-tabs>[data-x-action="following"]{flex:1;border:0;border-radius:0;padding:14px 0;color:#536471;font-weight:650}
+.pp-x .pp-x-feed-tabs>button[aria-pressed="true"]{color:#0f1419;border-bottom:3px solid #1d9bf0}
+.pp-x .pp-x-refresh{display:grid;place-items:center;border:0;border-radius:50%;width:34px;height:34px;padding:7px}
+.pp-x .pp-x-refresh svg{width:20px;height:20px}
+.pp-x [data-x-form="post"] textarea{background:#fff;border:0;border-radius:0;padding:6px 0;min-height:60px}
+.pp-x [data-x-form="post"]>.pp-field>span{color:#536471;font-size:15px}
+.pp-x-post{position:relative;margin:0 -16px;padding:15px 16px 10px 65px;border-bottom:1px solid var(--pp-line)}
+.pp-x-post>header{position:relative;display:flex;flex-direction:row;align-items:flex-start;gap:9px}
+.pp-x-post-avatar{position:absolute;left:-49px;top:0;display:grid;place-items:center;width:39px;height:39px;border-radius:50%;background:#e8eef4;color:#3f5262;font-size:18px;font-weight:650}
+.pp-x-post:nth-of-type(3n+2) .pp-x-post-avatar{background:#eee7f4;color:#654779}
+.pp-x-post:nth-of-type(3n) .pp-x-post-avatar{background:#e6f0eb;color:#3b6652}
+.pp-x-author{min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px}
+.pp-x-post>header .pp-snap-button{min-height:0;border:0;border-radius:0;padding:0;text-align:left;overflow-wrap:anywhere}
+.pp-x-author>small{font-size:11px;line-height:1.5}
+.pp-x-post>.pp-snap-copy{margin:5px 0 10px;line-height:1.55;font-size:14px}
+.pp-x .pp-x-reactions{justify-content:space-between;gap:4px;margin:5px 0 0}
+.pp-x .pp-x-reactions>.pp-snap-button{border:0;border-radius:0;padding:3px 3px;min-height:30px;display:flex;align-items:center;gap:6px;color:#536471;font-size:11px}
+.pp-x .pp-x-reactions svg{width:17px;height:17px}
+.pp-x .pp-x-reactions>[data-x-action="like"][aria-pressed="true"]{color:#d62670;border:0}
+.pp-x .pp-x-reactions>[data-x-action="like"][aria-pressed="true"] svg{fill:currentColor}
+.pp-x .pp-x-reactions>[data-x-action="repost"][aria-pressed="true"]{color:#00865a;border:0}
+.pp-x .pp-square-inject{width:30px;height:30px;min-height:30px;padding:6px;justify-content:center;float:right;border:0;border-radius:50%;color:#536471;margin:0 0 3px 6px}
+.pp-x .pp-square-inject>span{display:none}
+.pp-x .pp-square-inject svg{width:16px;height:16px}
+.pp-x .pp-square-inject[aria-pressed="true"]{color:#087cbd;background:#e8f5fd}
+.pp-x .pp-x-comments{border-left:1px solid #cfd9de;padding-left:10px;margin-top:10px;clear:both}
+.pp-x-comment{padding:9px 0;border-top:1px solid var(--pp-line)}
+.pp-x-comment .pp-snap-copy{font-size:13px;line-height:1.6;margin:3px 0}
+.pp-x-comment>[data-x-action="reply-comment"]{padding:2px 0;border:0;color:#087cbd;min-height:28px;font-size:11px}
+.pp-x .pp-x-account{padding:14px 0}
+.pp-x .pp-snap-avatar{width:42px;height:42px;color:#3f5262;background:#e8eef4}
+.pp-x .pp-x-account .pp-snap-person{padding:0 0 8px}
+.pp-x .pp-x-account .pp-snap-actions{margin:8px 0 0}
+.pp-x .pp-snap-message{border:0;border-radius:20px 20px 20px 4px;background:#eff3f4;margin:14px 35px 14px 0;padding:10px 14px;width:fit-content;max-width:88%}
+.pp-x .pp-snap-message.is-user{background:#1d9bf0;color:#fff;border-radius:20px 20px 4px 20px;margin-left:auto;margin-right:0}
+.pp-x .pp-snap-message.is-user small{color:#fff}
+.pp-x .pp-snap-message .pp-snap-copy{margin:3px 0;line-height:1.55;font-size:14px}
+.pp-x [data-x-form="message"]{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--pp-line);border-bottom:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;padding:10px 0}
+.pp-x [data-x-form="message"] .pp-field>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.pp-x [data-x-form="message"] textarea{height:42px;min-height:42px;line-height:21px;padding:10px 12px}
+.pp-x .pp-square-edition{font-size:10px;color:#536471}

@@ -1,6 +1,7 @@
-import { squareStatus, squareExpiry } from './square-core.js?v=0.24.4';
-import { displayStoryTime } from './story-clock.js?v=0.24.4';
-import { xItems, xProfile, xCounts } from './x.js?v=0.24.4';
+import { icon } from './icons.js?v=0.24.5';
+import { squareStatus, squareExpiry } from './square-core.js?v=0.24.5';
+import { displayStoryTime } from './story-clock.js?v=0.24.5';
+import { xItems, xProfile, xCounts } from './x.js?v=0.24.5';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;
@@ -8,7 +9,8 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     const key=name=>[tab,page,selected||'',name].join(':');
     const value=(name,fallback='')=>drafts[key(name)]??fallback;
     const disabled=()=>working||getView().busy?' disabled':'';
-    const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-x-action="'+action+'" data-x-id="'+xEscape(id)+'" '+extra+disabled()+'>'+xEscape(label)+'</button>';
+    const actionIcons={profile:'person',comments:'messages',repost:'repost',like:'heart'};
+    const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-x-action="'+action+'" data-x-id="'+xEscape(id)+'" aria-label="'+xEscape(label)+'" title="'+xEscape(label)+'" '+extra+disabled()+'>'+(actionIcons[action]?icon(actionIcons[action])+(action==='profile'?'':'<span>'+xEscape(label.split(' ').at(-1))+'</span>'):xEscape(label))+'</button>';
     const field=(name,label,fallback='',long=false)=>'<label class="pp-field"><span>'+label+'</span>'+(long?'<textarea rows="3" maxlength="6000"':'<input type="text" maxlength="100"')+' name="'+name+'" data-x-field="'+name+'"'+(long?'>'+xEscape(value(name,fallback))+'</textarea>':' value="'+xEscape(value(name,fallback))+'">')+'</label>';
     const form=(name,body,label)=>'<form class="pp-snap-form" data-x-form="'+name+'">'+body+'<button type="submit" class="pp-snap-primary"'+disabled()+'>'+label+'</button></form>';
     const refreshButton=(square=false)=>'<button type="button" class="pp-snap-button pp-x-refresh" data-x-action="'+(square?'square-refresh':'refresh')+'" aria-label="刷新'+(square?'广场':'动态')+'" title="刷新"'+disabled()+'><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg></button>';
@@ -37,7 +39,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             const target=comments.find(c=>c.id===replyTarget);
             if(page==='post:'+p.id && !target)replyTarget=null;
             const commenter=c=>c.author==='user'?profile().alias:state.x[c.author]?.name||'用户';
-            return '<article class="pp-x-post" data-x-post="'+xEscape(p.id)+'">'+(page==='profile'&&!self&&p.reposted?'<small>你转发了</small>':'')+'<header>'+(self?'<strong>'+xEscape(name)+'</strong>':button('account',name,p.author))+'<small>'+(!self&&a?'@'+xEscape(a.handle)+' · ':'')+displayStoryTime(p)+'</small></header><p class="pp-snap-copy">'+xEscape(p.text)+'</p>'+injectionButton(p,state)+'<div class="pp-snap-actions">'+button('comments','回复 '+counts.replies,p.id)+button('repost',(p.reposted?'已转发 ':'转发 ')+counts.reposts,p.id,'aria-pressed="'+!!p.reposted+'"')+button('like',(p.liked?'已赞 ':'赞 ')+counts.likes,p.id,'aria-pressed="'+!!p.liked+'"')+'</div>'+
+            return '<article class="pp-x-post" data-x-post="'+xEscape(p.id)+'">'+(page==='profile'&&!self&&p.reposted?'<small>你转发了</small>':'')+'<header><span class="pp-x-post-avatar" aria-hidden="true">'+xEscape(name.slice(0,1))+'</span><div class="pp-x-author">'+(self?'<strong>'+xEscape(name)+'</strong>':button('account',name,p.author))+'<small>'+(!self&&a?'@'+xEscape(a.handle)+' · ':'')+displayStoryTime(p)+'</small></div></header><p class="pp-snap-copy">'+xEscape(p.text)+'</p>'+injectionButton(p,state)+'<div class="pp-snap-actions pp-x-reactions">'+button('comments','回复 '+counts.replies,p.id)+button('repost',(p.reposted?'已转发 ':'转发 ')+counts.reposts,p.id,'aria-pressed="'+!!p.reposted+'"')+button('like',(p.liked?'已赞 ':'赞 ')+counts.likes,p.id,'aria-pressed="'+!!p.liked+'"')+'</div>'+
                 (page==='post:'+p.id?'<div class="pp-x-comments">'+comments.map(c=>{
                     const parent=comments.find(other=>other.id===c.replyTo);
                     return '<article class="pp-x-comment" data-x-comment="'+xEscape(c.id)+'"><p class="pp-snap-copy"><strong>'+xEscape(commenter(c))+'：</strong>'+xEscape(c.text)+'</p>'+(parent?'<small>回复 @'+xEscape(commenter(parent))+'</small>':'')+button('reply-comment','回复',c.id)+'</article>';
@@ -64,8 +66,8 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         else if(tab==='search')body=form('search',field('query','搜索用户'),'搜索')+(results?.length===0?empty('没有找到相关用户'):xItems(state,'account').filter(a=>results===null||results.includes(a.id)).map(a=>accountHTML(a)).join(''));
         else if(tab==='messages')body=inbox(state);
         else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3>'+refreshButton(true)+'</div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>p.feed==='square'&&(!state.x['square-edition']||p.publication?.editionId===state.x['square-edition'].editionId)).reverse());
-        else body='<div class="pp-snap-actions">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton()+'</div>'+form('post',field('post','有什么新鲜事？','',true),'发帖')+postsHTML(state,xItems(state,'post').filter(p=>p.feed!=='square'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
-        return '<div class="pp-snap pp-x"><header class="pp-snap-top"><b>𝕏</b>'+button('profile','个人主页')+'</header><p class="pp-snap-status" role="status">'+xEscape(working||state.busy?'正在处理…':state.errorKind==='x'&&state.error?state.error:status)+'</p>'+body+'<nav class="pp-snap-tabs pp-x-tabs" aria-label="X 页面">'+[['home','首页'],['square','广场'],['search','搜索'],['messages','私信']].map(([id,label])=>'<button type="button" data-x-action="tab" data-x-id="'+id+'" aria-pressed="'+(tab===id)+'">'+label+'</button>').join('')+'</nav></div>';
+        else body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton()+'</div>'+form('post',field('post','有什么新鲜事？','',true),'发帖')+postsHTML(state,xItems(state,'post').filter(p=>p.feed!=='square'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+        return '<div class="pp-snap pp-x"><header class="pp-snap-top"><b aria-label="X">'+icon('x')+'</b>'+button('profile','个人主页')+'</header><div class="pp-x-body" data-x-page="'+xEscape([tab,page,selected||''].join(':'))+'" data-x-thread="'+(page==='thread')+'" data-x-count="'+(page==='thread'?xItems(state,'message').filter(m=>m.accountId===selected).length:0)+'"><p class="pp-snap-status" role="status">'+xEscape(working||state.busy?'正在处理…':state.errorKind==='x'&&state.error?state.error:status)+'</p>'+body+'</div><nav class="pp-snap-tabs pp-x-tabs" aria-label="X 页面">'+[['home','首页','home'],['square','广场','globe'],['search','搜索','search'],['messages','私信','mail']].map(([id,label,glyph])=>'<button type="button" data-x-action="tab" data-x-id="'+id+'" aria-pressed="'+(tab===id)+'">'+icon(glyph)+'<span>'+label+'</span></button>').join('')+'</nav></div>';
     }
     async function perform(method,args=[],message='') {
         if(!adapter.x){notice('请在酒馆内使用 X。');return null;}if(working||getView().busy)return null;

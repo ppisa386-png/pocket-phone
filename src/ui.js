@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.4';
-import { storyTime } from './story-clock.js?v=0.24.4';
-import { createAssetPanel } from './assets-view.js?v=0.24.4';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.4';
-import { bindComposerKeys } from './composer.js?v=0.24.4';
-import { createXPanel } from './x-view.js?v=0.24.4';
-import { xUnread } from './x.js?v=0.24.4';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.4';
-import { snapUnread } from './snapchat.js?v=0.24.4';
-import { createApiPanel } from './api-view.js?v=0.24.4';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.4';
-import { icon } from './icons.js?v=0.24.4';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.4';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.4';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.4';
+import { createDailyPanel } from './daily-view.js?v=0.24.5';
+import { storyTime } from './story-clock.js?v=0.24.5';
+import { createAssetPanel } from './assets-view.js?v=0.24.5';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.5';
+import { bindComposerKeys } from './composer.js?v=0.24.5';
+import { createXPanel } from './x-view.js?v=0.24.5';
+import { xUnread } from './x.js?v=0.24.5';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.5';
+import { snapUnread } from './snapchat.js?v=0.24.5';
+import { createApiPanel } from './api-view.js?v=0.24.5';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.5';
+import { icon } from './icons.js?v=0.24.5';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.5';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.5';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.5';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -104,7 +104,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderX() {
         const active=shadow.activeElement,field=active?.dataset.xField;
         const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
-        const scroll=content.scrollTop;content.innerHTML=xPanel.html();content.scrollTop=scroll;
+        const old=content.querySelector('.pp-x-body'),scroll=old?.scrollTop||0,page=old?.dataset.xPage,count=old?.dataset.xCount;
+        content.innerHTML=xPanel.html();
+        const body=content.querySelector('.pp-x-body');
+        if(body)body.scrollTop=body.dataset.xThread==='true'&&(page!==body.dataset.xPage||count!==body.dataset.xCount)?body.scrollHeight:page===body.dataset.xPage?scroll:0;
         const next=field?Array.from(content.querySelectorAll('[data-x-field]')).find(el=>el.dataset.xField===field):null;
         if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
         queueMicrotask(()=>{if(opened&&route==='app:x')void xPanel.readVisible();});
