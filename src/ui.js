@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.3';
-import { storyTime } from './story-clock.js?v=0.24.3';
-import { createAssetPanel } from './assets-view.js?v=0.24.3';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.3';
-import { bindComposerKeys } from './composer.js?v=0.24.3';
-import { createXPanel } from './x-view.js?v=0.24.3';
-import { xUnread } from './x.js?v=0.24.3';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.3';
-import { snapUnread } from './snapchat.js?v=0.24.3';
-import { createApiPanel } from './api-view.js?v=0.24.3';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.3';
-import { icon } from './icons.js?v=0.24.3';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.3';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.3';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.3';
+import { createDailyPanel } from './daily-view.js?v=0.24.4';
+import { storyTime } from './story-clock.js?v=0.24.4';
+import { createAssetPanel } from './assets-view.js?v=0.24.4';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.4';
+import { bindComposerKeys } from './composer.js?v=0.24.4';
+import { createXPanel } from './x-view.js?v=0.24.4';
+import { xUnread } from './x.js?v=0.24.4';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.4';
+import { snapUnread } from './snapchat.js?v=0.24.4';
+import { createApiPanel } from './api-view.js?v=0.24.4';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.4';
+import { icon } from './icons.js?v=0.24.4';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.4';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.4';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.4';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -88,8 +88,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function renderSnapchat() {
         const active=shadow.activeElement;const field=active?.dataset.snapField;
         const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
-        const scroll=content.scrollTop;const clipsScroll=content.querySelector('.pp-snap-clips')?.scrollTop;
-        content.innerHTML=snapPanel.html();content.scrollTop=scroll;
+        const old=content.querySelector('.pp-snap-body');
+        const scroll=old?.scrollTop||0,page=old?.dataset.snapPage,count=old?.dataset.snapCount;
+        const clipsScroll=content.querySelector('.pp-snap-clips')?.scrollTop;
+        content.innerHTML=snapPanel.html();
+        const body=content.querySelector('.pp-snap-body');
+        if(body)body.scrollTop=body.querySelector('.pp-snap-thread')&&(page!==body.dataset.snapPage||count!==body.dataset.snapCount)?body.scrollHeight:page===body.dataset.snapPage?scroll:0;
         const clips=content.querySelector('.pp-snap-clips');if(clips&&clipsScroll!=null)clips.scrollTop=clipsScroll;
         const next=field?Array.from(content.querySelectorAll('[data-snap-field]')).find(el=>el.dataset.snapField===field):null;
         if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}

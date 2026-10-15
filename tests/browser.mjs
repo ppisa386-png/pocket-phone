@@ -300,6 +300,12 @@ try {
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.generateQuietPrompt=async options=>{window.modelCalls++;const task=options.quietPrompt;return JSON.stringify(task.includes('当前任务：Snapchat 新增联系人')?{accounts:[{name:'Alex',handle:'alex',has_account:true,invitation:'incoming'}]}:task.includes('当前任务：仅重写')?{text:'Hey Moon!'}:task.includes('当前任务：Snapchat 聊天')?{status:'reply',messages:[{kind:'text',text:'Hey Moon!'},{kind:'text',text:'How are you?'}]}:task.includes('当前任务：Snapcash')?{status:'accepted'}:task.includes('通话')&&task.includes('当前任务：Snapchat 语音')?{status:'answered',text:'I can hear you.'}:task.includes('当前任务：Snapchat spotlight')?{items:[{name:'Traveler',text:'A walk along the beach.'}]}:task.includes('当前任务：Snapchat map')?{items:[{name:'Traveler',place:'Beach',text:'Public seaside view',shared:true}]}:{items:[]});};});
         await p.evaluate(()=>window.seedWallet());await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();
         check(await p.evaluate(()=>window.modelCalls)===0,'opening Snapchat is local');
+        const snapFits=async()=>check(await p.locator('.pp-content').evaluate(el=>{
+            const bar=el.querySelector('.pp-snap-tabs').getBoundingClientRect(),box=el.getBoundingClientRect(),body=el.querySelector('.pp-snap-body');
+            return Math.abs(bar.bottom-box.bottom)<2&&body.scrollWidth<=body.clientWidth+1;
+        }),'Snapchat navigation pinned and body fits');
+        await snapFits();
+
         await p.locator('[data-snap-action="profile"]').tap();await p.locator('[data-snap-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存个人设置',exact:true}).tap();await p.getByText('已保存个人设置',{exact:true}).waitFor();
         await p.locator('[data-snap-action="list"]').tap();await p.getByRole('button',{name:'新增联系人',exact:true}).tap();await p.locator('[data-snap-action="accept"]').waitFor();await p.locator('[data-snap-action="accept"]').tap();await p.locator('[data-snap-action="thread"]').tap();
         const queuedCalls=await p.evaluate(()=>window.modelCalls);
@@ -307,6 +313,11 @@ try {
         await p.locator('[data-snap-field="message"]').fill('And another thought');await p.locator('[data-snap-field="message"]').evaluate(el=>el.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,composed:true,cancelable:true,inputType:'insertLineBreak'})));await p.getByText('And another thought',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls,'Snapchat Enter and mobile line break queue locally without API');
         await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('How are you?',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat Send sends one batch request');
         check(await p.locator('.pp-snap-message').count()===4,'Snapchat reply sentences render as separate bubbles');
+        await snapFits();await p.screenshot({path:resolve(screenshotDir,'snap-chat-390.png')});
+        await p.setViewportSize({width:320,height:740});await snapFits();
+        await p.screenshot({path:resolve(screenshotDir,'snap-chat-320.png')});
+        await p.setViewportSize({width:390,height:844});
+
         await p.locator('[data-snap-action="edit-message"]').first().tap();await p.locator('[data-snap-field="editText"]').fill('Edited snap');await p.locator('[data-snap-form="edit-message"] button[type="submit"]').tap();await p.getByText('Edited snap',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat pencil is local');
         await p.locator('[data-snap-action="reroll-message"]').first().tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();check(await p.getByText('How are you?',{exact:true}).count()===1,'Snapchat reroll leaves the other reply untouched');
 
@@ -316,11 +327,11 @@ try {
         await p.locator('[data-snap-action="cash"]').tap();await p.locator('[data-snap-field="amount"]').fill('12.30');await p.locator('[data-snap-field="memo"]').fill('Lunch');await p.getByRole('button',{name:'发送转账',exact:true}).tap();await p.getByText('已收款',{exact:true}).waitFor();
         check(await p.locator('.pp-snap-cash').count()===1,'one settled Snapcash card');
         await p.locator('[data-snap-action="tab"][data-snap-id="stories"]').tap();await p.locator('[data-snap-field="story"]').fill('<script>window.badSnap=true</script> Sunset');const before=await p.evaluate(()=>window.modelCalls);await p.getByRole('button',{name:'发布故事',exact:true}).tap();await p.locator('[data-snap-expiry]').waitFor();
-        check(await p.evaluate(()=>window.modelCalls)===before,'publishing story has no API cost');check(await p.evaluate(()=>!window.badSnap),'story text never runs HTML');
+        check(await p.evaluate(()=>window.modelCalls)===before,'publishing story has no API cost');check(await p.evaluate(()=>!window.badSnap),'story text never runs HTML');await snapFits();await p.screenshot({path:resolve(screenshotDir,'snap-stories-390.png')});
         await p.locator('[data-snap-action="tab"][data-snap-id="spotlight"]').tap();await p.getByRole('button',{name:'加载短视频',exact:true}).tap();await p.getByText('A walk along the beach.',{exact:true}).waitFor();
-        check(await p.locator('.pp-snap-clip').count()===1,'Spotlight renders a vertical text-video card');
+        check(await p.locator('.pp-snap-clip').count()===1,'Spotlight renders a vertical text-video card');await snapFits();await p.screenshot({path:resolve(screenshotDir,'snap-spotlight-390.png')});
         await p.locator('[data-snap-action="tab"][data-snap-id="map"]').tap();await p.getByRole('button',{name:'刷新共享位置与动态',exact:true}).tap();await p.getByText('Public seaside view',{exact:true}).waitFor();
-        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Snapchat fits mobile width');
+        check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Snapchat fits mobile width');await snapFits();await p.screenshot({path:resolve(screenshotDir,'snap-map-390.png')});
         await p.reload();await p.evaluate(()=>window.seedWallet());await p.locator('.pp-launcher').tap();await p.locator('[data-app="snapchat"]').tap();await p.locator('[data-snap-action="thread"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();await p.getByText('已收款',{exact:true}).waitFor();
         check(true,'Snapchat conversation and cash survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='Different story';await c.eventSource.emit('MESSAGE_EDITED');});

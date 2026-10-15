@@ -1,9 +1,9 @@
-import { storyTime } from './story-clock.js?v=0.24.3';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.3';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.3';
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.3';
-import { narrativeReplyCount } from './contact-policy.js?v=0.24.3';
-import { isBlocked } from './contact-events.js?v=0.24.3';
+import { storyTime } from './story-clock.js?v=0.24.4';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.4';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.4';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.4';
+import { narrativeReplyCount } from './contact-policy.js?v=0.24.4';
+import { isBlocked } from './contact-events.js?v=0.24.4';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});

@@ -376,3 +376,67 @@ h2, p { margin: 0; }
 .pp-phone[data-active-app="messages"] .pp-sms-compose button svg{width:21px;height:21px;transform:rotate(-90deg)}
 .pp-phone[data-active-app="messages"] .pp-sms-thread>.pp-call-error{flex-shrink:0;max-height:100px;overflow-y:auto}
 .pp-phone[data-active-app="messages"] .pp-sms-thread>.pp-footnote{margin:4px 14px;font-size:11px}
+
+/* Snapchat-only skin. Shared pp-snap classes used by other apps stay unchanged. */
+.pp-phone[data-active-app="snapchat"]{--pp-bg:#fff;--pp-card:#f5f5f7;--pp-text:#191b20;--pp-muted:#6d727b;--pp-line:#e8eaed;--pp-accent:#087bca;--pp-input:#f6f7f8;color:var(--pp-text);background:#fff;color-scheme:light}
+.pp-phone[data-active-app="snapchat"] .pp-topline,.pp-phone[data-active-app="snapchat"] .pp-header{background:#fffc00;color:#111}
+.pp-phone[data-active-app="snapchat"] .pp-footer{background:#fff;color:#191b20}
+.pp-snapchat{height:100%;min-height:0;display:flex;flex-direction:column;padding:0;overflow:hidden;background:#fff}
+.pp-snapchat .pp-snap-top{flex:0 0 auto;padding:10px 16px;background:#fffc00;border:0;min-height:58px}
+.pp-snap-brand{display:flex;align-items:center;gap:10px;font-size:1.35em;letter-spacing:-.4px}
+.pp-snap-brand>svg{width:28px;height:28px;fill:#fff;stroke:#111}
+.pp-snapchat .pp-snap-top>[data-snap-action="profile"]{background:#fff9;border:0;width:36px;height:36px;display:grid;place-items:center;padding:7px;border-radius:50%}
+.pp-snapchat .pp-snap-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px;scrollbar-width:thin}
+.pp-snapchat .pp-snap-status{color:#31745f;margin:8px 0;min-height:0}
+.pp-snapchat .pp-snap-status:empty{display:none}
+.pp-snapchat .pp-snap-tabs{position:static;flex:0 0 auto;z-index:2;margin:0;padding:7px 8px 4px;background:#fff;border-top:1px solid var(--pp-line)}
+.pp-snapchat .pp-snap-tabs button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;padding:5px 2px;border-radius:12px;font-size:10px;color:#7a7e86}
+.pp-snapchat .pp-snap-tabs svg{width:24px;height:24px}
+.pp-snapchat .pp-snap-tabs button[aria-pressed="true"]{color:#111;background:#fffc00;font-weight:700}
+.pp-snapchat .pp-snap-button{background:#f3f4f6;border:0;border-radius:20px;color:#353940;padding:8px 12px;min-height:34px}
+.pp-snapchat .pp-snap-primary{background:#fffc00;color:#161616;border-radius:22px;font-size:.85em;padding:10px 16px}
+.pp-snapchat .pp-snap-form{gap:9px;padding:14px 0}
+.pp-snapchat .pp-snap-form input:not([type="checkbox"]),.pp-snapchat .pp-snap-form textarea,.pp-snapchat .pp-snap-form select{border:1px solid #e4e7eb;border-radius:18px;font-size:14px}
+.pp-snapchat [data-snap-form="search"]{grid-template-columns:minmax(0,1fr) auto;align-items:end;border-bottom:1px solid var(--pp-line)}
+.pp-snapchat [data-snap-form="search"] .pp-field>span{font-size:11px}
+.pp-snapchat [data-snap-form="search"] input{border-radius:22px}
+.pp-snapchat [data-snap-form="search"] .pp-snap-primary{font-size:12px;white-space:nowrap;padding:11px 12px}
+.pp-snapchat .pp-snap-avatar{width:44px;height:44px;background:#eee6fa;color:#5e4188;font-size:18px;border:3px solid #fff;box-shadow:0 0 0 1px #e5dbf2}
+.pp-snapchat .pp-snap-account:nth-of-type(3n+2) .pp-snap-avatar{background:#dff0e8;color:#366c57;box-shadow:0 0 0 1px #c9e3d6}
+.pp-snapchat .pp-snap-account:nth-of-type(3n) .pp-snap-avatar{background:#ffead0;color:#8b5a24;box-shadow:0 0 0 1px #f2dbbb}
+.pp-snapchat .pp-snap-person>div{flex:1}
+.pp-snapchat .pp-snap-person strong{font-size:1.03em;font-weight:700}
+.pp-snapchat .pp-snap-person small{margin-top:4px;font-size:11px}
+.pp-snapchat .pp-snap-account{margin:0;padding:15px 0 10px;border:0;border-bottom:1px solid var(--pp-line);border-radius:0;background:#fff}
+.pp-snapchat .pp-snap-account .pp-snap-actions{margin:0 0 0 54px;gap:7px}
+.pp-snapchat [data-snap-action="thread"],.pp-snapchat [data-snap-action="accept"]{color:#087bca;font-weight:650}
+.pp-snapchat [data-snap-action="block"],.pp-snapchat [data-snap-action="decline"]{color:#7a7e86;background:transparent;font-size:10px}
+.pp-snapchat .pp-snap-actions [data-snap-action="voice"],.pp-snapchat .pp-snap-actions [data-snap-action="video"],.pp-snapchat .pp-snap-actions [data-snap-action="cash"]{width:36px;height:36px;display:grid;place-items:center;padding:8px}
+.pp-snapchat .pp-snap-actions svg{width:20px;height:20px}
+.pp-snapchat .pp-snap-message{background:#fff;border-left:3px solid #e3465b;border-radius:0;margin:18px 0;padding:0 0 0 12px}
+.pp-snapchat .pp-snap-message.is-user{border-color:#098bd5;margin-left:0}
+.pp-snapchat .pp-snap-message>small:first-child{color:#c3374d;font-size:10px;font-weight:650}
+.pp-snapchat .pp-snap-message.is-user>small:first-child{color:#087bca}
+.pp-snapchat .pp-message-tools{gap:1px;color:#8c929b}
+.pp-snapchat .pp-message-tools svg{width:15px;height:15px}
+.pp-snapchat [data-snap-form="message"]{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--pp-line);grid-template-columns:72px minmax(0,1fr) auto;align-items:end;gap:6px;padding:10px 0;z-index:1}
+.pp-snapchat [data-snap-form="message"] .pp-field>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.pp-snapchat [data-snap-form="message"] select{font-size:11px;padding:10px 5px;height:42px}
+.pp-snapchat [data-snap-form="message"] textarea{height:42px;min-height:42px;max-height:110px;resize:none;line-height:21px;padding:10px;font-size:14px}
+.pp-snapchat [data-snap-form="message"] .pp-snap-primary{height:42px;padding:10px 12px;font-size:12px;background:#087bca;color:#fff}
+.pp-snapchat .pp-snap-cash{background:#edf8f1;border:1px solid #d0eada;border-radius:20px;color:#225c40}
+.pp-snapchat .pp-snap-cash>b{font-size:1.8em}
+.pp-snapchat .pp-snap-story{background:#fff;border:1px solid #ecebf0;box-shadow:0 4px 15px #1d163009;padding:13px;border-radius:20px}
+.pp-snapchat .pp-snap-story header{border-left:3px solid #a759df;padding-left:10px}
+.pp-snapchat .pp-snap-story .pp-snap-media{min-height:210px;background:linear-gradient(150deg,#f0e6ff,#e2f4f6);border-radius:14px;color:#3d3850}
+.pp-snapchat .pp-snap-media>span{font-size:32px;color:inherit;opacity:.65}
+.pp-snapchat .pp-snap-clips{max-height:55dvh;scroll-snap-type:y proximity}
+.pp-snapchat .pp-snap-clip{min-height:49dvh;background:linear-gradient(160deg,#29334a,#121723);color:#fff;border:0;box-shadow:0 5px 16px #0002;margin:14px 0;padding:17px;border-radius:20px}
+.pp-snapchat .pp-snap-clip small{color:#cbd2de}
+.pp-snapchat .pp-snap-clip .pp-snap-media{background:transparent;min-height:150px;padding:12px 0;color:#fff}
+.pp-snapchat .pp-snap-clip .pp-snap-button{color:#fff;background:#ffffff20}
+.pp-snapchat .pp-snap-clip [data-snap-form="comment"]{color:#191b20}
+.pp-snapchat .pp-snap-map{min-height:280px;border:1px solid #c8dfcd;border-radius:22px;background:linear-gradient(110deg,transparent 58%,#a7d9ee 59% 66%,transparent 67%),repeating-linear-gradient(25deg,transparent 0 45px,#ffffffe6 46px 53px,transparent 54px 85px),repeating-linear-gradient(115deg,transparent 0 58px,#ffffffe6 59px 66px,transparent 67px 100px),#e1eedc;box-shadow:inset 0 0 25px #99bca422;color:#305447}
+.pp-snapchat .pp-snap-map>strong{font-size:1.3em}
+.pp-snapchat .pp-snap-map>p{color:#4a685b;margin-top:4px}
+.pp-snapchat .pp-snap-pins>span{background:#fff;border:1px solid #dbe6dd;box-shadow:0 3px 9px #3054471c;border-radius:16px;padding:9px 11px;font-weight:550}

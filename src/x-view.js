@@ -1,6 +1,6 @@
-import { squareStatus, squareExpiry } from './square-core.js?v=0.24.3';
-import { displayStoryTime } from './story-clock.js?v=0.24.3';
-import { xItems, xProfile, xCounts } from './x.js?v=0.24.3';
+import { squareStatus, squareExpiry } from './square-core.js?v=0.24.4';
+import { displayStoryTime } from './story-clock.js?v=0.24.4';
+import { xItems, xProfile, xCounts } from './x.js?v=0.24.4';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;

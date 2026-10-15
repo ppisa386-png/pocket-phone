@@ -1,4 +1,8 @@
 const paths = {
+    video: '<rect x="3" y="5" width="18" height="14" rx="4"/><path d="m10 9 5 3-5 3V9Z"/>',
+    stories: '<rect x="3" y="5" width="7" height="16" rx="2"/><rect x="14" y="3" width="7" height="16" rx="2"/>',
+    map: '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6ZM9 3v15M15 6v15"/>',
+    cash: '<rect x="2" y="5" width="20" height="14" rx="3"/><circle cx="12" cy="12" r="3"/><path d="M5 12h1m12 0h1"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
     daily: '<path d="M5 3h14v18H5a2 2 0 0 1-2-2V7h2M5 7v12M8 6h8M8 9h8M8 12h3v3H8zM14 12h2M14 15h2M8 18h8"/>',
     assets: '<path d="m12 4 2-3m-2 3 3 2 3-1v3l3 2-1 3 1 3-3 2-1 3-4-1-3 2-3-2-3-1 1-4-2-3 2-2V7l4-1 3-2Z"/><path d="M12 7c-4 3-5 9-2 13M15 8l1 2m-9 0 1 2m8 2-1 2m-7-1 1 2m4-6-1 2"/>',

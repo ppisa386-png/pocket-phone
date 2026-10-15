@@ -1,6 +1,6 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.3';
-import { icon } from './icons.js?v=0.24.3';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.3';
+import { displayStoryTime } from './story-clock.js?v=0.24.4';
+import { icon } from './icons.js?v=0.24.4';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.4';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -14,7 +14,8 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     const key=name=>[tab,accountId||'',page,name].join(':');
     const value=(name,fallback='')=>drafts[key(name)]??fallback;
     const disabled=()=>getView().busy||posting?' disabled':'';
-    const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-snap-action="'+action+'" data-snap-id="'+snapEsc(id)+'" '+extra+disabled()+'>'+snapEsc(label)+'</button>';
+    const actionIcons={profile:'person',voice:'phone',video:'video',cash:'cash'};
+    const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-snap-action="'+action+'" data-snap-id="'+snapEsc(id)+'" aria-label="'+snapEsc(label)+'" title="'+snapEsc(label)+'" '+extra+disabled()+'>'+(actionIcons[action]?icon(actionIcons[action]):snapEsc(label))+'</button>';
     const messageTools=i=>'<div class="pp-message-tools"><button type="button" class="pp-icon-button" data-snap-action="edit-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="修改消息"'+disabled()+'>'+icon('edit')+'</button><button type="button" class="pp-icon-button" data-snap-action="reroll-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="重新生成消息"'+disabled()+'>'+icon('retry')+'</button></div>';
     const field=(name,label,fallback='',type='text')=>'<label class="pp-field"><span>'+label+'</span><input data-snap-field="'+name+'" name="'+name+'" type="'+type+'" value="'+snapEsc(value(name,fallback))+'" '+(type==='number'?'min="0.01" step="0.01"':'maxlength="200"')+'></label>';
     const textarea=(name,label)=>'<label class="pp-field"><span>'+label+'</span><textarea data-snap-field="'+name+'" name="'+name+'" enterkeyhint="enter" rows="3" maxlength="6000">'+snapEsc(value(name))+'</textarea></label>';
@@ -26,7 +27,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
         return form('search',field('query','姓名或账号（可留空）'),'新增联系人')+accounts.map(a=>{
             const unread=snapItems(state,'message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
             const label=a.blocked?'已拉黑':({none:'尚未添加',incoming:'邀请你成为好友',pending:'等待通过',declined:'邀请未通过',friends:'好友'})[a.friend];
-            return '<article class="pp-snap-card"><div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+label+(unread?' · '+unread+' 条未读':'')+'</small></div></div><div class="pp-snap-actions">'+
+            return '<article class="pp-snap-card pp-snap-account"><div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+label+(unread?' · '+unread+' 条未读':'')+'</small></div></div><div class="pp-snap-actions">'+
                 (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
         }).join('')+(accounts.length?'':empty('还没有 Snapchat 联系人。点「新增联系人」查找账号。'));
     }
@@ -45,7 +46,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+'<input type="hidden" name="currency" value="USD"><p>美元 USD</p>'+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
     }
     function postHTML(item) {
-        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
+        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'pp-snap-story')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
     }
     function feedsHTML(state) {
         if(tab==='stories')return form('story',select('storyKind',['image','video'],'image')+textarea('story','故事内容'),'发布故事')+button('refresh','刷新好友故事')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');
@@ -57,7 +58,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
         const state=getView();if(accountId&&!state.snapchat?.[accountId]){accountId=null;page='';}
         const a=state.snapchat?.[accountId];const p=profile();
         let body=page==='profile'?button('list','‹ 返回')+form('profile',field('alias','网名',p.alias)+'<input type="hidden" name="currency" value="USD">'+field('location','我分享的位置',p.location)+'<label class="pp-snap-check"><input name="sharing" data-snap-field="sharing" type="checkbox"'+(value('sharing',p.sharing)?' checked':'')+'>向好友共享此位置</label>','保存个人设置'):tab==='chat'?(a?threadHTML(state,a):accountsHTML(state)):feedsHTML(state);
-        return '<div class="pp-snap"><header class="pp-snap-top"><b>Snapchat</b>'+button('profile','我的账号')+'</header><p class="pp-snap-status" role="status">'+snapEsc(state.busy?'正在处理…':state.errorKind==='snapchat'&&state.error?state.error:status)+'</p>'+body+'<nav class="pp-snap-tabs" aria-label="Snapchat 页面">'+[['chat','聊天'],['stories','故事'],['spotlight','聚光灯'],['map','地图']].map(([id,label])=>'<button type="button" data-snap-action="tab" data-snap-id="'+id+'" aria-pressed="'+(tab===id)+'">'+label+'</button>').join('')+'</nav></div>';
+        return '<div class="pp-snap pp-snapchat" data-snap-tab="'+tab+'"><header class="pp-snap-top"><span class="pp-snap-brand">'+icon('snapchat')+'<b>'+({chat:'聊天',stories:'故事',spotlight:'聚光灯',map:'地图'})[tab]+'</b></span>'+button('profile','我的账号')+'</header><div class="pp-snap-body" data-snap-page="'+snapEsc([tab,accountId||'',page].join(':'))+'" data-snap-count="'+(a?snapItems(state,'message').filter(m=>m.accountId===a.id).length:0)+'"><p class="pp-snap-status" role="status">'+snapEsc(state.busy?'正在处理…':state.errorKind==='snapchat'&&state.error?state.error:status)+'</p>'+body+'</div><nav class="pp-snap-tabs" aria-label="Snapchat 页面">'+[['chat','聊天','messages'],['stories','故事','stories'],['spotlight','聚光灯','video'],['map','地图','map']].map(([id,label,glyph])=>'<button type="button" data-snap-action="tab" data-snap-id="'+id+'" aria-pressed="'+(tab===id)+'">'+icon(glyph)+'<span>'+label+'</span></button>').join('')+'</nav></div>';
     }
     async function perform(method,args=[],message='') {
         if(!adapter.snapchat){notice('请在酒馆内使用 Snapchat。');return null;}
