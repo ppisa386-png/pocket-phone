@@ -5,7 +5,8 @@ export function readPreparedMemory(context, settings, bridge = globalThis.qqj_v3
     if (!bridge || typeof bridge.getPromptSnapshot !== 'function') return { status: 'missing', text: '', message: '未检测到千千结公开接口，请启用或更新千千结。' };
     try {
         const result = bridge.getPromptSnapshot();
-        const id = String(context.chatId ?? context.getCurrentChatId?.() ?? '').trim();
+        const primary = context.getCurrentChatId?.();
+        const id = String(primary === undefined || primary === null || primary === '' ? context.chatId ?? '' : primary).trim();
         const qqjId = context.chatMetadata?.qianqianjie?.chatId;
         if (result?.status !== 'ready') return { status: result?.status || 'unavailable', text: '', message: result?.status === 'disabled' ? '千千结当前已关闭。' : '当前没有已准备的记忆；请先让千千结随正文完成一次召回。' };
         if (!id || result.identity?.hostChatId !== id || (qqjId && result.identity?.qqjChatId !== qqjId)) return { status: 'stale', text: '', message: '记忆不属于当前聊天，已忽略。' };

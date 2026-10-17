@@ -1,6 +1,6 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.6';
-import { icon } from './icons.js?v=0.24.6';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.6';
+import { displayStoryTime } from './story-clock.js?v=0.24.7';
+import { icon } from './icons.js?v=0.24.7';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.7';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -9,7 +9,7 @@ const snapTime = item => displayStoryTime(item);
 
 export function createSnapPanel({adapter,getView,redraw,notice}) {
     let editingId=null;
-    let tab='chat', accountId=null, page='', drafts=Object.create(null), status='', reading=false, posting=false;
+    let tab='chat', accountId=null, page='', drafts=Object.create(null), status='', reading=false, posting=false, epoch=0;
     const profile=()=>snapProfile(getView(),adapter.userName?.()||'user');
     const key=name=>[tab,accountId||'',page,name].join(':');
     const value=(name,fallback='')=>drafts[key(name)]??fallback;
@@ -63,54 +63,60 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     async function perform(method,args=[],message='') {
         if(!adapter.snapchat){notice('请在酒馆内使用 Snapchat。');return null;}
         if(posting||getView().busy)return null;
-        posting=true;redraw();
-        try {const result=await adapter.snapchat[method](...args);if(result?.ok){status=message;return result;}status=result?.error||'正在处理其他操作，请稍后重试。';return result;}
-        catch(error){status=error.message;return null;}
-        finally{posting=false;redraw();}
+        const token=epoch;posting=true;redraw();
+        try {const result=await adapter.snapchat[method](...args);if(token!==epoch)return null;if(result?.ok){status=message;return result;}status=result?.error||'正在处理其他操作，请稍后重试。';return result;}
+        catch(error){if(token===epoch)status=error.message;return null;}
+        finally{if(token===epoch)posting=false;redraw();}
     }
     async function queueCurrent(){
-        const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
+        const token=epoch,selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
         if(!message.trim())return;
         const result=await perform('queueMessage',[selected,kind,message]);
-        if(result?.ok&&drafts[draftKey]===message)delete drafts[draftKey];
+        if(token===epoch&&result?.ok&&drafts[draftKey]===message)delete drafts[draftKey];
         redraw();return result;
     }
     async function sendCurrent(){
-        const selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
-        if(message.trim()) {const added=await perform('queueMessage',[selected,kind,message]);if(!added?.ok)return;if(drafts[draftKey]===message)delete drafts[draftKey];}
+        const token=epoch,selected=accountId,draftKey=key('message'),message=value('message'),kind=value('kind','text');
+        if(message.trim()) {const added=await perform('queueMessage',[selected,kind,message]);if(token!==epoch||!added?.ok)return;if(drafts[draftKey]===message)delete drafts[draftKey];}
         await perform('flushMessages',[selected]);redraw();
     }
+    function back() {
+        if(editingId){editingId=null;redraw();return true;}
+        if(page==='cash'){page='';redraw();return true;}
+        if(!page&&!accountId)return false;
+        accountId=null;page='';redraw();return true;
+    }
     return {
-        html, queueCurrent,
-        reset(){editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
+        html, queueCurrent, back,
+        reset(){epoch++;posting=false;editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
         input(target){if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
         async readVisible(){if(reading||posting||getView().busy||!accountId||page==='profile'||!adapter.snapchat)return;if(!snapItems(getView(),'message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;reading=true;try{await adapter.snapchat.markRead(accountId);}finally{reading=false;}},
         async action(action,id) {
             if(action==='edit-message'){editingId=id;drafts[key('editText')]=getView().snapchat[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='reroll-message'){await perform('rerollMessage',[id]);return;}
-            if(action==='tab'){tab=id;accountId=null;page='';status='';redraw();return;}
-            if(action==='profile'){page='profile';redraw();return;}
-            if(action==='list'){accountId=null;page='';redraw();return;}
-            if(action==='thread'){accountId=id;page='';redraw();return;}
-            if(action==='cash'){page='cash';redraw();return;}
-            if(action==='comment'){page='comment:'+id;redraw();return;}
+            if(action==='tab'){editingId=null;tab=id;accountId=null;page='';status='';redraw();return;}
+            if(action==='profile'){editingId=null;page='profile';redraw();return;}
+            if(action==='list'){editingId=null;accountId=null;page='';redraw();return;}
+            if(action==='thread'){editingId=null;accountId=id;page='';redraw();return;}
+            if(action==='cash'){editingId=null;page='cash';redraw();return;}
+            if(action==='comment'){editingId=null;page='comment:'+id;redraw();return;}
             const handlers={invite:['invite',[id]],accept:['accept',[id,true]],decline:['accept',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],reveal:['reveal',[id]],voice:['call',[id,'voice']],video:['call',[id,'video']],hangup:['hangup',[id]],retry:['retryMessage',[id]],refresh:['refresh',[tab]],like:['like',[id]],settle:['settle',[id,true]],cancel:['settle',[id,false]]};
             if(handlers[action])await perform(...handlers[action]);
         },
         async submit(formElement) {
             const data=Object.fromEntries(new FormData(formElement));const formName=formElement.dataset.snapForm;
-            const initialKey=key('');const draftKey=name=>initialKey+name;let result;
-            if(formName==='search'){result=await perform('discover',[data.query]);if(result?.ok)status='搜索完成，新增 '+result.value.added+' 个账号。';}
+            const initialKey=key(''),token=epoch;const draftKey=name=>initialKey+name;let result;
+            if(formName==='search'){result=await perform('discover',[data.query]);if(token===epoch&&result?.ok)status='搜索完成，新增 '+result.value.added+' 个账号。';}
             if(formName==='profile')result=await perform('saveProfile',[{...data,sharing:data.sharing==='on'}],'已保存个人设置');
             if(formName==='message'){await sendCurrent();return;}
-            if(formName==='edit-message'){result=await perform('editMessage',[editingId,data.editText]);if(result?.ok)editingId=null;}
-            if(formName==='story'){result=await perform('publish',[data.storyKind,data.story],'故事已发布');if(result?.ok)delete drafts[draftKey('story')];}
-            if(formName==='comment'){result=await perform('comment',[page.slice(8),data.comment]);if(result?.ok){delete drafts[draftKey('comment')];page='';}}
-            if(formName==='call'){const active=snapItems(getView(),'call').find(c=>c.accountId===accountId&&c.status==='connected');if(active){result=await perform('call',[accountId,active.mode,data.call,active.id]);if(result?.ok)delete drafts[draftKey('call')];}}
+            if(formName==='edit-message'){result=await perform('editMessage',[editingId,data.editText]);if(token===epoch&&result?.ok)editingId=null;}
+            if(formName==='story'){result=await perform('publish',[data.storyKind,data.story],'故事已发布');if(token===epoch&&result?.ok)delete drafts[draftKey('story')];}
+            if(formName==='comment'){result=await perform('comment',[page.slice(8),data.comment]);if(token===epoch&&result?.ok){delete drafts[draftKey('comment')];page='';}}
+            if(formName==='call'){const active=snapItems(getView(),'call').find(c=>c.accountId===accountId&&c.status==='connected');if(active){result=await perform('call',[accountId,active.mode,data.call,active.id]);if(token===epoch&&result?.ok)delete drafts[draftKey('call')];}}
             if(formName==='cash'){
                 result=await perform('transfer',[accountId,data.amount,data.currency,data.memo]);
-                if(result?.ok){for(const name of ['amount','memo'])delete drafts[draftKey(name)];page='';await perform('settle',[result.value,true]);}
+                if(token===epoch&&result?.ok){for(const name of ['amount','memo'])delete drafts[draftKey(name)];page='';await perform('settle',[result.value,true]);}
             }
             redraw();
         },

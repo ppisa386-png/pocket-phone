@@ -1,7 +1,7 @@
-import { icon } from './icons.js?v=0.24.6';
-import { squareStatus, squareExpiry } from './square-core.js?v=0.24.6';
-import { displayStoryTime } from './story-clock.js?v=0.24.6';
-import { xItems, xProfile, xCounts } from './x.js?v=0.24.6';
+import { icon } from './icons.js?v=0.24.7';
+import { squareStatus, squareExpiry } from './square-core.js?v=0.24.7';
+import { displayStoryTime } from './story-clock.js?v=0.24.7';
+import { xItems, xProfile, xCounts } from './x.js?v=0.24.7';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;
@@ -74,11 +74,15 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         working=true;const token=epoch;redraw();
         try{const result=await adapter.x[method](...args);if(token!==epoch)return null;status=result?.ok?message:result?.error||'请稍后重试。';return result;}
         catch(error){if(token===epoch)status=error.message;return null;}
-        finally{working=false;redraw();}
+        finally{if(token===epoch)working=false;redraw();}
+    }
+    function back() {
+        if(!page)return false;
+        replyTarget=null;page='';selected=null;redraw();return true;
     }
     return {
-        html,
-        reset(){epoch++;replyTarget=null;tab='home';page='';selected=null;following=false;results=null;drafts=Object.create(null);status='';},
+        html, back,
+        reset(){epoch++;working=false;replyTarget=null;tab='home';page='';selected=null;following=false;results=null;drafts=Object.create(null);status='';},
         input(el){drafts[key(el.dataset.xField)]=el.value;},
         async readVisible(){
             if(reading||working||getView().busy||!adapter.x)return;
@@ -90,7 +94,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         },
         async action(action,id) {
             if(action==='tab'){replyTarget=null;tab=id;page='';selected=null;status='';redraw();return;}
-            if(action==='back'){replyTarget=null;page='';selected=null;redraw();return;}
+            if(action==='back'){back();return;}
             if(action==='profile'){page='profile';selected=null;redraw();return;}
             if(action==='account'){selected=id;page='account';redraw();return;}
             if(action==='thread'){selected=id;page='thread';tab='messages';redraw();return;}
@@ -105,9 +109,9 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         async submit(el) {
             const data=Object.fromEntries(new FormData(el)),kind=el.dataset.xForm,base=key(''),token=epoch;let result;
             if(kind==='profile')result=await perform('saveProfile',[data],'已保存');
-            if(kind==='search'){result=await perform('discover',[data.query]);if(result?.ok)results=result.value.ids;}
-            if(kind==='post'){result=await perform('publish',[data.post],'已发布');if(result?.ok)delete drafts[base+'post'];}
-            if(kind==='comment'){result=await perform('comment',[page.slice(5),data.comment,replyTarget]);if(result?.ok){delete drafts[base+'comment'];replyTarget=null;}}
+            if(kind==='search'){result=await perform('discover',[data.query]);if(token===epoch&&result?.ok)results=result.value.ids;}
+            if(kind==='post'){result=await perform('publish',[data.post],'已发布');if(token===epoch&&result?.ok)delete drafts[base+'post'];}
+            if(kind==='comment'){result=await perform('comment',[page.slice(5),data.comment,replyTarget]);if(token===epoch&&result?.ok){delete drafts[base+'comment'];replyTarget=null;}}
             if(kind==='message'){
                 const before=new Set(xItems(getView(),'message').map(m=>m.id));result=await perform('send',[selected,data.message]);
                 if(token===epoch&&(result?.ok||xItems(getView(),'message').some(m=>!before.has(m.id)&&m.role==='user')))delete drafts[base+'message'];

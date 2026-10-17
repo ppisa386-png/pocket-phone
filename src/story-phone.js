@@ -1,9 +1,9 @@
-import { storyTime } from './story-clock.js?v=0.24.6';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.6';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.6';
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.6';
-import { narrativeReplyCount } from './contact-policy.js?v=0.24.6';
-import { isBlocked } from './contact-events.js?v=0.24.6';
+import { storyTime } from './story-clock.js?v=0.24.7';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.7';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.7';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.7';
+import { narrativeReplyCount } from './contact-policy.js?v=0.24.7';
+import { isBlocked } from './contact-events.js?v=0.24.7';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});
@@ -28,7 +28,21 @@ export function importStoryPhone(raw,revisions,chat,context){
         const rows=storyAnnotations(chat[index],'durian-contact').slice(0,20);
         for(let n=0;n<rows.length;n++){
             const row=rows[n],eventId='story-phone:'+revisions[index]+':'+n;
-            if(journal?.events.some(e=>e.id===eventId))continue;
+            const saved=journal?.events.find(e=>e.id===eventId);
+            if(saved){
+                // Older imports omitted replyable. Repair only messages whose
+                // still-valid source explicitly denied replies, including edits
+                // that rollback may restore. Null erasure markers stay erased.
+                if(row.kind==='sms'&&row.replyable===false&&saved.source.index===index&&saved.source.revision===revisions[index]){
+                    const needsFlag=c=>c.collection==='messages'&&c.key===eventId&&c.value?.origin==='narrative'&&c.value.role==='assistant'&&c.value.replyable!==false;
+                    if(journal.events.some(e=>e.changes.some(needsFlag))){
+                        journal=structuredClone(journal);
+                        for(const event of journal.events)for(const change of event.changes)if(needsFlag(change))change.value.replyable=false;
+                        state=replayJournal(journal);changed=true;
+                    }
+                }
+                continue;
+            }
             const isUser=value=>value==='user'||(context.name1&&norm(value)===norm(context.name1));
             const outgoing=isUser(row.sender)&&typeof row.recipient==='string'&&!!row.recipient.trim()&&!isUser(row.recipient);
             const incoming=isUser(row.recipient)&&!isUser(row.sender);
@@ -53,7 +67,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                 // The narrative can show the sender/notification without quoting
                 // the complete message twice. The valid contact tag carries it.
                 if(typeof row.text!=='string'||!row.text.trim()||row.text.length>6000)continue;
-                changes.push(set('messages',recordId,{id:recordId,contactId:id,participant,name:participant.name,role:outgoing?'user':'assistant',text:row.text.trim(),proactive:incoming,origin:'narrative',createdAt:now,storyTime:clock,read:outgoing||row.read===true,...(outgoing?{replyStatus:'sent'}:{}),acquisition}));
+                changes.push(set('messages',recordId,{id:recordId,contactId:id,participant,name:participant.name,role:outgoing?'user':'assistant',text:row.text.trim(),proactive:incoming,replyable:row.replyable!==false,origin:'narrative',createdAt:now,storyTime:clock,read:outgoing||row.read===true,...(outgoing?{replyStatus:'sent'}:{}),acquisition}));
             }else{
                 if(!['ringing','missed','declined','connected','ended'].includes(row.status))continue;
                 const previous=row.call_id?state.calls[row.call_id]:null;

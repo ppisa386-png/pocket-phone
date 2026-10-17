@@ -1,7 +1,8 @@
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=0.24.6';
-import { dateDay, dayDate } from './story-clock.js?v=0.24.6';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=0.24.7';
+import { dateDay, dayDate } from './story-clock.js?v=0.24.7';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
+export const financialEventKey = row => JSON.stringify([row.kind, assetText(row.name), row.action || (row.kind === 'job' ? 'start' : 'acquire')]);
 export function validateFinancialEvent(row, id, index, fallbackDay = null) {
     if (!['income', 'expense', 'asset', 'job'].includes(row?.kind)) throw Error('收支类型不正确。');
     const name = assetText(row.name); if (!name) throw Error('收支名称缺失。');
@@ -40,10 +41,10 @@ export function applyFinancialEvent(state, event) {
         }
         changes.push(assetSet(cashRecord('cash:' + event.id, delta, event.name, { source: 'story', eventId: event.id, day: event.day, salaryEmployer: event.salaryEmployer, payDate: event.payDate })));
     }
-    if (event.category || event.kind === 'asset') {
+    if (event.category || event.kind === 'asset' || event.action === 'dispose') {
         const holding = event.holdingId ? state.assets?.[event.holdingId] : null;
         if (event.action === 'dispose') {
-            if (!holding || holding.type !== 'holding') throw Error('出售资产未匹配到账本，请在一键更新时核对。');
+            if (!holding || holding.type !== 'holding' || holding.active === false) throw Error('出售资产未匹配到当前持有的财产，请在一键更新时核对。');
             changes.push(assetSet({ ...holding, active: false, endDay: event.day }));
         } else {
             if (!event.category) return [assetSet(event)];

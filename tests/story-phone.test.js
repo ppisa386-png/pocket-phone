@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
-import {createStoryPhoneBridge,STORY_PHONE_KEY} from '../src/story-phone.js';
+import {createStoryPhoneBridge,STORY_PHONE_KEY,importStoryPhone} from '../src/story-phone.js';
+import {JOURNAL_KEY,messageSignatures,revisionsFor,appendChange,replayJournal,eraseMessageFromJournal,reconcileJournal} from '../src/journal.js';
 import {normalizeSettings} from '../src/config.js';
+import {renderMessagesScreen} from '../src/messages-view.js';
+import {messageParticipants} from '../src/messages.js';
 const annotation=(row,prose)=>({mes:prose+'<!--durian-contact:'+JSON.stringify({...row,evidence:prose})+'-->',is_user:false,name:'Alex'});
 function setup(){
  const bus=new EventEmitter(),prompts={},context={chatId:'story',characterId:0,name1:'Sam',name2:'Alex',characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'An ordinary evening.',is_user:false,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},eventSource:bus,event_types:Object.fromEntries(['GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','MESSAGE_DELETED','MESSAGE_EDITED','CHAT_CHANGED'].map(n=>[n,n])),setExtensionPrompt(k,value,_p,_d,_s,_r,filter){prompts[k]={value,filter};}};
@@ -86,4 +89,69 @@ test('both directions in one floor import in order; third-party endpoints and in
  await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,2);
  f.context.chat.pop();await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,0);
  }finally{f.close();}
+});
+
+test('non-replyable narrative SMS remains readable without granting a return address',async()=>{
+ const f=setup();try{
+ f.context.chat.push(annotation({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'Read only notice.',replyable:false},'Sam received a one-way text from Alex; no reply address was available.'));
+ await f.memory.read();const id='card:alex.png',state=f.phone.snapshot();
+ assert.equal(Object.values(state.messages).length,1);assert.equal(state.contacts[id],undefined);
+ assert.equal(messageParticipants(state)[id].replyable,false);
+ const html=renderMessagesScreen(state,id,false,{});
+ assert.match(html,/Read only notice\./);assert.match(html,/<textarea[^>]*disabled/);assert.match(html,/没有可用的回复地址/);
+ for(const send of [()=>f.phone.sendMessage(id,'Reply'),()=>f.phone.queueMessage(id,'Reply'),()=>f.phone.flushMessages(id,'Reply')])assert.equal((await send()).ok,false);
+ assert.equal(f.requests(),0);assert.equal(Object.values(f.phone.snapshot().messages).length,1);
+ const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal(messageParticipants((await reload.read()).state)[id].replyable,false);}finally{reload.destroy();}
+ f.context.chat.push(annotation({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'You can reply now.',replyable:true},'Sam received a normal replyable text from Alex.'));
+ await f.memory.read();assert.ok(f.phone.snapshot().contacts[id]);assert.equal((await f.phone.sendMessage(id,'Now I can reply.')).ok,true);assert.equal(f.requests(),1);
+ f.context.chat.pop();await f.memory.read();assert.equal(f.phone.snapshot().contacts[id],undefined);assert.equal(messageParticipants(f.phone.snapshot())[id].replyable,false);
+ assert.equal((await f.phone.sendMessage(id,'Not available again')).ok,false);assert.equal(f.requests(),1);
+ }finally{f.close();}
+});
+
+test('a one-way narrative SMS does not revoke an independently acquired contact',async()=>{
+ const f=setup();try{
+ const id='card:alex.png';await f.memory.read();await f.memory.commit(await f.memory.begin(),[{collection:'contacts',key:id,value:{id,name:'Alex',number:'+1 212 555 0123'}}]);
+ f.context.chat.push(annotation({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'Notice.',replyable:false},'Sam received a one-way notice from Alex.'));
+ await f.memory.read();assert.equal(messageParticipants(f.phone.snapshot())[id].number,'+1 212 555 0123');
+ assert.equal((await f.phone.sendMessage(id,'Sent to the known number.')).ok,true);assert.equal(f.requests(),1);
+ }finally{f.close();}
+});
+
+test('legacy one-way SMS migrates all saved versions without overwriting edits or known numbers',async()=>{
+ const f=setup();try{
+ const contactId='card:alex.png';
+ f.context.chat.push(annotation({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'Original notice.',replyable:false},'Sam received a one-way notice from Alex.'));
+ const sourceRevisions=await revisionsFor(messageSignatures(f.context.chat));
+ let legacy=importStoryPhone(undefined,sourceRevisions,f.context.chat,f.context).journal;
+ const message=Object.values(replayJournal(legacy).messages)[0];
+ for(const event of legacy.events)for(const change of event.changes)if(change.value?.id===message.id)delete change.value.replyable;
+ f.context.chat.push({mes:'Sam reads the notice later.',is_user:false});
+ const revisions=await revisionsFor(messageSignatures(f.context.chat));
+ legacy=appendChange(legacy,revisions,[{collection:'messages',key:message.id,value:{...message,text:'Edited notice.',read:true,replyable:undefined}}]);
+ f.context.chatMetadata[JOURNAL_KEY]=legacy;
+ await f.memory.read();let state=f.phone.snapshot();
+ assert.equal(state.messages[message.id].text,'Edited notice.');assert.equal(state.messages[message.id].read,true);
+ assert.equal(messageParticipants(state)[contactId].replyable,false);
+ assert.equal((await f.phone.sendMessage(contactId,'Cannot reply')).ok,false);assert.equal(f.requests(),0);
+ f.context.chat.pop();await f.memory.read();state=f.phone.snapshot();
+ assert.equal(state.messages[message.id].text,'Original notice.');assert.equal(state.messages[message.id].replyable,false);
+ await f.memory.commit(await f.memory.begin(),[{collection:'contacts',key:contactId,value:{id:contactId,name:'Alex',number:'+1 212 555 0123'}}]);
+ assert.equal((await f.phone.sendMessage(contactId,'Use known number')).ok,true);assert.equal(f.requests(),1);
+ f.context.chat.pop();await f.memory.read();assert.equal(Object.values(f.phone.snapshot().messages).length,0);
+ }finally{f.close();}
+});
+
+test('legacy one-way migration preserves permanent erasure and ignores absent or changed source',async()=>{
+ const chat=[annotation({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'Notice.',replyable:false},'Sam received a one-way notice from Alex.')];
+ const context={name1:'Sam',characters:[{name:'Alex',avatar:'alex.png'}]},revisions=await revisionsFor(messageSignatures(chat));
+ const legacy=importStoryPhone(undefined,revisions,chat,context).journal;
+ const id=Object.keys(replayJournal(legacy).messages)[0];
+ for(const event of legacy.events)for(const change of event.changes)if(change.value?.id===id)delete change.value.replyable;
+ const erased=eraseMessageFromJournal(legacy,id),checked=importStoryPhone(erased,revisions,chat,context);
+ assert.equal(checked.changed,false);assert.equal(replayJournal(checked.journal).messages[id],undefined);
+ const noSource=importStoryPhone(legacy,[],[],context);assert.equal(noSource.changed,false);
+ chat[0]={mes:'A different scene.',is_user:false};const changedRevisions=await revisionsFor(messageSignatures(chat));
+ const reconciled=reconcileJournal(legacy,changedRevisions).journal;
+ assert.equal(Object.values(replayJournal(importStoryPhone(reconciled,changedRevisions,chat,context).journal).messages).length,0);
 });

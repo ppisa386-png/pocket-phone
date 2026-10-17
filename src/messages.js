@@ -10,13 +10,16 @@ export function unreadMessages(messages, contactId = null) {
     return Object.values(messages ?? {}).filter(message => message.role === 'assistant' && !message.read && (!contactId || message.contactId === contactId)).length;
 }
 
-// A received SMS supplies a return address for this thread only. It does not
-// unlock telephone dialing or add an unearned number to the contact directory.
+// A received SMS may supply a return address for this thread only. One-way
+// notifications remain readable but cannot grant communication access.
 export function messageParticipants(state) {
     const participants = { ...(state.contacts ?? {}) };
     for (const message of Object.values(state.messages ?? {})) {
-        if (message.proactive && message.role === 'assistant' && message.participant?.id === message.contactId && !participants[message.contactId]) {
-            participants[message.contactId] = { ...message.participant, number: null, receivedSMS: true };
+        if (message.proactive && message.role === 'assistant' && message.participant?.id === message.contactId && !state.contacts?.[message.contactId]) {
+            const replyable = message.replyable !== false;
+            if (!participants[message.contactId] || (participants[message.contactId].replyable === false && replyable)) {
+                participants[message.contactId] = { ...message.participant, number: null, receivedSMS: true, replyable };
+            }
         }
     }
     return participants;

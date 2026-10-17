@@ -80,3 +80,10 @@ test('v0.9 hidden-floor journals migrate only when the full legacy narrative sti
     chat[0].mes='Edited actual narrative';const newCanonical=await revisionsFor(messageSignatures(chat));const newLegacy=await revisionsFor(messageSignatures(chat,true));
     assert.equal(reconcileJournal(raw,newCanonical,newLegacy).removed,1);
 });
+
+test('prepared memory follows the active host chat ID and only falls back when it is empty',()=>{
+    const bridge={getPromptSnapshot:()=>prepared()};
+    assert.equal(readPreparedMemory({...context(),chatId:'',getCurrentChatId:()=> 'test-chat'},settings(),bridge).status,'ready');
+    assert.equal(readPreparedMemory({...context(),getCurrentChatId:()=> 'active-other-chat'},settings(),bridge).status,'stale');
+    assert.equal(readPreparedMemory({...context(),getCurrentChatId:()=> ''},settings(),bridge).status,'ready');
+});

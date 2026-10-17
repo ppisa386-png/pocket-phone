@@ -1,14 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.24.6';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.6';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.6';
-import { phoneQuietOptions } from './api-context.js?v=0.24.6';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.6';
-export { validateContacts } from './contacts.js?v=0.24.6';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.6';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.6';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.6';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.6';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.6';
+import { isMemoryHidden } from './journal.js?v=0.24.7';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.7';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.7';
+import { phoneQuietOptions } from './api-context.js?v=0.24.7';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.7';
+export { validateContacts } from './contacts.js?v=0.24.7';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.7';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.7';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.7';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.7';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.7';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -191,6 +191,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const ticket = await memory.begin();
         const contact = messageParticipants(state)[message.contactId];
         if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
+        if (contact.replyable===false) throw new Error('这条短信没有可用的回复地址。');
         if (contact.supportsSMS===false) throw new Error('此号码不支持短信。');
         if (isBlocked(state, contact.id, 'messages')) throw new Error('请先取消此人的短信拉黑。');
         const settings = getSettings();
@@ -491,6 +492,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         queueMessage(contactId,text) {
             return task(async(view)=>{
                 const contact=messageParticipants(view.state)[contactId];
+                if(contact?.replyable===false)throw new Error('这条短信没有可用的回复地址。');
                 if(!contact||contact.supportsSMS===false||isBlocked(view.state,contactId,'messages'))throw new Error('此联系人暂时不能接收短信。');
                 if(typeof text!=='string'||!text.trim()||text.length>6000)throw new Error('请填写有效的短信内容。');
                 const m={id:crypto.randomUUID(),contactId,name:contact.name,role:'user',text:text.trim(),createdAt:Date.now(),replyStatus:'queued',read:true};
@@ -500,6 +502,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         flushMessages(contactId,text='') {
             return task(async(view,current)=>{
                 const contact=messageParticipants(view.state)[contactId];
+                if(contact?.replyable===false)throw new Error('这条短信没有可用的回复地址。');
                 if(!contact||contact.supportsSMS===false||isBlocked(view.state,contactId,'messages'))throw new Error('此联系人暂时不能接收短信。');
                 if(typeof text!=='string'||text.length>6000)throw new Error('短信内容过长，请分开发送。');
                 const queued=threadMessages(view.state.messages,contactId).filter(m=>m.role==='user'&&m.replyStatus==='queued');
@@ -514,6 +517,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             return task(async (view, current) => {
                 const contact = messageParticipants(view.state)[contactId];
                 if (!contact) throw new Error('当前剧情中尚未获得此人的号码。');
+                if (contact.replyable===false) throw new Error('这条短信没有可用的回复地址。');
                 if (contact.supportsSMS===false) throw new Error('此号码不支持短信。');
                 if (isBlocked(view.state, contactId, 'messages')) throw new Error('请先取消此人的短信拉黑。');
                 if (typeof text !== 'string' || !text.trim()) throw new Error('请先填写短信内容。');

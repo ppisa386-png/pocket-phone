@@ -45,6 +45,67 @@ test('distinct purchases in one prose sentence are each booked once', async () =
     } finally { f.close(); }
 });
 
+test('manual assessment recovers distinct purchases sharing one evidence sentence', async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const evidence = 'Sam 买水花了5美元，又买面包花了8美元。';
+        await f.append(evidence, '2026-01-02');
+        const events = [
+            { sourceIndex: 1, evidence, kind: 'expense', name: '水', amount: 5 },
+            { sourceIndex: 1, evidence, kind: 'expense', name: '面包', amount: 8 },
+        ];
+        f.reply({ ...evaluation('2026-01-02'), events });
+        ok(await f.assets.update());
+        assert.equal(cashBalance(f.state()), 98700);
+        assert.equal(assetRows(f.state(), 'cash_transaction').length, 2);
+        await f.memory.read(); assert.equal(cashBalance(f.state()), 98700);
+        f.c.chat.pop(); await f.memory.read(); assert.equal(cashBalance(f.state()), 100000);
+    } finally { f.close(); }
+});
+
+test('manual assessment supplements a recorded sentence without rebooking its existing purchase', async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const evidence = 'Sam 买水花了5美元，又买面包花了8美元。';
+        const water = { kind: 'expense', name: '水', amount: 5, evidence };
+        await f.append(evidence + marker(water), '2026-01-02');
+        f.reply({ ...evaluation('2026-01-02'), events: [{ ...water, sourceIndex: 1 }] });
+        assert.equal((await f.assets.update()).ok, false);
+        assert.equal(cashBalance(f.state()), 99500);
+        f.reply({ ...evaluation('2026-01-02'), events: [{ ...water, sourceIndex: 1, name: '面包', amount: 8 }] });
+        ok(await f.assets.update()); assert.equal(cashBalance(f.state()), 98700);
+    } finally { f.close(); }
+});
+
+test('selling a known holding without repeating its category removes ownership and credits once', async () => {
+    const f = setup(); try {
+        f.reply({ ...initial(), initial: { balance: 1000, jobs: [], holdings: [{ name: '腕表', category: 'luxury', value: 500 }] } });
+        ok(await f.assets.update());
+        const sale = { kind: 'income', name: '售出腕表', amount: 300, action: 'dispose', holdingId: 'initial:holding:0', evidence: 'Sam 卖出腕表，收到300美元。' };
+        await f.append(sale.evidence + marker(sale), '2026-01-02');
+        assert.equal(cashBalance(f.state()), 130000);
+        assert.equal(f.state().assets['initial:holding:0'].active, false);
+        await f.memory.read(); assert.equal(cashBalance(f.state()), 130000);
+        f.c.chat.pop(); await f.memory.read();
+        assert.equal(cashBalance(f.state()), 100000);
+        assert.equal(f.state().assets['initial:holding:0'].active, true);
+    } finally { f.close(); }
+});
+
+test('a second sale of an already disposed holding cannot add cash during assessment', async () => {
+    const f = setup(); try {
+        f.reply({ ...initial(), initial: { balance: 1000, jobs: [], holdings: [{ name: '腕表', category: 'luxury', value: 500 }] } });
+        ok(await f.assets.update());
+        const sale = { kind: 'income', name: '售出腕表', amount: 300, action: 'dispose', holdingId: 'initial:holding:0', evidence: 'Sam 卖出腕表，收到300美元。' };
+        await f.append(sale.evidence + marker(sale), '2026-01-02');
+        await f.append('Sam 再次确认已经收到卖表的300美元。', '2026-01-03');
+        f.reply({ ...evaluation('2026-01-03'), events: [{ ...sale, sourceIndex: 2, evidence: 'Sam 再次确认已经收到卖表的300美元。' }] });
+        assert.equal((await f.assets.update()).ok, false);
+        assert.equal(cashBalance(f.state()), 130000);
+        assert.equal(f.state().assets.wallet.lastDay, day('2026-01-01'));
+    } finally { f.close(); }
+});
+
 test('old single-sentence event IDs migrate without charging the saved event again', async () => {
     const evidence='Sam 买水花了5美元，又买面包花了8美元。';
     const water={kind:'expense',name:'水',amount:5,evidence}, bread={kind:'expense',name:'面包',amount:8,evidence};
