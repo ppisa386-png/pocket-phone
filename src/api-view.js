@@ -1,4 +1,4 @@
-import { normalizeApiUrl } from './api.js?v=0.24.8';
+import { normalizeApiUrl } from './api.js?v=0.24.9';
 const apiEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export function createApiPanel({ adapter, getSettings, persist, redraw }) {

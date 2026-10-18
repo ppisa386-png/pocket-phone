@@ -484,6 +484,11 @@ h2, p { margin: 0; }
 .pp-x-comment .pp-snap-copy{font-size:13px;line-height:1.6;margin:3px 0}
 .pp-x-comment>[data-x-action="reply-comment"]{padding:2px 0;border:0;color:#087cbd;min-height:28px;font-size:11px}
 .pp-x .pp-x-account{padding:14px 0}
+.pp-x .pp-x-audience{padding:16px 0;color:#536471;line-height:1.8}
+.pp-x .pp-x-audience strong{color:#0f1419}
+.pp-x .pp-x-audience button{display:block;margin-top:8px;font-size:12px}
+.pp-x .pp-x-recommendations{border-bottom:1px solid var(--pp-line);padding-top:10px}
+.pp-x .pp-x-recommendations h3{font-size:16px;margin:8px 0}
 .pp-x .pp-snap-avatar{width:42px;height:42px;color:#3f5262;background:#e8eef4}
 .pp-x .pp-x-account .pp-snap-person{padding:0 0 8px}
 .pp-x .pp-x-account .pp-snap-actions{margin:8px 0 0}
