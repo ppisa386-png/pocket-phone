@@ -7,6 +7,7 @@ import { HostEvents, installHostGeneration } from './host-fixture.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
+import { renderMessagesScreen } from '../src/messages-view.js';
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
 const response = text => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: text } }] }) });
@@ -100,7 +101,7 @@ function phoneFixture() {
     const context={chatId:'A',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
     installHostGeneration(context);
     const settings=normalizeSettings({api:apiConfig(),retries:0}); let responder=()=>JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:quote}]}); let signal;
-    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,fetchImpl:async(_url,options)=>{signal=options.signal;return response(await responder(options));}});
+    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,fetchImpl:async(_url,options)=>{signal=options.signal;const result=await responder(options);return typeof result==='string'?response(result):result;}});
     const memory=createPhoneMemory({getContext:()=>context});
     const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:client});
     return {context,settings,phone,memory,bus,signal:()=>signal,reply:fn=>responder=fn,close(){client.cancel();phone.destroy();memory.destroy();}};
@@ -136,5 +137,68 @@ test('authentication failure is not retried fifteen times', async () => {
         await f.phone.scan(); f.settings.retries=15; let attempts=0;
         f.reply(()=>{attempts++; throw Object.assign(new Error('认证失败'),{retryable:false});});
         await f.phone.sendMessage('card:alex.png','Hi'); assert.equal(attempts,1);
+    } finally {f.close();}
+});
+
+test('gateway failures stop after one SMS attempt; manual retry keeps the original message', async () => {
+    const f=phoneFixture(); try {
+        await f.phone.scan(); f.settings.retries=15; let attempts=0;
+        f.reply(()=>{attempts++;return {ok:false,status:502,json:async()=>{throw new Error('private gateway HTML');}};});
+        await f.phone.sendMessage('card:alex.png','Hi');
+        const failed=f.phone.snapshot();
+        assert.equal(attempts,1);assert.equal(failed.busy,false);assert.equal(failed.progress,'');
+        assert.match(failed.error,/HTTP 502/);assert.doesNotMatch(failed.error,/JSON|private gateway/);
+        const sent=Object.values(failed.messages).find(m=>m.role==='user');
+        assert.equal(sent.replyStatus,'failed');
+        f.reply(()=>' {"status":"reply","text":"Received."}');
+        await f.phone.retryMessage(sent.id);
+        assert.equal(Object.values(f.phone.snapshot().messages).filter(m=>m.role==='user').length,1);
+        assert.equal(Object.values(f.phone.snapshot().messages).filter(m=>m.role==='assistant').length,1);
+    } finally {f.close();}
+});
+
+test('transport diagnostics distinguish no headers, gateway response, and HTTP 200 error without leaking data', async () => {
+    for (const kind of ['timeout','gateway','provider']) {
+        const f=clientFixture({fetchImpl:async(_url,options)=>{
+            if(kind==='timeout')return new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('private-secret'))));
+            return {ok:kind==='provider',status:kind==='provider'?200:502,json:async()=>({error:{message:'private-secret personal-story'}})};
+        }});
+        f.settings.api.timeout=.01;
+        await assert.rejects(f.client.generate('private-story',null,()=>true),error=>{
+            assert.equal(error.retryable,false);
+            assert.match(error.diagnostic,/上下文消息数：1/);
+            assert.match(error.diagnostic,/回复上限：4321/);
+            assert.match(error.diagnostic,kind==='timeout'?/HTTP：尚未收到/:kind==='gateway'?/HTTP：502/:/HTTP：200/);
+            assert.doesNotMatch(error.message+error.diagnostic,/private|personal-story|test-phone-key|provider\.example/);
+            if(kind==='provider')assert.match(error.message,/错误结果/);
+            return true;
+        });
+    }
+});
+
+test('SMS timeout does not multiply the wait by the configured retry count', async()=>{
+    const f=phoneFixture();try {
+        await f.phone.scan();f.settings.api.timeout=.01;f.settings.retries=15;let attempts=0;
+        f.reply(options=>new Promise((_,reject)=>{attempts++;options.signal.addEventListener('abort',()=>reject(new Error('aborted')));}));
+        await f.phone.sendMessage('card:alex.png','Hi');
+        assert.equal(attempts,1);assert.equal(f.phone.snapshot().busy,false);
+        assert.match(f.phone.snapshot().error,/不会自动重发/);
+        assert.equal(Object.values(f.phone.snapshot().messages)[0].replyStatus,'failed');
+    }finally{f.close();}
+});
+
+test('SMS shows preparation and network progress, then clears it after completion', async () => {
+    const f=phoneFixture();try {
+        await f.phone.scan();const seen=[];const stop=f.phone.subscribe(view=>seen.push(view.progress));
+        let release,started;const ready=new Promise(r=>started=r);
+        f.reply(()=>new Promise(r=>{release=r;started();}));
+        const pending=f.phone.sendMessage('card:alex.png','Hi');await ready;
+        const view=f.phone.snapshot();
+        assert.match(view.progress,/提交酒馆转发接口/);
+        assert.match(renderMessagesScreen(view,'card:alex.png',false,{}),/提交酒馆转发接口/);
+        assert.ok(seen.some(s=>/尚未提交独立 API/.test(s)));
+        release('{"status":"reply","text":"Hello"}');await pending;
+        assert.ok(seen.some(s=>/正在读取返回内容/.test(s)));
+        assert.equal(f.phone.snapshot().progress,'');stop();
     } finally {f.close();}
 });

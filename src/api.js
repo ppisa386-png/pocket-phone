@@ -32,7 +32,9 @@ export function apiError(status, data) {
     if (status === 429 || /quota|rate_limit/.test(code)) return failure('服务额度不足或请求过于频繁，请稍后重试。', status === 429);
     if (status === 404 || /model_not_found/.test(code)) return failure('找不到接口或模型，请检查 API 地址及模型 ID。');
     if (/context_length/.test(code)) return failure('请求超出模型上下文，请减少读取的正文楼数。');
-    return failure('API 请求失败' + (status ? '（HTTP ' + status + '）' : '') + '，请检查服务地址、模型与酒馆服务端连接。', status >= 500);
+    if (status === 502 || status === 504) return failure('酒馆转发接口返回 HTTP ' + status + '，尚未取得模型回复。请检查中转服务或执行器的对应请求记录，再手动重试。');
+    if (status >= 200 && status < 300) return failure('酒馆接口已响应（HTTP ' + status + '），但返回了错误结果，未取得模型回复。');
+    return failure('API 请求失败' + (status ? '（HTTP ' + status + '）' : '') + '，请检查服务地址、模型与酒馆服务端连接。');
 }
 
 export function extractApiText(data) {
@@ -47,7 +49,7 @@ export function extractApiText(data) {
 export function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
     const active = new Set();
     let cancelEpoch = 0;
-    async function post(path, config, key, extra, isCurrent = () => true) {
+    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}) {
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
         if (typeof host?.getRequestHeaders !== 'function') throw failure('当前酒馆缺少请求接口，请更新酒馆后使用独立 API。');
@@ -55,25 +57,43 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
         if (!isCurrent()) throw failure('本次操作已取消。');
         const controller = new AbortController(); active.add(controller);
         let timedOut = false;
+        const started = Date.now();
+        let stage = '提交酒馆转发接口，等待响应', status = null, bodyLength = 0;
         const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, config.timeout * 1000);
         const watcher = setInterval(() => { if (!isCurrent()) controller.abort(); }, 150);
         try {
+            const body = JSON.stringify({ chat_completion_source: 'openai', reverse_proxy: endpoint, proxy_password: key, ...extra });
+            bodyLength = body.length;
+            onProgress(stage);
             const response = await fetchImpl('/api/backends/chat-completions/' + path, {
                 method: 'POST', headers: host.getRequestHeaders(), credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
-                body: JSON.stringify({ chat_completion_source: 'openai', reverse_proxy: endpoint, proxy_password: key, ...extra }),
+                body,
             });
             if (!isCurrent()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
+            status = Number.isInteger(response.status) ? response.status : null;
+            stage = '酒馆接口已响应，正在读取返回内容';
+            onProgress(stage);
             let data;
-            try { data = await response.json(); } catch { throw failure('接口没有返回有效 JSON，请检查 API 地址和酒馆版本。'); }
+            try { data = await response.json(); } catch {
+                if (!response.ok) throw apiError(response.status, null);
+                throw failure('接口没有返回有效 JSON，请检查 API 地址和酒馆版本。');
+            }
             if (controller.signal.aborted || !isCurrent()) throw failure('本次操作已取消。');
             if (!response.ok || data?.error) throw apiError(response.status, data);
             return data;
         } catch (error) {
-            if (timedOut) throw failure('API 请求超时，可调整超时时间后重试。', true);
-            if (controller.signal.aborted || !isCurrent()) throw failure('本次操作已取消。');
-            if (error && typeof error === 'object' && 'retryable' in error) throw error;
+            let result;
+            if (timedOut) result = failure('等待酒馆转发结果超时（' + config.timeout + ' 秒），本次已停止等待，不会自动重发。请核对中转或执行器记录后手动重试。');
+            else if (controller.signal.aborted || !isCurrent()) result = failure('本次操作已取消。');
+            else if (error && typeof error === 'object' && 'retryable' in error) result = error;
             // Provider error bodies can echo credentials: never display them.
-            throw failure('无法连接 API，请检查酒馆服务端网络与服务地址。', true);
+            else result = failure('未能完成酒馆转发请求，请检查酒馆服务端网络与服务地址；本次不会自动重发。');
+            result.diagnostic = '请求环节：' + stage + '；等待耗时：' + Math.round((Date.now() - started) / 1000) + ' 秒；超时设置：' + config.timeout + ' 秒'
+                + '；HTTP：' + (status ?? '尚未收到') + '；请求字符数：' + bodyLength
+                + '；上下文消息数：' + (Array.isArray(extra.messages) ? extra.messages.length : 0)
+                + '；回复上限：' + (extra.max_completion_tokens ?? extra.max_tokens ?? '由服务决定')
+                + '\n此处记录的是浏览器与酒馆接口的往返，不能据此确认上游执行器已收到请求。';
+            throw result;
         } finally { clearTimeout(timeout); clearInterval(watcher); active.delete(controller); }
     }
     async function complete(config, key, messages, isCurrent) {
@@ -82,16 +102,17 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             max_tokens: config.maxTokens }, isCurrent));
     }
     return {
-        async generate(prompt, contact, isCurrent) {
+        async generate(prompt, contact, isCurrent, onProgress = () => {}) {
             const config = structuredClone(getSettings().api);
             normalizeApiUrl(config.baseUrl);
             if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
             const key = getKey(config.baseUrl);
             const fingerprint = JSON.stringify(config), epoch = cancelEpoch;
             const current = () => epoch === cancelEpoch && isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
+            onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             const prepared = await prepareRequest(getContext(), prompt, contact, current);
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
-            return extractApiText(await post('generate', config, key, independentPayload(prepared, config), current));
+            return extractApiText(await post('generate', config, key, independentPayload(prepared, config), current, onProgress));
         },
         async models(config, key, isCurrent) {
             const data = await post('status', config, key, {}, isCurrent);

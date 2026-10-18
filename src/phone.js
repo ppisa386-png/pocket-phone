@@ -1,14 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.24.9';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.9';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.9';
-import { phoneQuietOptions } from './api-context.js?v=0.24.9';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.9';
-export { validateContacts } from './contacts.js?v=0.24.9';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.9';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.9';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.9';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.9';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.9';
+import { isMemoryHidden } from './journal.js?v=0.24.10';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.10';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.10';
+import { phoneQuietOptions } from './api-context.js?v=0.24.10';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.10';
+export { validateContacts } from './contacts.js?v=0.24.10';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.10';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.10';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.10';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.10';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.10';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -34,6 +34,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
     let scope;
     let revision = null;
     let busy = false;
+    let progress = '';
     let error = '';
     let contactStatus = '';
     let errorKind = null;
@@ -57,10 +58,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             if (!destroyed && getContext().chatMetadata === job.metadata) void api.checkIncoming(job.options);
         });
     }
-    const snapshot = () => clone({ ...state, revision, busy, error, errorKind, activeCallId, contactStatus });
+    const snapshot = () => clone({ ...state, revision, busy, progress, error, errorKind, activeCallId, contactStatus });
     const emit = () => { if (!destroyed) for (const listener of listeners) listener(snapshot()); };
     const unsubscribe = memory.subscribe(value => {
-        if (scope !== value.scope) { operation++; activeCallId = null; error = ''; contactStatus = ''; scope = value.scope; }
+        if (scope !== value.scope) { operation++; activeCallId = null; error = ''; progress = ''; contactStatus = ''; scope = value.scope; }
         state = value.state;
         revision = value.revision;
         if (activeCallId && !state.calls[activeCallId]) { operation++; activeCallId = null; }
@@ -94,7 +95,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             let stage = '请求模型', responseLength = null;
             try {
                 checkEnabled();
-                const text = independent ? await modelClient.generate(prompt, contact, isCurrent) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
+                const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; progress = value; emit(); } };
+                report(independent ? '正在准备独立 API 请求' : '正在等待酒馆生成回复');
+                const text = independent ? await modelClient.generate(prompt, contact, isCurrent, report) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 checkEnabled();
                 responseLength = typeof text === 'string' ? text.length : null;
@@ -116,7 +119,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
     }
     async function task(work, kind = 'phone', waitForHost = false) {
         if (busy) return { ok: false, skipped: true };
-        busy = true; requestKind = kind; errorKind = kind; error = ''; emit();
+        busy = true; progress = '正在读取当前聊天'; requestKind = kind; errorKind = kind; error = ''; emit();
         let taskId = null;
         // read() establishes the initial scope before assigning an operation ID.
         try {
@@ -130,7 +133,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             const value = await work(view, current);
             return { ok: true, value };
         } catch (failure) { if(waitForHost && failure.code==='GENERATING')return {ok:false,code:failure.code}; onError(failure, kind); if (taskId === null || taskId === operation) error = failure.message || '请求失败，请重试。'; return { ok: false, error: failure.message, code: failure.code }; }
-        finally { busy = false; requestKind = null; emit(); flushReaction(); }
+        finally { busy = false; progress = ''; requestKind = null; emit(); flushReaction(); }
     }
     function instructions() {
         const settings = getSettings();
@@ -406,8 +409,13 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const ticket = await memory.begin();
                 const prompt = establishedContactPrompt(getSettings().prompts.establishedContacts, context, sources, Object.values(view.state.contacts));
                 const contacts = await request(prompt, data => {
-                    const found = validateEstablishedContacts(data, chat, context, sources, Object.values(view.state.contacts));
-                    if (data.contacts?.length && !found.length) throw new Error('未能核对联系人资料，请重试。');
+                    const rejected = [];
+                    const found = validateEstablishedContacts(data, chat, context, sources, Object.values(view.state.contacts), (number, reason) => {
+                        if (rejected.length < 10) rejected.push('第 ' + number + ' 项：' + reason);
+                    });
+                    if (data.contacts?.length && !found.length) throw Object.assign(new Error('已收到联系人回复，但未能核对设定原文或既有关系，未新增联系人。详细原因见报错记录。'), {
+                        retryable: false, diagnostic: '候选人数：' + data.contacts.length + '；通过人数：0\n' + rejected.join('\n'),
+                    });
                     return found;
                 }, valid, null, { retries: 0 });
                 if (!valid()) return;

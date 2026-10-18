@@ -9,6 +9,18 @@ import { createPhoneService } from '../src/phone.js';
 const quote='Alex gives Sam his number: +1 212 555 0123.';
 const persona='Sam has a sister named Bea. Their close friend is Casey. Jordan is a coworker.';
 const entry=(name,evidence,source='chat',relationship)=>({name,evidence,source,relationship,user_has_number:true,can_use_phone:true,number:null});
+
+test('established contact rejection explains fields, source and evidence without exposing personal text',()=>{
+    const sources=[{source:'persona',text:'Sam has a sister named Bea.'}];
+    const valid={name:'Bea',established:true,relationship:'sister',source:'persona',evidence:sources[0].text};
+    const contacts=[{}, {...valid,source:'invented'}, {...valid,evidence:'rewritten private biography'}, {...valid,name:'Unknown'}, valid];
+    const rejected=[];
+    const found=validateEstablishedContacts({contacts},[{}],{name1:'Sam',characters:[]},sources,[],(i,why)=>rejected.push([i,why]));
+    assert.equal(found.length,1);assert.equal(rejected.length,4);
+    assert.deepEqual(rejected.map(r=>r[0]),[1,2,3,4]);
+    assert.match(rejected[0][1],/字段/);assert.match(rejected[1][1],/source/);assert.match(rejected[2][1],/原文/);assert.match(rejected[3][1],/aliases/);
+    assert.doesNotMatch(JSON.stringify(rejected),/Bea|Sam|private biography|Unknown/);
+});
 function fixture() {
     const bus=new EventEmitter();const context={chatId:'A',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],powerUserSettings:{persona_description:persona},chat:[{mes:quote,name:'Alex',is_user:false},{mes:'Later that day.',name:'Alex',is_user:false}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['MESSAGE_RECEIVED','MESSAGE_DELETED','CHAT_CHANGED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]))};
     let requests=0,response=()=>({contacts:[entry('Alex',quote),entry('Bea','Sam has a sister named Bea.','persona','family'),entry('Casey','Their close friend is Casey.','persona','friend')]});const prompts=[];

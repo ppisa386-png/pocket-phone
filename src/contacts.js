@@ -1,4 +1,4 @@
-import { localizedPerson } from './names.js?v=0.24.9';
+import { localizedPerson } from './names.js?v=0.24.10';
 const normalizeName = value => String(value).normalize('NFKC').trim().toLowerCase();
 const visible = message => message && !message.is_system && !message.is_hidden && !message.hidden;
 
@@ -30,20 +30,23 @@ export function establishedContactPrompt(instruction, context, sources, existing
         '\n只输出 JSON：{"contacts":[{"name":"具名人物","aliases":[],"relationship":"与 user 的既有关系","established":true,"incidental":false,"source":"资料标识","number":null,"evidence":"设定原文"}]}。没有符合者返回空数组。';
 }
 
-export function validateEstablishedContacts(data, chat, context, sources, existing = []) {
+export function validateEstablishedContacts(data, chat, context, sources, existing = [], onRejected = () => {}) {
     if (!Array.isArray(data.contacts) || data.contacts.length > 200) throw new Error('联系人结果格式不正确。');
     const contacts = new Map();
-    for (const item of data.contacts) {
-        if (!item || typeof item.name !== 'string' || !item.name.trim() || item.established !== true || item.incidental === true || typeof item.relationship !== 'string' || !item.relationship.trim()) continue;
+    for (const [index, item] of data.contacts.entries()) {
+        const reject = reason => onRejected(index + 1, reason);
+        if (!item || typeof item.name !== 'string' || !item.name.trim() || item.established !== true || item.incidental === true || typeof item.relationship !== 'string' || !item.relationship.trim()) { reject('姓名或既有关系字段不完整，或标为偶遇人物'); continue; }
         const identity = localizedPerson(item, context, [...existing,...contacts.values()]);
         const name = identity.name;
-        if (normalizeName(name) === normalizeName(context.name1)) continue;
+        if (normalizeName(name) === normalizeName(context.name1)) { reject('候选是 user 本人'); continue; }
         const quotes = (Array.isArray(item.evidence) ? item.evidence : [item.evidence]).filter(q => typeof q === 'string' && q.trim().length >= 4);
         const source = sources.find(s => s.source === item.source);
-        if (!source || !quotes.length || quotes.length > 6 || !quotes.every(q => quoteText(source.text).includes(quoteText(q)))) continue;
+        if (!source) { reject('source 未对应本次提供的设定资料'); continue; }
+        if (!quotes.length || quotes.length > 6) { reject('evidence 缺失、过短或超过六段'); continue; }
+        if (!quotes.every(q => quoteText(source.text).includes(quoteText(q)))) { reject('evidence 不是对应设定资料中的原文，可能被改写或来自后续正文'); continue; }
         const evidence = quotes.join('\n');
         const aliases = identity.aliases.map(searchName);
-        if (!aliases.some(n => searchName(evidence).includes(n))) continue;
+        if (!aliases.some(n => searchName(evidence).includes(n))) { reject('引用原文未包含候选姓名或 aliases 中的原名'); continue; }
         const matches = (context.characters || []).map((c,index) => ({c,index})).filter(({c}) => aliases.includes(searchName(c.name)));
         const characterId = matches.length === 1 ? matches[0].index : null;
         const id = identity.existingId || (characterId !== null ? 'card:' + (matches[0].c.avatar || name) : 'name:' + normalizeName(name));

@@ -1,13 +1,13 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.9';
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.24.9';
-import { isBlocked } from './contact-events.js?v=0.24.9';
-import { icon } from './icons.js?v=0.24.9';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.24.9';
+import { displayStoryTime } from './story-clock.js?v=0.24.10';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.24.10';
+import { isBlocked } from './contact-events.js?v=0.24.10';
+import { icon } from './icons.js?v=0.24.10';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.24.10';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = displayStoryTime;
 const replyLabels = { sent: '已发送', queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
 export function renderMessagesScreen(view, selectedContactId, picking, drafts, editing = null) {
-    const { contacts = {}, messages = {}, busy = false, error = '', errorKind = null, contactStatus = '' } = view ?? {};
+    const { contacts = {}, messages = {}, busy = false, progress = '', error = '', errorKind = null, contactStatus = '' } = view ?? {};
     const retryHTML = error && errorKind === 'incoming' ? '<button type="button" class="pp-text-button" data-phone-check-incoming' + (busy ? ' disabled' : '') + '>重试</button>' : '';
     const errorHTML = retryHTML + (error ? '<div class="pp-call-error" role="alert">' + smsEscape(error) + '</div>' : '');
     if (picking === 'blocked') return '<div class="pp-sms-list"><div class="pp-phone-toolbar"><h2>短信黑名单</h2><button type="button" class="pp-text-button" data-sms-back>返回</button></div>' + renderBlockedList(view, 'messages') + '</div>';
@@ -23,7 +23,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
             '<div class="pp-sms-bubbles" aria-live="polite">' + (thread.length ? thread.map(message => '<div class="pp-sms-item" data-role="' + (message.role === 'user' ? 'user' : 'assistant') + '"><p class="pp-sms-bubble">' + smsEscape(message.text) + '</p><small>' + smsTime(message) + (message.role === 'user' ? ' · ' + replyLabels[message.replyStatus] : '') + '</small>' +
                 (message.role==='assistant'?'<div class="pp-message-tools"><button type="button" class="pp-icon-button" data-sms-edit="'+smsEscape(message.id)+'" aria-label="修改消息"'+(busy?' disabled':'')+'>'+icon('edit')+'</button><button type="button" class="pp-icon-button" data-sms-reroll="'+smsEscape(message.id)+'" aria-label="重新生成消息"'+(busy||blocked?' disabled':'')+'>'+icon('retry')+'</button><button type="button" class="pp-icon-button" data-sms-delete="'+smsEscape(message.id)+'" aria-label="删除消息"'+(busy?' disabled':'')+'>'+icon('trash')+'</button></div>'+(editing?.id===message.id?'<form data-sms-edit-form class="pp-sms-edit-form"><textarea data-sms-edit-text maxlength="6000" aria-label="修改消息">'+smsEscape(editing.text)+'</textarea><button type="submit"'+(busy?' disabled':'')+'>保存</button><button type="button" data-sms-edit-cancel>取消</button></form>':''):'')+
                 (message.id === latestUserId && message.replyStatus === 'failed' ? '<button type="button" class="pp-text-button" data-sms-retry="' + smsEscape(message.id) + '"' + (busy || blocked || cannotReply ? ' disabled' : '') + '>重试回复</button>' : '') + '</div>').join('') : '<p class="pp-sms-empty-thread">发送第一条短信</p>') + '</div>' +
-            (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML +
+            (busy ? '<p class="pp-phone-progress" role="status">' + smsEscape(progress || '正在处理，请稍候…') + '</p>' : '') + errorHTML +
             (phoneOnly ? '<p class="pp-footnote">此号码不支持短信。</p>' : '') +
             (contact.replyable===false ? '<p class="pp-footnote">这条短信没有可用的回复地址。</p>' : '') +
             (blocked ? '<p class="pp-footnote">此人的短信已被拉黑，取消后才能继续交流。</p>' : '') +
@@ -33,7 +33,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
     if (picking) entries.sort((a, b) => a.name.localeCompare(b.name));
     else entries = entries.filter(item => threadMessages(messages, item.id).length).sort((a, b) => threadMessages(messages, b.id).at(-1).createdAt - threadMessages(messages, a.id).at(-1).createdAt);
     return '<div class="pp-sms-list"><div class="pp-phone-toolbar"><h2>' + (picking ? '选择联系人' : '短信') + '</h2><button type="button" class="pp-text-button" ' + (picking ? 'data-sms-back' : 'data-sms-new') + '>' + (picking ? '取消' : '新建短信') + '</button>' + (picking ? '<button type="button" class="pp-text-button" data-sms-sync' + (busy ? ' disabled' : '') + '>新增联系人</button><button type="button" class="pp-text-button" data-contact-bulk' + (busy ? ' disabled' : '') + '>一键新增</button>' : '') + (!picking ? '<button type="button" class="pp-text-button" data-sms-blocklist>黑名单</button>' : '') + '</div>' +
-        (busy ? '<p class="pp-phone-progress" role="status">正在处理，请稍候…</p>' : '') + errorHTML + (contactStatus && picking ? '<p class="pp-contact-status" role="status">' + smsEscape(contactStatus) + '</p>' : '') +
+        (busy ? '<p class="pp-phone-progress" role="status">' + smsEscape(progress || '正在处理，请稍候…') + '</p>' : '') + errorHTML + (contactStatus && picking ? '<p class="pp-contact-status" role="status">' + smsEscape(contactStatus) + '</p>' : '') +
         (entries.length ? entries.map(item => {
             const last = threadMessages(messages, item.id).at(-1);
             const unread = unreadMessages(messages, item.id);
