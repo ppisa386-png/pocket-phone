@@ -1,25 +1,25 @@
-import { createDaily } from './src/daily.js?v=0.24.10';
-import { createDailyBridge } from './src/daily-story.js?v=0.24.10';
-import { createAssets } from './src/assets.js?v=0.24.10';
-import { createAssetBridge } from './src/assets-story.js?v=0.24.10';
-import { createOpinionBridge } from './src/x-opinion.js?v=0.24.10';
-import { createAmazon } from './src/amazon.js?v=0.24.10';
-import { createDeliveryBridge } from './src/delivery.js?v=0.24.10';
-import { createGenerationReader } from './src/host-state.js?v=0.24.10';
-import { createDiagnostics } from './src/diagnostics.js?v=0.24.10';
-import { createX } from './src/x.js?v=0.24.10';
-import { createSnapchat } from './src/snapchat.js?v=0.24.10';
-import { readPreparedMemory } from './src/external-memory.js?v=0.24.10';
-import { createApiClient, createKeyStore } from './src/api.js?v=0.24.10';
-import { captureHostRequest } from './src/api-context.js?v=0.24.10';
-import { MODULE_KEY, VERSION } from './src/config.js?v=0.24.10';
-import { mountPhone } from './src/ui.js?v=0.24.10';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=0.24.10';
-import { createPhoneService } from './src/phone.js?v=0.24.10';
-import { createContinuityBridge } from './src/continuity.js?v=0.24.10';
-import { normalizeSettings } from './src/config.js?v=0.24.10';
+import { createDaily } from './src/daily.js?v=0.24.11';
+import { createDailyBridge } from './src/daily-story.js?v=0.24.11';
+import { createAssets } from './src/assets.js?v=0.24.11';
+import { createAssetBridge } from './src/assets-story.js?v=0.24.11';
+import { createOpinionBridge } from './src/x-opinion.js?v=0.24.11';
+import { createAmazon } from './src/amazon.js?v=0.24.11';
+import { createDeliveryBridge } from './src/delivery.js?v=0.24.11';
+import { createGenerationReader } from './src/host-state.js?v=0.24.11';
+import { createDiagnostics } from './src/diagnostics.js?v=0.24.11';
+import { createX } from './src/x.js?v=0.24.11';
+import { createSnapchat } from './src/snapchat.js?v=0.24.11';
+import { readPreparedMemory } from './src/external-memory.js?v=0.24.11';
+import { createApiClient, createKeyStore } from './src/api.js?v=0.24.11';
+import { captureHostRequest } from './src/api-context.js?v=0.24.11';
+import { MODULE_KEY, VERSION } from './src/config.js?v=0.24.11';
+import { mountPhone } from './src/ui.js?v=0.24.11';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=0.24.11';
+import { createPhoneService } from './src/phone.js?v=0.24.11';
+import { createContinuityBridge } from './src/continuity.js?v=0.24.11';
+import { normalizeSettings } from './src/config.js?v=0.24.11';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=0.24.10';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=0.24.11';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -50,7 +50,7 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=0.24.10', import.meta.url), { cache: 'no-cache' });
+        const response = await fetch(new URL('./style.css?v=0.24.11', import.meta.url), { cache: 'no-cache' });
         if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         let hostModule=null;
@@ -122,7 +122,7 @@ async function start() {
             extensionPanel.id = 'personal-pocket-phone-extension-settings';
             extensionPanel.className = 'extension_container';
             extensionPanel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>榴莲手机</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>' +
-                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.24.10 · 开发测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
+                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.24.11 · 开发测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="menu_button" data-pp-open>打开手机设置</button><button type="button" class="menu_button" data-pp-reset>重置悬浮位置</button></div></div></div>';
             // Host themes may give .menu_button an icon-sized/min-content width.
             // Keep these two text controls horizontal without changing host CSS.
@@ -147,7 +147,7 @@ async function start() {
             observer.observe(document.body, { childList: true, subtree: true });
         }
         // Phone and SMS share the selected host or independent connection.
-        console.info('[榴莲手机] v0.24.10 已加载');
+        console.info('[榴莲手机] v0.24.11 已加载');
     } catch (error) {
         diagnostics.add(error,'初始化');
         modelClient?.cancel();

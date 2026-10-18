@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { contactSources, validateContacts, establishedSources, validateEstablishedContacts } from '../src/contacts.js';
+import { contactSources, validateContacts, establishedSources, establishedReferences, establishedContactPrompt, validateEstablishedContacts } from '../src/contacts.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
@@ -196,5 +196,64 @@ test('bulk full family names survive short-name source preference and upgrade ex
   assert.match(f.prompts.at(-1),/婚后姓/);assert.match(f.prompts.at(-1),/确实无法可靠推理才保留名或外号/);
   f.settings.retries=15;f.reply(()=>{throw Error('offline');});before=f.requests();
   assert.equal((await f.phone.addEstablishedContacts()).ok,false);assert.equal(f.requests(),before+1);
+ }finally{f.close();}
+});
+
+test('numbered setup references accept five translated contacts without model-copied quotations',()=>{
+ const sources=[{source:'persona',text:'Bea is Sam’s sister.\nRobin is Sam’s father.\nMorgan is Sam’s rival.\nCasey is Sam’s friend.\nJordan is Sam’s coworker.'}];
+ const names=['贝娅','罗宾','摩根','凯西','乔丹'],originals=['Bea','Robin','Morgan','Casey','Jordan'];
+ const rows=names.map((name,i)=>({name,source_name:originals[i],relationship:'既有关系',established:true,evidence_refs:['S1.P'+(i+1)],evidence:'模型翻译或改写了原文',number:'12345678'}));
+ const found=validateEstablishedContacts({contacts:rows},[{}],{name1:'Sam',characters:[]},sources);
+ assert.deepEqual(found.map(c=>c.name),names);assert.equal(found.length,5);
+ for(const [i,c] of found.entries()){
+  assert.equal(c.evidence,sources[0].text.split('\n')[i]);assert.ok(c.aliases.includes(originals[i]));assert.equal(c.number,null);
+ }
+});
+
+test('reference lookup rejects invented IDs, wrong original names, incidental people and missing relations',()=>{
+ const sources=[{source:'persona',text:'Bea is Sam’s sister.'}],context={name1:'Sam',characters:[]};
+ const row={name:'贝娅',source_name:'Bea',relationship:'sister',established:true,evidence_refs:['S1.P1'],source:'persona',evidence:sources[0].text};
+ const rejected=[];
+ const rows=[{...row,evidence_refs:['chat:0']},{...row,evidence_refs:[]},{...row,evidence_refs:'S1.P1'},
+  {...row,evidence_refs:['S2.P1']},{...row,source_name:'Invented'},{...row,incidental:true},{...row,relationship:''},
+  {...row,name:'虚构人物',source_name:'',aliases:[]},{...row,evidence_refs:Array(7).fill('S1.P1')},{...row,source_name:'---'}];
+ assert.deepEqual(validateEstablishedContacts({contacts:rows},[{}],context,sources,[],(i,reason)=>rejected.push(reason)),[]);
+ assert.equal(rejected.length,rows.length);assert.match(rejected[0],/编号/);assert.match(rejected[4],/source_name/);
+});
+
+test('setup references support names and relations across passages while retaining original evidence',()=>{
+ const sources=[{source:'persona',text:'Family\nRobin\nSam’s father, phone +1 212 555 0199.'},{source:'card:0:description',text:'Robin grew up in this town.'}];
+ const refs=establishedReferences(sources);
+ assert.equal(refs[1].text,'Robin');assert.equal(refs[3].source,'card:0:description');
+ const row={name:'罗宾',source_name:'Robin',relationship:'father',established:true,evidence_refs:['S1.P2','S1.P3','S2.P1'],number:'+1 212 555 0199'};
+ const found=validateEstablishedContacts({contacts:[row]},[{}],{name1:'Sam',characters:[]},sources);
+ assert.equal(found.length,1);assert.equal(found[0].number,row.number);
+ assert.equal(found[0].evidence,'Robin\nSam’s father, phone +1 212 555 0199.\nRobin grew up in this town.');
+ const long=[{source:'persona',text:'x'.repeat(1700)}];assert.equal(establishedReferences(long).map(p=>p.text).join(''),long[0].text);
+ assert.ok(establishedReferences(long).every(p=>p.text.length<=800));
+ const prompt=establishedContactPrompt('rules',{name1:'Sam'},sources,[]);
+ assert.match(prompt,/evidence_refs/);assert.match(prompt,/source_name/);assert.match(prompt,/S2.P1/);
+ assert.doesNotMatch(prompt,/evidence 仍逐字引用/);
+});
+
+test('reference-based bulk add persists translated identity once and rolls back with its source floor',async()=>{
+ const f=fixture();try{
+  f.context.powerUserSettings.persona_description='Bea is Sam’s sister.';
+  f.reply(()=>({contacts:[{name:'贝娅',source_name:'Bea',relationship:'sister',established:true,evidence_refs:['S1.P1']}]}));
+  const before=f.requests();assert.equal((await f.phone.addEstablishedContacts()).ok,true);assert.equal(f.requests(),before+1);
+  assert.equal(Object.values(f.phone.snapshot().contacts)[0].evidence,'Bea is Sam’s sister.');
+  await f.phone.addEstablishedContacts();assert.equal(Object.keys(f.phone.snapshot().contacts).length,1);
+  f.context.chat.pop();await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
+ }finally{f.close();}
+});
+
+test('reference IDs cannot authorize a late result after setup changes',async()=>{
+ const f=fixture();try{
+  f.context.powerUserSettings.persona_description='Bea is Sam’s sister.';
+  let finish,started;const ready=new Promise(r=>started=r);f.reply(()=>{started();return new Promise(r=>finish=r);});
+  const pending=f.phone.addEstablishedContacts();await ready;
+  f.context.powerUserSettings.persona_description='Unknown is Sam’s coworker.';
+  finish({contacts:[{name:'贝娅',source_name:'Bea',relationship:'sister',established:true,evidence_refs:['S1.P1']}]});
+  await pending;assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
  }finally{f.close();}
 });
