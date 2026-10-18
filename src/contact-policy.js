@@ -1,6 +1,6 @@
-import { findProactiveEvidence } from './proactive-evidence.js?v=0.24.7';
-import { isMemoryHidden } from './journal.js?v=0.24.7';
-import { eventDirective } from './contact-events.js?v=0.24.7';
+import { findProactiveEvidence } from './proactive-evidence.js?v=0.24.8';
+import { isMemoryHidden } from './journal.js?v=0.24.8';
+import { eventDirective } from './contact-events.js?v=0.24.8';
 // Turn counts describe history only; they never throttle character decisions.
 export const narrativeReplyCount = chat => chat.filter(message => !message.is_user && (!message.is_system || isMemoryHidden(message))).length;
 export const narrativeTurn = chat => chat.filter(message => message.is_user && (!message.is_system || isMemoryHidden(message))).length;

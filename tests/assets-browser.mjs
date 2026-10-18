@@ -47,6 +47,7 @@ try {
     }
     await checkBottom();
     assert.equal(await p.evaluate(() => window.calls), 0, 'open does not request');
+    await p.evaluate(() => { window.financeResponse.date = '2026-01-14'; });
     await p.getByRole('button', { name: '一键更新', exact: true }).tap(); await p.getByText('$5,000.00', { exact: true }).waitFor();
     assert.equal(await p.evaluate(() => window.calls), 1); assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(), true);
     for (const [tab, text] of [['fixed', '凯迪拉克 XT5'], ['luxury', '复古名表'], ['investment', '小理发店']]) {
@@ -110,7 +111,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 0.24.7/);
+    assert.match(log,/当前运行版本：榴莲手机 0.24.8/);
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -127,6 +128,22 @@ try {
     assert.equal(await p.getByText(/更新账本时结算|本轮已更新/).count(),0,'no internal timing explanation');
     assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
     assert.equal(await p.evaluate(()=>window.calls),2,'success uses one new manual request');
+
+    await p.evaluate(async () => {
+        await window.advance('日期：2026-01-17\n继续生活。');
+        window.SillyTavern.getContext().generateQuietPrompt = async () => {
+            window.calls++; return JSON.stringify({date:'2026-01-16',events:[],living:{total:100,bookedIds:[]},business:[]});
+        };
+    });
+    await p.getByRole('button',{name:'一键更新',exact:true}).tap();
+    await p.getByText(/正文日期为 2026-01-17，模型返回 2026-01-16/).waitFor();
+    await p.getByText('$4,995.00',{exact:true}).waitFor();
+    assert.equal(await p.evaluate(()=>window.calls),3,'date conflict does not retry');
+    assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),false);
+    await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
+    const dateLog=await p.locator('[data-error-log]').inputValue();
+    assert.match(dateLog,/ASSET_DATE_MISMATCH/);
+    assert.match(dateLog,/正文日期：2026-01-17；模型日期：2026-01-16/);
 
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

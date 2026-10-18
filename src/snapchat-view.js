@@ -1,6 +1,6 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.7';
-import { icon } from './icons.js?v=0.24.7';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.7';
+import { displayStoryTime } from './story-clock.js?v=0.24.8';
+import { icon } from './icons.js?v=0.24.8';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.8';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};

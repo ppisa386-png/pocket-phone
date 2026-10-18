@@ -1,5 +1,5 @@
-import { isMemoryHidden } from './journal.js?v=0.24.7';
-import { readPreparedMemory } from './external-memory.js?v=0.24.7';
+import { isMemoryHidden } from './journal.js?v=0.24.8';
+import { readPreparedMemory } from './external-memory.js?v=0.24.8';
 const normalizeQuote=value=>String(value??'').normalize('NFKC').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,'');
 // Read only the current participant's card, user persona and chat-scoped prepared recall.
 export function proactiveSources(context,settings,participant,state) {

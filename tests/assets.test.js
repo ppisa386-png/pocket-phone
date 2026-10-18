@@ -32,6 +32,61 @@ function setup(date = '2026-01-01') {
 const marker = row => '<!--durian-money:' + JSON.stringify(row) + '-->';
 const evaluation = date => ({ date, events: [], salaries: [], valuations: [], living: { total: 0, bookedIds: [] }, business: [] });
 
+test('first ledger snapshot uses the visible scene date instead of an independently guessed model date', async () => {
+    const f = setup('2026-10-18'); try {
+        f.c.chat[0].mes = '<calendar>2026年10月18日 周日 0:05</calendar>';
+        f.reply(initial('2026-10-17'));
+        ok(await f.assets.update());
+        assert.equal(f.state().assets.wallet.startDay, day('2026-10-18'));
+        assert.equal(f.state().assets.wallet.lastDay, day('2026-10-18'));
+        assert.equal(cashBalance(f.state()), 100000);
+        assert.equal(f.count(), 1);
+        assert.match(f.prompt(), /本次评估日期固定为 2026-10-18/);
+        assert.match(f.prompt(), /"assessmentDate":"2026-10-18"/);
+        assert.match(f.prompt(), /"elapsedDays":0/);
+        assert.equal((await f.assets.update()).ok, false);
+        assert.equal(f.count(), 1);
+    } finally { f.close(); }
+});
+
+test('known scene date need not be echoed; elapsed interval and transaction labels use the local anchor', async () => {
+    const f = setup(); try {
+        const first = initial(); delete first.date; f.reply(first);
+        ok(await f.assets.update());
+        await f.append('继续生活。', '2026-01-11');
+        const next = { ...evaluation(), living: { total: 100, bookedIds: [] } }; delete next.date; f.reply(next);
+        ok(await f.assets.update());
+        assert.equal(cashBalance(f.state()), 90000);
+        assert.equal(f.state().assets.wallet.lastDay, day('2026-01-11'));
+        assert.match(f.prompt(), /"from":"2026-01-01"/);
+        assert.match(f.prompt(), /"assessmentDate":"2026-01-11"/);
+        assert.match(f.prompt(), /"elapsedDays":10/);
+        assert.ok(JSON.stringify(assetRows(f.state(), 'cash_transaction')).includes('2026-01-01 至 2026-01-11'));
+        f.c.chat.pop(); await f.memory.read();
+        assert.equal(cashBalance(f.state()), 100000);
+        assert.equal(f.state().assets.wallet.lastDay, day('2026-01-01'));
+    } finally { f.close(); }
+});
+
+test('conflicting settlement period reports both dates and commits no money or lock', async () => {
+    const f = setup(); try {
+        ok(await f.assets.update()); await f.append('继续生活。', '2026-02-01');
+        const before = structuredClone(f.state().assets);
+        f.reply({ ...evaluation('2026-01-11'), living: { total: 100, bookedIds: [] } });
+        const result = await f.assets.update();
+        assert.equal(result.ok, false);
+        assert.match(result.error, /正文日期为 2026-02-01.*模型返回 2026-01-11/);
+        assert.deepEqual(f.state().assets, before); assert.equal(f.count(), 2);
+        f.reply(evaluation('2026-02-01')); ok(await f.assets.update());
+        assert.equal(f.count(), 3);
+    } finally { f.close(); }
+});
+
+test('missing dates without a scene anchor cannot initialize or fall back to wall time', () => {
+    const data = initial(); delete data.date;
+    assert.throws(() => applyAssessment({ assets: {} }, data, { chat: [{ mes: '继续生活。' }], index: 0, revision: 'a' }), /剧情日期/);
+});
+
 test('distinct purchases in one prose sentence are each booked once', async () => {
     const f = setup(); try {
         ok(await f.assets.update());
