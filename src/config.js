@@ -1,6 +1,6 @@
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '0.24.11';
+export const VERSION = '0.24.12';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -66,6 +66,7 @@ export function normalizeSettings(value) {
         api: normalizeApiSettings(api),
         apiProfiles,
         apiProfileId: apiProfiles.some(p => p.id === raw.apiProfileId) ? raw.apiProfileId : '',
+        enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
         launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
         position: isRecord(raw.position) ? { x: numeric(raw.position.x, 0, 1, 1), y: numeric(raw.position.y, 0, 1, 0.8) } : null,
         theme: ['dark', 'light'].includes(raw.theme) ? raw.theme : 'dark',

@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.11';
-import { storyTime } from './story-clock.js?v=0.24.11';
-import { createAssetPanel } from './assets-view.js?v=0.24.11';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.11';
-import { bindComposerKeys } from './composer.js?v=0.24.11';
-import { createXPanel } from './x-view.js?v=0.24.11';
-import { xUnread } from './x.js?v=0.24.11';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.11';
-import { snapUnread } from './snapchat.js?v=0.24.11';
-import { createApiPanel } from './api-view.js?v=0.24.11';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.11';
-import { icon } from './icons.js?v=0.24.11';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.11';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.11';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.11';
+import { createDailyPanel } from './daily-view.js?v=0.24.12';
+import { storyTime } from './story-clock.js?v=0.24.12';
+import { createAssetPanel } from './assets-view.js?v=0.24.12';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.12';
+import { bindComposerKeys } from './composer.js?v=0.24.12';
+import { createXPanel } from './x-view.js?v=0.24.12';
+import { xUnread } from './x.js?v=0.24.12';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.12';
+import { snapUnread } from './snapchat.js?v=0.24.12';
+import { createApiPanel } from './api-view.js?v=0.24.12';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.12';
+import { icon } from './icons.js?v=0.24.12';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.12';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.12';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.12';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -165,7 +165,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         layer.dataset.wallpaper = settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
-        launcher.hidden = !settings.launcherVisible;
+        launcher.hidden = !settings.enabled || !settings.launcherVisible;
         const badge = launcher.querySelector('.pp-launcher-badge');
         badge.hidden = !settings.apps.phone || !unreadCalls();
     }
@@ -196,7 +196,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderSettings() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card">' +
+        content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card"><label class="pp-setting-row"><span>启用榴莲手机</span><input type="checkbox" data-phone-enabled' + (settings.enabled ? ' checked' : '') + '></label></div>' +
+            (!settings.enabled ? '<p class="pp-footnote">榴莲手机已停用，已有数据保留。勾选后恢复使用。</p>' : '') + '<div class="pp-card">' +
             SECTIONS.map(section => '<button type="button" class="pp-setting-row" data-section="' + section.id + '"><span class="pp-section-icon">' + icon(section.icon) + '</span><span><strong>' + section.name + '</strong><small>' + section.note + '</small></span><span class="pp-row-chevron">' + icon('chevron') + '</span></button>').join('') +
             '</div><p class="pp-footnote">榴莲手机 ' + VERSION + ' · 开发测试版</p></div>';
     }
@@ -304,6 +305,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function render() {
         if (destroyed) return;
+        if (!settings.enabled && (route === 'home' || route.startsWith('app:'))) { route = 'settings'; history = []; }
         phone.dataset.home = String(route === 'home');
         phone.dataset.activeApp = route.startsWith('app:') ? route.slice(4) : '';
         shadow.querySelector('[data-action="back"]').hidden = route === 'home';
@@ -331,6 +333,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function navigate(next) {
+        if (!settings.enabled && next.startsWith('app:')) return;
         if (next === route) return;
         history.push(route);
         route = next;
@@ -363,7 +366,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         phone.hidden = true;
         launcher.setAttribute('aria-expanded', 'false');
         launcher.setAttribute('aria-label', '打开榴莲手机');
-        if (settings.launcherVisible) launcher.focus({ preventScroll: true });
+        if (settings.enabled && settings.launcherVisible) launcher.focus({ preventScroll: true });
         else if (lastFocused?.isConnected && lastFocused !== host) lastFocused.focus?.({ preventScroll: true });
     }
 
@@ -495,6 +498,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
+        if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
         if(target.dataset.snapField){snapPanel.input(target);return;}
@@ -633,8 +637,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let lastScope;
     const unsubscribeMemory = adapter.memory?.subscribe(({ scope }) => {
         if (scope !== lastScope) {
+            const keepSettings = lastScope === undefined && route === 'settings';
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
-            route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
+            route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
@@ -667,6 +672,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         open,
         close,
         openSettings() { open(); history = ['home']; route = 'settings'; render(); },
+        isOpen: () => opened,
+        setEnabled(enabled) { const saved = persist({ enabled: Boolean(enabled) }); render(); return saved; },
         setLauncherVisible(visible) { persist({ launcherVisible: Boolean(visible) }); },
         resetPosition() { persist({ position: null }); placeLauncher(); },
         getSettings() { return structuredClone(settings); },

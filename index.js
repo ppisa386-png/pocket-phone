@@ -1,25 +1,25 @@
-import { createDaily } from './src/daily.js?v=0.24.11';
-import { createDailyBridge } from './src/daily-story.js?v=0.24.11';
-import { createAssets } from './src/assets.js?v=0.24.11';
-import { createAssetBridge } from './src/assets-story.js?v=0.24.11';
-import { createOpinionBridge } from './src/x-opinion.js?v=0.24.11';
-import { createAmazon } from './src/amazon.js?v=0.24.11';
-import { createDeliveryBridge } from './src/delivery.js?v=0.24.11';
-import { createGenerationReader } from './src/host-state.js?v=0.24.11';
-import { createDiagnostics } from './src/diagnostics.js?v=0.24.11';
-import { createX } from './src/x.js?v=0.24.11';
-import { createSnapchat } from './src/snapchat.js?v=0.24.11';
-import { readPreparedMemory } from './src/external-memory.js?v=0.24.11';
-import { createApiClient, createKeyStore } from './src/api.js?v=0.24.11';
-import { captureHostRequest } from './src/api-context.js?v=0.24.11';
-import { MODULE_KEY, VERSION } from './src/config.js?v=0.24.11';
-import { mountPhone } from './src/ui.js?v=0.24.11';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=0.24.11';
-import { createPhoneService } from './src/phone.js?v=0.24.11';
-import { createContinuityBridge } from './src/continuity.js?v=0.24.11';
-import { normalizeSettings } from './src/config.js?v=0.24.11';
+import { createDaily } from './src/daily.js?v=0.24.12';
+import { createDailyBridge } from './src/daily-story.js?v=0.24.12';
+import { createAssets } from './src/assets.js?v=0.24.12';
+import { createAssetBridge } from './src/assets-story.js?v=0.24.12';
+import { createOpinionBridge } from './src/x-opinion.js?v=0.24.12';
+import { createAmazon } from './src/amazon.js?v=0.24.12';
+import { createDeliveryBridge } from './src/delivery.js?v=0.24.12';
+import { createGenerationReader } from './src/host-state.js?v=0.24.12';
+import { createDiagnostics } from './src/diagnostics.js?v=0.24.12';
+import { createX } from './src/x.js?v=0.24.12';
+import { createSnapchat } from './src/snapchat.js?v=0.24.12';
+import { readPreparedMemory } from './src/external-memory.js?v=0.24.12';
+import { createApiClient, createKeyStore } from './src/api.js?v=0.24.12';
+import { captureHostRequest } from './src/api-context.js?v=0.24.12';
+import { MODULE_KEY, VERSION } from './src/config.js?v=0.24.12';
+import { mountPhone } from './src/ui.js?v=0.24.12';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=0.24.12';
+import { createPhoneService } from './src/phone.js?v=0.24.12';
+import { createContinuityBridge } from './src/continuity.js?v=0.24.12';
+import { normalizeSettings } from './src/config.js?v=0.24.12';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=0.24.11';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=0.24.12';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -42,6 +42,15 @@ let extensionPanel;
 let observer;
 let starting = false;
 
+// Keep the settings panel available while the runtime is fully stopped.
+// Destroying services also invalidates pending writes and prompt hooks.
+function stopRuntime() {
+    controller?.destroy(); controller = null;
+    modelClient?.cancel(); modelClient = null;
+    for (const service of [incomingWatcher, continuityBridge, deliveryBridge, opinionBridge, assetBridge, dailyBridge, phoneService, memory]) service?.destroy();
+    incomingWatcher = continuityBridge = deliveryBridge = opinionBridge = assetBridge = dailyBridge = phoneService = memory = null;
+}
+
 async function start() {
     if (starting || controller) return;
     starting = true;
@@ -50,68 +59,82 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=0.24.11', import.meta.url), { cache: 'no-cache' });
+        const response = await fetch(new URL('./style.css?v=0.24.12', import.meta.url), { cache: 'no-cache' });
         if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         let hostModule=null;
         try { hostModule=await import(new URL('../../../../script.js',import.meta.url).href); }
         catch { /* Keep compatibility with hosts without public generation exports. */ }
         const generationState=createGenerationReader(hostModule,()=>globalThis.SillyTavern.getContext(),hostGenerationState);
-        memory = createPhoneMemory({
-            assetEnabled: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apps.assets,
-            getGenerationState:generationState,
-            getContext: () => globalThis.SillyTavern.getContext(),
-            onError: error => {diagnostics.add(error,'记录保存');globalThis.toastr?.error?.(error.message, '榴莲手机');},
-        });
-        modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: url => keyStore.get(url,normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId), prepareRequest: captureHostRequest });
-        phoneService = createPhoneService({
-            modelClient, onError:(error,source)=>diagnostics.add(error,source),
-            memory, getContext: () => globalThis.SillyTavern.getContext(),
-            getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
-        });
-        continuityBridge = createContinuityBridge({
-            getContext: () => globalThis.SillyTavern.getContext(),
-            getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
-            onError: error => {diagnostics.add(error,'正文同步');globalThis.toastr?.error?.('本次未能同步手机记录，请检查记录格式或酒馆版本。', '榴莲手机');},
-        });
-        deliveryBridge=createDeliveryBridge({
-            getContext:()=>globalThis.SillyTavern.getContext(),
-            getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
-            onError:error=>diagnostics.add(error,'订单配送'),
-        });
-        opinionBridge=createOpinionBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'舆情衔接')});
-        assetBridge=createAssetBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'小榴莲正文同步')});
-        dailyBridge=createDailyBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'日报正文衔接')});
-        const adapter = {
-            daily:createDaily({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}),
-            assets:createAssets({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}),
-            storyChat:()=>globalThis.SillyTavern.getContext().chat||[],
-            amazon:createAmazon({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}),
-            api: modelClient, keyStore, diagnostics,
-            memoryStatus: settings => readPreparedMemory(globalThis.SillyTavern.getContext(), settings),
-            continuitySupported: continuityBridge.supported,
-            phone: phoneService,
-            snapchat: createSnapchat({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}),
-            x: createX({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}),
-            userName:()=>globalThis.SillyTavern.getContext().name1,
-            memory,
-            load: () => globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY],
-            save(settings) {
-                const current = globalThis.SillyTavern.getContext();
-                current.extensionSettings[MODULE_KEY] = settings;
-                current.saveSettingsDebounced();
-            },
-            connectionName() {
-                const current = globalThis.SillyTavern.getContext();
-                return current.mainApi ? '连接类型：' + current.mainApi : '';
-            },
-            onChange(settings) {
-                const checkbox = extensionPanel?.querySelector('[data-pp-visibility]');
-                if (checkbox) checkbox.checked = settings.launcherVisible;
-            },
-        };
-        controller = mountPhone({ adapter, styles });
-        incomingWatcher = createStoryPhoneBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'正文通信')});
+        function mountRuntime(showSettings = false) {
+            const enabled = normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).enabled;
+            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: url => keyStore.get(url,normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId), prepareRequest: captureHostRequest });
+            if (enabled) {
+                memory = createPhoneMemory({
+                    assetEnabled: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apps.assets,
+                    getGenerationState:generationState,
+                    getContext: () => globalThis.SillyTavern.getContext(),
+                    onError: error => {diagnostics.add(error,'记录保存');globalThis.toastr?.error?.(error.message, '榴莲手机');},
+                });
+                phoneService = createPhoneService({
+                    modelClient, onError:(error,source)=>diagnostics.add(error,source),
+                    memory, getContext: () => globalThis.SillyTavern.getContext(),
+                    getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
+                });
+                continuityBridge = createContinuityBridge({
+                    getContext: () => globalThis.SillyTavern.getContext(),
+                    getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
+                    onError: error => {diagnostics.add(error,'正文同步');globalThis.toastr?.error?.('本次未能同步手机记录，请检查记录格式或酒馆版本。', '榴莲手机');},
+                });
+                deliveryBridge=createDeliveryBridge({
+                    getContext:()=>globalThis.SillyTavern.getContext(),
+                    getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
+                    onError:error=>diagnostics.add(error,'订单配送'),
+                });
+                opinionBridge=createOpinionBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'舆情衔接')});
+                assetBridge=createAssetBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'小榴莲正文同步')});
+                dailyBridge=createDailyBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'日报正文衔接')});
+                incomingWatcher = createStoryPhoneBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'正文通信')});
+            }
+            const adapter = {
+                daily:enabled ? createDaily({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
+                assets:enabled ? createAssets({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
+                storyChat:()=>globalThis.SillyTavern.getContext().chat||[],
+                amazon:enabled ? createAmazon({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
+                api: modelClient, keyStore, diagnostics,
+                memoryStatus: settings => readPreparedMemory(globalThis.SillyTavern.getContext(), settings),
+                continuitySupported: continuityBridge?.supported ?? false,
+                phone: phoneService,
+                snapchat: enabled ? createSnapchat({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
+                x: enabled ? createX({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
+                userName:()=>globalThis.SillyTavern.getContext().name1,
+                memory,
+                load: () => globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY],
+                save(settings) {
+                    const current = globalThis.SillyTavern.getContext();
+                    current.extensionSettings[MODULE_KEY] = settings;
+                    current.saveSettingsDebounced();
+                },
+                connectionName() {
+                    const current = globalThis.SillyTavern.getContext();
+                    return current.mainApi ? '连接类型：' + current.mainApi : '';
+                },
+                onChange(settings) {
+                    const checkbox = extensionPanel?.querySelector('[data-pp-visibility]');
+                    if (checkbox) checkbox.checked = settings.launcherVisible;
+                    const master = extensionPanel?.querySelector('[data-pp-enabled]');
+                    if (master) master.checked = settings.enabled;
+                    if (settings.enabled !== enabled) {
+                        const wasOpen = controller?.isOpen();
+                        stopRuntime();
+                        mountRuntime(wasOpen);
+                    }
+                },
+            };
+            controller = mountPhone({ adapter, styles });
+            if (showSettings) controller.openSettings();
+        }
+        mountRuntime();
         // Install only the small entry controls into SillyTavern's extension drawer.
         // Phone UI lives in a Shadow DOM to avoid affecting SillyTavern or other extensions.
         function attachPanel() {
@@ -122,7 +145,7 @@ async function start() {
             extensionPanel.id = 'personal-pocket-phone-extension-settings';
             extensionPanel.className = 'extension_container';
             extensionPanel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>榴莲手机</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>' +
-                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.24.11 · 开发测试版</p><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
+                '<div class="inline-drawer-content"><p style="font-size:.85em;opacity:.75">v0.24.12 · 开发测试版</p><label class="checkbox_label"><span>启用榴莲手机</span><input type="checkbox" data-pp-enabled></label><label class="checkbox_label"><input type="checkbox" data-pp-visibility><span>显示悬浮入口</span></label>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="menu_button" data-pp-open>打开手机设置</button><button type="button" class="menu_button" data-pp-reset>重置悬浮位置</button></div></div></div>';
             // Host themes may give .menu_button an icon-sized/min-content width.
             // Keep these two text controls horizontal without changing host CSS.
@@ -135,6 +158,9 @@ async function start() {
                 })) button.style.setProperty(property, value, 'important');
             }
             const visibility = extensionPanel.querySelector('[data-pp-visibility]');
+            const master = extensionPanel.querySelector('[data-pp-enabled]');
+            master.checked = controller.getSettings().enabled;
+            master.addEventListener('change', () => { if (!controller.setEnabled(master.checked)) master.checked = controller.getSettings().enabled; });
             visibility.checked = controller.getSettings().launcherVisible;
             visibility.addEventListener('change', () => controller.setLauncherVisible(visibility.checked));
             extensionPanel.querySelector('[data-pp-open]').addEventListener('click', () => controller.openSettings());
@@ -147,18 +173,10 @@ async function start() {
             observer.observe(document.body, { childList: true, subtree: true });
         }
         // Phone and SMS share the selected host or independent connection.
-        console.info('[榴莲手机] v0.24.11 已加载');
+        console.info('[榴莲手机] v0.24.12 已加载');
     } catch (error) {
         diagnostics.add(error,'初始化');
-        modelClient?.cancel();
-        incomingWatcher?.destroy();
-        continuityBridge?.destroy();
-        deliveryBridge?.destroy();
-        opinionBridge?.destroy();
-        assetBridge?.destroy();
-        dailyBridge?.destroy();
-        phoneService?.destroy();
-        memory?.destroy();
+        stopRuntime();
         console.error('[榴莲手机] 初始化失败', error);
         globalThis.toastr?.error?.(error.message, '榴莲手机');
     } finally {

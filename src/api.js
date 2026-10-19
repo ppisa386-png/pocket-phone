@@ -50,6 +50,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
     const active = new Set();
     let cancelEpoch = 0;
     async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}) {
+        if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
         if (typeof host?.getRequestHeaders !== 'function') throw failure('当前酒馆缺少请求接口，请更新酒馆后使用独立 API。');
@@ -103,6 +104,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
     }
     return {
         async generate(prompt, contact, isCurrent, onProgress = () => {}) {
+            if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
             const config = structuredClone(getSettings().api);
             normalizeApiUrl(config.baseUrl);
             if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');

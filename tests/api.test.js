@@ -47,6 +47,18 @@ test('independent requests use host proxy with their own key and do not mutate h
     assert.ok(!JSON.stringify(f.settings).includes('test-phone-key'));
 });
 
+test('disabled phone blocks generation, connection test and model-list requests before any API call',async()=>{
+    let prepared=0;
+    const f=clientFixture({prepareRequest:async()=>{prepared++;return {messages:[{role:'user',content:'test'}]};}});
+    f.settings.enabled=false;
+    await assert.rejects(f.client.generate('task',null,()=>true),/已停用/);
+    await assert.rejects(f.client.test(apiConfig(),'key'),/已停用/);
+    await assert.rejects(f.client.models(apiConfig(),'key'),/已停用/);
+    assert.equal(prepared,0);assert.equal(f.requests.length,0);
+    f.settings.enabled=true;
+    assert.equal(await f.client.generate('task',null,()=>true),'OK');assert.equal(prepared,1);
+});
+
 test('model list and connection test never read or send roleplay context', async () => {
     const requests = [];
     const f = clientFixture({ prepareRequest: () => { throw new Error('must not read roleplay'); }, fetchImpl: async (url, options) => {

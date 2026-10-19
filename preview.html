@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.24.11</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
+</style></head><body><main><small>POCKET PHONE · 0.24.12</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
 function dateDay(value) {
     const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return null;
     const d=new Date(0);d.setUTCFullYear(+m[1],+m[2]-1,+m[3]);d.setUTCHours(0,0,0,0);
@@ -83,7 +83,7 @@ function localizedPerson(item, context, existing = []) {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.24.11';
+const VERSION = '0.24.12';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -149,6 +149,7 @@ function normalizeSettings(value) {
         api: normalizeApiSettings(api),
         apiProfiles,
         apiProfileId: apiProfiles.some(p => p.id === raw.apiProfileId) ? raw.apiProfileId : '',
+        enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
         launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
         position: isRecord(raw.position) ? { x: numeric(raw.position.x, 0, 1, 1), y: numeric(raw.position.y, 0, 1, 0.8) } : null,
         theme: ['dark', 'light'].includes(raw.theme) ? raw.theme : 'dark',
@@ -279,6 +280,7 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
     const active = new Set();
     let cancelEpoch = 0;
     async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}) {
+        if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
         if (typeof host?.getRequestHeaders !== 'function') throw failure('当前酒馆缺少请求接口，请更新酒馆后使用独立 API。');
@@ -332,6 +334,7 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
     }
     return {
         async generate(prompt, contact, isCurrent, onProgress = () => {}) {
+            if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
             const config = structuredClone(getSettings().api);
             normalizeApiUrl(config.baseUrl);
             if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
@@ -1623,7 +1626,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
         layer.dataset.wallpaper = settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
-        launcher.hidden = !settings.launcherVisible;
+        launcher.hidden = !settings.enabled || !settings.launcherVisible;
         const badge = launcher.querySelector('.pp-launcher-badge');
         badge.hidden = !settings.apps.phone || !unreadCalls();
     }
@@ -1654,7 +1657,8 @@ function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderSettings() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card">' +
+        content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card"><label class="pp-setting-row"><span>启用榴莲手机</span><input type="checkbox" data-phone-enabled' + (settings.enabled ? ' checked' : '') + '></label></div>' +
+            (!settings.enabled ? '<p class="pp-footnote">榴莲手机已停用，已有数据保留。勾选后恢复使用。</p>' : '') + '<div class="pp-card">' +
             SECTIONS.map(section => '<button type="button" class="pp-setting-row" data-section="' + section.id + '"><span class="pp-section-icon">' + icon(section.icon) + '</span><span><strong>' + section.name + '</strong><small>' + section.note + '</small></span><span class="pp-row-chevron">' + icon('chevron') + '</span></button>').join('') +
             '</div><p class="pp-footnote">榴莲手机 ' + VERSION + ' · 开发测试版</p></div>';
     }
@@ -1762,6 +1766,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     function render() {
         if (destroyed) return;
+        if (!settings.enabled && (route === 'home' || route.startsWith('app:'))) { route = 'settings'; history = []; }
         phone.dataset.home = String(route === 'home');
         phone.dataset.activeApp = route.startsWith('app:') ? route.slice(4) : '';
         shadow.querySelector('[data-action="back"]').hidden = route === 'home';
@@ -1789,6 +1794,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function navigate(next) {
+        if (!settings.enabled && next.startsWith('app:')) return;
         if (next === route) return;
         history.push(route);
         route = next;
@@ -1821,7 +1827,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
         phone.hidden = true;
         launcher.setAttribute('aria-expanded', 'false');
         launcher.setAttribute('aria-label', '打开榴莲手机');
-        if (settings.launcherVisible) launcher.focus({ preventScroll: true });
+        if (settings.enabled && settings.launcherVisible) launcher.focus({ preventScroll: true });
         else if (lastFocused?.isConnected && lastFocused !== host) lastFocused.focus?.({ preventScroll: true });
     }
 
@@ -1953,6 +1959,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
+        if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
         if(target.dataset.snapField){snapPanel.input(target);return;}
@@ -2091,8 +2098,9 @@ function mountPhone({ adapter, styles, container = document.body }) {
     let lastScope;
     const unsubscribeMemory = adapter.memory?.subscribe(({ scope }) => {
         if (scope !== lastScope) {
+            const keepSettings = lastScope === undefined && route === 'settings';
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
-            route = 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
+            route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
@@ -2125,6 +2133,8 @@ function mountPhone({ adapter, styles, container = document.body }) {
         open,
         close,
         openSettings() { open(); history = ['home']; route = 'settings'; render(); },
+        isOpen: () => opened,
+        setEnabled(enabled) { const saved = persist({ enabled: Boolean(enabled) }); render(); return saved; },
         setLauncherVisible(visible) { persist({ launcherVisible: Boolean(visible) }); },
         resetPosition() { persist({ position: null }); placeLauncher(); },
         getSettings() { return structuredClone(settings); },

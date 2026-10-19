@@ -25,6 +25,16 @@ test('disabled apps, zero retries and user prompt edits survive settings migrati
     assert.deepEqual(normalizeSettings(config), config);
 });
 
+test('master switch defaults on and preserves independent app and launcher preferences',()=>{
+    assert.equal(normalizeSettings({}).enabled,true);
+    assert.equal(normalizeSettings({enabled:'false'}).enabled,true);
+    const settings=normalizeSettings({enabled:false,launcherVisible:true,apps:{x:false},prompts:{phone:'custom'}});
+    assert.equal(settings.enabled,false);assert.equal(settings.launcherVisible,true);
+    assert.equal(settings.apps.x,false);assert.equal(settings.apps.messages,true);
+    assert.equal(normalizeSettings({...settings,enabled:true}).prompts.phone,'custom');
+    assert.deepEqual(normalizeSettings(settings),settings);
+});
+
 test('launcher stays inside small screens and after orientation changes', () => {
     for (const view of [{ width: 320, height: 568 }, { width: 844, height: 390 }, { width: 1280, height: 720 }]) {
         const point = clampPosition({ x: 20000, y: -500 }, view);

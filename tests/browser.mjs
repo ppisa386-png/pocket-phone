@@ -23,6 +23,7 @@ window.seedWallet=async()=>{const j=await import('/src/journal.js');const rev=aw
 ctx.saveMetadata = async () => localStorage.setItem('phone-test-data', JSON.stringify({chat:ctx.chat,metadata:ctx.chatMetadata}));
 const handlers = {}; ctx.event_types = Object.fromEntries(['APP_READY','CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','GENERATE_AFTER_DATA','CHAT_COMPLETION_SETTINGS_READY'].map(n => [n,n]));
 ctx.eventSource = {on(type, fn) {if(type==='APP_READY') queueMicrotask(fn); else (handlers[type] ||= []).push(fn);},removeListener(type,fn){handlers[type]=(handlers[type]||[]).filter(f=>f!==fn);},async emit(type,...args) {for(const fn of [...(handlers[type] || [])]) {try{await fn(...args);}catch{}}}};
+window.phoneHookCount=()=>Object.values(handlers).reduce((sum,items)=>sum+items.length,0);
 ctx.extensionPrompts = {};
 ctx.setExtensionPrompt = (key,value,position,depth,scan,role,filter) => { ctx.extensionPrompts[key] = {value,position,depth,scan,role,filter}; };
 ctx.getRequestHeaders=()=>({'Content-Type':'application/json'});
@@ -552,6 +553,49 @@ try {
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});
         await p.waitForFunction(()=>document.querySelector('#personal-pocket-phone-root').shadowRoot.querySelector('.pp-status-time').textContent==='—');
         check(await p.evaluate(()=>window.modelCalls)===0,'navigation, timestamp and narrative synchronization use no model calls');
+        await ctx.close();
+    }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.locator('[data-pp-enabled]').waitFor();
+        check(await p.locator('[data-pp-enabled]').isChecked(),'master switch defaults enabled in host drawer');
+        const hookCount=await p.evaluate(()=>window.phoneHookCount());
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="phone"]').tap();
+        await p.locator('[data-phone-tab="contacts"]').tap();await addPhoneContact(p);await p.locator(".pp-contact-row").waitFor();
+        await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();
+        await p.locator('[data-section="apps"]').tap();await p.getByRole('switch',{name:'启用X',exact:true}).uncheck();
+        await p.locator('[data-action="back"]').tap();
+        await p.evaluate(async()=>{const c=SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');});
+        check(await p.evaluate(()=>Object.values(SillyTavern.getContext().extensionPrompts).some(p=>p.value)),'enabled runtime prepares narrative instructions');
+        const before=await p.evaluate(()=>({metadata:JSON.stringify(SillyTavern.getContext().chatMetadata),calls:window.modelCalls}));
+        await p.locator('[data-phone-enabled]').uncheck();
+        check(!await p.locator('[data-pp-enabled]').isChecked()&&await p.locator('.pp-launcher').isHidden(),'settings switch synchronizes host drawer and hides launcher');
+        check(await p.evaluate(()=>window.phoneHookCount()===0&&Object.values(SillyTavern.getContext().extensionPrompts).every(p=>!p.value)),'disable removes runtime listeners and all prompt slots');
+        await p.locator('[data-action="home"]').tap();check(await p.locator('[data-app="messages"]').count()===0,'disabled settings cannot navigate into apps');
+        await p.evaluate(async()=>{const c=SillyTavern.getContext();for(const name of ['GENERATION_ENDED','MESSAGE_RECEIVED','CHAT_CHANGED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS'])await c.eventSource.emit(name,'normal');});
+        check(await p.evaluate(b=>JSON.stringify(SillyTavern.getContext().chatMetadata)===b.metadata&&window.modelCalls===b.calls,before),'disabled host events cannot alter saved phone data or request a model');
+        await p.screenshot({path:resolve(screenshotDir,'master-disabled-390.png')});
+        await p.reload();await p.locator('[data-pp-enabled]').waitFor();
+        check(!await p.locator('[data-pp-enabled]').isChecked()&&await p.locator('.pp-launcher').isHidden(),'disabled state survives reload');
+        check(await p.evaluate(()=>window.phoneHookCount()===0),'disabled startup does not construct background services');
+        await p.locator('[data-pp-open]').tap();check(await p.locator('[data-phone-enabled]').isVisible(),'settings stay accessible while disabled');
+        await p.locator('[data-phone-enabled]').check();
+        check(await p.locator('[data-pp-enabled]').isChecked()&&await p.locator('.pp-launcher').isVisible(),'reenable from phone settings synchronizes both controls');
+        check(await p.evaluate(()=>window.phoneHookCount())===hookCount,'reenable installs one copy of runtime listeners');
+        await p.locator('[data-action="home"]').tap();check(await p.locator('[data-app="x"]').count()===0,'master does not overwrite app preferences');
+        await p.locator('[data-app="phone"]').tap();await p.locator('[data-phone-tab="contacts"]').tap();await p.locator('.pp-contact-row').first().waitFor();
+        check(await p.locator('.pp-contact-row').count()===1,'saved contacts survive disable and reenable');
+        await p.locator('[data-action="home"]').tap();await p.locator('[data-app="messages"]').tap();
+        await p.locator('[data-sms-new]').tap();await p.locator('[data-sms-contact]').first().tap();
+        await p.evaluate(()=>{window.smsHold=true;});await p.locator('[data-sms-draft]').fill('Pending at disable');await p.locator('[aria-label="发送短信"]').tap();
+        await p.waitForFunction(()=>typeof window.finishSMS==='function');
+        await p.locator('[data-action="close"]').tap();
+        await p.locator('[data-pp-enabled]').uncheck();
+        await p.evaluate(async()=>{window.finishSMS();await new Promise(r=>setTimeout(r,60));});
+        check(await p.evaluate(()=>!JSON.stringify(SillyTavern.getContext().chatMetadata).includes('Text received.')),'late host reply cannot write after master is disabled');
+        await p.locator('[data-pp-enabled]').check();
+        check(await p.evaluate(()=>window.phoneHookCount())===hookCount,'repeated toggles do not duplicate listeners');
         await ctx.close();
     }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
