@@ -1,5 +1,7 @@
-import { isMemoryHidden } from './journal.js?v=0.24.13';
-import { readPreparedMemory } from './external-memory.js?v=0.24.13';
+import { smsForAI } from './sms-context.js?v=0.24.14';
+import { exactStoryTime } from './story-clock.js?v=0.24.14';
+import { isMemoryHidden } from './journal.js?v=0.24.14';
+import { readPreparedMemory } from './external-memory.js?v=0.24.14';
 const normalizeQuote=value=>String(value??'').normalize('NFKC').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,'');
 // Read only the current participant's card, user persona and chat-scoped prepared recall.
 export function proactiveSources(context,settings,participant,state) {
@@ -11,7 +13,7 @@ export function proactiveSources(context,settings,participant,state) {
     for(const key of ['description','personality','scenario'])add('card:'+key,data[key]);
     add('memory',readPreparedMemory(context,settings).text);
     for(const call of Object.values(state.calls||{}))if(call.contactId===participant.id&&call.turns?.length)add('call:'+call.id,call.turns.map(t=>t.text).join('\n'));
-    for(const m of Object.values(state.messages||{}))if(m.contactId===participant.id&&m.replyStatus!=='queued')add('message:'+m.id,m.text);
+    for(const m of smsForAI(state,participant.id,exactStoryTime(context.chat)))if(m.contactId===participant.id&&m.replyStatus!=='queued')add('message:'+m.id,m.text);
     return sources;
 }
 export function findProactiveEvidence(evidence,chat,sources=[],source) {

@@ -212,3 +212,31 @@ test('erased SMS clears prepared slot and is absent from next actual narrative p
   assert.match(JSON.stringify(data),/A_PRIVATE_MEETING/);
  }finally{f.close();}
 });
+
+test('actual narrative payload expires SMS by story time before persistence and keeps phone UI history',async()=>{
+ const f=await fixture({withMemory:true});try{
+  await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[
+   set('smsContext','a',{category:'A',anchor:{date:'2026-10-01',time:'12:00'},expired:false}),
+   set('smsContext','b',{category:'B',anchor:{date:'2026-10-01',time:'12:00'},expired:false})
+  ]);
+  f.context.chat.push({mes:'2026-10-03 12:00',name:'Alex',is_user:false});
+  await f.generate();
+  const payload={chat:[{role:'user',content:'Continue'}]};
+  await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',payload);
+  assert.doesNotMatch(JSON.stringify(payload),/A_PRIVATE_MEETING/);
+  assert.match(JSON.stringify(payload),/B_PRIVATE_PLAN/);
+  await f.bus.emit('GENERATION_ENDED');await f.memory.read();
+  assert.equal((await f.memory.read()).state.smsContext.a.expired,true);
+  f.context.chat.push({mes:'2026-10-04 12:01',name:'Alex',is_user:false});
+  await f.generate();
+  const next={type:'normal',messages:[{role:'user',content:'Continue'}]};
+  await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',next);
+  assert.doesNotMatch(JSON.stringify(next),/A_PRIVATE_MEETING|B_PRIVATE_PLAN/);
+  assert.match(JSON.stringify(next),/A_CALL_PROMISE/);
+  await f.bus.emit('GENERATION_ENDED');
+  const state=(await f.memory.read()).state;
+  assert.equal(state.smsContext.b.expired,true);
+  assert.equal(state.messages.a.text,'A_PRIVATE_MEETING');assert.equal(state.messages.b.text,'B_PRIVATE_PLAN');
+ }finally{f.close();}
+});

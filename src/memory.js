@@ -1,8 +1,9 @@
-import { storyTime } from './story-clock.js?v=0.24.13';
-import { importStoryAssets } from './assets-story.js?v=0.24.13';
-import { importStorySquare } from './x-opinion.js?v=0.24.13';
-import { importStoryPhone } from './story-phone.js?v=0.24.13';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.13';
+import { syncSMSContext } from './sms-context.js?v=0.24.14';
+import { storyTime } from './story-clock.js?v=0.24.14';
+import { importStoryAssets } from './assets-story.js?v=0.24.14';
+import { importStorySquare } from './x-opinion.js?v=0.24.14';
+import { importStoryPhone } from './story-phone.js?v=0.24.14';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.14';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -95,14 +96,20 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
             return null;
         }
         snapshot.revisions = await revisionsFor(snapshot.signatures);
+        // A generation may start while revision hashing is in flight. Do not
+        // migrate/save metadata underneath a prepared narrative prompt.
+        if (generating || getGenerationState() === true) { unavailable='GENERATING'; return null; }
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         const legacyRevisions = current.chat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(current.chat, true)) : null;
+        if (generating || getGenerationState() === true) { unavailable='GENERATING'; return null; }
+        if (!sameChat(snapshot)) { unavailable='CHANGED'; return null; }
         const reconciled = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
         const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
         const square=importStorySquare(imported.journal,snapshot.revisions,current.chat,current);
         const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
-        const journal=finances.journal;
-        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed) await save(snapshot, journal);
+        const sms=syncSMSContext(finances.journal,snapshot.revisions,current.chat);
+        const journal=sms.journal;
+        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed || sms.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
@@ -167,7 +174,8 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
                     basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
                 if (replayJournal(snapshot.journal).messages[messageId]?.role !== 'assistant') throw new Error('这条短信已不存在。');
-                const next = eraseMessageFromJournal(snapshot.journal, messageId);
+                let next = eraseMessageFromJournal(snapshot.journal, messageId);
+                next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
                 await save(snapshot, next);
                 tickets.delete(ticket); generation++;
                 await bus?.emit?.('durian-phone-records-erased');
@@ -202,6 +210,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                     });
                     next = appendChange(next, snapshot.revisions.slice(0, index + 1), changes, batch.id);
                 }
+                next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
                 await save(snapshot, next);
                 tickets.delete(ticket);
                 if (sameChat(snapshot)) { active = { ...snapshot, journal: next }; notify(); }

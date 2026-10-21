@@ -603,6 +603,31 @@ try {
         check(await p.evaluate(()=>window.phoneHookCount())===hookCount,'repeated toggles do not duplicate listeners');
         await ctx.close();
     }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(async()=>{
+            const c=SillyTavern.getContext(),evidence='Alex sent Sam a text.';
+            c.chat.push({name:'Alex',is_user:false,send_date:'2099-01-01',mes:'2026-10-01 12:00\n'+evidence+'<!--durian-contact:'+JSON.stringify({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'OLD_DAILY_STILL_READABLE',sms_category:'A',evidence})+'-->'});
+            await c.eventSource.emit('GENERATION_ENDED');
+        });
+        await p.locator('.pp-launcher').tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
+        await p.getByText('OLD_DAILY_STILL_READABLE',{exact:true}).waitFor();
+        await p.evaluate(async()=>{
+            const c=SillyTavern.getContext();c.chat.push({name:'Alex',is_user:false,mes:'2026-10-04 12:00'});await c.eventSource.emit('GENERATION_ENDED');
+            c.generateQuietPrompt=async options=>{window.modelCalls++;window.retentionPrompt=options.quietPrompt;const ids=JSON.parse(options.quietPrompt.match(/"pendingIds":(\[[^\]]*\])/)[1]);return JSON.stringify({status:'reply',text:'CURRENT_REPLY',sms_reply_category:'A',sms_classifications:ids.map(id=>({id,category:'A'}))});};
+        });
+        await p.locator('[data-sms-draft]').fill('NEW_QUESTION');await p.getByRole('button',{name:'发送短信',exact:true}).tap();
+        await p.getByText('CURRENT_REPLY',{exact:true}).waitFor();
+        check(await p.getByText('OLD_DAILY_STILL_READABLE',{exact:true}).isVisible(),'expired SMS remains visible with original text');
+        check(await p.evaluate(()=>!window.retentionPrompt.includes('OLD_DAILY_STILL_READABLE')&&window.modelCalls===1),'expired SMS excluded from reply and classification, no extra model request');
+        check(!await p.locator('.pp-sms-thread').textContent().then(t=>/expired|已过期|classification/.test(t)),'internal expiry status has no visible badge');
+        await p.screenshot({path:resolve(screenshotDir,'sms-retention-390.png')});
+        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();
+        await p.getByText('OLD_DAILY_STILL_READABLE',{exact:true}).waitFor();
+        check(await p.evaluate(async()=>{const j=await import('/src/journal.js'),state=j.replayJournal(SillyTavern.getContext().chatMetadata[j.JOURNAL_KEY]);return Object.values(state.smsContext).some(m=>m.expired===true);}), 'expiry persists after reload without deleting history');
+        await ctx.close();
+    }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
 } catch (error) {

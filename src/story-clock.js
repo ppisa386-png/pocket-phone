@@ -43,6 +43,12 @@ export function readStoryClock(chat, seed=null, { exact = false } = {}) {
     return {day,hour};
 }
 
+// Exact clock for elapsed-time policies: fuzzy morning/evening is not a time.
+export function exactStoryTime(chat) {
+    const {day,hour}=readStoryClock(chat,null,{exact:true});
+    return {date:dayDate(day),time:hour==null?'':String(Math.floor(hour)).padStart(2,'0')+':'+String(Math.round((hour%1)*60)).padStart(2,'0'),precision:'exact'};
+}
+
 // Stored story anchors are distinct from createdAt (local ordering only).
 export function storyTime(chat) {
     const {day,hour}=readStoryClock(chat);

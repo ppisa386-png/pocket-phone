@@ -1,6 +1,7 @@
-import { storyTime } from './story-clock.js?v=0.24.13';
-import { nameAliases } from './names.js?v=0.24.13';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.13';
+import { smsForAI, syncSMSContext } from './sms-context.js?v=0.24.14';
+import { exactStoryTime } from './story-clock.js?v=0.24.14';
+import { nameAliases } from './names.js?v=0.24.14';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.14';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -39,7 +40,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         if (message.proactive && message.participant && (allParticipants || belongsTo(message.participant, speaker))) allowed.add(message.contactId);
     }
     const entries = [];
-    for (const message of Object.values(state.messages)) {
+    for (const message of smsForAI(state, null, currentStoryTime)) {
         if (message.replyStatus === 'queued' || !allowed.has(message.contactId) || !['user', 'assistant'].includes(message.role) || typeof message.text !== 'string') continue;
         entries.push({ time: Number(message.createdAt) || 0, data: {
             channel: '短信', conversation:message.contactId, counterpart:state.contacts[message.contactId]?.name||message.participant?.name||message.name||speaker.name, storyTime:message.storyTime||null, speaker: message.role === 'user' ? userName : state.contacts[message.contactId]?.name||message.name||speaker.name, text: message.text,
@@ -164,10 +165,10 @@ export function createContinuityBridge({ getContext, getSettings, onError = () =
                 return JSON.stringify(prefix) === JSON.stringify(signatures);
             }
             if (!stillCurrent()) return;
-            const state = replayJournal(reconcileJournal(raw, revisions, legacyRevisions).journal);
+            const state = replayJournal(syncSMSContext(reconcileJournal(raw, revisions, legacyRevisions).journal,revisions,legacyChat).journal);
             const maxContext = Number(current.maxContext);
             const budget = Number.isFinite(maxContext) && maxContext > 0 ? Math.min(8000, Math.max(512, Math.floor(maxContext / 4))) : 8000;
-            const prompt = buildContinuityPrompt(state, speaker, { instruction: getSettings().prompts.continuity, userName: current.name1 || 'user', budget, allParticipants:true, currentStoryTime:storyTime(legacyChat) });
+            const prompt = buildContinuityPrompt(state, speaker, { instruction: getSettings().prompts.continuity, userName: current.name1 || 'user', budget, allParticipants:true, currentStoryTime:exactStoryTime(legacyChat) });
             if (prompt && stillCurrent()) { prepared={prompt,stillCurrent}; current.setExtensionPrompt(CONTINUITY_KEY, prompt, 1, 1, false, 0, stillCurrent); }
             lastError = '';
         } catch (error) {

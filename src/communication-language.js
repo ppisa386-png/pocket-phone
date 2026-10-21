@@ -1,0 +1,3 @@
+// The actual active preset remains in the host-prepared context. Do not guess
+// its language from UI locale, character display names, or old model replies.
+export const COMMUNICATION_LANGUAGE_RULE = '\n通信语言适配：短信、电话说话内容和语音转写都属于角色对白，使用本次上下文中当前生效预设的【对白语言、翻译、排版】规则，不套用预设的正文叙述语言。中文界面、中文姓名、中文任务说明、user本次用中文输入、旧消息曾只写中文，都不代表对白必须中文。预设规定单语就用该单语；规定原文加译文就完整保留两者及其顺序、括号或换行，不能只返回译文。若规定角色母语或当前交流语言加中文，则依据当前角色设定和场景选择原语言，不把所有角色固定成英语，也不凭中文译名推断母语；不另行强制双语。预设未明确规定时，才参考角色当前对白习惯及最近有效的人工修订格式。JSON只是数据容器：每条完整对白（含预设要求的原文和译文）都放进同一个text字符串，换行用JSON转义；不另放translation/original等未约定字段。仅短信内容、仅对白、不输出额外叙事等限制不排除预设要求的译文。已在正文逐字写出的通信仅原样抄录，不为适配改写历史或user原话。不添加语言规则说明，不翻译固定JSON键/status等协议值。输出前核对本条角色对白是否完整遵守预设的语言与翻译规则。';
