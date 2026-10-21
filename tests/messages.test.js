@@ -5,6 +5,46 @@ import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { threadMessages, unreadMessages } from '../src/messages.js';
 import { normalizeSettings } from '../src/config.js';
+import { renderMessagesScreen } from '../src/messages-view.js';
+import { replayJournal, appendChange, reconcileJournal } from '../src/journal.js';
+
+test('SMS preview, bubble order and thread recency ignore conflicting imported timestamps', async () => {
+    const f=setup(); try {
+        const evidence='Alex sent Sam a text.';
+        f.context.chat.push({is_user:false,send_date:'2099-01-01T00:00:00Z',mes:evidence+'<!--durian-contact:'+JSON.stringify({name:'Alex',sender:'Alex',recipient:'user',kind:'sms',evidence,text:'Old imported text'})+'-->'});
+        await f.memory.read();
+        const id='card:alex.png', old=threadMessages(f.service.snapshot().messages,id)[0];
+        await f.service.sendMessage(id,'Latest outgoing');
+        let state=f.service.snapshot();
+        assert.deepEqual(threadMessages(state.messages,id).map(m=>m.text),['Old imported text','Latest outgoing','Got your message.']);
+        assert.match(renderMessagesScreen(state,null,false,{}),/<small>Got your message\.<\/small>/);
+        assert.doesNotMatch(renderMessagesScreen(state,null,false,{}),/<small>Old imported text<\/small>/);
+        await f.service.editMessage(old.id,'Edited old text');await f.service.markMessagesRead(id);
+        const reload=createPhoneMemory({getContext:()=>f.context});
+        try {assert.equal(threadMessages((await reload.read()).state.messages,id).at(-1).text,'Got your message.');} finally {reload.destroy();}
+        f.context.chat.push({mes:'A later scene.'});await f.memory.read();
+        f.reply(()=>{throw new Error('offline');});await f.service.sendMessage(id,'Newest failed outgoing');
+        state=f.service.snapshot();assert.match(renderMessagesScreen(state,null,false,{}),/<small>Newest failed outgoing<\/small>/);
+        f.reply(()=>'{"status":"reply","text":"Retry success"}');
+        await f.service.retryMessage(threadMessages(state.messages,id).at(-1).id);
+        assert.equal(threadMessages(f.service.snapshot().messages,id).at(-1).text,'Retry success');
+        f.context.chat.pop();await f.memory.read();
+        assert.equal(threadMessages(f.service.snapshot().messages,id).at(-1).text,'Got your message.');
+    } finally {f.close();}
+});
+
+test('late historical import and editing do not displace newer conversations across replay and rollback', () => {
+    const revisions=['floor0','floor1'];
+    const message=(id,contactId,text,createdAt)=>({collection:'messages',key:id,value:{id,contactId,text,createdAt,role:'assistant',read:true}});
+    let journal=appendChange(undefined,revisions,[message('b','bob','Bob latest',1)]);
+    journal=appendChange(journal,revisions.slice(0,1),[message('a','alex','Alex historical',999999)]);
+    journal=appendChange(journal,revisions,[message('a','alex','Alex edited',999999)]);
+    const state=replayJournal(JSON.parse(JSON.stringify(journal)));
+    const html=renderMessagesScreen({...state,contacts:{alex:{id:'alex',name:'Alex'},bob:{id:'bob',name:'Bob'}}},null,false,{});
+    assert.ok(html.indexOf('data-sms-contact="bob"')<html.indexOf('data-sms-contact="alex"'));
+    assert.deepEqual(Object.keys(state.messages),['a','b']);
+    assert.equal(replayJournal(reconcileJournal(journal,revisions.slice(0,1)).journal).messages.a.text,'Alex historical');
+});
 
 const quote = 'Alex gives you his number: +1 212 555 0123.';
 function setup() {

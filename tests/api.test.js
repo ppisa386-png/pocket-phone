@@ -10,6 +10,99 @@ import { createPhoneService } from '../src/phone.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
+
+test('compatible final-text variants are read without mistaking reasoning or streaming deltas for replies',()=>{
+    assert.equal(extractApiText({choices:[{text:' Legacy final text ',finish_reason:'stop'}]}),'Legacy final text');
+    assert.equal(extractApiText({choices:[{message:{content:[null,{type:'text',text:'First '},{type:'text',text:4},{type:'image_url',image_url:{url:'private'}},{type:'text',text:'second'}]}}]}),'First second');
+    assert.equal(extractApiText({choices:[{message:{content:'Final',reasoning_content:'PRIVATE reasoning'}}]}),'Final');
+    for(const [choice,code] of [
+        [{message:{reasoning_content:'PRIVATE reasoning'},text:'not a substitute'},'API_REASONING_ONLY'],
+        [{message:{tool_calls:[{function:{arguments:'PRIVATE tool args'}}]},text:'not a substitute'},'API_OUTPUT_TOOLS'],
+        [{delta:{content:'PRIVATE fragment'}},'API_UNEXPECTED_DELTA'],
+        [{message:{content:'Partial'},finish_reason:'length'},'API_OUTPUT_TRUNCATED'],
+        [{message:{content:'PRIVATE refused'},finish_reason:'content_filter'},'API_OUTPUT_FILTERED'],
+        [{message:{refusal:'PRIVATE refusal',content:''}},'API_OUTPUT_FILTERED'],
+        [{message:{content:{text:'PRIVATE unknown'}}},'API_CONTENT_SHAPE'],
+        [{message:{content:'   '},finish_reason:'stop'},'API_EMPTY_OUTPUT'],
+    ])assert.throws(()=>extractApiText({choices:[choice]}),e=>{
+        assert.equal(e.code,code);assert.equal(e.retryable,false);assert.doesNotMatch(e.message+e.diagnostic,/PRIVATE|substitute/);return true;
+    });
+});
+
+test('missing/invalid candidates and unknown provider labels produce safe structural diagnostics',()=>{
+    for(const data of [null,'PRIVATE raw',{}, {choices:[]}, {choices:'PRIVATE raw'}, {choices:[null]}]) {
+        assert.throws(()=>extractApiText(data),e=>e.code==='API_RESPONSE_SHAPE'&&!e.diagnostic.includes('PRIVATE'));
+    }
+    assert.throws(()=>extractApiText({choices:[{finish_reason:'PRIVATE finish reason',message:{content:null,reasoning_details:['PRIVATE']}}],usage:{completion_tokens:'PRIVATE tokens'}}),e=>{
+        assert.match(e.diagnostic,/结束原因：其他/);assert.match(e.diagnostic,/含推理内容：是/);
+        assert.match(e.diagnostic,/输出token用量：未提供/);assert.doesNotMatch(e.diagnostic,/PRIVATE/);return true;
+    });
+});
+
+test('empty final-text failures keep HTTP, request and safe response metadata through persisted error logs',async()=>{
+    const {createDiagnostics}=await import('../src/diagnostics.js');let stored='';
+    const log=createDiagnostics({storage:{getItem:()=>null,setItem:(_k,v)=>stored=v},version:'test'});
+    const f=clientFixture({fetchImpl:async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:null,reasoning_content:'PRIVATE reasoning'},finish_reason:'stop'}],usage:{completion_tokens:77,completion_tokens_details:{reasoning_tokens:77}},private_field:'SECRET'})})});
+    await assert.rejects(f.client.generate('PRIVATE prompt',null,()=>true),e=>{
+        assert.equal(e.code,'API_REASONING_ONLY');assert.match(e.diagnostic,/HTTP：200/);
+        assert.match(e.diagnostic,/请求环节：正在读取模型回复文字/);assert.match(e.diagnostic,/回复上限：4321/);
+        assert.match(e.diagnostic,/结束原因：stop/);assert.match(e.diagnostic,/推理token用量：77/);
+        log.add(e,'messages');assert.doesNotMatch(stored,/PRIVATE|SECRET/);assert.match(log.text(),/API_REASONING_ONLY/);return true;
+    });
+});
+
+test('empty SMS is not repeatedly requested; unchanged manual retry succeeds without duplicating the message',async()=>{
+    const errors=[],f=phoneFixture(e=>errors.push(e));try{
+        await f.phone.scan();f.settings.retries=15;const bodies=[];
+        f.reply(options=>{bodies.push(JSON.parse(options.body));return {ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{content:''}}]})};});
+        await f.phone.sendMessage('card:alex.png','Keep original');
+        assert.equal(bodies.length,1);assert.equal(errors.at(-1).code,'API_EMPTY_OUTPUT');
+        assert.match(errors.at(-1).diagnostic,/HTTP：200/);assert.match(errors.at(-1).diagnostic,/正在读取模型回复文字/);
+        const sent=Object.values(f.phone.snapshot().messages)[0];assert.equal(sent.replyStatus,'failed');
+        f.reply(options=>{bodies.push(JSON.parse(options.body));return {ok:true,status:200,json:async()=>({choices:[{text:'{"status":"reply","text":"Successful retry"}',finish_reason:'stop'}]})};});
+        await f.phone.retryMessage(sent.id);
+        assert.deepEqual(bodies[1],bodies[0]);
+        const messages=Object.values(f.phone.snapshot().messages);assert.equal(messages.length,2);assert.equal(messages[1].text,'Successful retry');
+    }finally{f.close();}
+});
+
+test('HTTP 200 proxy errors retain safe classifications from ST statusText and provider codes', async () => {
+    const cases = [
+        [{error:{message:'Service Unavailable'}},/服务繁忙或执行器不可用/,/报告状态：503/],
+        [{error:{message:'Too Many Requests'}},/请求过于频繁/,/报告状态：429/],
+        [{error:{message:'Bad Request'}},/请求被接口拒绝/,/报告状态：400/],
+        [{error:{message:'Gateway Timeout'}},/上游等待超时/,/报告状态：504/],
+        [{error:{message:'Too Many Requests'},quota_error:true},/额度不足/,/额度标记：是/],
+        [{error:{code:'context_length_exceeded',message:'PRIVATE STORY secret-key'}},/长度超限/,/报告状态：未提供/],
+        [{error:true,message:'Bad Gateway'},/转发连接失败/,/报告状态：502/],
+        [{error:'Unauthorized'},/认证失败/,/报告状态：401/],
+        [{error:{status:503,message:'PRIVATE STORY secret-key'}},/服务繁忙/,/报告状态：503/],
+        [{error:true},/同一时刻的错误记录/,/含错误说明：否/],
+    ];
+    for(const [data,reason,detail] of cases){
+        let calls=0;
+        const f=clientFixture({fetchImpl:async()=>{calls++;return {ok:true,status:200,json:async()=>data};}});
+        await assert.rejects(f.client.generate('task',null,()=>true),e=>{
+            assert.equal(e.retryable,false);assert.match(e.message,reason);assert.match(e.diagnostic,detail);
+            assert.match(e.diagnostic,/HTTP：200/);assert.doesNotMatch(e.message+e.diagnostic,/PRIVATE|secret-key/);return true;
+        });assert.equal(calls,1);
+    }
+});
+
+test('SMS retains the first parse failure when a later retry gets a proxy error; manual retry does not duplicate',async()=>{
+    const errors=[],f=phoneFixture(e=>errors.push(e));try{
+        await f.phone.scan();f.settings.retries=2;let calls=0;
+        f.reply(()=>++calls===1?'PRIVATE malformed response':{ok:true,status:200,json:async()=>({error:{message:'Service Unavailable'}})});
+        await f.phone.sendMessage('card:alex.png','One original message');
+        assert.equal(calls,2);assert.match(errors.at(-1).diagnostic,/此前尝试：第1次：解析返回格式/);
+        assert.match(errors.at(-1).diagnostic,/错误分类：服务繁忙/);
+        assert.doesNotMatch(errors.at(-1).diagnostic,/PRIVATE|One original/);
+        const sent=Object.values(f.phone.snapshot().messages)[0];
+        f.reply(()=>'{"status":"reply","text":"Works now"}');await f.phone.retryMessage(sent.id);
+        assert.equal(Object.values(f.phone.snapshot().messages).filter(m=>m.role==='user').length,1);
+        assert.equal(Object.values(f.phone.snapshot().messages).filter(m=>m.role==='assistant').length,1);
+    }finally{f.close();}
+});
 const response = text => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: text } }] }) });
 function clientFixture(overrides = {}) {
     const settings = normalizeSettings({ api: apiConfig() });
@@ -108,14 +201,14 @@ test('API config or key changes invalidate generation while context is prepared'
 });
 
 const quote='Alex gives you his number: +1 212 555 0123.';
-function phoneFixture() {
+function phoneFixture(onError = () => {}) {
     const bus=new HostEvents(); const event_types=Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]));
     const context={chatId:'A',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
     installHostGeneration(context);
     const settings=normalizeSettings({api:apiConfig(),retries:0}); let responder=()=>JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:quote}]}); let signal;
     const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,fetchImpl:async(_url,options)=>{signal=options.signal;const result=await responder(options);return typeof result==='string'?response(result):result;}});
     const memory=createPhoneMemory({getContext:()=>context});
-    const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:client});
+    const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:client,onError});
     return {context,settings,phone,memory,bus,signal:()=>signal,reply:fn=>responder=fn,close(){client.cancel();phone.destroy();memory.destroy();}};
 }
 

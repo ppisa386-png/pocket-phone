@@ -1,8 +1,8 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.12';
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.24.12';
-import { isBlocked } from './contact-events.js?v=0.24.12';
-import { icon } from './icons.js?v=0.24.12';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.24.12';
+import { displayStoryTime } from './story-clock.js?v=0.24.13';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=0.24.13';
+import { isBlocked } from './contact-events.js?v=0.24.13';
+import { icon } from './icons.js?v=0.24.13';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=0.24.13';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = displayStoryTime;
 const replyLabels = { sent: '已发送', queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
@@ -30,8 +30,9 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
             '<form data-sms-form class="pp-sms-compose"><label for="pp-sms-input">短信内容</label><textarea id="pp-sms-input" data-sms-draft enterkeyhint="enter" rows="2" maxlength="6000" placeholder="短信…"' + (busy || blocked || cannotReply ? ' disabled' : '') + '>' + smsEscape(drafts[contact.id] || '') + '</textarea><button type="submit" aria-label="发送短信"' + (busy || blocked || cannotReply ? ' disabled' : '') + '>'+icon('send')+'</button></form></div>';
     }
     let entries = Object.values(picking ? contacts : participants);
+    const recency = new Map(Object.values(messages ?? {}).map((message, index) => [message.contactId, index]));
     if (picking) entries.sort((a, b) => a.name.localeCompare(b.name));
-    else entries = entries.filter(item => threadMessages(messages, item.id).length).sort((a, b) => threadMessages(messages, b.id).at(-1).createdAt - threadMessages(messages, a.id).at(-1).createdAt);
+    else entries = entries.filter(item => recency.has(item.id)).sort((a, b) => recency.get(b.id) - recency.get(a.id));
     return '<div class="pp-sms-list"><div class="pp-phone-toolbar"><h2>' + (picking ? '选择联系人' : '短信') + '</h2><button type="button" class="pp-text-button" ' + (picking ? 'data-sms-back' : 'data-sms-new') + '>' + (picking ? '取消' : '新建短信') + '</button>' + (picking ? '<button type="button" class="pp-text-button" data-sms-sync' + (busy ? ' disabled' : '') + '>新增联系人</button><button type="button" class="pp-text-button" data-contact-bulk' + (busy ? ' disabled' : '') + '>一键新增</button>' : '') + (!picking ? '<button type="button" class="pp-text-button" data-sms-blocklist>黑名单</button>' : '') + '</div>' +
         (busy ? '<p class="pp-phone-progress" role="status">' + smsEscape(progress || '正在处理，请稍候…') + '</p>' : '') + errorHTML + (contactStatus && picking ? '<p class="pp-contact-status" role="status">' + smsEscape(contactStatus) + '</p>' : '') +
         (entries.length ? entries.map(item => {

@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.12';
-import { storyTime } from './story-clock.js?v=0.24.12';
-import { createAssetPanel } from './assets-view.js?v=0.24.12';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.12';
-import { bindComposerKeys } from './composer.js?v=0.24.12';
-import { createXPanel } from './x-view.js?v=0.24.12';
-import { xUnread } from './x.js?v=0.24.12';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.12';
-import { snapUnread } from './snapchat.js?v=0.24.12';
-import { createApiPanel } from './api-view.js?v=0.24.12';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.12';
-import { icon } from './icons.js?v=0.24.12';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.12';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.12';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.12';
+import { createDailyPanel } from './daily-view.js?v=0.24.13';
+import { storyTime } from './story-clock.js?v=0.24.13';
+import { createAssetPanel } from './assets-view.js?v=0.24.13';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.13';
+import { bindComposerKeys } from './composer.js?v=0.24.13';
+import { createXPanel } from './x-view.js?v=0.24.13';
+import { xUnread } from './x.js?v=0.24.13';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.13';
+import { snapUnread } from './snapchat.js?v=0.24.13';
+import { createApiPanel } from './api-view.js?v=0.24.13';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.13';
+import { icon } from './icons.js?v=0.24.13';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.13';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.13';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.13';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },

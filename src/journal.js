@@ -79,12 +79,22 @@ export function appendChange(journal, revisions, changes, id = crypto.randomUUID
 
 export function replayJournal(journal) {
     const maps = Object.fromEntries(COLLECTIONS.map(name => [name, new Map()]));
+    const messagePositions = new Map();
     for (const event of readJournal(journal).events) {
         for (const change of event.changes) {
+            // First creation anchors chronology. Edits/read flags must not move
+            // old SMS; late imports still belong to their original story floor.
+            if (change.collection === 'messages' && change.value !== null && !messagePositions.has(change.key)) {
+                messagePositions.set(change.key, { floor: event.source.index, order: messagePositions.size });
+            }
             if (change.value === null) maps[change.collection].delete(change.key);
             else maps[change.collection].set(change.key, copy(change.value));
         }
     }
+    maps.messages = new Map([...maps.messages].sort(([a], [b]) => {
+        const left = messagePositions.get(a), right = messagePositions.get(b);
+        return left.floor - right.floor || left.order - right.order;
+    }));
     return Object.fromEntries(COLLECTIONS.map(name => [name, Object.fromEntries(maps[name])]));
 }
 

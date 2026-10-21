@@ -4,7 +4,8 @@ export function validateSMS(data) {
     return { status: data.status, text: data.text.trim() };
 }
 export function threadMessages(messages, contactId) {
-    return Object.values(messages ?? {}).filter(message => message.contactId === contactId).sort((a, b) => a.createdAt - b.createdAt);
+    // replayJournal supplies occurrence order, independent of wall/story clocks.
+    return Object.values(messages ?? {}).filter(message => message.contactId === contactId);
 }
 export function unreadMessages(messages, contactId = null) {
     return Object.values(messages ?? {}).filter(message => message.role === 'assistant' && !message.read && (!contactId || message.contactId === contactId)).length;

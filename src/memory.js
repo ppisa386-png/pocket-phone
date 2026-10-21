@@ -1,8 +1,8 @@
-import { storyTime } from './story-clock.js?v=0.24.12';
-import { importStoryAssets } from './assets-story.js?v=0.24.12';
-import { importStorySquare } from './x-opinion.js?v=0.24.12';
-import { importStoryPhone } from './story-phone.js?v=0.24.12';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.12';
+import { storyTime } from './story-clock.js?v=0.24.13';
+import { importStoryAssets } from './assets-story.js?v=0.24.13';
+import { importStorySquare } from './x-opinion.js?v=0.24.13';
+import { importStoryPhone } from './story-phone.js?v=0.24.13';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.13';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',

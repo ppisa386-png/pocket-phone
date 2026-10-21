@@ -1,14 +1,14 @@
-import { isMemoryHidden } from './journal.js?v=0.24.12';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.12';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.12';
-import { phoneQuietOptions } from './api-context.js?v=0.24.12';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.12';
-export { validateContacts } from './contacts.js?v=0.24.12';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.12';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.12';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.12';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.12';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.12';
+import { isMemoryHidden } from './journal.js?v=0.24.13';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.13';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.13';
+import { phoneQuietOptions } from './api-context.js?v=0.24.13';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.13';
+export { validateContacts } from './contacts.js?v=0.24.13';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.13';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.13';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.13';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.13';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.13';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -90,6 +90,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         prompt += preparedMemoryPrompt(readPreparedMemory(context, getSettings()));
         if (options.outputContract) prompt += '\n' + options.outputContract;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
+        const attempts = [];
         for (let attempt = 0; attempt <= retries; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
             let stage = '请求模型', responseLength = null;
@@ -106,14 +107,16 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 stage = '校验业务数据';
                 return validate(data);
             } catch (failure) {
+                const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');
                 if (!isCurrent() || failure.retryable === false || attempt === retries) {
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + (attempt + 1) + (responseLength === null ? '' : '；返回字符数：' + responseLength);
                     throw Object.assign(new Error(failure.message || '请求失败，请重试。'), {
                         code: failure.code, retryable: failure.retryable,
-                        diagnostic: detail + (failure.diagnostic ? '\n' + failure.diagnostic : ''),
+                        diagnostic: detail + (failure.diagnostic ? '\n' + failure.diagnostic : '') + (attempts.length ? '\n此前尝试：' + attempts.join('；') : ''),
                     });
                 }
+                attempts.push(summary);
             }
         }
     }

@@ -27,22 +27,78 @@ export function createKeyStore(storage) {
 
 function failure(message, retryable = false) { return Object.assign(new Error(message), { retryable }); }
 export function apiError(status, data) {
-    const code = String(data?.error?.code || data?.error?.type || '').toLowerCase();
-    if (status === 401 || status === 403 || /authentication|invalid_api_key/.test(code)) return failure('认证失败，请检查这个地址对应的 API 密钥和访问权限。');
-    if (status === 429 || /quota|rate_limit/.test(code)) return failure('服务额度不足或请求过于频繁，请稍后重试。', status === 429);
-    if (status === 404 || /model_not_found/.test(code)) return failure('找不到接口或模型，请检查 API 地址及模型 ID。');
-    if (/context_length/.test(code)) return failure('请求超出模型上下文，请减少读取的正文楼数。');
-    if (status === 502 || status === 504) return failure('酒馆转发接口返回 HTTP ' + status + '，尚未取得模型回复。请检查中转服务或执行器的对应请求记录，再手动重试。');
-    if (status >= 200 && status < 300) return failure('酒馆接口已响应（HTTP ' + status + '），但返回了错误结果，未取得模型回复。');
-    return failure('API 请求失败' + (status ? '（HTTP ' + status + '）' : '') + '，请检查服务地址、模型与酒馆服务端连接。');
+    // ST's OpenAI proxy may wrap upstream failures as HTTP 200 and keep only
+    // error.message (HTTP statusText) plus quota_error. Do not discard those.
+    // Classify locally; never echo arbitrary provider text, codes or credentials.
+    const raw = data?.error;
+    const nested = raw && typeof raw === 'object' ? raw : {};
+    const code = [nested.code, nested.type, nested.status].filter(v => typeof v === 'string').join(' ').slice(0, 1000).toLowerCase();
+    const message = (typeof raw === 'string' ? raw : typeof nested.message === 'string' ? nested.message : typeof data?.message === 'string' ? data.message : '').slice(0, 4000).toLowerCase();
+    const labels = { 'bad request':400, unauthorized:401, forbidden:403, 'not found':404, 'request timeout':408,
+        'request entity too large':413, 'payload too large':413, 'unprocessable entity':422, 'too many requests':429,
+        'internal server error':500, 'bad gateway':502, 'service unavailable':503, 'gateway timeout':504 };
+    const declared = Number(nested.status ?? nested.status_code ?? nested.code);
+    const reported = Number.isInteger(declared) && declared >= 400 && declared <= 599 ? declared : Object.hasOwn(labels, message.trim()) ? labels[message.trim()] : null;
+    const effective = reported || status;
+    let reason = '未识别', hint = '请核对酒馆服务端同一时刻的错误记录（分享前去除密钥和正文）。';
+    if (data?.quota_error === true || /insufficient_quota|quota_exceeded|resource_exhausted/.test(code)) { reason='额度不足';hint='请检查服务额度。'; }
+    else if ([401,403].includes(effective) || /authentication|invalid_api_key/.test(code)) { reason='认证失败';hint='请检查这个地址对应的 API 密钥和访问权限。'; }
+    else if (effective===429 || /rate_limit/.test(code)) { reason='请求过于频繁';hint='请稍后手动重试。'; }
+    else if (effective===404 || /model_not_found/.test(code)) { reason='找不到接口或模型';hint='请检查 API 地址及模型 ID。'; }
+    else if (effective===413 || /context_length|max_tokens|token_limit/.test(code) || /context length|context window|too many tokens/.test(message)) { reason='上下文或输出长度超限';hint='请核对模型长度限制与预设参数。'; }
+    else if (effective===408 || effective===504 || /timeout|timed.?out/.test(code+' '+message)) { reason='上游等待超时';hint='请核对中转或执行器记录，再手动重试。'; }
+    else if (effective===503 || /overloaded|server_busy|no available.*executor|executor.*offline/.test(code+' '+message)) { reason='服务繁忙或执行器不可用';hint='请检查服务或执行器状态，再手动重试。'; }
+    else if (effective===502 || /econnrefused|econnreset|enotfound/.test(code+' '+message)) { reason='转发连接失败';hint='请检查中转服务或执行器的对应请求记录，再手动重试。'; }
+    else if (effective===400 || effective===422 || /invalid_request|invalid_argument/.test(code)) { reason='请求被接口拒绝';hint='请核对服务支持的模型与预设参数；具体拒绝原因需查看酒馆服务端记录。'; }
+    else if (effective>=500) { reason='服务内部错误';hint='请核对中转服务记录，再手动重试。'; }
+    const prefix = status>=200&&status<300 ? '酒馆接口已响应（HTTP '+status+'），但返回了错误结果，未取得模型回复。' : 'API 请求失败'+(status?'（HTTP '+status+'）':'')+'。';
+    const error = failure(prefix+(reason==='未识别'?'':reason+'。')+hint, status===429 && data?.quota_error!==true);
+    error.diagnostic = '错误分类：'+reason+'；错误体报告状态：'+(reported??'未提供')
+        +'；错误结构：'+(raw===null?'null':Array.isArray(raw)?'array':typeof raw)
+        +'；含错误说明：'+(message?'是':'否')+'；额度标记：'+(data?.quota_error===true?'是':'否');
+    return error;
 }
 
 export function extractApiText(data) {
     if (data?.error) throw apiError(0, data);
-    if (data?.choices?.[0]?.finish_reason === 'length') throw failure('模型输出被截断，请提高回复 token 上限。');
-    const content = data?.choices?.[0]?.message?.content;
-    const text = typeof content === 'string' ? content : Array.isArray(content) ? content.filter(p => p.type === 'text').map(p => p.text).join('') : '';
-    if (!text.trim()) throw failure('模型没有返回文字，请检查模型是否支持 Chat Completions，或提高回复 token 上限。');
+    const choices = Array.isArray(data?.choices) ? data.choices : [];
+    const choice = choices[0], message = choice?.message, content = message?.content;
+    const shape = value => value === undefined ? '缺失' : value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+    const nonempty = value => typeof value === 'string' ? !!value.trim() : Array.isArray(value) && value.length > 0;
+    const reasoning = nonempty(message?.reasoning_content) || nonempty(message?.reasoning) || nonempty(message?.reasoning_details);
+    const tools = Array.isArray(message?.tool_calls) ? message.tool_calls.length : message?.function_call ? 1 : 0;
+    const refusal = nonempty(message?.refusal);
+    const finish = ['stop','length','content_filter','tool_calls','function_call'].includes(choice?.finish_reason) ? choice.finish_reason : choice?.finish_reason == null ? '未提供' : '其他';
+    const textParts = Array.isArray(content) ? content.filter(p => p?.type === 'text' && typeof p.text === 'string') : [];
+    const tokenCount = value => Number.isSafeInteger(value) && value >= 0 ? value : '未提供';
+    const fail = (code, reason) => {
+        const error = failure(reason);
+        error.code = code;
+        // Only known shapes/counts/enums: no response excerpts, reasoning or arbitrary field names.
+        error.diagnostic = '错误代码：'+code+'；响应结构：'+shape(data)+'；choices：'+shape(data?.choices)+'；候选数：'+choices.length
+            +'；message：'+shape(message)+'；content：'+shape(content)+'；文本片段数：'+textParts.length+'；旧式text：'+shape(choice?.text)
+            +'；结束原因：'+finish+'；含推理内容：'+(reasoning?'是':'否')+'；工具调用数：'+tools+'；含拒答标记：'+(refusal?'是':'否')
+            +'；含流式片段：'+(choice?.delta?'是':'否')+'；输出token用量：'+tokenCount(data?.usage?.completion_tokens)
+            +'；推理token用量：'+tokenCount(data?.usage?.completion_tokens_details?.reasoning_tokens);
+        throw error;
+    };
+    if (finish === 'length') fail('API_OUTPUT_TRUNCATED','接口标记模型输出被截断，本次未保存回复。');
+    if (finish === 'content_filter' || refusal) fail('API_OUTPUT_FILTERED','接口返回内容过滤或拒答标记，本次未取得可用回复。');
+    if (finish === 'tool_calls' || finish === 'function_call') fail('API_OUTPUT_TOOLS','接口返回了工具调用，未完成本次所需的文字回复。');
+    // Support the legacy completion text used by compatible gateways, but never
+    // treat reasoning, tool arguments or an unfinished streaming delta as a reply.
+    let text = typeof content === 'string' ? content : textParts.map(p => p.text).join('');
+    if (!text.trim() && content == null && !reasoning && !tools && typeof choice?.text === 'string') text = choice.text;
+    if (!text.trim()) {
+        if (!choices.length || !choice || typeof choice !== 'object') fail('API_RESPONSE_SHAPE','接口返回中没有有效的回复候选，无法读取文字；需核对返回格式。');
+        if (reasoning) fail('API_REASONING_ONLY','模型没有返回文字：接口只提供了推理内容，没有最终回复。本次未保存。');
+        if (tools) fail('API_OUTPUT_TOOLS','接口只提供了工具调用，没有最终文字回复。');
+        if (choice.delta) fail('API_UNEXPECTED_DELTA','非流式请求收到了流式片段，无法确认完整回复；需核对中转返回格式。');
+        if (content != null && typeof content !== 'string' && !(Array.isArray(content) && content.every(p => p?.type==='text' && typeof p.text==='string'))) {
+            fail('API_CONTENT_SHAPE','接口返回了无法识别的内容格式，未读取到回复文字。');
+        }
+        fail('API_EMPTY_OUTPUT','接口返回的最终回复文字为空。本次未保存；空回复本身不能说明是 token 上限问题。');
+    }
     return text.trim();
 }
 
@@ -81,6 +137,11 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             }
             if (controller.signal.aborted || !isCurrent()) throw failure('本次操作已取消。');
             if (!response.ok || data?.error) throw apiError(response.status, data);
+            if (path === 'generate') {
+                stage = '正在读取模型回复文字';
+                onProgress(stage);
+                return extractApiText(data);
+            }
             return data;
         } catch (error) {
             let result;
@@ -89,7 +150,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             else if (error && typeof error === 'object' && 'retryable' in error) result = error;
             // Provider error bodies can echo credentials: never display them.
             else result = failure('未能完成酒馆转发请求，请检查酒馆服务端网络与服务地址；本次不会自动重发。');
-            result.diagnostic = '请求环节：' + stage + '；等待耗时：' + Math.round((Date.now() - started) / 1000) + ' 秒；超时设置：' + config.timeout + ' 秒'
+            result.diagnostic = (result.diagnostic ? result.diagnostic + '\n' : '') + '请求环节：' + stage + '；等待耗时：' + Math.round((Date.now() - started) / 1000) + ' 秒；超时设置：' + config.timeout + ' 秒'
                 + '；HTTP：' + (status ?? '尚未收到') + '；请求字符数：' + bodyLength
                 + '；上下文消息数：' + (Array.isArray(extra.messages) ? extra.messages.length : 0)
                 + '；回复上限：' + (extra.max_completion_tokens ?? extra.max_tokens ?? '由服务决定')
@@ -99,8 +160,8 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
     }
     async function complete(config, key, messages, isCurrent) {
         if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
-        return extractApiText(await post('generate', config, key, { model: config.model.trim(), messages, stream: false,
-            max_tokens: config.maxTokens }, isCurrent));
+        return post('generate', config, key, { model: config.model.trim(), messages, stream: false,
+            max_tokens: config.maxTokens }, isCurrent);
     }
     return {
         async generate(prompt, contact, isCurrent, onProgress = () => {}) {
@@ -114,7 +175,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             const prepared = await prepareRequest(getContext(), prompt, contact, current);
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
-            return extractApiText(await post('generate', config, key, independentPayload(prepared, config), current, onProgress));
+            return post('generate', config, key, independentPayload(prepared, config), current, onProgress);
         },
         async models(config, key, isCurrent) {
             const data = await post('status', config, key, {}, isCurrent);
