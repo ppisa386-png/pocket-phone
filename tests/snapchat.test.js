@@ -120,3 +120,34 @@ test('Chinese friend display names preserve original character, friendship and a
  const accounts=snapItems(f.state(),'account');assert.equal(accounts.length,1);assert.equal(accounts[0].id,id);assert.equal(accounts[0].name,'亚历克斯');assert.equal(accounts[0].handle,'alex');assert.equal(accounts[0].friend,'friends');assert.equal(accounts[0].characterId,'card:alex.png');assert.equal(f.state().snapchat.profile.alias,'Moon');assert.match(f.prompt(),/name 填中文显示名/);
  }finally{f.close();}
 });
+
+
+test('batch invitations use one wrapped response and map by ID, with no partial save or automatic retry',async()=>{
+ const f=setup();try{
+ f.settings.retries=4;
+ f.reply({accounts:[{name:'Alex',handle:'alex',has_account:true},{name:'Bea',handle:'bea',has_account:true}]});ok(await f.snap.discover());
+ const ids=snapItems(f.state(),'account').map(a=>a.id),before=f.count();
+ f.reply(()=>'<think>consider</think>结果：'+JSON.stringify({results:[{id:ids[1],status:'pending'},{id:ids[0],status:'friends'}]}));
+ ok(await f.snap.inviteMany([...ids,ids[0]]));assert.equal(f.count(),before+1);assert.equal(f.state().snapchat[ids[0]].friend,'friends');assert.equal(f.state().snapchat[ids[1]].friend,'pending');
+ f.reply({results:[{id:'unknown',status:'friends'}]});assert.equal((await f.snap.inviteMany([ids[1]])).ok,false);assert.equal(f.count(),before+2);assert.equal(f.state().snapchat[ids[1]].friend,'pending');
+ f.reply(()=>'{"results":[');assert.equal((await f.snap.inviteMany([ids[1]])).ok,false);assert.equal(f.count(),before+3);assert.match(f.state().error,/不完整/);
+ const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal((await reload.read()).state.snapchat[ids[0]].friend,'friends');}finally{reload.destroy();}
+ }finally{f.close();}
+});
+
+test('batch selection refuses blocked contacts and discards late results after chat changes',async()=>{
+ const f=setup();try{
+ f.reply({accounts:[{name:'Alex',handle:'alex',has_account:true}]});ok(await f.snap.discover());const id=snapItems(f.state(),'account')[0].id;
+ ok(await f.snap.block(id,true));const before=f.count();assert.equal((await f.snap.inviteMany([id])).ok,false);assert.equal(f.count(),before);ok(await f.snap.block(id,false));
+ f.reply(()=>{f.context.chat[0].mes='Another timeline';return JSON.stringify({results:[{id,status:'friends'}]});});await f.snap.inviteMany([id]);await f.memory.read();assert.equal(snapItems(f.state(),'account').length,0);
+ }finally{f.close();}
+});
+
+
+test('Snapchat chat and call preserve preset bilingual text in one request',async()=>{
+ const f=setup();try{
+ const id=await friend(f),text='Bis morgen.\n（明天见。）';let before=f.count();
+ f.reply({status:'reply',messages:[{kind:'voice',text}]});ok(await f.snap.send(id,'text','你好'));assert.equal(f.count(),before+1);assert.equal(snapItems(f.state(),'message').at(-1).text,text);assert.match(f.prompt(),/Snapchat 的聊天、语音转写/);assert.match(f.prompt(),/画面说明等叙述性文字遵循预设的叙述语言/);
+ f.reply({status:'answered',text});before=f.count();ok(await f.snap.call(id,'video'));assert.equal(f.count(),before+1);assert.equal(snapItems(f.state(),'call')[0].turns[0].text,text);assert.match(f.prompt(),/单语预设保持单语/);
+ }finally{f.close();}
+});

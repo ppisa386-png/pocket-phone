@@ -1,7 +1,7 @@
-import { smsForAI, syncSMSContext } from './sms-context.js?v=0.24.14';
-import { exactStoryTime } from './story-clock.js?v=0.24.14';
-import { nameAliases } from './names.js?v=0.24.14';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.14';
+import { smsForAI, syncSMSContext } from './sms-context.js?v=0.24.15';
+import { exactStoryTime } from './story-clock.js?v=0.24.15';
+import { nameAliases } from './names.js?v=0.24.15';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.15';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();

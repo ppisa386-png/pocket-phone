@@ -1,9 +1,9 @@
-import { syncSMSContext } from './sms-context.js?v=0.24.14';
-import { storyTime } from './story-clock.js?v=0.24.14';
-import { importStoryAssets } from './assets-story.js?v=0.24.14';
-import { importStorySquare } from './x-opinion.js?v=0.24.14';
-import { importStoryPhone } from './story-phone.js?v=0.24.14';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.14';
+import { syncSMSContext } from './sms-context.js?v=0.24.15';
+import { storyTime } from './story-clock.js?v=0.24.15';
+import { importStoryAssets } from './assets-story.js?v=0.24.15';
+import { importStorySquare } from './x-opinion.js?v=0.24.15';
+import { importStoryPhone } from './story-phone.js?v=0.24.15';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.15';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',

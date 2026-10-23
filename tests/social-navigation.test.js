@@ -44,7 +44,8 @@ test('late Snapchat queue completion cannot send a message after switching chats
   await panel.action('thread','a');panel.input({dataset:{snapField:'message'},value:'Old chat message'});
   const pending=panel.submit({dataset:{snapForm:'message'}});panel.reset();finish({ok:true});await pending;
   assert.equal(flushes,0,'switching chats cancels the old send pipeline');
-  assert.doesNotMatch(panel.html(),/disabled|Old chat message/);
+  assert.doesNotMatch(panel.html(),/Old chat message/);
+  assert.match(panel.html(),/type="submit">新增联系人/, 'search is not locked by the retired request');
  }finally{globalThis.FormData=OriginalFormData;}
 });
 
@@ -62,7 +63,7 @@ test('late Snapchat failure and pending indicators stay in their original chat',
  let finish;
  const panel=createSnapPanel({...options(),adapter:{snapchat:{refresh:()=>new Promise(r=>finish=r)}}});
  await panel.action('tab','stories');const pending=panel.action('refresh');panel.reset();
- assert.doesNotMatch(panel.html(),/ disabled/,'new chat is not left waiting on a retired panel request');
+ assert.match(panel.html(),/type="submit">新增联系人/,'new chat search is not left waiting on a retired panel request');
  finish({ok:false,error:'OLD_CHAT_ERROR'});await pending;assert.doesNotMatch(panel.html(),/OLD_CHAT_ERROR/);
 });
 
@@ -73,4 +74,13 @@ test('X reset clears the retired pending indicator without unlocking a newer req
  const next=panel.action('refresh');assert.equal(releases.length,2);
  releases[0]({ok:true});await old;assert.match(panel.html(),/正在处理/,'the retired request cannot finish the current spinner');
  releases[1]({ok:true});await next;assert.doesNotMatch(panel.html(),/正在处理/);
+});
+
+
+test('Snapchat selection is local, retries retain selection, reset clears it',async()=>{
+ let calls=0,selected;const state={snapchat:{a:{id:'a',type:'account',name:'A',handle:'a',friend:'none'},b:{id:'b',type:'account',name:'B',handle:'b',friend:'pending'}}};
+ const panel=createSnapPanel({...options(),getView:()=>state,adapter:{snapchat:{inviteMany:async ids=>{calls++;selected=ids;return {ok:false,error:'Try later'};}}}});
+ panel.input({dataset:{snapSelect:'a'},checked:true});panel.input({dataset:{snapSelect:'b'},checked:true});assert.equal(calls,0);assert.match(panel.html(),/添加（2）/);
+ await panel.action('add-selected');assert.equal(calls,1);assert.deepEqual(selected,['a','b']);assert.match(panel.html(),/添加（2）/);
+ panel.reset();assert.match(panel.html(),/添加（0）/);assert.doesNotMatch(panel.html(),/ checked/);
 });

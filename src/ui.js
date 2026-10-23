@@ -1,18 +1,18 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.14';
-import { storyTime } from './story-clock.js?v=0.24.14';
-import { createAssetPanel } from './assets-view.js?v=0.24.14';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.14';
-import { bindComposerKeys } from './composer.js?v=0.24.14';
-import { createXPanel } from './x-view.js?v=0.24.14';
-import { xUnread } from './x.js?v=0.24.14';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.14';
-import { snapUnread } from './snapchat.js?v=0.24.14';
-import { createApiPanel } from './api-view.js?v=0.24.14';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.14';
-import { icon } from './icons.js?v=0.24.14';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.14';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.14';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.14';
+import { createDailyPanel } from './daily-view.js?v=0.24.15';
+import { storyTime } from './story-clock.js?v=0.24.15';
+import { createAssetPanel } from './assets-view.js?v=0.24.15';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.15';
+import { bindComposerKeys } from './composer.js?v=0.24.15';
+import { createXPanel } from './x-view.js?v=0.24.15';
+import { xUnread } from './x.js?v=0.24.15';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.15';
+import { snapUnread } from './snapchat.js?v=0.24.15';
+import { createApiPanel } from './api-view.js?v=0.24.15';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.15';
+import { icon } from './icons.js?v=0.24.15';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.15';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.15';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.15';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -501,7 +501,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
-        if(target.dataset.snapField){snapPanel.input(target);return;}
+        if(target.dataset.snapField||target.dataset.snapSelect){snapPanel.input(target);return;}
         if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
         if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
         if (target.hasAttribute('data-prompt-selector')) { promptId = target.value; renderPrompts(); }

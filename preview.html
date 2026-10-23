@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.24.14</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
+</style></head><body><main><small>POCKET PHONE · 0.24.15</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
 function dateDay(value) {
     const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return null;
     const d=new Date(0);d.setUTCFullYear(+m[1],+m[2]-1,+m[3]);d.setUTCHours(0,0,0,0);
@@ -89,7 +89,7 @@ function localizedPerson(item, context, existing = []) {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.24.14';
+const VERSION = '0.24.15';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -945,6 +945,7 @@ const snapTime = item => displayStoryTime(item);
 
 function createSnapPanel({adapter,getView,redraw,notice}) {
     let editingId=null;
+    const selectedAccounts=new Set();
     let tab='chat', accountId=null, page='', drafts=Object.create(null), status='', reading=false, posting=false, epoch=0;
     const profile=()=>snapProfile(getView(),adapter.userName?.()||'user');
     const key=name=>[tab,accountId||'',page,name].join(':');
@@ -960,11 +961,12 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
     const empty=text=>'<p class="pp-snap-empty">'+text+'</p>';
     function accountsHTML(state) {
         const accounts=snapItems(state,'account');
-        return form('search',field('query','姓名或账号（可留空）'),'新增联系人')+accounts.map(a=>{
+        for(const id of selectedAccounts){const a=state.snapchat?.[id];if(!a||a.blocked||['friends','incoming'].includes(a.friend))selectedAccounts.delete(id);}
+        return form('search',field('query','姓名或账号（可留空）'),'新增联系人')+'<div class="pp-snap-actions">'+button('add-selected','添加（'+selectedAccounts.size+'）','',selectedAccounts.size?'':'disabled')+'</div>'+accounts.map(a=>{
             const unread=snapItems(state,'message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
             const label=a.blocked?'已拉黑':({none:'尚未添加',incoming:'邀请你成为好友',pending:'等待通过',declined:'邀请未通过',friends:'好友'})[a.friend];
             return '<article class="pp-snap-card pp-snap-account"><div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+label+(unread?' · '+unread+' 条未读':'')+'</small></div></div><div class="pp-snap-actions">'+
-                (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
+                (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):'<label class="pp-snap-check"><input type="checkbox" data-snap-select="'+snapEsc(a.id)+'" aria-label="选择 '+snapEsc(a.name)+'"'+(selectedAccounts.has(a.id)?' checked':'')+disabled()+'>选择添加</label>')+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
         }).join('')+(accounts.length?'':empty('还没有 Snapchat 联系人。点「新增联系人」查找账号。'));
     }
     function transferHTML(t,blocked) {
@@ -1024,10 +1026,11 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
     }
     return {
         html, queueCurrent, back,
-        reset(){epoch++;posting=false;editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
-        input(target){if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
+        reset(){selectedAccounts.clear();epoch++;posting=false;editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
+        input(target){if(target.dataset.snapSelect){if(posting||getView().busy)return;target.checked?selectedAccounts.add(target.dataset.snapSelect):selectedAccounts.delete(target.dataset.snapSelect);redraw();return;}if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
         async readVisible(){if(reading||posting||getView().busy||!accountId||page==='profile'||!adapter.snapchat)return;if(!snapItems(getView(),'message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;reading=true;try{await adapter.snapchat.markRead(accountId);}finally{reading=false;}},
         async action(action,id) {
+            if(action==='add-selected'){const token=epoch,ids=[...selectedAccounts];const result=await perform('inviteMany',[ids]);if(token===epoch&&result?.ok){ids.forEach(id=>selectedAccounts.delete(id));const r=result.value;status='已添加 '+r.friends+' 人，等待通过 '+r.pending+' 人，未通过 '+r.declined+' 人。';redraw();}return;}
             if(action==='edit-message'){editingId=id;drafts[key('editText')]=getView().snapchat[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='reroll-message'){await perform('rerollMessage',[id]);return;}
@@ -2041,7 +2044,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
         if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
-        if(target.dataset.snapField){snapPanel.input(target);return;}
+        if(target.dataset.snapField||target.dataset.snapSelect){snapPanel.input(target);return;}
         if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
         if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
         if (target.hasAttribute('data-prompt-selector')) { promptId = target.value; renderPrompts(); }

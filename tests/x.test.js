@@ -292,3 +292,11 @@ test('X Chinese display names retain follow status and original character identi
  const accounts=xItems(f.state(),'account');assert.equal(accounts.length,1);assert.equal(accounts[0].id,id);assert.equal(accounts[0].name,'亚历克斯');assert.equal(accounts[0].handle,'alex');assert.equal(accounts[0].following,true);assert.equal(accounts[0].characterId,'card:alex.png');assert.equal(f.state().x.profile.alias,'Moon');assert.match(f.prompt(),/不改变短信、帖子、对白/);
  }finally{f.close();}
 });
+
+
+test('X feed requests preset dialogue translation and keeps original and translation together',async()=>{
+ const f=setup();try{
+ const text='Guten Morgen.\n（早上好。）';f.reply({posts:[{name:'School',handle:'school',text}]});ok(await f.x.refresh());
+ assert.match(f.prompt(),/帖子、转帖附言、评论、回复及私信/);assert.match(f.prompt(),/单语预设保持单语/);assert.match(f.prompt(),/不统一英语/);assert.equal(xItems(f.state(),'post')[0].text,text);
+ }finally{f.close();}
+});

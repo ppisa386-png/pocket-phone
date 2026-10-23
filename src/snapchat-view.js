@@ -1,6 +1,6 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.14';
-import { icon } from './icons.js?v=0.24.14';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.14';
+import { displayStoryTime } from './story-clock.js?v=0.24.15';
+import { icon } from './icons.js?v=0.24.15';
+import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.15';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -9,6 +9,7 @@ const snapTime = item => displayStoryTime(item);
 
 export function createSnapPanel({adapter,getView,redraw,notice}) {
     let editingId=null;
+    const selectedAccounts=new Set();
     let tab='chat', accountId=null, page='', drafts=Object.create(null), status='', reading=false, posting=false, epoch=0;
     const profile=()=>snapProfile(getView(),adapter.userName?.()||'user');
     const key=name=>[tab,accountId||'',page,name].join(':');
@@ -24,11 +25,12 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     const empty=text=>'<p class="pp-snap-empty">'+text+'</p>';
     function accountsHTML(state) {
         const accounts=snapItems(state,'account');
-        return form('search',field('query','姓名或账号（可留空）'),'新增联系人')+accounts.map(a=>{
+        for(const id of selectedAccounts){const a=state.snapchat?.[id];if(!a||a.blocked||['friends','incoming'].includes(a.friend))selectedAccounts.delete(id);}
+        return form('search',field('query','姓名或账号（可留空）'),'新增联系人')+'<div class="pp-snap-actions">'+button('add-selected','添加（'+selectedAccounts.size+'）','',selectedAccounts.size?'':'disabled')+'</div>'+accounts.map(a=>{
             const unread=snapItems(state,'message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
             const label=a.blocked?'已拉黑':({none:'尚未添加',incoming:'邀请你成为好友',pending:'等待通过',declined:'邀请未通过',friends:'好友'})[a.friend];
             return '<article class="pp-snap-card pp-snap-account"><div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+' · '+label+(unread?' · '+unread+' 条未读':'')+'</small></div></div><div class="pp-snap-actions">'+
-                (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):button('invite',a.friend==='pending'?'查看邀请回应':'添加好友',a.id))+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
+                (a.blocked?button('thread','聊天记录',a.id)+button('unblock','解除拉黑',a.id):a.friend==='friends'?button('thread','聊天',a.id):a.friend==='incoming'?button('accept','接受邀请',a.id)+button('decline','拒绝',a.id):'<label class="pp-snap-check"><input type="checkbox" data-snap-select="'+snapEsc(a.id)+'" aria-label="选择 '+snapEsc(a.name)+'"'+(selectedAccounts.has(a.id)?' checked':'')+disabled()+'>选择添加</label>')+(!a.blocked?button('block','拉黑',a.id):'')+'</div></article>';
         }).join('')+(accounts.length?'':empty('还没有 Snapchat 联系人。点「新增联系人」查找账号。'));
     }
     function transferHTML(t,blocked) {
@@ -88,10 +90,11 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     }
     return {
         html, queueCurrent, back,
-        reset(){epoch++;posting=false;editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
-        input(target){if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
+        reset(){selectedAccounts.clear();epoch++;posting=false;editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
+        input(target){if(target.dataset.snapSelect){if(posting||getView().busy)return;target.checked?selectedAccounts.add(target.dataset.snapSelect):selectedAccounts.delete(target.dataset.snapSelect);redraw();return;}if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
         async readVisible(){if(reading||posting||getView().busy||!accountId||page==='profile'||!adapter.snapchat)return;if(!snapItems(getView(),'message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;reading=true;try{await adapter.snapchat.markRead(accountId);}finally{reading=false;}},
         async action(action,id) {
+            if(action==='add-selected'){const token=epoch,ids=[...selectedAccounts];const result=await perform('inviteMany',[ids]);if(token===epoch&&result?.ok){ids.forEach(id=>selectedAccounts.delete(id));const r=result.value;status='已添加 '+r.friends+' 人，等待通过 '+r.pending+' 人，未通过 '+r.declined+' 人。';redraw();}return;}
             if(action==='edit-message'){editingId=id;drafts[key('editText')]=getView().snapchat[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='reroll-message'){await perform('rerollMessage',[id]);return;}
