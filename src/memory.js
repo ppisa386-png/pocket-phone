@@ -1,9 +1,9 @@
-import { syncSMSContext } from './sms-context.js?v=0.24.15';
-import { storyTime } from './story-clock.js?v=0.24.15';
-import { importStoryAssets } from './assets-story.js?v=0.24.15';
-import { importStorySquare } from './x-opinion.js?v=0.24.15';
-import { importStoryPhone } from './story-phone.js?v=0.24.15';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.15';
+import { syncSMSContext } from './sms-context.js?v=0.24.16';
+import { storyTime } from './story-clock.js?v=0.24.16';
+import { importStoryAssets } from './assets-story.js?v=0.24.16';
+import { importStorySquare } from './x-opinion.js?v=0.24.16';
+import { importStoryPhone } from './story-phone.js?v=0.24.16';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.16';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -46,6 +46,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     const bus = context?.eventSource;
     const types = context?.event_types ?? context?.eventTypes ?? {};
     const subscriptions = [];
+    const settleTimers = new Set();
 
     function unavailableError() {
         const messages={NO_CHAT:'请先打开角色聊天。',GENERATING:'请等待正文生成结束后再试。',EMPTY_CHAT:'当前聊天还没有可用正文。',CHANGED:'聊天刚刚发生变化，请重试。'};
@@ -147,6 +148,16 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
             settledProcessor = getContext().streamingProcessor ?? null;
         }
         backgroundRefresh();
+        if(name==='GENERATION_ENDED'||name==='GENERATION_STOPPED'){
+            const epoch=generation,metadata=getContext().chatMetadata;
+            for(const delay of [0,100]){
+                const timer=setTimeout(()=>{
+                    settleTimers.delete(timer);
+                    if(!disposed&&epoch===generation&&getContext().chatMetadata===metadata)backgroundRefresh();
+                },delay);
+                settleTimers.add(timer);
+            }
+        }
     });
     listen('GENERATION_STARTED', (type, _options, dryRun) => {
         // Host prompt previews emit STARTED without a matching ENDED event.
@@ -219,6 +230,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         },
         destroy() {
             disposed = true;
+            for(const timer of settleTimers)clearTimeout(timer);settleTimers.clear();
             for (const [type, handler] of subscriptions) {
                 if (typeof bus?.removeListener === 'function') bus.removeListener(type, handler);
                 else bus?.off?.(type, handler);

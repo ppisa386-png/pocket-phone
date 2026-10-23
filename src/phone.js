@@ -1,17 +1,17 @@
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=0.24.15';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=0.24.15';
-import { exactStoryTime } from './story-clock.js?v=0.24.15';
-import { isMemoryHidden } from './journal.js?v=0.24.15';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.15';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.15';
-import { phoneQuietOptions } from './api-context.js?v=0.24.15';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.15';
-export { validateContacts } from './contacts.js?v=0.24.15';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.15';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.15';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.15';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.15';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.15';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=0.24.16';
+import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=0.24.16';
+import { exactStoryTime } from './story-clock.js?v=0.24.16';
+import { isMemoryHidden } from './journal.js?v=0.24.16';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.16';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.16';
+import { phoneQuietOptions } from './api-context.js?v=0.24.16';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.16';
+export { validateContacts } from './contacts.js?v=0.24.16';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.16';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.16';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.16';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.16';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.16';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -385,11 +385,17 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         async markCallsRead() {
             if (readJobs.has('calls')) return;
             readJobs.add('calls');
+            const originalScope=scope, metadata=getContext().chatMetadata;
             try {
                 const ticket = await memory.begin();
                 const view = await memory.read();
+                if(view.scope!==originalScope||getContext().chatMetadata!==metadata)return;
                 const unread = Object.values(view.state.calls).filter(call => call.direction === 'incoming' && !call.read && finished(call));
                 if (unread.length) await memory.commit(ticket, unread.map(call => set('calls', call.id, { ...call, read: true })));
+            } catch (failure) {
+                // Automatic acknowledgement is not a user-requested generation.
+                // Leave unread intact; the next idle render will try again.
+                if(failure.code!=='GENERATING')throw failure;
             } finally { readJobs.delete('calls'); }
         },
         async setBlocked(contactId, channel, blocked) {
@@ -609,6 +615,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (view.scope !== originalScope) return;
                 const unread = threadMessages(view.state.messages, contactId).filter(message => message.role === 'assistant' && !message.read);
                 if (unread.length) await memory.commit(ticket, unread.map(message => set('messages', message.id, { ...message, read: true })));
+            } catch (failure) {
+                if(failure.code!=='GENERATING')throw failure;
             } finally { readJobs.delete(key); }
         },
         async hangup() {

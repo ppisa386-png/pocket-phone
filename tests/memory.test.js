@@ -205,3 +205,16 @@ test('live host readiness overrides stale start/stream state and reports precise
   f.current().chatId=undefined;await assert.rejects(f.memory.begin(),e=>e.code==='NO_CHAT');
  }finally{f.memory.destroy();}
 });
+
+
+test('ended event before host idle flag gets a deferred sync without unlocking active generation',async()=>{
+ let busy=false;const f=fixture(()=>busy);try{
+ await f.memory.read();let seen=0;const unsubscribe=f.memory.subscribe(()=>seen++);
+ busy=true;f.bus.emit('GENERATION_STARTED','normal');f.current().chat.push(message(2));f.bus.emit('GENERATION_ENDED');
+ await f.memory.read();const before=seen;busy=false;
+ await new Promise(resolve=>setTimeout(resolve,150));assert.ok(seen>before,'idle final state reaches UI without another click');
+ busy=true;f.bus.emit('GENERATION_ENDED');f.bus.emit('GENERATION_STARTED','normal');const activeSeen=seen;
+ await new Promise(resolve=>setTimeout(resolve,150));assert.equal(seen,activeSeen);await assert.rejects(f.memory.begin(),e=>e.code==='GENERATING');
+ unsubscribe();
+ }finally{f.memory.destroy();}
+});

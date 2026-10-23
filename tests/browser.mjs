@@ -628,6 +628,20 @@ try {
         check(await p.evaluate(async()=>{const j=await import('/src/journal.js'),state=j.replayJournal(SillyTavern.getContext().chatMetadata[j.JOURNAL_KEY]);return Object.values(state.smsContext).some(m=>m.expired===true);}), 'expiry persists after reload without deleting history');
         await ctx.close();
     }
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(async()=>{window.hostGenerating=false;window.readNotices=[];window.toastr={info:m=>window.readNotices.push(m),error:m=>window.readNotices.push(m)};const c=SillyTavern.getContext();const evidence='Sam missed a call from Alex.';c.chat.push({is_user:false,mes:evidence+'<!--durian-contact:'+JSON.stringify({recipient:'user',name:'Alex',kind:'call',status:'missed',evidence})+'-->'});await c.eventSource.emit('MESSAGE_RECEIVED');});
+        await p.locator('.pp-launcher').tap();
+        await p.evaluate(async()=>{window.hostGenerating=true;await SillyTavern.getContext().eventSource.emit('GENERATION_STARTED','normal');});
+        await p.locator('[data-app="phone"]').tap();
+        await p.getByText('未接来电',{exact:false}).first().waitFor();
+        await p.evaluate(async()=>{await SillyTavern.getContext().eventSource.emit('GENERATION_ENDED');window.hostGenerating=false;});
+        await p.waitForFunction(async()=>{const j=await import('/src/journal.js');const calls=Object.values(j.replayJournal(SillyTavern.getContext().chatMetadata[j.JOURNAL_KEY]).calls);return calls.length===1&&calls[0].read;});
+        check(await p.evaluate(()=>!window.readNotices.some(s=>s.includes('等待正文'))),'missed-call auto read does not show a generation error');
+        check(await p.evaluate(()=>window.modelCalls===0),'recent missed calls need no model request');
+        await p.screenshot({path:resolve(screenshotDir,'missed-call-idle-390.png')});await ctx.close();
+    }
     check(errors.length === 0, 'no browser JavaScript errors: ' + errors.join('; '));
     check(external.length === 0, 'no external network or model requests');
 } catch (error) {
