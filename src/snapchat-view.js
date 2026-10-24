@@ -1,6 +1,6 @@
-import { displayStoryTime } from './story-clock.js?v=0.24.16';
-import { icon } from './icons.js?v=0.24.16';
-import { snapItems, snapProfile, snapExpired } from './snapchat.js?v=0.24.16';
+import { displayStoryTime } from './story-clock.js?v=0.24.17';
+import { icon } from './icons.js?v=0.24.17';
+import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=0.24.17';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -48,10 +48,10 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+'<input type="hidden" name="currency" value="USD"><p>美元 USD</p>'+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
     }
     function postHTML(item) {
-        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'pp-snap-story')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
+        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'pp-snap-story')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.friendLikes?.length?'<p class="pp-snap-copy">♥ '+snapEsc(item.friendLikes.map(id=>getView().snapchat?.[id]?.name||'好友').join('、'))+' 赞了这条故事</p>':'')+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
     }
     function feedsHTML(state) {
-        if(tab==='stories')return form('story',select('storyKind',['image','video'],'image')+textarea('story','故事内容'),'发布故事')+button('refresh','刷新好友故事')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');
+        if(tab==='stories'){const refresh=snapStoryRefreshState(state);return form('story',select('storyKind',['image','video'],'image')+textarea('story','故事内容'),'发布故事')+button('refresh',refresh.refreshed?(refresh.allowed?'查看新故事互动':'本回合已刷新'):'刷新好友故事','',refresh.allowed?'':'disabled')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');}
         if(tab==='spotlight')return button('refresh','加载短视频')+'<div class="pp-snap-clips">'+snapItems(state,'clip').slice().reverse().map(postHTML).join('')+'</div>'+empty('上下滑动浏览更多视频。');
         const p=profile();const locations=snapItems(state,'location').filter(i=>!state.snapchat[i.author]?.blocked).slice().reverse();
         return button('refresh','刷新共享位置与动态')+'<div class="pp-snap-map"><strong>Snap Map</strong><p>朋友分享的位置 · 世界动态</p><div class="pp-snap-pins">'+(p.sharing&&p.location?'<span>⌖ 你 · '+snapEsc(p.location)+'</span>':'')+locations.slice(0,6).map(i=>'<span>⌖ '+snapEsc(i.name)+' · '+snapEsc(i.place)+'</span>').join('')+'</div></div>'+(!p.sharing?empty('你的位置未共享，可在「我的账号」开启。'):'')+locations.map(i=>'<article class="pp-snap-card"><strong>'+snapEsc(i.name)+' · '+snapEsc(i.place)+'</strong><small>'+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p></article>').join('');

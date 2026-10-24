@@ -1,13 +1,19 @@
-import { parseModelObject } from './model-json.js?v=0.24.16';
-import { requireCash } from './assets-core.js?v=0.24.16';
-import { readStoryClock } from './story-clock.js?v=0.24.16';
-import { localizedPerson, sameNamedPerson } from './names.js?v=0.24.16';
+import { parseModelObject } from './model-json.js?v=0.24.17';
+import { requireCash } from './assets-core.js?v=0.24.17';
+import { readStoryClock } from './story-clock.js?v=0.24.17';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.24.17';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
 export const snapProfile = (state, name = 'user') => state.snapchat?.profile || { id:'profile',type:'profile',alias:name,currency:'USD',location:'',sharing:false };
 export const snapExpired = (item, now = Date.now()) => now - item.createdAt >= 86400000;
 export const snapUnread = state => snapItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + snapItems(state,'account').filter(a=>a.friend==='incoming').length;
+// The journal rolls both the floor marker and story checks back with their source floor.
+export function snapStoryRefreshState(state, revision = state.revision) {
+    const refreshed = state.snapchat?.storyRefresh?.revision === (revision ?? 'root');
+    const pending = snapItems(state,'story').filter(s=>s.author==='user'&&!s.reactionsChecked&&!snapExpired(s));
+    return {refreshed,pending,allowed:!refreshed||pending.length>0};
+}
 const setSnap = value => ({collection:'snapchat',key:value.id,value});
 export function parseSnapObject(raw) {
     try { return parseModelObject(raw); }
@@ -34,7 +40,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
         if(!current())throw new Error('Snapchat 已关闭或聊天已变化。');
         const ticket=await memory.begin();
         const commit=async changes=>{if(!current())throw new Error('聊天已变化，本次操作已取消。');if(changes.length)await memory.commit(ticket,changes);};
-        return work(view.state,current,request,commit);
+        return work(view.state,current,request,commit,view.revision);
     });
     const profile=state=>snapProfile(state,getContext().name1);
     function target(state,account) {
@@ -45,7 +51,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
         return getSettings().prompts.general+'\n'+getSettings().prompts.snapchat+'\n这是 Snapchat 文字扮演任务。媒体用文字描述；语音只含可听见内容，视频通话仅限镜头内可见和可听见内容。不得替 user 发言，不产生真实操作。'+
             '\n当前 user 公开网名：'+JSON.stringify(p.alias)+'。'+(account?'当前对方账号：'+JSON.stringify({name:account.name,handle:account.handle})+'；对方'+(account.identityKnown?'已通过此前披露知道账号的真实身份。':'不知道这个账号是谁。后台真人对应、角色卡、user 人设、私人剧情和记忆都不能据此暴露账号身份；只能认识网名及本账号公开过的内容。'):'发现账号不等于知道账号背后的真实身份。')+
             '\n仅使用对应账号已知的信息，不将正文中的私人剧情写成公开动态或据此公开 user 身份。user 未共享的位置不得显示给别人。'+
-            (account?'\n本账号此前互动与转账：'+JSON.stringify(Object.values(state.snapchat||{}).filter(i=>i.accountId===account.id&&['call','transfer'].includes(i.type)).slice(-20))+'\nuser 向好友公开的故事：'+JSON.stringify(snapItems(state,'story').filter(i=>i.author==='user'&&!snapExpired(i)).slice(-8))+'\nuser 共享位置：'+JSON.stringify(p.sharing?p.location:null):'')+
+            (account?'\n本账号此前互动与转账：'+JSON.stringify(Object.values(state.snapchat||{}).filter(i=>i.accountId===account.id&&['call','transfer'].includes(i.type)).slice(-20))+'\nuser 向好友公开的故事：'+JSON.stringify(snapItems(state,'story').filter(i=>i.author==='user'&&!snapExpired(i)).slice(-8).map(i=>({id:i.id,kind:i.kind,text:i.text,comments:(i.comments||[]).filter(c=>c.accountId===account.id),liked:(i.friendLikes||[]).includes(account.id)})))+'\nuser 共享位置：'+JSON.stringify(p.sharing?p.location:null):'')+
             '\n只输出本任务指定 JSON，内容语言遵守酒馆预设。';
     }
     const ask=(state,account,request,current,prompt,validate)=>request(rules(state,account)+'\n'+prompt,validate,current,account?target(state,account):null,{retries:0,parseResponse:parseSnapObject,outputContract:'当前任务是 Snapchat，不续写正文或状态栏。最终只返回本任务要求的单个完整 JSON 对象，不能返回多个候选；保留预设语言与身份隔离规则。'});
@@ -162,15 +168,45 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
         });},
         hangup(id){return run(async(state,_c,_r,commit)=>{const call=state.snapchat[id];if(call?.type==='call')await commit([setSnap({...call,status:'ended'})]);});},
         publish(kind,value){return run(async(state,_c,_r,commit)=>{if(!['image','video'].includes(kind))throw new Error('故事请选择照片或视频。');await commit([setSnap(newRecord('story',{author:'user',name:profile(state).alias,kind,text:required(value,'故事内容'),comments:[],liked:false}))]);});},
-        refresh(tab){return run(async(state,current,request,commit)=>{
+        refresh(tab){return run(async(state,current,request,commit,revision)=>{
             if(!['stories','spotlight','map'].includes(tab))throw new Error('页面不可刷新。');
-            const friends=snapItems(state,'account').filter(a=>a.friend==='friends'&&!a.blocked).map(({id,name,handle})=>({id,name,handle}));
-            const spec=tab==='stories'?'只为给定好友生成已发布的照片/视频故事。每项 {accountId,kind:"image/video",text}。':tab==='spotlight'?'生成陌生人/创作者公开短视频。每项 {name,text}，text 是视频画面、声音与字幕的文字描述。':'生成好友明确共享的位置或世界各地公开动态。每项 {accountId:null 或给定好友ID,name,place,text,shared:true}；不得泄漏不分享位置的好友。';
-            const items=await ask(state,null,request,current,'当前任务：Snapchat '+tab+' 刷新。'+spec+'好友列表：'+JSON.stringify(friends)+'\n输出 {"items": [...]}，最多 5 条，不替 user 发布内容。',d=>{if(!Array.isArray(d.items)||d.items.length>5)throw new Error('动态内容格式不正确。');return d.items;});
+            const refreshState=tab==='stories'?snapStoryRefreshState(state,revision):null;
+            if(refreshState&&!refreshState.allowed)throw new Error('本回合已刷新好友故事；发布新故事后可查看好友的新互动。');
+            const friends=snapItems(state,'account').filter(a=>a.friend==='friends'&&!a.blocked).map(a=>({id:a.id,name:a.name,handle:a.handle,identityKnown:knownAtContact(state,a)}));
+            const reactionsOnly=refreshState?.refreshed===true;
+            const pending=refreshState?.pending||[];
+            const spec=tab==='stories'?(reactionsOnly?'本回合好友故事已刷新，只检查下列新发布的 user 故事的好友互动，items 必须为空数组，不再生成好友故事。':'只为给定好友生成已发布的照片/视频故事。每项 {accountId,kind:"image/video",text}。')+
+                '\n同时按每位好友的关系、性格、当前处境以及是否有条件看到/回应，自行决定是否给下列故事点赞或简短回复；可以只有点赞，也可以无人互动，不要求每人回应，不为凑数互动。只允许列表中已添加且未拉黑的好友。各账号认知独立，identityKnown 为 false 时不能依据后台人设或私人剧情认出 user；不得把某人私下知道的事变成所有好友都知道，不虚构 user 发言。回复语言遵循当前预设的对白与翻译规则。'+
+                '\n待检查的 user 故事（只可针对这些ID互动）：'+JSON.stringify(pending.map(({id,kind,text})=>({id,kind,text})))+
+                '\n输出 {"items":[],"reactions":[{"storyId":"给定故事ID","accountId":"好友ID","liked":true,"text":"回复或空字符串"}]}。同一好友对同一故事最多一项，无互动返回 reactions:[]。'
+                :tab==='spotlight'?'生成陌生人/创作者公开短视频。每项 {name,text}，text 是视频画面、声音与字幕的文字描述。':'生成好友明确共享的位置或世界各地公开动态。每项 {accountId:null 或给定好友ID,name,place,text,shared:true}；不得泄漏不分享位置的好友。';
+            const data=await ask(state,null,request,current,'当前任务：Snapchat '+tab+' 刷新。'+spec+'好友列表：'+JSON.stringify(friends)+'\n'+(tab==='stories'?'items 最多 5 条。':'输出 {"items": [...]}，最多 5 条。')+'不替 user 发布内容。',d=>{
+                if(!Array.isArray(d.items)||d.items.length>5||reactionsOnly&&d.items.length)throw new Error('动态内容格式不正确。');
+                if(tab!=='stories')return {items:d.items,reactions:[]};
+                const reactions=d.reactions??(pending.length?null:[]);
+                if(!Array.isArray(reactions)||reactions.length>friends.length*pending.length)throw new Error('故事互动格式不正确。');
+                const seen=new Set();
+                for(const r of reactions){
+                    const key=JSON.stringify([r?.storyId,r?.accountId]);
+                    if(!r||!pending.some(s=>s.id===r.storyId)||!friends.some(a=>a.id===r.accountId)||seen.has(key)||typeof r.liked!=='boolean'||typeof r.text!=='string'||r.text.length>2000||!r.liked&&!r.text.trim())throw new Error('故事互动包含无效好友、故事或重复内容。');
+                    seen.add(key);
+                }
+                return {items:d.items,reactions};
+            });
+            const items=data.items;
             const changes=[];
             for(const item of items){const a=friends.find(a=>a.id===item.accountId);if(tab==='stories'&&!a)continue;if(tab==='map'&&(item.shared!==true||item.accountId&&!a))continue;
                 const body=text(item.text);if(!body)continue;
                 changes.push(setSnap(newRecord(tab==='stories'?'story':tab==='spotlight'?'clip':'location',{author:a?.id||'public',name:a?.name||text(item.name,100)||'创作者',kind:item.kind==='image'?'image':'video',text:body,place:text(item.place,200),comments:[],liked:false})));
+            }
+            if(refreshState){
+                for(const story of pending){
+                    const reactions=data.reactions.filter(r=>r.storyId===story.id);
+                    const likes=[...new Set([...(story.friendLikes||[]),...reactions.filter(r=>r.liked).map(r=>r.accountId)])];
+                    const comments=[...(story.comments||[]),...reactions.filter(r=>r.text.trim()).map(r=>({accountId:r.accountId,name:friends.find(a=>a.id===r.accountId).name,text:r.text.trim(),createdAt:Date.now()}))];
+                    changes.push(setSnap({...story,reactionsChecked:true,reactionsCheckedAt:Date.now(),friendLikes:likes,comments}));
+                }
+                changes.push(setSnap({id:'storyRefresh',type:'story_refresh',revision:revision??'root'}));
             }
             await commit(changes);
         });},

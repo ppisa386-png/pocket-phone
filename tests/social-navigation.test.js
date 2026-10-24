@@ -84,3 +84,13 @@ test('Snapchat selection is local, retries retain selection, reset clears it',as
  await panel.action('add-selected');assert.equal(calls,1);assert.deepEqual(selected,['a','b']);assert.match(panel.html(),/添加（2）/);
  panel.reset();assert.match(panel.html(),/添加（0）/);assert.doesNotMatch(panel.html(),/ checked/);
 });
+
+test('story refresh control locks, reopens only for unchecked user stories, and shows friend reactions',async()=>{
+ const view={revision:'r',snapchat:{a:account}};const panel=createSnapPanel({adapter:{},getView:()=>view,redraw(){},notice(){}});await panel.action('tab','stories');
+ assert.match(panel.html(),/刷新好友故事/);view.snapchat.storyRefresh={id:'storyRefresh',type:'story_refresh',revision:'r'};
+ assert.match(panel.html(),/aria-label="本回合已刷新"[^>]*disabled/);
+ view.snapchat.story={id:'story',type:'story',author:'user',name:'You',kind:'image',text:'Sunset',createdAt:Date.now(),comments:[]};assert.match(panel.html(),/查看新故事互动/);
+ Object.assign(view.snapchat.story,{reactionsChecked:true,friendLikes:['a'],comments:[{accountId:'a',name:'Alex',text:'Great!（真棒！）'}]});
+ assert.match(panel.html(),/aria-label="本回合已刷新"[^>]*disabled/);assert.match(panel.html(),/Alex 赞了这条故事/);assert.match(panel.html(),/Great!（真棒！）/);
+ view.revision='next';assert.match(panel.html(),/刷新好友故事/);
+});

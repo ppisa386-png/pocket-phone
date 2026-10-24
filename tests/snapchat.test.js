@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
-import {createSnapchat,snapItems,snapExpired,snapAmount,snapUnread} from '../src/snapchat.js';
+import {createSnapchat,snapItems,snapExpired,snapAmount,snapUnread,snapStoryRefreshState} from '../src/snapchat.js';
 import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 
@@ -49,7 +49,7 @@ test('voice and video calls enforce separate prompt boundaries and one active ca
 
 test('story creation and expiry cost no requests; feeds accept only friends and shared map locations',async()=>{
  const f=setup();const id=await friend(f);const before=f.count();ok(await f.snap.publish('image','Sunset'));const story=snapItems(f.state(),'story')[0];assert.equal(snapExpired(story,story.createdAt+86400000),true);assert.equal(snapExpired(story,story.createdAt+86399999),false);assert.equal(f.count(),before);
- f.reply({items:[{accountId:id,text:'Trip',kind:'image'},{accountId:'unknown',text:'Secret'}]});ok(await f.snap.refresh('stories'));assert.equal(snapItems(f.state(),'story').length,2);
+ f.reply({reactions:[],items:[{accountId:id,text:'Trip',kind:'image'},{accountId:'unknown',text:'Secret'}]});ok(await f.snap.refresh('stories'));assert.equal(snapItems(f.state(),'story').length,2);
  f.reply({items:[{accountId:id,text:'At the park',place:'Park',shared:true},{accountId:id,text:'Private home',shared:false},{accountId:'unknown',text:'Secret',shared:true},{name:'Tourist',place:'London',text:'Public event',shared:true}]});ok(await f.snap.refresh('map'));assert.equal(snapItems(f.state(),'location').length,2);
  const n=f.count();ok(await f.snap.comment(story.id,'My own comment'));assert.equal(f.count(),n,'does not impersonate user as the author');f.close();
 });
@@ -150,4 +150,51 @@ test('Snapchat chat and call preserve preset bilingual text in one request',asyn
  f.reply({status:'reply',messages:[{kind:'voice',text}]});ok(await f.snap.send(id,'text','你好'));assert.equal(f.count(),before+1);assert.equal(snapItems(f.state(),'message').at(-1).text,text);assert.match(f.prompt(),/Snapchat 的聊天、语音转写/);assert.match(f.prompt(),/画面说明等叙述性文字遵循预设的叙述语言/);
  f.reply({status:'answered',text});before=f.count();ok(await f.snap.call(id,'video'));assert.equal(f.count(),before+1);assert.equal(snapItems(f.state(),'call')[0].turns[0].text,text);assert.match(f.prompt(),/单语预设保持单语/);
  }finally{f.close();}
+});
+
+test('story refresh is once per floor and persisted, while new user stories only unlock reactions',async()=>{
+ const f=setup();const id=await friend(f);f.reply({items:[{accountId:id,kind:'image',text:'Friend story'}],reactions:[]});const n=f.count();
+ ok(await f.snap.refresh('stories'));assert.equal(f.count(),n+1);assert.equal((await f.snap.refresh('stories')).ok,false);assert.equal(f.count(),n+1);
+ const reload=createPhoneMemory({getContext:()=>f.context});assert.equal(snapStoryRefreshState((await reload.read()).state,f.state().revision).allowed,false);reload.destroy();
+ ok(await f.snap.publish('image','New story'));const story=snapItems(f.state(),'story').find(s=>s.author==='user');
+ assert.equal(snapStoryRefreshState(f.state()).allowed,true);
+ f.reply({items:[],reactions:[{storyId:story.id,accountId:id,liked:true,text:'Lovely!（真好看！）'}]});ok(await f.snap.refresh('stories'));
+ assert.match(f.prompt(),/items 必须为空数组/);assert.match(f.prompt(),/不要求每人回应/);assert.match(f.prompt(),/identityKnown.*false/);
+ assert.equal(snapItems(f.state(),'story').length,2);assert.deepEqual(f.state().snapchat[story.id].friendLikes,[id]);assert.equal(f.state().snapchat[story.id].comments[0].text,'Lovely!（真好看！）');
+ assert.equal(snapStoryRefreshState(f.state()).allowed,false);const calls=f.count();assert.equal((await f.snap.refresh('stories')).ok,false);assert.equal(f.count(),calls);
+ ok(await f.snap.publish('video','Another new story'));f.reply({items:[],reactions:[]});ok(await f.snap.refresh('stories'));assert.equal(snapStoryRefreshState(f.state()).allowed,false);
+ assert.doesNotMatch(f.prompt(),/New story/,'previously checked stories not included in new reaction task');assert.equal(f.state().snapchat[story.id].comments.length,1);f.close();
+});
+
+test('empty story refresh counts; next floor unlocks once and deletion restores the previous lock',async()=>{
+ const f=setup();await friend(f);f.reply({items:[],reactions:[]});ok(await f.snap.refresh('stories'));const old=f.state().revision;
+ f.context.chat.push({name:'Alex',mes:'Next narrative floor.'});await f.memory.read();assert.equal(snapStoryRefreshState(f.state()).allowed,true);
+ ok(await f.snap.publish('image','New floor story'));ok(await f.snap.refresh('stories'));assert.equal(snapStoryRefreshState(f.state()).allowed,false);
+ f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(f.state().revision,old);assert.equal(snapItems(f.state(),'story').length,0);assert.equal(snapStoryRefreshState(f.state()).allowed,false);
+ f.context.chat[0].mes='Regenerated opening';f.bus.emit('MESSAGE_EDITED');await f.memory.read();assert.equal(snapStoryRefreshState(f.state()).allowed,true);f.close();
+});
+
+test('reaction validation is atomic and failed refresh never consumes the allowance',async()=>{
+ const f=setup();const id=await friend(f);f.reply({items:[],reactions:[]});ok(await f.snap.refresh('stories'));ok(await f.snap.publish('image','Pending'));
+ const story=snapItems(f.state(),'story')[0],valid={storyId:story.id,accountId:id,liked:true,text:'Good'};
+ for(const response of [{items:[]},{items:[{accountId:id,text:'Extra story'}],reactions:[]},{items:[],reactions:[{...valid,accountId:'stranger'}]},{items:[],reactions:[{...valid,storyId:'old'}]},{items:[],reactions:[valid,valid]},{items:[],reactions:[{...valid,liked:'true'}]}]){
+  f.reply(response);const count=f.count();assert.equal((await f.snap.refresh('stories')).ok,false);assert.equal(f.count(),count+1);assert.equal(snapStoryRefreshState(f.state()).allowed,true);assert.deepEqual(f.state().snapchat[story.id].comments,[]);assert.equal(snapItems(f.state(),'story').length,1);
+ }
+ ok(await f.snap.block(id,true));f.reply({items:[],reactions:[valid]});assert.equal((await f.snap.refresh('stories')).ok,false);
+ f.reply({items:[],reactions:[]});ok(await f.snap.refresh('stories'));assert.equal(snapStoryRefreshState(f.state()).allowed,false);f.close();
+});
+
+test('concurrent refresh and stale cross-chat results cannot add stories or consume another floor',async()=>{
+ const f=setup();const id=await friend(f);let finish,start;const started=new Promise(r=>start=r);f.reply(async()=>{start();return new Promise(r=>finish=r);});
+ const request=f.snap.refresh('stories');await started;const calls=f.count();assert.equal((await f.snap.refresh('stories')).ok,false);assert.equal(f.count(),calls);
+ f.context.chatId='other';f.context.chatMetadata={};f.bus.emit('CHAT_CHANGED');finish(JSON.stringify({items:[{accountId:id,text:'Late story'}],reactions:[]}));assert.equal((await request).ok,false);await f.memory.read();assert.equal(snapItems(f.state(),'story').length,0);assert.equal(snapStoryRefreshState(f.state()).allowed,true);f.close();
+});
+
+test('own story replies and likes remain isolated per friend in chat and narrative context',async()=>{
+ const f=setup();const id=await friend(f);const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'snapchat',key:'bea',value:{id:'bea',type:'account',name:'Bea',handle:'bea',friend:'friends',identityKnown:false}}]);
+ ok(await f.snap.publish('image','A public sunset'));const story=snapItems(f.state(),'story')[0];
+ f.reply({items:[],reactions:[{storyId:story.id,accountId:id,liked:true,text:'Alex private reply'},{storyId:story.id,accountId:'bea',liked:true,text:'Bea private reply'}]});ok(await f.snap.refresh('stories'));
+ const prompt=buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{instruction:'Remember',budget:50000});
+ assert.match(prompt,/Alex private reply/);assert.match(prompt,/点赞/);assert.doesNotMatch(prompt,/Bea private reply/);assert.match(prompt,/不知道现实身份/);
+ f.reply({status:'reply',text:'Thanks'});ok(await f.snap.send(id,'text','Hi'));assert.match(f.prompt(),/Alex private reply/);assert.doesNotMatch(f.prompt(),/Bea private reply/);f.close();
 });

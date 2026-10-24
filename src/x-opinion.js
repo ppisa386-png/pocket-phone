@@ -1,6 +1,6 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.16';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.16';
-import { buildSquarePrompt } from './square-core.js?v=0.24.16';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.17';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.17';
+import { buildSquarePrompt } from './square-core.js?v=0.24.17';
 export const OPINION_KEY='durian_phone_public_opinion';
 // Keep legacy imports compatible; old automatic opinions and narrative square
 // tags no longer create or inject records. Existing journal data is preserved.

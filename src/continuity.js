@@ -1,7 +1,7 @@
-import { smsForAI, syncSMSContext } from './sms-context.js?v=0.24.16';
-import { exactStoryTime } from './story-clock.js?v=0.24.16';
-import { nameAliases } from './names.js?v=0.24.16';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.16';
+import { smsForAI, syncSMSContext } from './sms-context.js?v=0.24.17';
+import { exactStoryTime } from './story-clock.js?v=0.24.17';
+import { nameAliases } from './names.js?v=0.24.17';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.17';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -67,6 +67,14 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
     }
     for(const item of social){
         if(!['story','clip'].includes(item.type))continue;
+        if(item.type==='story'&&item.author==='user'){
+            for(const account of snapAccounts.values()){
+                const who=identity(account,state.snapchat?.profile?.alias);
+                for(const c of (item.comments||[]).filter(c=>c.accountId===account.id))entries.push({time:Number(c.createdAt)||0,data:{channel:'Snapchat 故事回复',...who,speaker:account.name,text:c.text,post:item.text}});
+                if((item.friendLikes||[]).includes(account.id))entries.push({time:Number(item.reactionsCheckedAt)||0,data:{channel:'Snapchat 故事互动',...who,speaker:account.name,action:'点赞',post:item.text}});
+            }
+            continue;
+        }
         const account=snapAccounts.get(item.author);if(!account)continue;
         const who=identity(account,state.snapchat?.profile?.alias);
         for(const [i,c]of (item.comments||[]).entries())entries.push({time:Number(c.createdAt||item.createdAt)||i,data:{channel:'Snapchat 动态评论',...who,speaker:c.name===account.name?account.name:who.otherParty,text:c.text,post:item.text}});

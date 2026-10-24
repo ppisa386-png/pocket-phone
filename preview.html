@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 0.24.16</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
+</style></head><body><main><small>POCKET PHONE · 0.24.17</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat 页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Read scene timestamps locally. No wall-clock fallback and no model calls.
 function dateDay(value) {
     const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return null;
     const d=new Date(0);d.setUTCFullYear(+m[1],+m[2]-1,+m[3]);d.setUTCHours(0,0,0,0);
@@ -89,7 +89,7 @@ function localizedPerson(item, context, existing = []) {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '0.24.16';
+const VERSION = '0.24.17';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -936,6 +936,12 @@ const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(it
 const snapProfile = (state, name = 'user') => state.snapchat?.profile || { id:'profile',type:'profile',alias:name,currency:'USD',location:'',sharing:false };
 const snapExpired = (item, now = Date.now()) => now - item.createdAt >= 86400000;
 const snapUnread = state => snapItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + snapItems(state,'account').filter(a=>a.friend==='incoming').length;
+// The journal rolls both the floor marker and story checks back with their source floor.
+function snapStoryRefreshState(state, revision = state.revision) {
+    const refreshed = state.snapchat?.storyRefresh?.revision === (revision ?? 'root');
+    const pending = snapItems(state,'story').filter(s=>s.author==='user'&&!s.reactionsChecked&&!snapExpired(s));
+    return {refreshed,pending,allowed:!refreshed||pending.length>0};
+}
 
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -984,10 +990,10 @@ function createSnapPanel({adapter,getView,redraw,notice}) {
             (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+'<input type="hidden" name="currency" value="USD"><p>美元 USD</p>'+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
     }
     function postHTML(item) {
-        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'pp-snap-story')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
+        return '<article class="pp-snap-card '+(item.type==='clip'?'pp-snap-clip':'pp-snap-story')+'"><header><strong>'+snapEsc(item.name)+'</strong><small>'+snapKind[item.kind]+(item.type==='story'?' · <span data-snap-expiry="'+item.createdAt+'">'+(snapExpired(item)?'已过期':'24 小时内')+'</span>':'')+'</small></header><div class="pp-snap-media"><span aria-hidden="true">'+(item.kind==='video'?'▷':'▧')+'</span><p class="pp-snap-copy">'+snapEsc(item.text)+'</p></div><div class="pp-snap-actions">'+button('like',item.liked?'♥ 已赞':'♡ 点赞',item.id)+button('comment','评论',item.id)+'</div>'+(item.friendLikes?.length?'<p class="pp-snap-copy">♥ '+snapEsc(item.friendLikes.map(id=>getView().snapchat?.[id]?.name||'好友').join('、'))+' 赞了这条故事</p>':'')+(item.comments||[]).map(c=>'<p class="pp-snap-copy"><b>'+snapEsc(c.name)+'：</b>'+snapEsc(c.text)+'</p>').join('')+(page==='comment:'+item.id?form('comment',textarea('comment','评论内容'),'发送评论'):'')+'</article>';
     }
     function feedsHTML(state) {
-        if(tab==='stories')return form('story',select('storyKind',['image','video'],'image')+textarea('story','故事内容'),'发布故事')+button('refresh','刷新好友故事')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');
+        if(tab==='stories'){const refresh=snapStoryRefreshState(state);return form('story',select('storyKind',['image','video'],'image')+textarea('story','故事内容'),'发布故事')+button('refresh',refresh.refreshed?(refresh.allowed?'查看新故事互动':'本回合已刷新'):'刷新好友故事','',refresh.allowed?'':'disabled')+snapItems(state,'story').slice().reverse().filter(i=>i.author==='user'||!state.snapchat[i.author]?.blocked).map(postHTML).join('');}
         if(tab==='spotlight')return button('refresh','加载短视频')+'<div class="pp-snap-clips">'+snapItems(state,'clip').slice().reverse().map(postHTML).join('')+'</div>'+empty('上下滑动浏览更多视频。');
         const p=profile();const locations=snapItems(state,'location').filter(i=>!state.snapchat[i.author]?.blocked).slice().reverse();
         return button('refresh','刷新共享位置与动态')+'<div class="pp-snap-map"><strong>Snap Map</strong><p>朋友分享的位置 · 世界动态</p><div class="pp-snap-pins">'+(p.sharing&&p.location?'<span>⌖ 你 · '+snapEsc(p.location)+'</span>':'')+locations.slice(0,6).map(i=>'<span>⌖ '+snapEsc(i.name)+' · '+snapEsc(i.place)+'</span>').join('')+'</div></div>'+(!p.sharing?empty('你的位置未共享，可在「我的账号」开启。'):'')+locations.map(i=>'<article class="pp-snap-card"><strong>'+snapEsc(i.name)+' · '+snapEsc(i.place)+'</strong><small>'+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p></article>').join('');

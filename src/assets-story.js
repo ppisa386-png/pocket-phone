@@ -1,9 +1,9 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.16';
-import { storyAnnotations } from './story-phone.js?v=0.24.16';
-import { readStoryClock } from './story-clock.js?v=0.24.16';
-import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.24.16';
-import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=0.24.16';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.16';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.17';
+import { storyAnnotations } from './story-phone.js?v=0.24.17';
+import { readStoryClock } from './story-clock.js?v=0.24.17';
+import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.24.17';
+import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=0.24.17';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.17';
 
 export const ASSETS_KEY = 'durian_phone_finances';
 const safe = x => JSON.stringify(x).replace(/\{\{/g, '\\u007b\\u007b');
