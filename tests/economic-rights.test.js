@@ -97,6 +97,6 @@ test('economic rights: partial license payment preserves holding; explicit entir
  const transfer='Sam将该项目收益权全部转让，收到1000美元，转让后不再享有该权利。';await f.append(transfer+marker({kind:'asset',name:'项目收益权',action:'dispose',holdingId,evidence:transfer})+marker({kind:'income',name:'收益权转让款',amount:1000,evidence:transfer}),'2026-01-20');
  assert.equal(f.state().assets[holdingId].active,false);assert.equal(cashBalance(f.state()),230000);
  await f.append('转让后的月底，无新收入。','2026-02-01');f.reply({...evaluation('2026-02-01'),note:'权利已全部转出，无转让后收益。'});ok(await f.assets.update());assert.equal(cashBalance(f.state()),230000);assert.match(f.prompt(),/部分授权\/转让或一次性收款不等于失去全部权利/);
- assert.match(f.prompt(),/没有专门的部分权益\/既有合同条款修改接口/);assert.match(f.prompt(),/valuations 也只改价值/);
+ assert.match(f.prompt(),/action:amend/);assert.match(f.prompt(),/价值未知时/);
  }finally{f.close();}
 });

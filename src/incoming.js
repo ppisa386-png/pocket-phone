@@ -1,6 +1,6 @@
-import { findProactiveEvidence } from './proactive-evidence.js?v=0.24.18';
-import { narrativeReplyCount } from './contact-policy.js?v=0.24.18';
-import { messageSignatures, isMemoryHidden } from './journal.js?v=0.24.18';
+import { findProactiveEvidence } from './proactive-evidence.js?v=0.24.19';
+import { narrativeReplyCount } from './contact-policy.js?v=0.24.19';
+import { messageSignatures, isMemoryHidden } from './journal.js?v=0.24.19';
 // Only the current single-chat character or the last actual group speaker may call.
 export function incomingParticipant(context) {
     const characters = context.characters ?? [];

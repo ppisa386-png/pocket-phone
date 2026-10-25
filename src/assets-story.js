@@ -1,14 +1,15 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.18';
-import { storyAnnotations } from './story-phone.js?v=0.24.18';
-import { readStoryClock } from './story-clock.js?v=0.24.18';
-import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.24.18';
-import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=0.24.18';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.18';
+import { expiryChanges } from './assets-rights.js?v=0.24.19';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.19';
+import { storyAnnotations } from './story-phone.js?v=0.24.19';
+import { readStoryClock } from './story-clock.js?v=0.24.19';
+import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.24.19';
+import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=0.24.19';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.19';
 
 export const ASSETS_KEY = 'durian_phone_finances';
 export const ASSET_RIGHTS_STORY_RULES = '经济权益不按职业或行业推断；有新作品、项目、合作或授权时，只检查本次已发生的财务变化。参与、署名、创作、制作、发行或成功不等于拥有版权/分成，须依据明确剧情、合同、人设及既有账本确认归属。'
     + '新取得且持续拥有的权利用 kind:asset、category:investment 登记；details 用600字以内保留权利范围、归属比例、合同条件、期限、收益基数、成本扣除和结算周期，未知写未知，不补合同。一次性实际到账用 income，不因收款自动新增持续权益，不把估值当收入。'
-    + '部分授权不等于全部转让；仅当该资产所代表的全部权利已转出/到期/终止时，才用 asset + action:dispose + holdingId 结束该资产，付款另按原规则登记一次。仍持有的部分不能注销；不得用重复 acquire 冒充合同修改。有新事实才写注释，正文不估算收益。';
+    + '部分授权不等于全部转让；仅当该资产所代表的全部权利已转出/到期/终止时，才用 asset + action:dispose + holdingId 结束该资产，付款另按原规则登记一次。仍持有的部分不能注销；修改或部分转让用 kind:asset、action:amend、holdingId、date及修改后的完整details，不用acquire覆盖；只更新条款，不直接收钱，实际付款另记一次。可附rights:{sharePercent:user保留比例,expiresOn:已知到期日YYYY-MM-DD（含当日）}，未知省略；完整终止用dispose。有新事实才写注释，正文不估算收益。';
 
 const safe = x => JSON.stringify(x).replace(/\{\{/g, '\\u007b\\u007b');
 export function importStoryAssets(journal, revisions, chat) {
@@ -44,13 +45,15 @@ export function importStoryAssets(journal, revisions, chat) {
             state = replayJournal(journal); changed = true;
         }
     }
+    const expired=expiryChanges(state,clock.day);
+    if(expired.length){journal=appendChange(journal,revisions,expired);changed=true;}
     return { journal, changed };
 }
 
 export function buildAssetPrompt(state, settings) {
     if (!settings.apps.assets) return '';
     const balance = cashBalance(state), debt = debtEpisode(state);
-    const holdings = assetRows(state, 'holding').filter(h => h.active !== false).map(({ id, name, category, details }) => ({ id, name, category, details: assetText(details, 600) }));
+    const holdings = assetRows(state, 'holding').filter(h => h.active !== false).map(({ id, name, category, details, rights }) => ({ id, name, category, details: assetText(details, 600), rights: rights || {} }));
     const jobs = assetRows(state, 'job').filter(j => j.endDay == null).map(({ id, employer, name, monthlyMinor }) => ({ id, employer, name, monthlySalary: monthlyMinor == null ? null : monthlyMinor / 100 }));
     return settings.prompts.assetStory + '\n' + ASSET_RIGHTS_STORY_RULES + '\n经济资料只供叙事参考，不表示其他人物知道私人余额：' + safe({
         balance: balance === null ? '尚未建账' : dollars(balance), reserved: dollars(reservedCash(state)),

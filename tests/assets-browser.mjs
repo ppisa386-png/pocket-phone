@@ -111,7 +111,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 0.24.18/);
+    assert.match(log,/当前运行版本：榴莲手机 0.24.19/);
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -145,5 +145,15 @@ try {
     assert.match(dateLog,/ASSET_DATE_MISMATCH/);
     assert.match(dateLog,/正文日期：2026-01-17；模型日期：2026-01-16/);
 
+    await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
+    await p.evaluate(()=>{window.financeResponse={initial:{balance:1000,holdings:[{name:'项目持续收益权',category:'investment',value:null,details:'保留10%收益权',rights:{sharePercent:10}}],jobs:[]}};});
+    await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByRole('button',{name:'一键更新',exact:true}).tap();await p.getByText('$1,000.00',{exact:true}).waitFor();
+    await p.locator('[data-asset-tab="investment"]').tap();await p.getByText('待估值',{exact:true}).waitFor();await checkBottom();await p.screenshot({path:resolve(root,'../qa-results/assets-rights-pending-320.png')});
+    await p.evaluate(async()=>{const evidence='Sam将部分权益转让，保留比例变为5%。';await window.advance('日期：2026-01-20\n'+evidence+'<!--durian-money:'+JSON.stringify({kind:'asset',name:'项目持续收益权',action:'amend',holdingId:'initial:holding:0',details:'保留5%收益权',rights:{sharePercent:5},evidence})+'-->');window.financeResponse={date:'2026-02-01',events:[],living:{total:0,bookedIds:[]},business:[{id:'initial:holding:0',netIncome:100,bookedIds:[]}]};await window.advance('日期：2026-02-01\n月末结算。');});
+    await p.getByRole('button',{name:'一键更新',exact:true}).tap();await p.getByText(/收益期间超出有效持有期或跨越权益变更/).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),false);
+    await p.evaluate(()=>{window.financeResponse.business=[{id:'initial:holding:0',from:'2026-01-15',to:'2026-01-20',netIncome:100,bookedIds:[]},{id:'initial:holding:0',from:'2026-01-20',to:'2026-02-01',netIncome:50,bookedIds:[]}];});
+    await p.getByRole('button',{name:'一键更新',exact:true}).tap();await p.locator('[data-asset-tab="cash"]').tap();await p.getByText('$1,150.00',{exact:true}).waitFor();await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByText('$1,150.00',{exact:true}).waitFor();
+    assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);await p.locator('[data-asset-tab="investment"]').tap();await p.getByText('待估值',{exact:true}).waitFor();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    console.log('PASS rights mobile: unknown value saves, partial amendment, invalid period rejected, valid split income, persistence');
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }
