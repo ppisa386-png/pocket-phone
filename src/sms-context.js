@@ -1,5 +1,5 @@
-import { dateDay, exactStoryTime } from './story-clock.js?v=0.24.19';
-import { appendChange, replayJournal } from './journal.js?v=0.24.19';
+import { dateDay, exactStoryTime } from './story-clock.js?v=0.24.20';
+import { appendChange, replayJournal } from './journal.js?v=0.24.20';
 
 export const smsCategory = value => value === 'A' || value === 'B' ? value : null;
 const limits = { A: 24 * 60, B: 72 * 60 };

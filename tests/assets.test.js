@@ -1,9 +1,10 @@
+import { createAssetPanel } from '../src/assets-view.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
-import { createAssets, applyAssessment } from '../src/assets.js';
+import { createAssets, applyAssessment, assessmentReferences } from '../src/assets.js';
 import { createSnapchat } from '../src/snapchat.js';
 import { createAmazon } from '../src/amazon.js';
 import { cashBalance, reservedCash, assetRows, salaryPayments, requireCash, recentCash, debtEpisode } from '../src/assets-core.js';
@@ -450,5 +451,68 @@ test('wrapped asset JSON preserves quoted annotation text and rejects unsafe amo
   f.reply({...evaluation('2026-01-02'),living:{total:'1,000',bookedIds:[]}});
   const result=await f.assets.update();assert.equal(result.ok,false);assert.match(result.error,/living.total/);
   assert.equal(cashBalance(f.state()),100000);assert.equal(f.count(),2);
+ }finally{f.close();}
+});
+
+
+test('month leap resolves four pending short references, deducts living once and persists a transparent settlement', async () => {
+ const f=setup('2026-05-12');try{
+  f.reply({initial:{balance:12000,holdings:[],jobs:[{name:'文学作者',monthlySalary:4500}]}});ok(await f.assets.update());
+  const rows=['餐费','交通费','酒店费','日用品'].map(name=>({kind:'expense',name,evidence:'Sam支付了'+name+'。'}));
+  await f.append(rows.map(r=>r.evidence+marker(r)).join('\n'),'2026-05-20');
+  await f.append('【2026年5月20日 09:30 星期三 至 2026年6月24日 19:40 星期三|旅行结束】');
+  const refs=assessmentReferences(f.state());assert.equal(refs.length,4);
+  const result={...evaluation('2026-06-24'),events:refs.map(r=>({id:r.ref,amount:100})),living:{total:2000,bookedIds:refs.map(r=>r.ref)}};
+  f.reply(result);ok(await f.assets.update());
+  assert.match(f.prompt(),/完整经过 43 天/);assert.match(f.prompt(),/offsetReferences/);
+  const summary=f.state().assets.wallet.settlement;
+  assert.equal(summary.days,43);assert.equal(summary.livingPaidMinor,40000);assert.equal(summary.livingAddedMinor,160000);
+  assert.equal(summary.salaryAddedMinor,495000);assert.equal(summary.incomeAddedMinor,495000);assert.equal(summary.expenseAddedMinor,200000);
+  assert.equal(summary.netChangeMinor,295000);assert.equal(cashBalance(f.state()),1495000);
+  const panel=createAssetPanel({adapter:{},getView:()=>f.state(),redraw(){},notice(){}});
+  assert.match(panel.html(),/上次结算明细/);assert.match(panel.html(),/43 天/);assert.match(panel.html(),/本次补扣生活费/);assert.match(panel.html(),/\$1,600.00/);
+  await f.memory.read();assert.deepEqual(f.state().assets.wallet.settlement,summary);
+  assert.equal((await f.assets.update()).ok,false);assert.equal(cashBalance(f.state()),1495000);
+  f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
+  assert.equal(f.state().assets.wallet.lastDay,day('2026-05-12'));assert.equal(f.state().assets.wallet.settlement,null);assert.equal(cashBalance(f.state()),1200000);
+ }finally{f.close();}
+});
+
+test('event ID, cash ID and short ref for one expense count only once within living total',async()=>{
+ const f=setup();try{ok(await f.assets.update());const e={kind:'expense',name:'午饭',amount:10,evidence:'Sam午饭花了10美元。'};
+ await f.append(e.evidence+marker(e),'2026-01-02');const tx=assetRows(f.state(),'cash_transaction')[0];
+ f.reply({...evaluation('2026-01-02'),living:{total:100,bookedIds:['C1',tx.eventId,tx.id]}});ok(await f.assets.update());
+ assert.equal(cashBalance(f.state()),90000);assert.equal(f.state().assets.wallet.settlement.livingPaidMinor,1000);
+ assert.equal(f.state().assets.wallet.settlement.netChangeMinor,-9000);
+ }finally{f.close();}
+});
+
+test('invalid offset diagnostics distinguish unknown, income, previous settlement and cross-total duplicates atomically',async()=>{
+ const f=setup();try{f.reply({...initial(),initial:{balance:1000,jobs:[],holdings:[{name:'店铺',category:'investment',value:100}]}});ok(await f.assets.update());
+ const rows=[{kind:'expense',name:'开销',amount:10,evidence:'Sam花了10美元。'},{kind:'income',name:'收入',amount:20,evidence:'Sam收到20美元。'}];
+ await f.append(rows.map(r=>r.evidence+marker(r)).join('\n'),'2026-01-02');const before=structuredClone(f.state().assets);
+ for(const [refs,pattern] of [[['missing'],/未找到对应/],[['C2'],/只能抵扣支出/],[['initial:holding:0'],/未找到对应/]]){
+ f.reply({...evaluation('2026-01-02'),living:{total:10,bookedIds:refs}});const r=await f.assets.update();assert.equal(r.ok,false);assert.match(r.error,pattern);assert.deepEqual(f.state().assets,before);}
+ f.reply({...evaluation('2026-01-02'),living:{total:10,bookedIds:['C1']},business:[{id:'initial:holding:0',netIncome:20,bookedIds:['C1']}]});
+ let r=await f.assets.update();assert.equal(r.ok,false);assert.match(r.error,/其他结算项目/);assert.deepEqual(f.state().assets,before);
+ f.reply({...evaluation('2026-01-02'),living:{total:10,bookedIds:['C1']}});ok(await f.assets.update());
+ const old=assetRows(f.state(),'cash_transaction').find(t=>t.deltaMinor<0);await f.append('次日','2026-01-03');
+ assert.equal(assessmentReferences(f.state()).length,0);f.reply({...evaluation('2026-01-03'),living:{total:10,bookedIds:[old.id]}});
+ r=await f.assets.update();assert.equal(r.ok,false);assert.match(r.error,/以前的结算/);
+ }finally{f.close();}
+});
+
+test('elapsed period cannot silently skip missing living estimate, explicit zero still saves',async()=>{
+ const f=setup();try{ok(await f.assets.update());await f.append('费用由他人承担','2026-02-01');
+ const before=structuredClone(f.state().assets);const result=evaluation('2026-02-01');delete result.living;f.reply(result);
+ const r=await f.assets.update();assert.equal(r.ok,false);assert.match(r.error,/缺少本期生活开销/);assert.deepEqual(f.state().assets,before);
+ f.reply(evaluation('2026-02-01'));ok(await f.assets.update());assert.equal(f.state().assets.wallet.settlement.livingTotalMinor,0);
+ }finally{f.close();}
+});
+
+test('short offsets cannot create a payment from an unresolved or noncash event',async()=>{
+ const f=setup();try{ok(await f.assets.update());const row={kind:'asset',name:'获赠权益',category:'investment',evidence:'Sam获赠权益。'};
+ await f.append(row.evidence+marker(row),'2026-01-02');const e=assetRows(f.state(),'story_event')[0],before=structuredClone(f.state().assets);
+ f.reply({...evaluation('2026-01-02'),living:{total:10,bookedIds:[e.id]}});assert.equal((await f.assets.update()).ok,false);assert.deepEqual(f.state().assets,before);
  }finally{f.close();}
 });

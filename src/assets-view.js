@@ -1,5 +1,5 @@
-import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=0.24.19';
-import { dayDate } from './story-clock.js?v=0.24.19';
+import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=0.24.20';
+import { dayDate } from './story-clock.js?v=0.24.20';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
     let tab = 'cash', working = false, status = '', epoch = 0;
@@ -12,6 +12,15 @@ export function createAssetPanel({ adapter, getView, redraw, notice }) {
         if (tab === 'cash') {
             body = '<section class="pp-asset-balance"><small>可支配资金 · USD</small><strong>' + (balance === null ? '—' : assetEscape(dollars(balance))) + '</strong>' +
                 (hold ? '<small>转账待收款占用 ' + dollars(hold) + ' · 可用 ' + dollars(balance === null ? 0 : balance - hold) + '</small>' : '') + '</section>';
+            const summary = wallet?.settlement;
+            if (summary) {
+                const line = (label, amount) => '<article class="pp-asset-row"><span>' + label + '</span><b>' + dollars(amount) + '</b></article>';
+                body += '<details class="pp-asset-ledger" open><summary>上次结算明细</summary><p class="pp-asset-note">' + dayDate(summary.fromDay) + ' 至 ' + dayDate(summary.toDay) + ' · ' + summary.days + ' 天</p>' +
+                    line('期间生活费估算', summary.livingTotalMinor) + line('其中已逐笔扣除', summary.livingPaidMinor) + line('本次补扣生活费', summary.livingAddedMinor) +
+                    line('本次补发工资', summary.salaryAddedMinor) + line('本次新增收入合计', summary.incomeAddedMinor) + line('本次新增支出合计', summary.expenseAddedMinor) +
+                    '<article class="pp-asset-row"><span>本次余额变化</span><b>' + (summary.netChangeMinor < 0 ? '−' : '+') + dollars(Math.abs(summary.netChangeMinor)) + '</b></article>' +
+                    '<p class="pp-asset-note">更新前 ' + dollars(summary.balanceBeforeMinor) + ' → 更新后 ' + dollars(summary.balanceAfterMinor) + '。已逐笔扣除的费用不重复扣款；工资已包含在新增收入合计中。</p></details>';
+            } else if (wallet) body += '<p class="pp-asset-note">暂无期间结算明细；首次建账只记录当时余额。旧版结算未保存此明细。</p>';
             const jobs = assetRows(state, 'job').filter(j => j.endDay == null);
             body += '<h3>工作与收入</h3>' + (jobs.map(j => '<article class="pp-asset-row"><span>' + assetEscape(j.name) + '</span><b>' + (j.monthlyMinor == null ? '待评估' : dollars(j.monthlyMinor) + '/月') + '</b></article>').join('') || '<p class="pp-snap-empty">暂无工作记录</p>');
             if (jobs.length) body += '<p class="pp-asset-note">每月 15 日发薪</p>';

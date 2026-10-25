@@ -24,3 +24,16 @@ test('new communication records store story anchors and updates preserve them; d
   c.chat.pop();state=(await m.read()).state;assert.equal(state.calls.call,undefined);assert.equal(state.messages.one.storyTime.time,'08:10');
  }finally{m.destroy();}
 });
+
+
+test('bracketed scene date ranges use the final date and time, not arbitrary mentioned dates',()=>{
+ const seed={mes:'日期：2026-05-12 10:00'};
+ const range={mes:'【2026年5月20日 09:30 星期三 至 2026年6月24日 19:40 星期三|旅行结束】'};
+ assert.deepEqual(readStoryClock([seed,range]),{day:dateDay('2026-06-24'),hour:19+40/60});
+ assert.deepEqual(readStoryClock([range],null,{exact:true}),{day:dateDay('2026-06-24'),hour:19+40/60});
+ assert.equal(storyTime([{mes:'[2026-05-20 09:30 to 2026-06-24 19:40]'}]).date,'2026-06-24');
+ assert.equal(storyTime([{mes:'【2026年6月24日 19:40】'}]).time,'19:40');
+ for(const text of ['她说旅行从2026年5月20日至2026年6月24日。','<think>'+range.mes+'</think>','<!--'+range.mes+'-->']) assert.equal(storyTime([seed,{mes:text}]).date,'2026-05-12');
+ assert.equal(storyTime([{mes:'2026-05-20 09:30 约好2026-06-24见面。'}]).date,'2026-05-20');
+ assert.equal(storyTime([{mes:'2026-05-20 至 2026-02-30'}]).date,'2026-05-20');
+});

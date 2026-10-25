@@ -111,7 +111,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 0.24.19/);
+    assert.match(log,/当前运行版本：榴莲手机 0.24.20/);
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -155,5 +155,25 @@ try {
     await p.getByRole('button',{name:'一键更新',exact:true}).tap();await p.locator('[data-asset-tab="cash"]').tap();await p.getByText('$1,150.00',{exact:true}).waitFor();await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByText('$1,150.00',{exact:true}).waitFor();
     assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);await p.locator('[data-asset-tab="investment"]').tap();await p.getByText('待估值',{exact:true}).waitFor();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
     console.log('PASS rights mobile: unknown value saves, partial amendment, invalid period rejected, valid split income, persistence');
+
+    await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
+    await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.chat=[{mes:'日期：2026-05-12\nSam工作中。',is_user:false}];window.financeResponse={initial:{balance:12000,holdings:[],jobs:[{name:'文学作者',monthlySalary:4500}]}};});
+    await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-action="update"]').tap();await p.getByText('$12,000.00',{exact:true}).waitFor();
+    await p.evaluate(async()=>{
+        const rows=['餐费','交通费','酒店费','日用品'].map(name=>({kind:'expense',name,evidence:'Sam支付了'+name+'。'}));
+        await window.advance('日期：2026-05-20\n'+rows.map(r=>r.evidence+'<!--durian-money:'+JSON.stringify(r)+'-->').join('\n'));
+        await window.advance('【2026年5月20日 09:30 星期三 至 2026年6月24日 19:40 星期三|旅行结束】');
+        window.financeResponse={date:'2026-06-24',events:[1,2,3,4].map(n=>({id:'P'+n,amount:100})),living:{total:2000,bookedIds:['bad']},business:[]};
+    });
+    await p.locator('[data-asset-action="update"]').tap();await p.getByText(/费用抵扣失败.*未找到对应/).waitFor();
+    assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),false);await p.getByText('$12,000.00',{exact:true}).waitFor();
+    await p.evaluate(()=>window.financeResponse.living.bookedIds=['P1','P2','P3','P4']);
+    await p.locator('[data-asset-action="update"]').tap();await p.getByText('$14,950.00',{exact:true}).waitFor();
+    await p.getByText('上次结算明细',{exact:true}).waitFor();await p.getByText(/2026-05-12 至 2026-06-24 · 43 天/).waitFor();
+    await p.getByText('$1,600.00',{exact:true}).waitFor();await checkBottom();
+    await p.screenshot({path:resolve(root,'../qa-results/assets-settlement-320.png')});
+    await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();
+    await p.getByText(/43 天/).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
+    console.log('PASS settlement mobile: failed offsets preserve balance, four pending aliases settle 43 days, expense offsets and salary visible, reload preserved');
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

@@ -16,8 +16,22 @@ export function readStoryClock(chat, seed=null, { exact = false } = {}) {
                 return date?'\n'+date+(time?' '+time:'')+'\n':'';
             }).replace(/<!--[\s\S]*?-->/g,'').replace(/<[^>]*>/g,'\n');
         const lines=text.split('\n').map(s=>s.replace(/^[\s*#|]+|[\s*|]+$/g,'')).filter(Boolean);
-        for(const line of lines){
-            const t=line.match(/^(?:(?:当前|剧情|故事)?(?:日期|时间)|Date|Time|Scene time)?\s*[:：]?\s*(\d{4})[-年/.](\d{1,2})[-月/.](\d{1,2})日?(?:\s|$|[T,，|])/i);
+        for(const rawLine of lines){
+            let line=rawLine.replace(/^[【\[]\s*/, '').replace(/\s*[】\]]$/, '');
+            let t=line.match(/^(?:(?:当前|剧情|故事)?(?:日期|时间)|Date|Time|Scene time)?\s*[:：]?\s*(\d{4})[-年/.](\d{1,2})[-月/.](\d{1,2})日?(?:\s|$|[T,，|])/i);
+            // A scene status can summarize a time jump. Only accept an explicit
+            // opening date range, never arbitrary later dates in narrative prose.
+            if(t){
+                const end=line.slice(t[0].length).match(/^(?:\d{1,2}[:：]\d{2}\s*(?:AM|PM)?\s*)?(?:(?:星期|周)[一二三四五六日天]\s*)?(?:至|到|→|～|~|—|to\b)\s*(\d{4})[-年/.](\d{1,2})[-月/.](\d{1,2})日?(?=\s|$|[T,，|])/i);
+                if(end){
+                    const startDay=dateDay(`${t[1]}-${t[2].padStart(2,'0')}-${t[3].padStart(2,'0')}`);
+                    const endDay=dateDay(`${end[1]}-${end[2].padStart(2,'0')}-${end[3].padStart(2,'0')}`);
+                    if(startDay!==null&&endDay!==null&&endDay>=startDay){
+                        line=`${end[1]}-${end[2].padStart(2,'0')}-${end[3].padStart(2,'0')} `+line.slice(t[0].length+end[0].length);
+                        t=line.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    }
+                }
+            }
             const md=!t&&day!==null?line.match(/^(?:(?:当前|剧情)?(?:日期|时间)|Date|Time)\s*[:：]\s*(\d{1,2})[-月/.](\d{1,2})日?/i):null;
             let next=null;
             if(t)next=dateDay(`${t[1]}-${t[2].padStart(2,'0')}-${t[3].padStart(2,'0')}`);

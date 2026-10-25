@@ -1,6 +1,6 @@
-import { readStoryClock, dayDate } from './story-clock.js?v=0.24.19';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.19';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.19';
+import { readStoryClock, dayDate } from './story-clock.js?v=0.24.20';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.20';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.20';
 export const DELIVERY_KEY='durian_phone_delivery';
 const deliverySafe=value=>JSON.stringify(value).replace(/\{\{/g,'\\u007b\\u007b');
 export function orderClock(order,chat){return readStoryClock((chat||[]).slice(order.sourceIndex+1),{day:order.createdDay,hour:order.createdHour});}
