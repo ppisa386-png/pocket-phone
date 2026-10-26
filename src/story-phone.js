@@ -1,11 +1,12 @@
-import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=0.24.20';
-import { smsReplyClassification } from './sms-context.js?v=0.24.20';
-import { storyTime } from './story-clock.js?v=0.24.20';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.20';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.20';
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.20';
-import { narrativeReplyCount } from './contact-policy.js?v=0.24.20';
-import { isBlocked } from './contact-events.js?v=0.24.20';
+import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=0.24.21';
+import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=0.24.21';
+import { smsReplyClassification } from './sms-context.js?v=0.24.21';
+import { storyTime } from './story-clock.js?v=0.24.21';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.21';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.21';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.21';
+import { narrativeReplyCount } from './contact-policy.js?v=0.24.21';
+import { isBlocked } from './contact-events.js?v=0.24.21';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});
@@ -97,7 +98,8 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const actors=(context.characters||[]).filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
     const calls=Object.values(state.calls).filter(c=>['ringing','connected'].includes(c.status)).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
     return CHINESE_NAME_RULE+settings.prompts.storyContact+'\n来电偏好：'+(channels.phone?settings.prompts.incoming:'关闭')+'\n短信偏好：'+(channels.messages?settings.prompts.incomingMessages:'关闭')+'\n这是正文生成中的手机衔接，不是独立手机 API 任务。先按酒馆预设写正文，不要输出整篇 JSON。'+
-        '\n主动联系开关：'+settings.proactiveEnabled+'；可用渠道：'+safe(channels)+'。'+(settings.proactiveEnabled?(due?'本次到达每三条角色正文一次的考虑时机，请结合人物动机判断是否安排合理的来电/短信；可以没有，不是必须发生。':'本次不额外催生主动联系；若剧情本来自然发生通信或延续既有通话，正常描写并记录。'):'主动联系已关闭，不额外安排主动来电或短信。')+
+        '\n主动联系开关：'+settings.proactiveEnabled+'；可用渠道：'+safe(channels)+'。'+(settings.proactiveEnabled?(due?'本次是可选的联系考虑时机；没有独立且适合此刻的理由就不安排任何新联系，不需要凑一条通知。':'本次不额外催生主动联系；若剧情本来自然发生通信或延续既有通话，正常描写并记录。'):'主动联系已关闭，不额外安排主动来电或短信。')+
+        '\n'+PROACTIVE_PACING_RULE+'\n近期联络节奏（仅元数据，空列表不表示必须联系）：'+safe(recentContactActivity(state,chat))+
         '\n来电/短信的动机和取得 user 号码的途径由正文 AI 结合完整人设、关系、记忆及场景判断。不限情侣、异地、亲友；追求、听闻消息想打听、事务或普通分享也可以。已有正常联系或剧情中合理可获得号码即可，不强制逐字写过交换号码或预先成为手机联系人；也不能让完全没有途径的人凭空知道号码。不要求危机，不用恋人标签强制联系；同场、忙碌、失联等由剧情判断。来电接听、拒接、未接或继续通话由正文依当前扮演规则推进，手机只记已经写出的事实。'+
         '\n这是 user 个人的手机。只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。收到的短信可只在 text 放全文，但正文必须有确实到达 user 手机的事实；user 发出的短信必须在正文已经逐字写出并实际发送，不能借记录补写 user 发言。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,calls})+

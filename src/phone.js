@@ -1,17 +1,18 @@
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=0.24.20';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=0.24.20';
-import { exactStoryTime } from './story-clock.js?v=0.24.20';
-import { isMemoryHidden } from './journal.js?v=0.24.20';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.20';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.20';
-import { phoneQuietOptions } from './api-context.js?v=0.24.20';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.20';
-export { validateContacts } from './contacts.js?v=0.24.20';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.20';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.20';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.20';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.20';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.20';
+import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=0.24.21';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=0.24.21';
+import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=0.24.21';
+import { exactStoryTime } from './story-clock.js?v=0.24.21';
+import { isMemoryHidden } from './journal.js?v=0.24.21';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.21';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.21';
+import { phoneQuietOptions } from './api-context.js?v=0.24.21';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.21';
+export { validateContacts } from './contacts.js?v=0.24.21';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.21';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.21';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.21';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.21';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.21';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -315,7 +316,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (!last || (!options.stepKey && (last.is_user || last.is_system && !isMemoryHidden(last)))) return;
                 const ticket = await memory.begin();
                 const sources=proactiveSources(context,settings,participant,view.state);
-                const prompt = settings.prompts.general + '\n电话规则：' + (enabled.phone ? settings.prompts.incoming : '电话已关闭，不得来电。') +
+                const prompt = settings.prompts.general + '\n' + PROACTIVE_PACING_RULE + '\n此人的近期联络节奏：' + JSON.stringify(recentContactActivity(view.state, chat, participant.id)) + '\n电话规则：' + (enabled.phone ? settings.prompts.incoming : '电话已关闭，不得来电。') +
                     '\n日常短信规则（同一事件内以后续反应规则为准）：' + (enabled.messages ? settings.prompts.incomingMessages + '\n' + settings.prompts.messages : '短信已关闭，不得发短信。') +
                     '\n当前任务：主动联系判断。仅判断此人：' + JSON.stringify(participant.name) + '；user：' + JSON.stringify(context.name1) +
                     '\n依据角色设定、双方关系、当前剧情与已有通信，自行决定是否主动联系、渠道与时机；可以联系，也可以等待或不联系。不规定联系间隔，不强制沉默后停止。选择电话时应确实希望即时双向交流。异地伴侣、亲友可以因想念、关心、分享生活或约定联络而主动问候，不需要先出现危机、任务或新事件；根据性格、关系状态、剧情时间及已有联系判断，此前几十楼都未联系是可参考的背景，但楼数不等于天数。不要仅因没有紧急事件就一律不联系，也不能因恋人标签就强制联系。不打断正在面对面或电话中的交谈，不重复正文已经发生的联系，不替 user 决定。' +

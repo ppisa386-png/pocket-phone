@@ -1,3 +1,4 @@
+import { recentContactActivity } from '../src/proactive-pacing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -176,4 +177,41 @@ test('automatic read acknowledgement still reports genuine save failures',async(
  f.context.chat.push(annotation({recipient:'user',name:'Alex',kind:'call',status:'missed'},'Sam missed a call from Alex.'));await f.memory.read();
  f.context.saveMetadata=async()=>{throw Error('disk failure');};await assert.rejects(f.phone.markCallsRead(),/保存失败/);assert.equal(Object.values(f.phone.snapshot().calls)[0].read,false);
  }finally{f.close();}
+});
+
+
+test('quiet contact opportunities do not manufacture messages, calls, requests or later catch-up quotas',async()=>{
+ const f=setup();try{
+ for(let n=0;n<9;n++){
+  f.context.chat.push({mes:'日期：2026-10-26 10:00\n继续当前场景，没有发生通信。',is_user:false});
+  await f.memory.read();await f.bridge.prepare();const prompt=f.prompts[STORY_PHONE_KEY].value;
+  assert.match(prompt,/连续多个考虑时机都无人联系也正常/);assert.match(prompt,/联系人多少不决定消息数量/);
+  assert.match(prompt,/正常对话/);assert.match(prompt,/不要为绕过少打扰原则临时制造危机/);
+ }
+ assert.equal(Object.keys(f.phone.snapshot().messages).length,0);assert.equal(Object.keys(f.phone.snapshot().calls).length,0);assert.equal(f.requests(),0);
+ }finally{f.close();}
+});
+
+test('narrative pacing sees actual communication metadata and loses it after source rollback',async()=>{
+ const f=setup();try{
+ f.context.chat.push(annotation({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:'PRIVATE CONTENT'},'日期：2026-10-26 10:00\nAlex sent Sam a text.'));
+ await f.memory.read();await f.bridge.prepare();let prompt=f.prompts[STORY_PHONE_KEY].value;
+ assert.match(prompt,/"medium":"sms","direction":"incoming"/);assert.match(prompt,/"date":"2026-10-26","time":"10:00"/);
+ assert.ok(!prompt.includes('PRIVATE CONTENT'));
+ f.context.chat.pop();await f.memory.read();await f.bridge.prepare();prompt=f.prompts[STORY_PHONE_KEY].value;assert.match(prompt,/"recent":\[\]/);assert.equal(f.requests(),0);
+ }finally{f.close();}
+});
+
+test('pacing metadata is bounded, contact-specific, and excludes expired text and unsent drafts',()=>{
+ const now=[{mes:'日期：2026-10-26 12:00'}];
+ const state={messages:{},calls:{},smsContext:{}};
+ for(let n=0;n<12;n++)state.messages['m'+n]={id:'m'+n,contactId:'a',name:'A',role:n%2?'user':'assistant',text:'PRIVATE '+n,createdAt:n,storyTime:{date:'2026-10-26',time:'11:00'}};
+ state.messages.other={id:'other',contactId:'b',name:'B',role:'assistant',text:'B SECRET',createdAt:30};
+ state.messages.queued={id:'queued',contactId:'a',role:'user',replyStatus:'queued',createdAt:40};
+ state.messages.failed={id:'failed',contactId:'a',role:'user',replyStatus:'failed',createdAt:50};
+ state.messages.old={id:'old',contactId:'a',role:'assistant',text:'EXPIRED SECRET',createdAt:60};state.smsContext.old={category:'A',anchor:{date:'2026-10-20',time:'10:00'}};
+ state.calls.call={id:'call',contactId:'b',name:'B',turns:[{text:'CALL SECRET'}],direction:'incoming',status:'missed',createdAt:70};
+ const result=recentContactActivity(state,now,'a');assert.equal(result.recent.length,8);assert.ok(result.recent.every(m=>m.contactId==='a'));
+ const text=JSON.stringify(result);assert.ok(!/PRIVATE|SECRET|createdAt|order|queued|failed/.test(text));
+ assert.equal(recentContactActivity(state,now).recent.at(-1).medium,'call');
 });

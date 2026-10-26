@@ -1,7 +1,7 @@
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=0.24.20';
-import { localizedPerson, sameNamedPerson } from './names.js?v=0.24.20';
-import { parseModelObject } from './model-json.js?v=0.24.20';
-import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=0.24.20';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=0.24.21';
+import { localizedPerson, sameNamedPerson } from './names.js?v=0.24.21';
+import { parseModelObject } from './model-json.js?v=0.24.21';
+import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=0.24.21';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
