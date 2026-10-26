@@ -1,18 +1,19 @@
-import { createDailyPanel } from './daily-view.js?v=0.24.21';
-import { storyTime } from './story-clock.js?v=0.24.21';
-import { createAssetPanel } from './assets-view.js?v=0.24.21';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.21';
-import { bindComposerKeys } from './composer.js?v=0.24.21';
-import { createXPanel } from './x-view.js?v=0.24.21';
-import { xUnread } from './x.js?v=0.24.21';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.21';
-import { snapUnread } from './snapchat.js?v=0.24.21';
-import { createApiPanel } from './api-view.js?v=0.24.21';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.21';
-import { icon } from './icons.js?v=0.24.21';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.21';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.21';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.21';
+import { bindInputViewport } from './input-viewport.js?v=0.24.22';
+import { createDailyPanel } from './daily-view.js?v=0.24.22';
+import { storyTime } from './story-clock.js?v=0.24.22';
+import { createAssetPanel } from './assets-view.js?v=0.24.22';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.22';
+import { bindComposerKeys } from './composer.js?v=0.24.22';
+import { createXPanel } from './x-view.js?v=0.24.22';
+import { xUnread } from './x.js?v=0.24.22';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.22';
+import { snapUnread } from './snapchat.js?v=0.24.22';
+import { createApiPanel } from './api-view.js?v=0.24.22';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.22';
+import { icon } from './icons.js?v=0.24.22';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.22';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.22';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.22';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -79,6 +80,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const launcher = shadow.querySelector('.pp-launcher');
     const phone = shadow.querySelector('.pp-phone');
     const content = shadow.querySelector('.pp-content');
+    const inputViewport = bindInputViewport({ shadow, phone, content, signal: lifetime.signal });
     const title = shadow.querySelector('.pp-title');
     const noticeElement = shadow.querySelector('.pp-toast');
     const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
@@ -229,7 +231,14 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
     }
 
-    function renderAPI() { content.innerHTML = apiPanel.html(); }
+    function renderAPI() {
+        const active = shadow.activeElement, field = active?.dataset.apiField, scroll = content.scrollTop;
+        const selection = field && ['text','password','url','search','tel'].includes(active.type) ? [active.selectionStart, active.selectionEnd] : null;
+        content.innerHTML = apiPanel.html();
+        const next = field ? Array.from(content.querySelectorAll('[data-api-field]')).find(el => el.dataset.apiField === field) : null;
+        if (next) { content.scrollTop = scroll; next.focus({preventScroll:true}); if (selection) next.setSelectionRange(...selection); }
+        inputViewport.update();
+    }
 
     function renderApps() {
         content.innerHTML = '<div class="pp-page"><div class="pp-card">' + APPS.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p></div>';
@@ -599,7 +608,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const rect = phone.getBoundingClientRect();
         const point = {x:Math.max(4,Math.min(x,Math.max(4,window.innerWidth-rect.width-4))),
             y:Math.max(4,Math.min(y,Math.max(4,window.innerHeight-rect.height-4)))};
-        phone.style.height = rect.height + 'px';
+        // Keep dragged windows responsive when a keyboard opens and closes.
+        phone.style.height = window.innerWidth <= 480 ? 'calc(100dvh - 20px)' : 'min(740px, calc(100dvh - 24px))';
         phone.style.bottom = 'auto'; phone.style.right = 'auto';
         phone.style.left = point.x + 'px'; phone.style.top = point.y + 'px';
         windowPosition = point;

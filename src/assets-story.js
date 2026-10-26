@@ -1,10 +1,10 @@
-import { expiryChanges } from './assets-rights.js?v=0.24.21';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.21';
-import { storyAnnotations } from './story-phone.js?v=0.24.21';
-import { readStoryClock } from './story-clock.js?v=0.24.21';
-import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.24.21';
-import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=0.24.21';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.21';
+import { expiryChanges } from './assets-rights.js?v=0.24.22';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.22';
+import { storyAnnotations } from './story-phone.js?v=0.24.22';
+import { readStoryClock } from './story-clock.js?v=0.24.22';
+import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, dollars } from './assets-core.js?v=0.24.22';
+import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=0.24.22';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.22';
 
 export const ASSETS_KEY = 'durian_phone_finances';
 export const ASSET_RIGHTS_STORY_RULES = '经济权益不按职业或行业推断；有新作品、项目、合作或授权时，只检查本次已发生的财务变化。参与、署名、创作、制作、发行或成功不等于拥有版权/分成，须依据明确剧情、合同、人设及既有账本确认归属。'

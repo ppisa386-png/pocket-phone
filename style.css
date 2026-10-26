@@ -583,3 +583,15 @@ h2, p { margin: 0; }
 .pp-shop-tab-icon{position:relative;display:block;height:24px}
 .pp-shop-tab-icon>svg{width:24px;height:24px}
 .pp-shop-tab-icon>b{position:absolute;top:-6px;left:17px;min-width:16px;padding:1px 4px;border-radius:9px;background:#ff9900;color:#232f3e;font-size:10px;line-height:14px}
+
+/* A keyboard leaves a smaller visual viewport than the CSS layout viewport. */
+.pp-phone[data-keyboard="true"] { top:calc(var(--pp-visible-top, 0px) + 8px) !important; bottom:auto !important; height:calc(var(--pp-visible-height, 100dvh) - 16px) !important; max-height:calc(var(--pp-visible-height, 100dvh) - 16px); }
+.pp-phone[data-keyboard="true"] .pp-topline { display:none; }
+.pp-phone[data-keyboard="true"] .pp-header { flex-basis:40px; }
+.pp-phone[data-keyboard="true"] .pp-footer { height:14px; flex-basis:14px; }
+.pp-phone[data-keyboard="true"] .pp-footer button { height:14px; }
+.pp-phone[data-editing="true"] .pp-api-savebar { position:static; }
+.pp-content input, .pp-content textarea { scroll-margin-block:12px; }
+
+.pp-field input[data-api-field] { min-width:0; width:100%; min-height:42px; border-radius:9px; padding:8px 12px; background:var(--pp-input); color:var(--pp-text); caret-color:var(--pp-text); border:1px solid var(--pp-line); color-scheme:dark; font-size:max(16px, 1em); }
+.pp-layer[data-theme="light"] .pp-field input[data-api-field] { color-scheme:light; }

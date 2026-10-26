@@ -1,18 +1,18 @@
-import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=0.24.21';
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=0.24.21';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=0.24.21';
-import { exactStoryTime } from './story-clock.js?v=0.24.21';
-import { isMemoryHidden } from './journal.js?v=0.24.21';
-import { CHINESE_NAME_RULE } from './names.js?v=0.24.21';
-import { proactiveSources } from './proactive-evidence.js?v=0.24.21';
-import { phoneQuietOptions } from './api-context.js?v=0.24.21';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.21';
-export { validateContacts } from './contacts.js?v=0.24.21';
-import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.21';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.21';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.21';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.21';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.21';
+import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=0.24.22';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=0.24.22';
+import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=0.24.22';
+import { exactStoryTime } from './story-clock.js?v=0.24.22';
+import { isMemoryHidden } from './journal.js?v=0.24.22';
+import { CHINESE_NAME_RULE } from './names.js?v=0.24.22';
+import { proactiveSources } from './proactive-evidence.js?v=0.24.22';
+import { phoneQuietOptions } from './api-context.js?v=0.24.22';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=0.24.22';
+export { validateContacts } from './contacts.js?v=0.24.22';
+import { readPreparedMemory, preparedMemoryPrompt } from './external-memory.js?v=0.24.22';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=0.24.22';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=0.24.22';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=0.24.22';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=0.24.22';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
