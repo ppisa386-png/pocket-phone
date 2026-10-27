@@ -1,9 +1,9 @@
-import { syncSMSContext } from './sms-context.js?v=0.24.22';
-import { storyTime } from './story-clock.js?v=0.24.22';
-import { importStoryAssets } from './assets-story.js?v=0.24.22';
-import { importStorySquare } from './x-opinion.js?v=0.24.22';
-import { importStoryPhone } from './story-phone.js?v=0.24.22';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.22';
+import { syncSMSContext } from './sms-context.js?v=0.24.23';
+import { storyTime } from './story-clock.js?v=0.24.23';
+import { importStoryAssets } from './assets-story.js?v=0.24.23';
+import { importStorySquare } from './x-opinion.js?v=0.24.23';
+import { importStoryPhone } from './story-phone.js?v=0.24.23';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.23';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -142,7 +142,10 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     for (const name of EVENTS) listen(name, () => {
         // Invalidate in-flight model results even if the user later restores the
         // same text/swipe, or switches away and back before the request finishes.
-        if (name !== 'GENERATION_ENDED' || generating) generation++;
+        // Quiet prompt preparation may finish through STOPPED as well as ENDED.
+        // Neither is a new narrative revision on its own. A real narrative
+        // STARTED already invalidates tasks; edits/switches still do so below.
+        if (!['GENERATION_ENDED', 'GENERATION_STOPPED'].includes(name) || generating) generation++;
         if (name === 'GENERATION_ENDED' || name === 'GENERATION_STOPPED' || name === 'CHAT_CHANGED') {
             generating = false;
             settledProcessor = getContext().streamingProcessor ?? null;
