@@ -1,5 +1,5 @@
-import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=0.24.23';
-import { dayDate } from './story-clock.js?v=0.24.23';
+import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=0.24.24';
+import { dayDate } from './story-clock.js?v=0.24.24';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
     let tab = 'cash', working = false, status = '', epoch = 0;
@@ -26,7 +26,7 @@ export function createAssetPanel({ adapter, getView, redraw, notice }) {
             if (jobs.length) body += '<p class="pp-asset-note">每月 15 日发薪</p>';
             body += '<details class="pp-asset-ledger"><summary>最近收支</summary>' + (recentCash(state).map(t => '<article class="pp-asset-row"><span>' + assetEscape(t.memo || (t.source === 'snapcash' ? 'Snapchat 转账' : '收支')) + '</span><b class="' + (t.deltaMinor > 0 ? 'pp-asset-income' : '') + '">' + (t.deltaMinor > 0 ? '+' : '−') + dollars(Math.abs(t.deltaMinor)) + '</b></article>').join('') || '<p class="pp-snap-empty">暂无收支</p>') + '</details>';
         } else {
-            body = assetRows(state, 'holding').filter(h => h.category === tab && h.active !== false).map(h => '<article class="pp-asset-row"><span>' + assetEscape(h.name) + '</span><b>' + (h.valueMinor == null ? '待估值' : dollars(h.valueMinor)) + '</b></article>').join('') || '<p class="pp-snap-empty">暂无' + labels[tab] + '</p>';
+            body = assetRows(state, 'holding').filter(h => h.category === tab && h.active !== false && !h.excludedFromAssets).map(h => '<article class="pp-asset-row"><span>' + assetEscape(h.name) + '</span><b>' + (h.valueMinor == null ? '待估值' : dollars(h.valueMinor)) + '</b></article>').join('') || '<p class="pp-snap-empty">暂无' + labels[tab] + '</p>';
         }
         return '<div class="pp-snap pp-assets"><div class="pp-asset-body" data-asset-page="' + tab + '"><header class="pp-snap-top"><b>小榴莲</b><button type="button" class="pp-snap-primary" data-asset-action="update"' + (working || state.busy || locked ? ' disabled' : '') + '>一键更新</button></header>' +
             '<p class="pp-asset-note">' + (wallet ? '已结算至 ' + dayDate(wallet.lastDay) : '点击一键更新，建立你的账本') + (pending ? ' · ' + pending + ' 笔待结算' : '') + '</p>' +

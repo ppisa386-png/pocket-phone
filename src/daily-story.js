@@ -1,6 +1,6 @@
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.23';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.23';
-import { buildDailyPrompt } from './daily-core.js?v=0.24.23';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=0.24.24';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.24';
+import { buildDailyPrompt } from './daily-core.js?v=0.24.24';
 export const DAILY_KEY='durian_phone_daily';
 export function createDailyBridge({getContext,getSettings,onError=()=>{}}){
     const c=getContext(),bus=c?.eventSource,types=c?.event_types??c?.eventTypes??{},hooks=[];let token=0,disposed=false;

@@ -1,5 +1,5 @@
-import { exactStoryTime } from './story-clock.js?v=0.24.23';
-import { smsForAI } from './sms-context.js?v=0.24.23';
+import { exactStoryTime } from './story-clock.js?v=0.24.24';
+import { smsForAI } from './sms-context.js?v=0.24.24';
 
 export const PROACTIVE_PACING_RULE = '主动联系节奏：手机安静是正常结果，无消息不需要补偿。每三条角色正文一次只是可选考虑时机，不是发送周期或欠下的通知；连续多个考虑时机都无人联系也正常。'
     + '先看剧情实际经过多久、刚刚是否交流过、这次是否有不同于上次的具体动机。刚联系过、话题已结束、没有新进展时优先留白；不要把关心、想念、性格热情或人设中是朋友反复当作新理由。'

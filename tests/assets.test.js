@@ -516,3 +516,40 @@ test('short offsets cannot create a payment from an unresolved or noncash event'
  f.reply({...evaluation('2026-01-02'),living:{total:10,bookedIds:[e.id]}});assert.equal((await f.assets.update()).ok,false);assert.deepEqual(f.state().assets,before);
  }finally{f.close();}
 });
+
+test('luxury gifts with excerpt evidence import before assessment, keep unknown value and rollback',async()=>{
+ const f=setup();try{
+  ok(await f.assets.update());
+  const first='她选好了红宝石色高定礼服和金色手包';
+  const last='他刷卡付账说：“这枚卡地亚钻戒送给你，现在就戴上。”';
+  const text=first+'。随后他们又看了首饰柜台。'+last;
+  await f.append(text+marker({kind:'asset',name:'红宝石色高定礼服、鞋包与卡地亚钻戒',category:'luxury',amount:null,date:'2026-01-02',evidence:first+'……'+last,details:'由朋友买单赠送给user'}),'2026-01-02');
+  const holdings=assetRows(f.state(),'holding');assert.equal(holdings.length,1);assert.equal(holdings[0].category,'luxury');assert.equal(holdings[0].valueMinor,null);assert.equal(cashBalance(f.state()),100000);
+  const panel=createAssetPanel({adapter:{},getView:f.state,redraw(){},notice(){}});await panel.action('tab','luxury');assert.match(panel.html(),/卡地亚钻戒/);assert.match(panel.html(),/待估值/);
+  await f.memory.read();assert.equal(assetRows(f.state(),'holding').length,1);assert.equal(f.count(),1,'import has no model call');
+  f.reply(evaluation('2026-01-02'));ok(await f.assets.update());assert.equal(assetRows(f.state(),'holding').length,1);assert.equal(cashBalance(f.state()),100000);
+  f.c.chat.pop();await f.memory.read();assert.equal(assetRows(f.state(),'holding').length,0);assert.equal(cashBalance(f.state()),100000);
+ }finally{f.close();}
+});
+
+test('classification repair excludes tools without deleting cash, values or ownership and rolls back',async()=>{
+ const f=setup();try{
+  const first=initial();first.initial.holdings=[{name:'常备撬棍及日常工具',category:'fixed',value:85},{name:'卡地亚钻戒',category:'fixed',value:4200}];f.reply(first);ok(await f.assets.update());
+  await f.append('买咖啡花了5美元。'+marker({kind:'expense',name:'咖啡',amount:5,evidence:'买咖啡花了5美元。'}),'2026-01-02');
+  const before=structuredClone(f.state()), hs=assetRows(before,'holding');
+  f.reply({...evaluation('2026-01-02'),classifications:[{id:hs[0].id,category:'exclude',reason:'普通日常工具不是大件资产'},{id:hs[1].id,category:'luxury',reason:'名牌钻戒属于奢侈品'}]});ok(await f.assets.update());
+  const after=f.state();assert.equal(cashBalance(after),cashBalance(before));assert.deepEqual(assetRows(after,'cash_transaction'),assetRows(before,'cash_transaction'));
+  assert.equal(after.assets[hs[0].id].active,true);assert.equal(after.assets[hs[0].id].valueMinor,8500);assert.equal(after.assets[hs[0].id].excludedFromAssets,true);
+  assert.equal(after.assets[hs[1].id].category,'luxury');assert.equal(after.assets[hs[1].id].valueMinor,420000);
+  const panel=createAssetPanel({adapter:{},getView:f.state,redraw(){},notice(){}});await panel.action('tab','fixed');assert.doesNotMatch(panel.html(),/撬棍|卡地亚/);await panel.action('tab','luxury');assert.match(panel.html(),/卡地亚/);
+  f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets[hs[0].id].excludedFromAssets,undefined);assert.equal(f.state().assets[hs[1].id].category,'fixed');
+ }finally{f.close();}
+});
+
+test('invalid classification IDs, duplicates, investment and missing reasons fail atomically',()=>{
+ const d=day('2026-01-01'), original={assets:{wallet:{id:'wallet',type:'wallet',openingMinor:100000,lastDay:d,lastIndex:0},tool:{id:'tool',type:'holding',category:'fixed',name:'工具',valueMinor:8500,active:true},right:{id:'right',type:'holding',category:'investment',name:'版权',active:true}}};
+ const args={chat:[{mes:'日期：2026-01-01'},{mes:'日期：2026-01-02'}],index:1,revision:'next'};
+ for(const rows of [[{id:'no',category:'exclude',reason:'未知'}],[{id:'right',category:'exclude',reason:'不能排除投资'}],[{id:'tool',category:'investment',reason:'不能改变收益性质'}],[{id:'tool',category:'exclude'}],[{id:'tool',category:'exclude',reason:'普通工具'},{id:'tool',category:'fixed',reason:'重复'}]]){
+  const copy=structuredClone(original);assert.throws(()=>applyAssessment(original,{...evaluation('2026-01-02'),classifications:rows},args),/分类修正无效/);assert.deepEqual(original,copy);
+ }
+});

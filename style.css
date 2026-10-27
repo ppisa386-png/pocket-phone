@@ -597,3 +597,6 @@ h2, p { margin: 0; }
 
 .pp-field input[data-api-field] { min-width:0; width:100%; min-height:42px; border-radius:9px; padding:8px 12px; background:var(--pp-input); color:var(--pp-text); caret-color:var(--pp-text); border:1px solid var(--pp-line); color-scheme:dark; font-size:max(16px, 1em); }
 .pp-layer[data-theme="light"] .pp-field input[data-api-field] { color-scheme:light; }
+
+.pp-x-post-avatar{border:0;padding:0;cursor:pointer;font-family:inherit}
+.pp-x-post-avatar:focus-visible{outline:2px solid #1d9bf0;outline-offset:2px}

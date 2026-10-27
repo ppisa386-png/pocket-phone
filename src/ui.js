@@ -1,19 +1,19 @@
-import { bindInputViewport } from './input-viewport.js?v=0.24.23';
-import { createDailyPanel } from './daily-view.js?v=0.24.23';
-import { storyTime } from './story-clock.js?v=0.24.23';
-import { createAssetPanel } from './assets-view.js?v=0.24.23';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.23';
-import { bindComposerKeys } from './composer.js?v=0.24.23';
-import { createXPanel } from './x-view.js?v=0.24.23';
-import { xUnread } from './x.js?v=0.24.23';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.23';
-import { snapUnread } from './snapchat.js?v=0.24.23';
-import { createApiPanel } from './api-view.js?v=0.24.23';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.23';
-import { icon } from './icons.js?v=0.24.23';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.23';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.23';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.23';
+import { bindInputViewport } from './input-viewport.js?v=0.24.24';
+import { createDailyPanel } from './daily-view.js?v=0.24.24';
+import { storyTime } from './story-clock.js?v=0.24.24';
+import { createAssetPanel } from './assets-view.js?v=0.24.24';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.24';
+import { bindComposerKeys } from './composer.js?v=0.24.24';
+import { createXPanel } from './x-view.js?v=0.24.24';
+import { xUnread } from './x.js?v=0.24.24';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.24';
+import { snapUnread } from './snapchat.js?v=0.24.24';
+import { createApiPanel } from './api-view.js?v=0.24.24';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.24';
+import { icon } from './icons.js?v=0.24.24';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.24';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.24';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.24';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },

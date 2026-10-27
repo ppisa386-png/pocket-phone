@@ -1,12 +1,13 @@
-import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=0.24.23';
-import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=0.24.23';
-import { smsReplyClassification } from './sms-context.js?v=0.24.23';
-import { storyTime } from './story-clock.js?v=0.24.23';
-import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.23';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.23';
-import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.23';
-import { narrativeReplyCount } from './contact-policy.js?v=0.24.23';
-import { isBlocked } from './contact-events.js?v=0.24.23';
+import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=0.24.24';
+import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=0.24.24';
+import { smsReplyClassification } from './sms-context.js?v=0.24.24';
+import { storyTime } from './story-clock.js?v=0.24.24';
+import { createNarrativePrompt } from './narrative-prompt.js?v=0.24.24';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=0.24.24';
+import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=0.24.24';
+import { narrativeReplyCount } from './contact-policy.js?v=0.24.24';
+import { isBlocked } from './contact-events.js?v=0.24.24';
+import { financialEvidenceMatches } from './assets-policy.js?v=0.24.24';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});
@@ -19,7 +20,7 @@ export function storyAnnotations(message,tag){
     const text=String(message?.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(think|thinking|script|style)[^>]*>[\s\S]*?<\/\1>/gi,'');
     const prose=text.replace(/<!--[\s\S]*?-->/g,'');const result=[];
     for(const m of text.matchAll(new RegExp('<!--\\s*'+tag+'\\s*:\\s*([\\s\\S]*?)-->','g'))){
-        try{const row=JSON.parse(m[1]);if(typeof row.evidence==='string'&&row.evidence.trim().length>=4&&(prose.includes(row.evidence.trim())||(tag==='durian-contact'&&evidenceText(row.evidence).length>=4&&evidenceText(prose).includes(evidenceText(row.evidence)))))result.push({...row,prose});}catch{/* Incomplete narrative metadata never creates an event. */}
+        try{const row=JSON.parse(m[1]);if(typeof row.evidence==='string'&&row.evidence.trim().length>=4&&(prose.includes(row.evidence.trim())||(tag==='durian-money'&&financialEvidenceMatches(prose,row.evidence))||(tag==='durian-contact'&&evidenceText(row.evidence).length>=4&&evidenceText(prose).includes(evidenceText(row.evidence)))))result.push({...row,prose});}catch{/* Incomplete narrative metadata never creates an event. */}
     }
     return result;
 }

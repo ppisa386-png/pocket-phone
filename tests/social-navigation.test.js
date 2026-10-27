@@ -94,3 +94,13 @@ test('story refresh control locks, reopens only for unchecked user stories, and 
  assert.match(panel.html(),/aria-label="本回合已刷新"[^>]*disabled/);assert.match(panel.html(),/Alex 赞了这条故事/);assert.match(panel.html(),/Great!（真棒！）/);
  view.revision='next';assert.match(panel.html(),/刷新好友故事/);
 });
+
+test('X home displays posts without duplicate recommendation cards and opens account controls locally',async()=>{
+ const view={x:{a:{...account,recommended:true,bio:'Account biography'},p:{id:'p',type:'post',author:'a',text:'Recommended post'}}};
+ const panel=createXPanel({...options(),getView:()=>view});
+ assert.match(panel.html(),/Recommended post/);assert.doesNotMatch(panel.html(),/Account biography|pp-x-recommendations|data-x-action="follow"/);
+ assert.match(panel.html(),/class="pp-x-post-avatar" data-x-action="account" data-x-id="a"/);
+ await panel.action('account','a');assert.match(panel.html(),/Account biography/);assert.match(panel.html(),/data-x-action="follow"/);assert.match(panel.html(),/data-x-action="thread"/);
+ panel.back();assert.match(panel.html(),/Recommended post/);assert.doesNotMatch(panel.html(),/Account biography/);
+ await panel.action('tab','search');assert.match(panel.html(),/查看主页/);assert.doesNotMatch(panel.html(),/data-x-action="follow"|data-x-action="thread"/);
+});

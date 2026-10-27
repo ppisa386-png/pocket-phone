@@ -1,6 +1,6 @@
-import { readStoryClock } from './story-clock.js?v=0.24.23';
-import { squareBasis } from './square-core.js?v=0.24.23';
-import { storyAnnotations } from './story-phone.js?v=0.24.23';
+import { readStoryClock } from './story-clock.js?v=0.24.24';
+import { squareBasis } from './square-core.js?v=0.24.24';
+import { storyAnnotations } from './story-phone.js?v=0.24.24';
 
 export const dailyArticles = state => Object.values(state.daily || {}).filter(a => a.type === 'article' && a.editionId === state.daily?.edition?.editionId);
 export function dailyExpiry(edition, chat) {
