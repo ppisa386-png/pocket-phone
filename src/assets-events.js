@@ -1,6 +1,6 @@
-import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=0.24.24';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=0.24.24';
-import { dateDay, dayDate } from './story-clock.js?v=0.24.24';
+import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=0.24.25';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=0.24.25';
+import { dateDay, dayDate } from './story-clock.js?v=0.24.25';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
 export const financialEventKey = row => JSON.stringify([row.kind, assetText(row.name), row.action || (row.kind === 'job' ? 'start' : 'acquire')]);

@@ -65,13 +65,16 @@ try {
   await p.locator('[data-daily-action="update"]').tap();await waitRequest();
   await p.locator('[data-action="close"]').tap();assert.equal(await p.locator('.pp-phone').isVisible(),false);
   await p.getByRole('button',{name:'榴莲日报 · 后台处理中…',exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.state().busy),true);
-  // Reopening the running task does not issue another request.
-  await p.locator('.pp-background-task').tap();assert.equal(await p.locator('[data-daily-action="update"]').isDisabled(),true);assert.equal(await count(),1);
-  await p.locator('[data-action="close"]').tap();await release();
-  await p.getByRole('button',{name:'榴莲日报 · 已完成，点击查看',exact:true}).waitFor();
+  await p.locator('.pp-background-task').waitFor({state:'hidden',timeout:5000});
+  assert.equal(await p.evaluate(()=>window.state().busy),true,'notice expires while generation continues');
+  // Reopening/reclosing the same running request must not repeat the notice.
+  await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();assert.equal(await p.locator('[data-daily-action="update"]').isDisabled(),true);assert.equal(await count(),1);
+  await p.locator('[data-action="close"]').tap();assert.equal(await p.locator('.pp-background-task').isVisible(),false);await release();
+  await p.waitForFunction(()=>!window.state().busy);
+  assert.equal(await p.locator('.pp-background-task').isVisible(),false,'completion stays quiet');
   assert.equal(await p.evaluate(()=>Object.values(window.state().daily).filter(a=>a.type==='article').length),4);
   await mkdir(resolve(root,'../qa-results'),{recursive:true});await p.screenshot({path:resolve(root,'../qa-results/background-'+mode+'.png')});
-  await p.locator('.pp-background-task').tap();assert.equal(await p.locator('.pp-daily-article').count(),4);assert.equal(await count(),1);
+  await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();assert.equal(await p.locator('.pp-daily-article').count(),4);assert.equal(await count(),1);
   for(const app of ['assets','amazon','x','snapchat','messages','phone']){
    const before=await count();await p.evaluate(app=>{window.reply={value:'saved '+app};window.run(app);},app);await waitRequest();
    await p.locator('[data-action="close"]').tap();await p.locator('.pp-background-task[data-busy="true"]').waitFor();await release();
@@ -79,10 +82,10 @@ try {
    assert.equal(await p.evaluate(app=>window.state().profiles['test:'+app]?.value,app),'saved '+app);
    assert.equal(await count(),before+1);await p.locator('.pp-launcher').tap();
   }
-  // Failure is visible after closing, preserving the previous edition.
+  // A new request gets a new brief notice; failure remains inside the app.
   await p.locator('[data-app="daily"]').tap();await p.evaluate(()=>{window.reply=window.edition;window.backgroundFail=true;});
-  await p.locator('[data-daily-action="update"]').tap();await waitRequest();await p.locator('[data-action="close"]').tap();await release();
-  await p.getByRole('button',{name:'榴莲日报 · 处理失败，点击查看',exact:true}).waitFor();await p.locator('.pp-background-task').tap();
+  await p.locator('[data-daily-action="update"]').tap();await waitRequest();await p.locator('[data-action="close"]').tap();await p.getByRole('button',{name:'榴莲日报 · 后台处理中…',exact:true}).waitFor();await release();
+  await p.waitForFunction(()=>!window.state().busy);assert.equal(await p.locator('.pp-background-task').isVisible(),false);await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();
   assert.equal(await p.locator('.pp-daily-article').count(),4);assert.equal(await p.locator('[data-daily-action="update"]').isDisabled(),false);
   assert.ok((await p.locator('.pp-daily-status').textContent()).length>0);
   console.log('PASS '+mode+': real daily close/reopen/save/failure; six other apps shared service continues with UI hidden, no duplicate request');await p.close();

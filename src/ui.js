@@ -1,19 +1,19 @@
-import { bindInputViewport } from './input-viewport.js?v=0.24.24';
-import { createDailyPanel } from './daily-view.js?v=0.24.24';
-import { storyTime } from './story-clock.js?v=0.24.24';
-import { createAssetPanel } from './assets-view.js?v=0.24.24';
-import { createAmazonPanel } from './amazon-view.js?v=0.24.24';
-import { bindComposerKeys } from './composer.js?v=0.24.24';
-import { createXPanel } from './x-view.js?v=0.24.24';
-import { xUnread } from './x.js?v=0.24.24';
-import { createSnapPanel } from './snapchat-view.js?v=0.24.24';
-import { snapUnread } from './snapchat.js?v=0.24.24';
-import { createApiPanel } from './api-view.js?v=0.24.24';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.24';
-import { icon } from './icons.js?v=0.24.24';
-import { renderMessagesScreen } from './messages-view.js?v=0.24.24';
-import { unreadMessages, messageParticipants } from './messages.js?v=0.24.24';
-import { renderPhoneScreen } from './phone-view.js?v=0.24.24';
+import { bindInputViewport } from './input-viewport.js?v=0.24.25';
+import { createDailyPanel } from './daily-view.js?v=0.24.25';
+import { storyTime } from './story-clock.js?v=0.24.25';
+import { createAssetPanel } from './assets-view.js?v=0.24.25';
+import { createAmazonPanel } from './amazon-view.js?v=0.24.25';
+import { bindComposerKeys } from './composer.js?v=0.24.25';
+import { createXPanel } from './x-view.js?v=0.24.25';
+import { xUnread } from './x.js?v=0.24.25';
+import { createSnapPanel } from './snapchat-view.js?v=0.24.25';
+import { snapUnread } from './snapchat.js?v=0.24.25';
+import { createApiPanel } from './api-view.js?v=0.24.25';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=0.24.25';
+import { icon } from './icons.js?v=0.24.25';
+import { renderMessagesScreen } from './messages-view.js?v=0.24.25';
+import { unreadMessages, messageParticipants } from './messages.js?v=0.24.25';
+import { renderPhoneScreen } from './phone-view.js?v=0.24.25';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -46,6 +46,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let smsRenderKey = '';
     let opened = false;
     let backgroundTask = null;
+    let backgroundNoticeTimer = null;
     let lastFocused = null;
     let dragging = null;
     let suppressClickUntil = 0;
@@ -90,11 +91,33 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function updateBackgroundTask() {
         if (phoneView.busy && phoneView.requestKind) {
             const app = phoneView.requestKind === 'incoming' ? 'phone' : phoneView.requestKind;
-            backgroundTask = { app, name: APPS.find(item => item.id === app)?.name || '榴莲手机', busy: true };
+            if (!backgroundTask?.busy || backgroundTask.app !== app) {
+                clearTimeout(backgroundNoticeTimer);
+                backgroundNoticeTimer = null;
+                backgroundTask = { app, name: APPS.find(item => item.id === app)?.name || '榴莲手机', busy: true };
+            }
         } else if (backgroundTask?.busy) {
             backgroundTask = opened ? null : { ...backgroundTask, busy: false, failed: Boolean(phoneView.error) };
         }
         backgroundButton.hidden = opened || !settings.enabled || !backgroundTask;
+        if (backgroundTask?.app === 'daily') {
+            // One short notice per running daily task; rendering/status updates
+            // must neither restart its timer nor leave completion floating.
+            if (opened || !settings.enabled || !backgroundTask.busy) {
+                clearTimeout(backgroundNoticeTimer);
+                backgroundNoticeTimer = null;
+                if (backgroundTask.noticeShown) backgroundTask.noticeExpired = true;
+                backgroundButton.hidden = true;
+            } else if (!backgroundTask.noticeShown) {
+                const task = backgroundTask;
+                task.noticeShown = true;
+                backgroundNoticeTimer = setTimeout(() => {
+                    backgroundNoticeTimer = null;
+                    task.noticeExpired = true;
+                    if (!destroyed && backgroundTask === task) backgroundButton.hidden = true;
+                }, 2500);
+            } else if (backgroundTask.noticeExpired) backgroundButton.hidden = true;
+        }
         if (backgroundTask) {
             backgroundButton.textContent = backgroundTask.name + ' · ' + (backgroundTask.busy ? '后台处理中…' : backgroundTask.failed ? '处理失败，点击查看' : '已完成，点击查看');
             backgroundButton.setAttribute('aria-label', backgroundButton.textContent);
@@ -678,6 +701,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (scope !== lastScope) {
             const keepSettings = lastScope === undefined && route === 'settings';
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
+            clearTimeout(backgroundNoticeTimer);
+            backgroundNoticeTimer = null;
             backgroundTask = null;
             backgroundButton.hidden = true;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
@@ -727,6 +752,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             unsubscribePhone?.();
             clearInterval(clockInterval);
             clearTimeout(noticeTimeout);
+            clearTimeout(backgroundNoticeTimer);
             host.remove();
         },
     };

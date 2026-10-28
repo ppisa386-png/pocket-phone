@@ -1,7 +1,7 @@
-import { smsForAI } from './sms-context.js?v=0.24.24';
-import { exactStoryTime } from './story-clock.js?v=0.24.24';
-import { isMemoryHidden } from './journal.js?v=0.24.24';
-import { readPreparedMemory } from './external-memory.js?v=0.24.24';
+import { smsForAI } from './sms-context.js?v=0.24.25';
+import { exactStoryTime } from './story-clock.js?v=0.24.25';
+import { isMemoryHidden } from './journal.js?v=0.24.25';
+import { readPreparedMemory } from './external-memory.js?v=0.24.25';
 const normalizeQuote=value=>String(value??'').normalize('NFKC').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,'');
 // Read only the current participant's card, user persona and chat-scoped prepared recall.
 export function proactiveSources(context,settings,participant,state) {
