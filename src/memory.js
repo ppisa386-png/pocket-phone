@@ -1,10 +1,10 @@
-import { migrateDailyArchives } from './daily-archive.js?v=1.0';
-import { syncSMSContext } from './sms-context.js?v=1.0';
-import { storyTime } from './story-clock.js?v=1.0';
-import { importStoryAssets } from './assets-story.js?v=1.0';
-import { importStorySquare } from './x-opinion.js?v=1.0';
-import { importStoryPhone } from './story-phone.js?v=1.0';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.0';
+import { migrateDailyArchives } from './daily-archive.js?v=1.0.1';
+import { syncSMSContext } from './sms-context.js?v=1.0.1';
+import { storyTime } from './story-clock.js?v=1.0.1';
+import { importStoryAssets } from './assets-story.js?v=1.0.1';
+import { importStorySquare } from './x-opinion.js?v=1.0.1';
+import { importStoryPhone } from './story-phone.js?v=1.0.1';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.0.1';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',

@@ -1,19 +1,19 @@
-import { bindInputViewport } from './input-viewport.js?v=1.0';
-import { createDailyPanel } from './daily-view.js?v=1.0';
-import { storyTime } from './story-clock.js?v=1.0';
-import { createAssetPanel } from './assets-view.js?v=1.0';
-import { createAmazonPanel } from './amazon-view.js?v=1.0';
-import { bindComposerKeys } from './composer.js?v=1.0';
-import { createXPanel } from './x-view.js?v=1.0';
-import { xUnread } from './x.js?v=1.0';
-import { createSnapPanel } from './snapchat-view.js?v=1.0';
-import { snapUnread } from './snapchat.js?v=1.0';
-import { createApiPanel } from './api-view.js?v=1.0';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.0';
-import { icon } from './icons.js?v=1.0';
-import { renderMessagesScreen } from './messages-view.js?v=1.0';
-import { unreadMessages, messageParticipants } from './messages.js?v=1.0';
-import { renderPhoneScreen } from './phone-view.js?v=1.0';
+import { bindInputViewport } from './input-viewport.js?v=1.0.1';
+import { createDailyPanel } from './daily-view.js?v=1.0.1';
+import { storyTime } from './story-clock.js?v=1.0.1';
+import { createAssetPanel } from './assets-view.js?v=1.0.1';
+import { createAmazonPanel } from './amazon-view.js?v=1.0.1';
+import { bindComposerKeys } from './composer.js?v=1.0.1';
+import { createXPanel } from './x-view.js?v=1.0.1';
+import { xUnread } from './x.js?v=1.0.1';
+import { createSnapPanel } from './snapchat-view.js?v=1.0.1';
+import { snapUnread } from './snapchat.js?v=1.0.1';
+import { createApiPanel } from './api-view.js?v=1.0.1';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.0.1';
+import { icon } from './icons.js?v=1.0.1';
+import { renderMessagesScreen } from './messages-view.js?v=1.0.1';
+import { unreadMessages, messageParticipants } from './messages.js?v=1.0.1';
+import { renderPhoneScreen } from './phone-view.js?v=1.0.1';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -45,8 +45,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     let smsDrafts = Object.create(null);
     let smsRenderKey = '';
     let opened = false;
-    let backgroundTask = null;
-    let backgroundNoticeTimer = null;
     let lastFocused = null;
     let dragging = null;
     let suppressClickUntil = 0;
@@ -68,7 +66,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     layer.className = 'pp-layer';
     layer.style.setProperty('--pp-launcher-size', LAUNCHER_SIZE + 'px');
     layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + '<span class="pp-launcher-badge" hidden></span></button>' +
-        '<button type="button" class="pp-background-task" data-action="background-task" aria-live="polite" hidden></button>' +
         '<section class="pp-phone" role="dialog" aria-label="榴莲手机" hidden>' +
         '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span></div>' +
         '<header class="pp-header"><button type="button" data-action="back" class="pp-icon-button" aria-label="返回">' + icon('back') + '</button><span class="pp-title"></span><button type="button" data-action="close" class="pp-icon-button" aria-label="收起手机">' + icon('close') + '</button></header>' +
@@ -86,44 +83,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const inputViewport = bindInputViewport({ shadow, phone, content, signal: lifetime.signal });
     const title = shadow.querySelector('.pp-title');
     const noticeElement = shadow.querySelector('.pp-toast');
-    const backgroundButton = shadow.querySelector('.pp-background-task');
-
-    function updateBackgroundTask() {
-        if (phoneView.busy && phoneView.requestKind) {
-            const app = phoneView.requestKind === 'incoming' ? 'phone' : phoneView.requestKind;
-            if (!backgroundTask?.busy || backgroundTask.app !== app) {
-                clearTimeout(backgroundNoticeTimer);
-                backgroundNoticeTimer = null;
-                backgroundTask = { app, name: APPS.find(item => item.id === app)?.name || '榴莲手机', busy: true };
-            }
-        } else if (backgroundTask?.busy) {
-            backgroundTask = opened ? null : { ...backgroundTask, busy: false, failed: Boolean(phoneView.error) };
-        }
-        backgroundButton.hidden = opened || !settings.enabled || !backgroundTask;
-        if (backgroundTask?.app === 'daily') {
-            // One short notice per running daily task; rendering/status updates
-            // must neither restart its timer nor leave completion floating.
-            if (opened || !settings.enabled || !backgroundTask.busy) {
-                clearTimeout(backgroundNoticeTimer);
-                backgroundNoticeTimer = null;
-                if (backgroundTask.noticeShown) backgroundTask.noticeExpired = true;
-                backgroundButton.hidden = true;
-            } else if (!backgroundTask.noticeShown) {
-                const task = backgroundTask;
-                task.noticeShown = true;
-                backgroundNoticeTimer = setTimeout(() => {
-                    backgroundNoticeTimer = null;
-                    task.noticeExpired = true;
-                    if (!destroyed && backgroundTask === task) backgroundButton.hidden = true;
-                }, 2500);
-            } else if (backgroundTask.noticeExpired) backgroundButton.hidden = true;
-        }
-        if (backgroundTask) {
-            backgroundButton.textContent = backgroundTask.name + ' · ' + (backgroundTask.busy ? '后台处理中…' : backgroundTask.failed ? '处理失败，点击查看' : '已完成，点击查看');
-            backgroundButton.setAttribute('aria-label', backgroundButton.textContent);
-            backgroundButton.dataset.busy = String(backgroundTask.busy);
-        }
-    }
     const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
 
     const snapPanel = createSnapPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:snapchat')renderSnapchat();},notice});
@@ -211,7 +170,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         launcher.hidden = !settings.enabled || !settings.launcherVisible;
         const badge = launcher.querySelector('.pp-launcher-badge');
         badge.hidden = !settings.apps.phone || !unreadCalls();
-        updateBackgroundTask();
     }
 
     function viewport() { return { width: window.innerWidth, height: window.innerHeight }; }
@@ -403,8 +361,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened) return;
         lastFocused = document.activeElement;
         opened = true;
-        if (!backgroundTask?.busy) backgroundTask = null;
-        updateBackgroundTask();
         route = 'home'; history = []; selectedSMSContactId = null; pickingSMSContact = false; smsEditing = null; contactSearchOpen = false;
         phone.hidden = false;
         if(windowPosition){const point={...windowPosition};phone.style.height='';phone.style.bottom='';phone.style.top='';movePhone(point.x,point.y);}
@@ -418,7 +374,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         // Hiding the window does not own or cancel service/model lifetimes.
         opened = false;
         phone.hidden = true;
-        updateBackgroundTask();
         launcher.setAttribute('aria-expanded', 'false');
         launcher.setAttribute('aria-label', '打开榴莲手机');
         if (settings.enabled && settings.launcherVisible) launcher.focus({ preventScroll: true });
@@ -458,12 +413,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (action === 'refresh-errors') renderErrors();
         if (action === 'clear-errors') {adapter.diagnostics?.clear();renderErrors();}
         if (action === 'close') { event.stopPropagation(); close(); }
-        if (action === 'background-task') {
-            event.stopPropagation();
-            const app = backgroundTask?.app;
-            open();
-            if (app && settings.apps[app]) navigate('app:' + app);
-        }
         if (action === 'home') { route = 'home'; history = []; render(); }
         if (action === 'back') {
             if(contactSearchOpen){contactSearchOpen=false;render();}
@@ -702,10 +651,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (scope !== lastScope) {
             const keepSettings = lastScope === undefined && route === 'settings';
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
-            clearTimeout(backgroundNoticeTimer);
-            backgroundNoticeTimer = null;
-            backgroundTask = null;
-            backgroundButton.hidden = true;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
@@ -714,7 +659,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     });
     const unsubscribePhone = adapter.phone?.subscribe(view => {
         phoneView = view;
-        updateBackgroundTask();
         const badge = launcher.querySelector('.pp-launcher-badge');
         const count = settings.apps.phone ? unreadCalls() : 0;
         badge.hidden = count === 0; badge.textContent = count > 99 ? '99+' : String(count);
@@ -753,7 +697,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             unsubscribePhone?.();
             clearInterval(clockInterval);
             clearTimeout(noticeTimeout);
-            clearTimeout(backgroundNoticeTimer);
             host.remove();
         },
     };
