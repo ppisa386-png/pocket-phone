@@ -1,10 +1,11 @@
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createDaily } from '../src/daily.js';
 import { createDailyBridge, DAILY_KEY } from '../src/daily-story.js';
 import { createDailyPanel } from '../src/daily-view.js';
-import { dailyArticles, dailyExpiry, dailyStatus, buildDailyPrompt, dailyChanges } from '../src/daily-core.js';
+import { dailyArticles, dailyExpiry, dailyStatus, buildDailyPrompt, dailyChanges, dailyArchives, dailyEditorialHistory } from '../src/daily-core.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { normalizeSettings } from '../src/config.js';
@@ -196,4 +197,56 @@ test('reprinting on a later day does not reactivate a previously expired pending
   f.c.chat.push({mes:'2003-07-25'});await f.memory.read();ok(await f.daily.update());
   assert.equal(first(f).selected,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
  }finally{f.close();}
+});
+
+// 1.0 archive and editorial continuity regressions.
+test('archive keeps three expired dates, same-day refresh replaces rather than archives, and view costs no API',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());
+  f.reply({articles:[article('同日最终版')]});ok(await f.daily.update());assert.equal(dailyArchives(f.state(),f.c.chat).length,0);
+  for(let d=25;d<=28;d++){
+   f.c.chat.push({mes:'2003-07-'+d});await f.memory.read();
+   const before=dailyArchives(f.state(),f.c.chat);assert.ok(before.length<=3);
+   f.reply({articles:[article('第'+d+'日新闻')]});ok(await f.daily.update());
+  }
+  let old=dailyArchives(f.state(),f.c.chat);assert.deepEqual(old.map(e=>e.day),[27,26,25].map(d=>dateDay('2003-07-'+d)));
+  assert.equal(Object.values(f.state().daily).filter(a=>a.type==='article').length,4,'current state removes superseded article entries');
+  assert.equal(Object.values(f.state().daily).filter(a=>a.type==='archive').length,3);
+  const count=f.calls(),panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
+  await panel.action('archive');assert.match(panel.html(),/过往报纸夹/);assert.equal((panel.html().match(/data-daily-action="archive-edition"/g)||[]).length,3);
+  await panel.action('archive-edition',old[0].editionId);await panel.action('read',old[0].articles[0].id);assert.match(panel.html(),/主办方公布/);assert.match(panel.html(),/已过期 · 仅供回看/);assert.equal((panel.html().match(/ disabled/g)||[]).length,4);
+  await panel.action('inject',old[0].articles[0].id);assert.equal(f.calls(),count);assert.equal((await f.daily.toggle(old[0].articles[0].id)).ok,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
+  assert.equal(panel.back(),true);assert.match(panel.html(),/过往报纸夹/);assert.equal(panel.back(),true);assert.match(panel.html(),/第28日新闻/);assert.equal(panel.back(),false);
+  const copy=setup();try{copy.c.chat=structuredClone(f.c.chat);copy.c.chatMetadata=structuredClone(f.c.chatMetadata);await copy.daily.open();assert.deepEqual(dailyArchives(copy.state(),copy.c.chat),old);assert.equal(copy.calls(),0);}finally{copy.close();}
+  f.c.chat.pop();await f.memory.read();assert.match(first(f).headline,/第27日/);assert.deepEqual(dailyArchives(f.state(),f.c.chat).map(e=>e.day),[26,25,24].map(d=>dateDay('2003-07-'+d)));
+ }finally{f.close();}
+});
+
+test('editorial context labels adopted, selected pending and unselected; followups need a fresh selection',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());const rows=dailyArticles(f.state());ok(await f.daily.toggle(rows[0].id));ok(await f.daily.toggle(rows[1].id));
+  const evidence='Alex 读了报纸，对报道中的传闻保持怀疑。';f.c.chat.push({mes:evidence+'<!--durian-daily-used:'+JSON.stringify({id:rows[0].id,used:true,evidence})+'-->'});await f.memory.read();
+  f.c.chat.push({mes:'2003-07-25'});await f.memory.read();
+  const history=dailyEditorialHistory(f.state(),f.c.chat);assert.deepEqual(history[0].articles.map(a=>a.adoption),['adopted','selected_pending','unselected','unselected']);
+  f.reply({articles:[article('音乐节新进展')]});ok(await f.daily.update());
+  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.previousEditions[0].articles[0].adoption,'adopted');assert.match(f.prompt(),/不为连续性编造调查结果/);assert.match(f.prompt(),/不要求每期延续/);assert.match(f.prompt(),/报道语言遵循当前预设/);
+  assert.equal(first(f).selected,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
+  ok(await f.daily.toggle(first(f).id));const prompt=buildDailyPrompt(f.state(),f.c.chat);assert.match(prompt,/音乐节新进展/);assert.doesNotMatch(prompt,/其他栏目/);assert.match(prompt,/未经证实的指控/);
+  f.c.chat.pop();await f.memory.read();assert.equal(dailyEditorialHistory(f.state(),f.c.chat)[0].articles[0].adoption,'adopted');
+  f.c.chat.pop();await f.memory.read();assert.equal(dailyEditorialHistory(f.state(),f.c.chat)[0].articles[0].adoption,'selected_pending');
+ }finally{f.close();}
+});
+
+test('failed replacement leaves complete folder untouched; unknown dates never label archives expired',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());f.c.chat.push({mes:'2003-07-25'});await f.memory.read();f.reply({articles:[article('第二日报纸')]});ok(await f.daily.update());const before=structuredClone(f.state().daily);
+  f.reply(()=>JSON.stringify({publication:'Daily',articles:[]}));assert.equal((await f.daily.update()).ok,false);assert.deepEqual(f.state().daily,before);
+  assert.deepEqual(dailyArchives({daily:before},[{mes:'日期未知'}]),[]);assert.deepEqual(dailyArchives({daily:before},[{mes:'2003-07-23'}]),[]);
+  const history=dailyEditorialHistory({daily:{edition:{editionId:'legacy',day:null},a:{id:'a',type:'article',editionId:'legacy',headline:'未知采用状态',body:'正文',selected:true}}},[{mes:'日期未知'}]);assert.equal(history[0].articles[0].adoption,'unknown');
+ }finally{f.close();}
+});
+
+test('old built-in daily prompts migrate, customized and blank prompts remain intact',()=>{
+ const migrated=normalizeSettings({prompts:PREVIOUS_DAILY_PROMPTS});assert.equal(migrated.prompts.daily,DAILY_EDITORIAL_PROMPT);assert.equal(migrated.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
+ const custom=normalizeSettings({prompts:{daily:'我的自定义选题',dailyStory:''}});assert.equal(custom.prompts.daily,'我的自定义选题');assert.equal(custom.prompts.dailyStory,'');
 });

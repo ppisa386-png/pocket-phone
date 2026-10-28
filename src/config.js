@@ -1,6 +1,7 @@
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from './daily-prompts.js?v=1.0';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '0.24.25';
+export const VERSION = '1.0';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -11,8 +12,8 @@ export const APPS = [
     { id: 'amazon', name: 'Amazon', color: '#e89947' },
 ];
 export const PROMPTS = {
-    daily: {name:'榴莲日报 · 新闻选编',text:'按近期剧情的地域、机构与行业线索创作4～6条世界新闻候选，可虚构正文尚未发生的公共事件；不能虚构 user 的行为和经历。选取符合年代的实际报刊名，版面有大小长短；普通人的车、衣着和日常行踪不凑新闻。仅手动选择的报道供正文择机采用，语言跟随预设。'},
-    dailyStory: {name:'榴莲日报 · 已选报道与正文',text:'仅把 user 手动选中的有效报道作为参考，人物按合理知情途径择机回应。允许暂缓，不强制反应；媒体观点不等于事实，不重复已采用的内容。'},
+    daily: {name:'榴莲日报 · 新闻选编',text:DAILY_EDITORIAL_PROMPT},
+    dailyStory: {name:'榴莲日报 · 已选报道与正文',text:DAILY_NARRATIVE_PROMPT},
     assetStory: {name:'小榴莲 · 正文记账',text:'出行、衣着及新增消费参考当前经济情况，保留人设和历史明确支持的已有财物，不把现金少等同于没有资产。可用资金不足时不写成已付清，确有借贷依据才写欠款。只记录本次正文已发生的 user 收支、财产和工作变化；不为记账添加交易，不估价、不计算盈亏，金额不明留空。有变化才记录，无事不写。'},
     assetAssessment: {name:'小榴莲 · 账本评估',text:'根据人设、性格、年代、地区、剧情日期和有效记忆合理评估财富。普通生活开销包含饮食、交通和有依据的居住费用，节省者少、奢侈者适度多；奢侈品购置单独记账。没有房产不自动认定租房。投资收益不强制为正，不预测当前剧情日期以后的历史。只更新确有变化的项目，避免重复收支。'},
     establishedContacts: {name:'一键新增联系人',text:'批量加入人物设定中在故事开始前就与 user 存在明确关系的具名人物，正面和负面关系一视同仁。不要求交换号码剧情，不审查取号资格；排除无名人物和仅一面之缘的路人。没有提供号码数字时保留空号码，不编造。'},
@@ -78,7 +79,7 @@ export function normalizeSettings(value) {
         proactiveEnabled: typeof raw.proactiveEnabled === 'boolean' ? raw.proactiveEnabled : true,
         retries: Math.round(numeric(raw.retries, 0, 15, 2)),
         apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
-        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
+        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
     };
 }
 

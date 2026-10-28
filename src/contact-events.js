@@ -1,4 +1,4 @@
-import { isMemoryHidden } from './journal.js?v=0.24.25';
+import { isMemoryHidden } from './journal.js?v=1.0';
 export const eventKey = id => 'contactEvent:' + id;
 export const isBlocked = (state, id, channel) => state.profiles?.['blocked:' + id]?.[channel] === true;
 

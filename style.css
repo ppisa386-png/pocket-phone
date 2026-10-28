@@ -600,3 +600,11 @@ h2, p { margin: 0; }
 
 .pp-x-post-avatar{border:0;padding:0;cursor:pointer;font-family:inherit}
 .pp-x-post-avatar:focus-visible{outline:2px solid #1d9bf0;outline-offset:2px}
+
+.pp-daily-folder-button{display:grid;place-items:center;padding:6px!important;border:1px solid currentColor;border-radius:7px;flex:0 0 auto}
+.pp-daily-toolbar{gap:10px;flex-wrap:wrap}
+.pp-daily-archive-list{display:grid;gap:14px;margin:18px 0}
+.pp-daily-archive-list>button{display:grid;gap:8px;text-align:left;border:1px solid #a6a08e;border-radius:4px;padding:18px;background:transparent;color:inherit;font:inherit;min-width:0;overflow-wrap:anywhere}
+.pp-daily-archive-list small,.pp-daily-archive-list span{font-size:12px;opacity:.75}
+.pp-daily-archive-list strong{font-family:Georgia,"Noto Serif SC",serif;font-size:22px}
+.pp-daily-folder .pp-daily-masthead h2{font-size:30px}

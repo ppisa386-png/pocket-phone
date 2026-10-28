@@ -1,9 +1,10 @@
-import { syncSMSContext } from './sms-context.js?v=0.24.25';
-import { storyTime } from './story-clock.js?v=0.24.25';
-import { importStoryAssets } from './assets-story.js?v=0.24.25';
-import { importStorySquare } from './x-opinion.js?v=0.24.25';
-import { importStoryPhone } from './story-phone.js?v=0.24.25';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=0.24.25';
+import { migrateDailyArchives } from './daily-archive.js?v=1.0';
+import { syncSMSContext } from './sms-context.js?v=1.0';
+import { storyTime } from './story-clock.js?v=1.0';
+import { importStoryAssets } from './assets-story.js?v=1.0';
+import { importStorySquare } from './x-opinion.js?v=1.0';
+import { importStoryPhone } from './story-phone.js?v=1.0';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.0';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -108,9 +109,10 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
         const square=importStorySquare(imported.journal,snapshot.revisions,current.chat,current);
         const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
-        const sms=syncSMSContext(finances.journal,snapshot.revisions,current.chat);
+        const archive=migrateDailyArchives(finances.journal,snapshot.revisions);
+        const sms=syncSMSContext(archive.journal,snapshot.revisions,current.chat);
         const journal=sms.journal;
-        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed || sms.changed) await save(snapshot, journal);
+        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed || archive.changed || sms.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
