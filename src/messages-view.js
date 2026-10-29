@@ -1,8 +1,8 @@
-import { displayStoryTime } from './story-clock.js?v=1.0.6';
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.0.6';
-import { isBlocked } from './contact-events.js?v=1.0.6';
-import { icon } from './icons.js?v=1.0.6';
-import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=1.0.6';
+import { displayStoryTime } from './story-clock.js?v=1.0.7';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.0.7';
+import { isBlocked } from './contact-events.js?v=1.0.7';
+import { icon } from './icons.js?v=1.0.7';
+import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=1.0.7';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = displayStoryTime;
 const replyLabels = { sent: '已发送', queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };

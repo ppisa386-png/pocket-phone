@@ -1,7 +1,7 @@
-import { shopItems, shopMoney } from './amazon.js?v=1.0.6';
-import { dayDate, readStoryClock } from './story-clock.js?v=1.0.6';
-import { deliveryStatus } from './delivery.js?v=1.0.6';
-import { icon } from './icons.js?v=1.0.6';
+import { shopItems, shopMoney } from './amazon.js?v=1.0.7';
+import { dayDate, readStoryClock } from './story-clock.js?v=1.0.7';
+import { deliveryStatus } from './delivery.js?v=1.0.7';
+import { icon } from './icons.js?v=1.0.7';
 const shopEscape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createAmazonPanel({adapter,getView,redraw,notice}){
     let tab='shop',selected=null,status='',working=false,epoch=0,drafts={};

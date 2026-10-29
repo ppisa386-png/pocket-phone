@@ -8,10 +8,10 @@ import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 import {xAudience, audienceChanges, audienceSources} from '../src/x-audience.js';
 
-function setup(getGenerationState){
+function setup(getGenerationState,independent=false){
  const bus=new EventEmitter();let response={},count=0,lastPrompt='';
  const context={chatId:'x-test',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'Alex uses X.',name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;lastPrompt=o.quietPrompt;return typeof response==='function'?response(o):JSON.stringify(response);}};
- const settings=normalizeSettings({retries:0});const memory=createPhoneMemory({getContext:()=>context,getGenerationState});const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});const x=createX({memory,phone,getContext:()=>context,getSettings:()=>settings});
+ const settings=normalizeSettings({retries:0});if(independent)settings.api.mode='independent';const memory=createPhoneMemory({getContext:()=>context,getGenerationState});const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:independent?{generate:async prompt=>context.generateQuietPrompt({quietPrompt:prompt})}:null});const x=createX({memory,phone,getContext:()=>context,getSettings:()=>settings});
  return {x,memory,phone,context,settings,bus,state:()=>phone.snapshot(),reply:r=>{response=r;},count:()=>count,prompt:()=>lastPrompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
@@ -19,6 +19,30 @@ async function account(f,policy='requests'){
  ok(await f.x.saveProfile({alias:'Moon',bio:'Music'}));
  f.reply({accounts:[{name:'Alex',handle:'alex',has_account:true,dm_policy:policy}]});const r=await f.x.discover('Alex');ok(r);return r.value.ids[0];
 }
+
+for(const independent of [false,true])test('X '+(independent?'independent':'host')+' request supplements recall with saved knowledge and existing public comments',async()=>{
+ const f=setup(undefined,independent);const original=globalThis.qqj_v3_public_bridge_v1;
+ let reads=0;
+ try{
+  globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'}),getSnapshot(){reads++;return {status:'ready',identity:{hostChatId:'x-test'},memory:{status:'ready',floors:[{messageIndex:0,summary:'Alex saw the gift and Sam told Alex about the planned journey. This was private.'}]}};}};
+  f.reply({posts:[{name:'Alex',handle:'alex',text:'Hello'}]});ok(await f.x.refresh());
+  const a=xItems(f.state(),'account')[0];assert.equal(a.identityKnown,false,'effective real-name identity need not rewrite journal');
+  ok(await f.x.publish('A public update'));const post=xItems(f.state(),'post').find(p=>p.author==='user');
+  f.reply({posts:[],replies:[{postId:post.id,accountId:a.id,text:'We already talked about the journey.'}]});ok(await f.x.refresh());
+  f.reply({posts:[]});const before=f.count();ok(await f.x.refresh());
+  assert.equal(f.count(),before+1);assert.equal(reads,f.count(),'one synchronous snapshot per existing model request');
+  assert.match(f.prompt(),/Alex saw the gift/);assert.match(f.prompt(),/This was private/);
+  assert.match(f.prompt(),/We already talked about the journey/);
+  assert.match(f.prompt(),/"identityKnown":true/);assert.match(f.prompt(),/私下已知可以影响措辞/);
+  assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/Alex saw the gift/,'do not persist copies of external memory');
+  ok(await f.x.saveProfile({alias:'Moon',bio:''}));f.reply({posts:[]});ok(await f.x.refresh());
+  assert.match(f.prompt(),/"identityKnown":true/,'prior public interaction keeps established identity after renaming');assert.match(f.prompt(),/其他账号保持匿名边界/);
+  const reply=xItems(f.state(),'comment')[0];f.reply({text:'Understood'});ok(await f.x.comment(post.id,'Thanks',reply.id));
+  assert.match(f.prompt(),/Alex saw the gift/);assert.match(f.prompt(),/此前已确认 user 账号对应的真实身份/);
+  globalThis.qqj_v3_public_bridge_v1.getSnapshot=()=>({status:'ready',identity:{hostChatId:'other'},memory:{status:'ready',floors:[{messageIndex:0,summary:'STALE PRIVATE SECRET'}]}});
+  f.reply({posts:[]});ok(await f.x.refresh());assert.doesNotMatch(f.prompt(),/STALE PRIVATE SECRET|Alex saw the gift/);
+ }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
+});
 
 test('X home accepts one complete wrapped result and explains invalid fields without retrying',async()=>{
  const f=setup();try{

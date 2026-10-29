@@ -1,7 +1,7 @@
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.0.6';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.6';
-import { parseModelObject } from './model-json.js?v=1.0.6';
-import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.0.6';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.0.7';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.7';
+import { parseModelObject } from './model-json.js?v=1.0.7';
+import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.0.7';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
@@ -32,6 +32,23 @@ const noAccount = row => row?.has_account === false || row?.has_account === 'fal
 export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
     const known=(state,a)=>({...a,identityKnown:a.identityKnown===true||profile(state).alias===getContext().name1});
+    const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd});
+    const memoryQuery=(state,a)=>({
+        names:(a?[a]:xItems(state,'account').filter(a=>!a.blocked)).flatMap(a=>[a.name,...(a.aliases||[])]),
+        topic:xItems(state,'post').filter(p=>p.author==='user'||a&&p.author===a.id).slice(-15).map(p=>p.text).join('\n')+
+            (a?'\n'+xThread(state,a.id).slice(-3).map(m=>m.text).join('\n'):''),
+    });
+    function publicConversation(state) {
+        const all=xItems(state,'post');
+        const posts=new Set([...all.slice(-20),...all.filter(p=>p.author==='user').slice(-15)].map(p=>p.id));
+        const result=[];let size=0;
+        for(const c of xItems(state,'comment').filter(c=>posts.has(c.postId)&&!state.x[c.author]?.blocked).slice(-40).reverse()) {
+            const row={postId:c.postId,id:c.id,author:c.author,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo};
+            const length=JSON.stringify(row).length;if(size+length>24000)continue;
+            result.unshift(row);size+=length;
+        }
+        return result;
+    }
     const run=work=>phone.appTask(async(view,current,request)=>{
         if(!current())throw Error('X 已关闭或聊天已变化。');
         const ticket=await memory.begin();
@@ -43,11 +60,13 @@ export function createX({memory,phone,getContext,getSettings}) {
         return getSettings().prompts.general+'\n'+getSettings().prompts.x+'\n'+getSettings().prompts.xStyle+
             '\n这是 X 文字扮演任务，不执行真实网络操作。只输出本任务指定 JSON，内容语言遵守酒馆预设；不替 user 发言。user 的公开个人资料：'+JSON.stringify({alias:p.alias,bio:p.bio})+
             '\n真实剧情/人设/千千结记忆只作背景；私人电话、短信、其他 App 内容不能凭空变成公开消息。每人一个 X 账号，发现账号不等于认识真人。'+
+            '\n人物认知连续性：先结合有效正文、已提供的千千结记忆和本帖既有评论，逐人区分已经亲历/目击/被明确告知的事实、只见过的公开内容及尚未知情的事。已确认账号身份的熟人应延续自己已有认知，不因换到 X 就把见过的物品、已获知的关系或计划当成首次听说。可以对新变化作反应（例如订婚不等于已经结婚、计划出行不等于已经抵达），不重复首次惊讶或已经回答的问题。私下已知可以影响措辞或选择沉默，不等于把私密细节公开，也不等于其他网友知道。未知身份账号仍不得利用私下经历认人；无记录不能断言从未发生。'+
+            '\n身份基线：'+(p.alias===getContext().name1?'user 当前使用已设置的真实姓名，按原有真名账号规则识别；是否熟悉以及知道哪些事仍须逐人有依据。':'user 使用网名；只有明确 identityKnown 的账号可关联真人，其他账号保持匿名边界。')+
             (a?'\n当前对方：'+JSON.stringify({name:a.name,handle:a.handle})+'。'+(a.identityKnown?'此前已确认 user 账号对应的真实身份，改网名不会遗忘。':'对方不知道此网名是谁。不能凭后台 user 对应关系、角色卡、人设、正文中的私人称呼或私下经历认出 user；只知道网名及本账号公开过或本私信提供的信息。'):'\n逐个人物区分知情范围，不把后台账号对应关系当作人物已知。')+
             '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(-15).map(({id,text})=>({id,text})))+'\nuser 最近公开转发（不代表赞同）：'+JSON.stringify(xItems(state,'post').filter(p=>p.reposted&&p.author!=='user').slice(-10).map(p=>({author:state.x[p.author]?.name,text:p.text})))+'\n'+task;
     }
     const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
-        retries:0,parseResponse:parseXObject,
+        retries:0,parseResponse:parseXObject,memoryQuery:memoryQuery(state,a),
         outputContract:'当前是 X 应用任务，不续写正文、不输出状态栏或 HTML。保留人设、背景和语言约定，最终只返回本任务要求的单个完整 JSON 对象，数组无内容用[]；不要复述示例或输出多个候选。'+X_ACCOUNT_RULES,...options,
     });
     const audienceTask=state=>'\n'+AUDIENCE_RULES+'\n当前粉丝：'+JSON.stringify(xAudience(state)?{initialFollowers:xAudience(state).initialFollowers,followers:xAudience(state).followers}:null)+'\n可评估的公开传播来源：'+JSON.stringify(audienceSources(state).slice(-40).map(s=>({...s,creditedGain:xAudience(state)?.credited?.[s.sourceId]||0})))+
@@ -139,7 +158,7 @@ export function createX({memory,phone,getContext,getSettings}) {
                 '当前任务：X 动态。'+X_ACCOUNT_RULES+(following?'仅生成已关注账号的公开帖子，不能添加列表外发帖账号；评论者不受关注列表限制。':
                     '为你推荐必须属于 user 生活的世界。优先考虑人设/有效剧情中已建立关系且可能使用 X 的朋友、同学、同事等账号；没有合适熟人时，按学校、职业、行业、城市、兴趣推荐机构或创作者。不能凭空捏造 user 与推荐者已认识，不强迫关注，也不能让推荐者知道未公开的 user 身份。可原创贴合背景的陌生账号，不让所有帖子围着 user 转。'+
                     '可附 accounts:[{name:"名称",handle:"账号",bio:"简介",has_account:true,followers:合理粉丝数}] 推荐最多8个账号。帖子新作者也须先做账号适用性筛选，并附has_account。')+audienceTask(state);
-            const results=await ask(state,null,request,current,task+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新最多15条 user 帖子的累计公开互动，不得替 user 改写发言；根据这些互动一并评估growth。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；本次新提及的growth来源可用 mention:new:0（posts从0计数），已有提及继续用给出的来源ID。')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(({id,name,handle,identityKnown,following,crowd})=>({id,name,handle,identityKnown,following,crowd})))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').slice(-20).map(p=>p.text))+
+            const results=await ask(state,null,request,current,task+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新最多15条 user 帖子的累计公开互动，不得替 user 改写发言；根据这些互动一并评估growth。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；本次新提及的growth来源可用 mention:new:0（posts从0计数），已有提及继续用给出的来源ID。')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').slice(-20).map(p=>({id:p.id,author:p.author,text:p.text})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state))+
                 '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:近期原文索引,evidence:"recentProse 中对应 assistant 原文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&!square&&Array.isArray(d.accounts)?[]:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',8):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}));
             state=structuredClone(state);state.x||={};const changes=[],newMentions=new Map();let added=0;
             if(!square&&!following){

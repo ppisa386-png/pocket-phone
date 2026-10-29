@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { readPreparedMemory, preparedMemoryPrompt } from '../src/external-memory.js';
+import { readPreparedMemory, preparedMemoryPrompt, readXMemory, xMemoryPrompt } from '../src/external-memory.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
@@ -10,6 +10,51 @@ import { JOURNAL_KEY, messageSignatures, revisionsFor, appendChange, reconcileJo
 const settings=()=>normalizeSettings({retries:0,proactiveEnabled:false});
 const context=()=>({chatId:'test-chat',chatMetadata:{qianqianjie:{chatId:'qqj-chat'}}});
 const prepared=()=>({status:'ready',identity:{hostChatId:'test-chat',qqjChatId:'qqj-chat'},recall:{text:'Sam and Alex agreed to meet at the station.'},prequel:{text:'Earlier they met in London.'}});
+
+const savedSnapshot=floors=>({status:'ready',identity:prepared().identity,memory:{status:'ready',floors}});
+test('X selects saved whole floor summaries even when last recall is empty; no profile/state dump or model recall',()=>{
+    const c={...context(),chat:Array.from({length:100},()=>({mes:'Story'}))};
+    const floors=Array.from({length:100},(_,i)=>({messageIndex:i,assistantSeq:i,summary:'Unrelated record '+i}));
+    floors[2].summary='索菲娅已亲眼见过礼物并获知出行计划；其他人并不知情。';
+    const snapshot=savedSnapshot(floors);
+    Object.defineProperty(snapshot,'people',{get(){throw Error('must not read profiles');}});
+    Object.defineProperty(snapshot,'cse',{get(){throw Error('must not read private state');}});
+    let reads=0;
+    const bridge={getSnapshot(){reads++;return snapshot;},readMemory(){throw Error('must not initiate recall');}};
+    const result=readXMemory(c,settings(),{names:['索菲娅·费尔南德斯'],topic:''},bridge);
+    assert.equal(reads,1);assert.equal(result.status,'ready');assert.equal(result.count,21);
+    assert.match(result.text,/已亲眼见过礼物/);assert.match(result.text,/其他人并不知情/);
+    assert.doesNotMatch(result.text,/Unrelated record 3"/);assert.match(result.text,/Unrelated record 99/);
+    assert.match(xMemoryPrompt(result),/不代表完整记忆/);
+});
+
+test('X saved selection respects active chat, disabled source, invalidation and removed/future floors',()=>{
+    const c={...context(),chat:[{},{}]};const valid=savedSnapshot([{messageIndex:0,summary:'Alex knows.'},{messageIndex:2,summary:'Deleted future.'}]);
+    let current=valid,reads=0;const bridge={getSnapshot(){reads++;return current;}};
+    assert.equal(readXMemory(c,{api:{memorySource:'none'}},{},bridge).status,'disabled');assert.equal(reads,0);
+    assert.equal(readXMemory(c,settings(),{},bridge).count,1);
+    assert.equal(readXMemory({...c,getCurrentChatId:()=> 'other'},settings(),{},bridge).status,'stale');
+    current={...valid,identity:{...valid.identity,qqjChatId:'other'}};assert.equal(readXMemory(c,settings(),{},bridge).text,'');
+    current={...valid,memory:{status:'not-ready',floors:valid.memory.floors}};assert.equal(readXMemory(c,settings(),{},bridge).text,'');
+    current=savedSnapshot([]);assert.equal(readXMemory(c,settings(),{},bridge).text,'','never fall back to cached records');
+    assert.equal(readXMemory(c,settings(),{},{}).status,'missing');
+});
+
+test('X saved memory budgets whole summaries without truncating a privacy qualifier',()=>{
+    const c={...context(),chat:Array.from({length:60},()=>({}))};
+    const floors=Array.from({length:60},(_,i)=>({messageIndex:i,summary:'Alex '+String(i)+' '+('a'.repeat(4000))+' ONLY PRIVATE'}));
+    const result=readXMemory(c,settings(),{names:['Alex']},{getSnapshot:()=>savedSnapshot(floors)});
+    assert.ok(result.text.length<=32000);assert.ok(result.count>0&&result.count<40);
+    for(const row of JSON.parse(result.text))assert.ok(row.summary.endsWith('ONLY PRIVATE'));
+});
+
+test('X Chinese topic can retrieve a saved floor outside the recent window without a name match',()=>{
+    const c={...context(),chat:Array.from({length:50},()=>({}))};
+    const floors=Array.from({length:50},(_,i)=>({messageIndex:i,summary:'Unrelated '+i}));
+    floors[0].summary='朋友已经参观画展并见到了画家。';
+    const result=readXMemory(c,settings(),{topic:'今年画展的进展'},{getSnapshot:()=>savedSnapshot(floors)});
+    assert.match(result.text,/朋友已经参观画展/);
+});
 
 test('QQJ integration reads only prepared prompt text and preserves private boundaries as supplied',()=>{
     let reads=0;
