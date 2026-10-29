@@ -1,4 +1,5 @@
 import { createAssetPanel } from '../src/assets-view.js';
+import { ownershipRecoveryProse } from '../src/assets-recovery.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -32,6 +33,103 @@ function setup(date = '2026-01-01') {
 }
 const marker = row => '<!--durian-money:' + JSON.stringify(row) + '-->';
 const evaluation = date => ({ date, events: [], salaries: [], valuations: [], living: { total: 0, bookedIds: [] }, business: [] });
+
+const dressFact = '朋友刷自己的卡付清红色礼服和金色高跟鞋，交给Sam带走。';
+const watchFact = '朋友结账后，Sam戴上获赠的玫瑰金钻石女表，朋友戴上他自己的黑色男表。';
+const giftRows = () => [
+    { sourceIndex: 1, evidence: dressFact, name: '红色礼服', category: 'luxury', kind: 'asset', owner: 'user', amount: null, marketValue: 2000 },
+    { sourceIndex: 1, evidence: dressFact, name: '金色高跟鞋', category: 'luxury', kind: 'asset', owner: 'user', amount: null, marketValue: null },
+    { sourceIndex: 2, evidence: watchFact, name: '玫瑰金钻石女表', category: 'luxury', kind: 'asset', owner: 'user', amount: null, marketValue: 10000 },
+];
+async function missedLegacyGifts(f) {
+    f.reply({ ...initial(), initial: { balance: 1000, jobs: [], holdings: [{name:'旧钻戒',category:'luxury',value:5000}] } });
+    ok(await f.assets.update()); await f.append(dressFact, '2026-01-02'); await f.append(watchFact, '2026-01-02');
+    f.reply(evaluation('2026-01-02')); ok(await f.assets.update());
+    const ticket = await f.memory.begin(), wallet = {...f.state().assets.wallet}; delete wallet.ownershipAuditVersion;
+    await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:wallet}]);
+}
+
+test('missing annotations: manual new-prose gift capture coexists with old valuation and living costs', async () => {
+    const f=setup(); try {
+        f.reply({...initial(),initial:{balance:1000,jobs:[],holdings:[{name:'旧钻戒',category:'luxury',value:null}]}}); ok(await f.assets.update());
+        await f.append(dressFact,'2026-01-02'); await f.append(watchFact,'2026-01-02');
+        const old=assetRows(f.state(),'holding')[0];
+        f.reply({...evaluation('2026-01-02'),events:giftRows(),valuations:[{id:old.id,value:5000}],living:{total:10,bookedIds:[]}});
+        ok(await f.assets.update()); assert.equal(assetRows(f.state(),'holding').length,4);
+        assert.equal(cashBalance(f.state()),99000); assert.equal(f.state().assets[old.id].valueMinor,500000);
+        assert.equal(assetRows(f.state(),'cash_transaction').length,1);
+        assert.match(f.prompt(),/即使正文没有durian-money注释/);
+        const payload=JSON.parse(f.prompt().split('账本与待核对资料：')[1].split('\n')[0]);
+        assert.deepEqual(payload.newProse.map(p=>p.index),[1,2]);
+        const calls=f.count(); assert.equal((await f.assets.update()).ok,false); assert.equal(f.count(),calls);
+        f.c.chat.pop(); await f.memory.read(); assert.equal(assetRows(f.state(),'holding').length,1);
+        assert.equal(cashBalance(f.state()),100000);
+    } finally { f.close(); }
+});
+
+test('legacy same-floor audit adds missed gifts once without rerolling balance, prices or settlement',async()=>{
+    const f=setup();try{
+        await missedLegacyGifts(f); const before=structuredClone(f.state().assets.wallet), cash=structuredClone(assetRows(f.state(),'cash_transaction'));
+        const panel=createAssetPanel({adapter:{assets:f.assets},getView:f.state,redraw(){},notice(){}});
+        assert.doesNotMatch(panel.html(),/data-asset-action="update" disabled/);
+        const duplicate={...giftRows()[0],name:'旧钻戒',marketValue:1}; f.reply({recoveredAssets:[...giftRows(),duplicate]});
+        const result=await f.assets.update();ok(result);assert.equal(result.value.repaired,true);
+        assert.equal(assetRows(f.state(),'holding').length,4);assert.equal(cashBalance(f.state()),100000);
+        assert.equal(assetRows(f.state(),'holding').find(h=>h.name==='旧钻戒').valueMinor,500000);
+        assert.deepEqual(assetRows(f.state(),'cash_transaction'),cash);
+        assert.deepEqual(f.state().assets.wallet,{...before,ownershipAuditVersion:1});
+        assert.match(f.prompt(),/ownershipRecoveryProse/);assert.match(panel.html(),/data-asset-action="update" disabled/);
+        const calls=f.count();assert.equal((await f.assets.update()).ok,false);assert.equal(f.count(),calls);
+        await f.memory.read();assert.equal(assetRows(f.state(),'holding').length,4);
+        f.c.chat.pop();await f.memory.read();assert.equal(assetRows(f.state(),'holding').length,1);
+    }finally{f.close();}
+});
+
+test('legacy audit errors keep retry available but cannot change money or existing holdings',async()=>{
+    const f=setup();try{
+        await missedLegacyGifts(f);const before=structuredClone(f.state().assets);
+        for(const data of [
+            {}, {recoveredAssets:giftRows(),living:{total:50,bookedIds:[]}},
+            {recoveredAssets:giftRows(),valuations:[{id:'initial:holding:0',value:1}]},
+            {recoveredAssets:[{...giftRows()[0],owner:'friend'}]},
+            {recoveredAssets:[{...giftRows()[0],amount:2000}]},
+            {recoveredAssets:[{...giftRows()[0],category:'investment'}]},
+            {recoveredAssets:[{...giftRows()[0],sourceIndex:999}]},
+            {recoveredAssets:[{...giftRows()[0],evidence:'这是编造的成交事实。'}]},
+        ]) {f.reply(data);assert.equal((await f.assets.update()).ok,false);assert.deepEqual(f.state().assets,before);}
+        f.reply({recoveredAssets:giftRows()});ok(await f.assets.update());
+    }finally{f.close();}
+});
+
+test('legacy audit can share the next assessment; old cash remains barred, new life costs settle',async()=>{
+    const f=setup();try{
+        await missedLegacyGifts(f);await f.append('继续旅行。','2026-01-03');
+        f.reply({...evaluation('2026-01-03'),recoveredAssets:giftRows(),events:[{kind:'expense',name:'重扣旧购物',sourceIndex:1,evidence:dressFact,amount:50}],living:{total:10,bookedIds:[]}});
+        ok(await f.assets.update());assert.equal(assetRows(f.state(),'holding').length,4);assert.equal(cashBalance(f.state()),99000);
+        assert.equal(f.state().assets.wallet.skippedUnverified,1);assert.equal(f.state().assets.wallet.lastDay,day('2026-01-03'));
+        await f.append('次日。','2026-01-04');f.reply(evaluation('2026-01-04'));ok(await f.assets.update());
+        assert.equal(assetRows(f.state(),'holding').length,4);assert.doesNotMatch(f.prompt(),/"ownershipRecoveryProse":/);
+    }finally{f.close();}
+});
+
+test('ownership audit excludes unknown-time, pre-opening, system and user text; bounded to twenty prose floors',()=>{
+    const state={assets:{wallet:{startDay:day('2026-01-01'),lastIndex:30}}};
+    const chat=[{mes:'无日期'}, {mes:'日期：2025-12-01\n旧物'}, {mes:'日期：2026-01-01\n计划',is_user:true}, {mes:'系统',is_system:true},
+        ...Array.from({length:27},(_,n)=>({mes:'日期：2026-01-02\n第'+n+'条正文'}))];
+    const rows=ownershipRecoveryProse(state,chat);assert.equal(rows.length,20);assert.equal(rows[0].index,11);assert.equal(rows.at(-1).index,30);
+    assert.deepEqual(ownershipRecoveryProse({assets:{wallet:{...state.assets.wallet,ownershipAuditVersion:1}}},chat),[]);
+});
+
+test('each narrative floor can import gift markers immediately, without a separate model request',async()=>{
+    const f=setup();try{
+        ok(await f.assets.update()); const calls=f.count();
+        const rows=giftRows();await f.append(dressFact+marker({...rows[0],marketValue:null})+marker(rows[1]),'2026-01-02');
+        assert.equal(assetRows(f.state(),'holding').length,2);
+        await f.append(watchFact+marker({...rows[2],marketValue:null}),'2026-01-02');
+        assert.equal(assetRows(f.state(),'holding').length,3);assert.equal(cashBalance(f.state()),100000);assert.equal(f.count(),calls);
+        const prompt=buildAssetPrompt(f.state(),f.settings);assert.match(prompt,/付款人是他人而漏记/);assert.match(prompt,/每项追加独立/);
+    }finally{f.close();}
+});
 
 test('first ledger snapshot uses the visible scene date instead of an independently guessed model date', async () => {
     const f = setup('2026-10-18'); try {
@@ -547,7 +645,7 @@ test('classification repair excludes tools without deleting cash, values or owne
 });
 
 test('invalid classification IDs, duplicates, investment and missing reasons fail atomically',()=>{
- const d=day('2026-01-01'), original={assets:{wallet:{id:'wallet',type:'wallet',openingMinor:100000,lastDay:d,lastIndex:0},tool:{id:'tool',type:'holding',category:'fixed',name:'工具',valueMinor:8500,active:true},right:{id:'right',type:'holding',category:'investment',name:'版权',active:true}}};
+ const d=day('2026-01-01'), original={assets:{wallet:{id:'wallet',type:'wallet',ownershipAuditVersion:1,openingMinor:100000,lastDay:d,lastIndex:0},tool:{id:'tool',type:'holding',category:'fixed',name:'工具',valueMinor:8500,active:true},right:{id:'right',type:'holding',category:'investment',name:'版权',active:true}}};
  const args={chat:[{mes:'日期：2026-01-01'},{mes:'日期：2026-01-02'}],index:1,revision:'next'};
  for(const rows of [[{id:'no',category:'exclude',reason:'未知'}],[{id:'right',category:'exclude',reason:'不能排除投资'}],[{id:'tool',category:'investment',reason:'不能改变收益性质'}],[{id:'tool',category:'exclude'}],[{id:'tool',category:'exclude',reason:'普通工具'},{id:'tool',category:'fixed',reason:'重复'}]]){
   const copy=structuredClone(original);assert.throws(()=>applyAssessment(original,{...evaluation('2026-01-02'),classifications:rows},args),/分类修正无效/);assert.deepEqual(original,copy);

@@ -1,12 +1,13 @@
-import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=1.0.3';
-import { dayDate } from './story-clock.js?v=1.0.3';
+import { needsOwnershipRecovery } from './assets-recovery.js?v=1.0.4';
+import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=1.0.4';
+import { dayDate } from './story-clock.js?v=1.0.4';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
     let tab = 'cash', working = false, status = '', epoch = 0;
     const labels = { cash: '余额', fixed: '固定资产', luxury: '奢侈品', investment: '投资' };
     function html() {
         const state = getView(), wallet = state.assets?.wallet, balance = cashBalance(state), hold = reservedCash(state);
-        const locked = !!wallet && wallet.revision === state.revision;
+        const locked = !!wallet && wallet.revision === state.revision && !needsOwnershipRecovery(wallet);
         const pending = assetRows(state, 'story_event').filter(e => !e.processed).length;
         let body;
         if (tab === 'cash') {
@@ -40,7 +41,7 @@ export function createAssetPanel({ adapter, getView, redraw, notice }) {
             if (action !== 'update' || working || getView().busy) return;
             if (!adapter.assets) { notice('请在酒馆中点击一键更新建立账本。'); return; }
             const token = epoch; working = true; redraw();
-            try { const result = await adapter.assets.update(); if (token === epoch) status = result?.ok ? '账本已更新' : result?.error || '本次未更新，请重试。'; }
+            try { const result = await adapter.assets.update(); if (token === epoch) status = result?.ok ? (result.value?.repaired ? '遗漏物品已核对，原有收支结算未重算' : '账本已更新') : result?.error || '本次未更新，请重试。'; }
             catch (e) { if (token === epoch) status = e.message; }
             finally { if (token === epoch) working = false; redraw(); }
         },
