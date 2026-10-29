@@ -1,8 +1,8 @@
-import { icon } from './icons.js?v=1.0.4';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.0.4';
-import { displayStoryTime } from './story-clock.js?v=1.0.4';
-import { xItems, xProfile, xCounts } from './x.js?v=1.0.4';
-import { xAudience } from './x-audience.js?v=1.0.4';
+import { icon } from './icons.js?v=1.0.5';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.0.5';
+import { displayStoryTime } from './story-clock.js?v=1.0.5';
+import { xItems, xProfile, xCounts } from './x.js?v=1.0.5';
+import { xAudience } from './x-audience.js?v=1.0.5';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;

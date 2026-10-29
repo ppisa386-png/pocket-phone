@@ -1,6 +1,6 @@
-import { needsOwnershipRecovery } from './assets-recovery.js?v=1.0.4';
-import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=1.0.4';
-import { dayDate } from './story-clock.js?v=1.0.4';
+import { needsOwnershipRecovery } from './assets-recovery.js?v=1.0.5';
+import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=1.0.5';
+import { dayDate } from './story-clock.js?v=1.0.5';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
     let tab = 'cash', working = false, status = '', epoch = 0;

@@ -164,7 +164,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             max_tokens: config.maxTokens }, isCurrent);
     }
     return {
-        async generate(prompt, contact, isCurrent, onProgress = () => {}) {
+        async generate(prompt, contact, isCurrent, onProgress = () => {}, options = {}) {
             if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
             const config = structuredClone(getSettings().api);
             normalizeApiUrl(config.baseUrl);
@@ -175,7 +175,13 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             const prepared = await prepareRequest(getContext(), prompt, contact, current);
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
-            return post('generate', config, key, independentPayload(prepared, config), current, onProgress);
+            const payload = independentPayload(prepared, config);
+            // Only the caller's task contract is appended, after preset hooks.
+            // Keep all roleplay context and portable settings intact.
+            if (typeof options.finalOutputContract === 'string' && options.finalOutputContract.trim()) {
+                payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
+            }
+            return post('generate', config, key, payload, current, onProgress);
         },
         async models(config, key, isCurrent) {
             const data = await post('status', config, key, {}, isCurrent);

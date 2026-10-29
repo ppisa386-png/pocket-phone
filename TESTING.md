@@ -1,3 +1,8 @@
+## 1.0.5 补查格式
+- ../asset-format105-full.txt：407/407 Node通过；涵盖独立API最终任务约束、真实调用链的受控补查返回、失败原子保留、成功同楼锁、隐藏账本/多候选/思考隔离。
+- ../asset-format105-browser.txt：assets-browser通过；HTML注释包装的补查结果在320px成功保存，余额不变、刷新后锁定，既有财务回归通过，零外部调用/JS错误。
+- 用户原365字符回复未取得，只确认截图失败阶段与可复现兼容缺口，不将模拟模型测试冒充用户上游实测。
+
 ## 1.0.4 购物财产与旧账补查
 - ../ownership-full.txt：403/403 Node通过；../ownership-target.txt：资产/权益/正文桥64/64通过。
 - ../ownership-browser.txt：资产移动浏览器通过，320px旧账补查、余额不变、状态和重载锁；原工资、费用抵扣、权益及回退回归通过，零外部请求/脚本错误。截图../qa-results/assets-recovery-320.png已查看。

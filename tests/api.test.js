@@ -8,8 +8,37 @@ import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
+import { createAssets } from '../src/assets.js';
+import { cashBalance, assetRows } from '../src/assets-core.js';
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
+
+test('independent final output contract follows all preset hooks without mutating captured context',async()=>{
+ const prepared={messages:[{role:'system',content:'Character and world'},{role:'user',content:'Task'},{role:'system',content:'Preset ending: continue roleplay prose'}],temperature:0.83,max_tokens:4321};
+ const original=structuredClone(prepared),f=clientFixture({prepareRequest:async()=>prepared});
+ await f.client.generate('task',null,()=>true,()=>{},{finalOutputContract:'Return one JSON ledger object.'});
+ assert.deepEqual(f.requests[0].body.messages,[...original.messages,{role:'system',content:'Return one JSON ledger object.'}]);
+ assert.deepEqual(prepared,original);assert.equal(f.requests[0].body.temperature,0.83);assert.equal(f.requests[0].body.max_tokens,4321);
+ await f.client.generate('ordinary phone task',null,()=>true);assert.deepEqual(f.requests[1].body.messages,original.messages);
+});
+
+test('independent legacy repair sends final schema and reads wrapped JSON once; non-JSON keeps ledger untouched',async()=>{
+ const f=phoneFixture();const assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ try{
+  f.context.chat=[{mes:'日期：2026-05-17\n平常的一天。'}];f.reply(()=>JSON.stringify({initial:{balance:1000,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
+  const evidence='朋友付清礼服的款项，把礼服作为礼物交给Sam带走。';f.context.chat.push({mes:'日期：2026-05-18\n'+evidence});await f.memory.read();
+  f.reply(()=>JSON.stringify({events:[],living:{total:0,bookedIds:[]},business:[]}));assert.equal((await assets.update()).ok,true);
+  const ticket=await f.memory.begin(),wallet={...f.phone.snapshot().assets.wallet};delete wallet.ownershipAuditVersion;
+  await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:wallet}]);const before=structuredClone(f.phone.snapshot().assets);
+  let calls=0;
+  f.reply(options=>{calls++;const body=JSON.parse(options.body);assert.match(body.messages.at(-1).content,/recoveredAssets/);assert.match(body.messages.at(-1).content,/不是角色扮演正文续写/);return '收到，我会核对这些物品。';});
+  const failure=await assets.update();assert.equal(failure.ok,false);assert.equal(failure.code,'MODEL_JSON_MISSING');assert.deepEqual(f.phone.snapshot().assets,before);assert.equal(calls,1);
+  f.reply(()=>{calls++;return '<!--'+JSON.stringify({recoveredAssets:[{sourceIndex:1,evidence,name:'礼服',owner:'user',category:'luxury',amount:null,marketValue:2000}]})+'-->';});
+  const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(result.value.repaired,true);assert.equal(calls,2);
+  assert.equal(cashBalance(f.phone.snapshot()),100000);assert.equal(assetRows(f.phone.snapshot(),'holding').length,1);
+  assert.equal((await assets.update()).ok,false);assert.equal(calls,2);
+ }finally{f.close();}
+});
 
 test('compatible final-text variants are read without mistaking reasoning or streaming deltas for replies',()=>{
     assert.equal(extractApiText({choices:[{text:' Legacy final text ',finish_reason:'stop'}]}),'Legacy final text');

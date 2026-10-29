@@ -111,7 +111,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 1.0.4/);
+    assert.match(log,/当前运行版本：榴莲手机 1.0.5/);
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -175,7 +175,7 @@ try {
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();
     await p.getByText(/43 天/).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
     console.log('PASS settlement mobile: failed offsets preserve balance, four pending aliases settle 43 days, expense offsets and salary visible, reload preserved');
-    // Simulate a 1.0.4 ledger that settled a gift floor without capturing it.
+    // Simulate a 1.0.5 ledger that settled a gift floor without capturing it.
     await p.evaluate(async()=>{
         await window.advance('日期：2026-06-25\n朋友付清红色礼服的款项，作为礼物交给Sam带走。');
         window.financeResponse={events:[],living:{total:0,bookedIds:[]},business:[]};
@@ -189,7 +189,7 @@ try {
     });
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();
     assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),false,'legacy same-floor repair available');
-    await p.evaluate(()=>{const c=window.SillyTavern.getContext();window.financeResponse={recoveredAssets:[{sourceIndex:c.chat.length-1,evidence:'朋友付清红色礼服的款项，作为礼物交给Sam带走。',name:'红色礼服',category:'luxury',owner:'user',amount:null,marketValue:2000}]};});
+    await p.evaluate(()=>{const c=window.SillyTavern.getContext();window.financeResponse={recoveredAssets:[{sourceIndex:c.chat.length-1,evidence:'朋友付清红色礼服的款项，作为礼物交给Sam带走。',name:'红色礼服',category:'luxury',owner:'user',amount:null,marketValue:2000}]};c.generateQuietPrompt=async()=>{window.calls++;return '<!--'+JSON.stringify(window.financeResponse)+'-->';};});
     await p.locator('[data-asset-action="update"]').tap();await p.getByText('遗漏物品已核对，原有收支结算未重算',{exact:true}).waitFor();
     await p.getByText('$14,950.00',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
     await p.locator('[data-asset-tab="luxury"]').tap();await p.getByText('红色礼服',{exact:true}).waitFor();await checkBottom();
