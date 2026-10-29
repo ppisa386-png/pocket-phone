@@ -1,19 +1,19 @@
-import { bindInputViewport } from './input-viewport.js?v=1.0.2';
-import { createDailyPanel } from './daily-view.js?v=1.0.2';
-import { storyTime } from './story-clock.js?v=1.0.2';
-import { createAssetPanel } from './assets-view.js?v=1.0.2';
-import { createAmazonPanel } from './amazon-view.js?v=1.0.2';
-import { bindComposerKeys } from './composer.js?v=1.0.2';
-import { createXPanel } from './x-view.js?v=1.0.2';
-import { xUnread } from './x.js?v=1.0.2';
-import { createSnapPanel } from './snapchat-view.js?v=1.0.2';
-import { snapUnread } from './snapchat.js?v=1.0.2';
-import { createApiPanel } from './api-view.js?v=1.0.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.0.2';
-import { icon } from './icons.js?v=1.0.2';
-import { renderMessagesScreen } from './messages-view.js?v=1.0.2';
-import { unreadMessages, messageParticipants } from './messages.js?v=1.0.2';
-import { renderPhoneScreen } from './phone-view.js?v=1.0.2';
+import { bindInputViewport } from './input-viewport.js?v=1.0.3';
+import { createDailyPanel } from './daily-view.js?v=1.0.3';
+import { storyTime } from './story-clock.js?v=1.0.3';
+import { createAssetPanel } from './assets-view.js?v=1.0.3';
+import { createAmazonPanel } from './amazon-view.js?v=1.0.3';
+import { bindComposerKeys } from './composer.js?v=1.0.3';
+import { createXPanel } from './x-view.js?v=1.0.3';
+import { xUnread } from './x.js?v=1.0.3';
+import { createSnapPanel } from './snapchat-view.js?v=1.0.3';
+import { snapUnread } from './snapchat.js?v=1.0.3';
+import { createApiPanel } from './api-view.js?v=1.0.3';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.0.3';
+import { icon } from './icons.js?v=1.0.3';
+import { renderMessagesScreen } from './messages-view.js?v=1.0.3';
+import { unreadMessages, messageParticipants } from './messages.js?v=1.0.3';
+import { renderPhoneScreen } from './phone-view.js?v=1.0.3';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },

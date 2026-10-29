@@ -564,3 +564,15 @@ test('one-click valuation of an existing gift needs no new prose or cash transac
   f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets[h.id].valueMinor,null);
  }finally{f.close();}
 });
+
+test('unverified new event is skipped while valid valuation and living expense settle',async()=>{
+ const f=setup();try{
+  const first=initial();first.initial.holdings=[{name:'钻戒',category:'luxury',value:null}];f.reply(first);ok(await f.assets.update());
+  await f.append('今天继续生活。','2026-01-11');const h=assetRows(f.state(),'holding')[0];
+  f.reply({...evaluation('2026-01-11'),events:[{kind:'expense',name:'虚构购买',amount:9,sourceIndex:1,evidence:'不存在的消费'}],valuations:[{id:h.id,value:5000}],living:{total:100,bookedIds:[]}});
+  ok(await f.assets.update());assert.equal(f.state().assets[h.id].valueMinor,500000);assert.equal(cashBalance(f.state()),90000);assert.equal(f.state().assets.wallet.skippedUnverified,1);
+  assert.equal(assetRows(f.state(),'cash_transaction').some(t=>t.memo==='虚构购买'),false);
+  const panel=createAssetPanel({adapter:{},getView:f.state,redraw(){},notice(){}});assert.match(panel.html(),/跳过 1 条/);
+  f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets[h.id].valueMinor,null);assert.equal(cashBalance(f.state()),100000);
+ }finally{f.close();}
+});

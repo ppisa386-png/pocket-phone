@@ -1,5 +1,5 @@
-import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=1.0.2';
-import { dayDate } from './story-clock.js?v=1.0.2';
+import { assetRows, cashBalance, reservedCash, dollars, recentCash } from './assets-core.js?v=1.0.3';
+import { dayDate } from './story-clock.js?v=1.0.3';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
     let tab = 'cash', working = false, status = '', epoch = 0;
@@ -29,7 +29,7 @@ export function createAssetPanel({ adapter, getView, redraw, notice }) {
             body = assetRows(state, 'holding').filter(h => h.category === tab && h.active !== false && !h.excludedFromAssets).map(h => '<article class="pp-asset-row"><span>' + assetEscape(h.name) + '</span><b>' + (h.valueMinor == null ? '待估值' : dollars(h.valueMinor)) + '</b></article>').join('') || '<p class="pp-snap-empty">暂无' + labels[tab] + '</p>';
         }
         return '<div class="pp-snap pp-assets"><div class="pp-asset-body" data-asset-page="' + tab + '"><header class="pp-snap-top"><b>小榴莲</b><button type="button" class="pp-snap-primary" data-asset-action="update"' + (working || state.busy || locked ? ' disabled' : '') + '>一键更新</button></header>' +
-            '<p class="pp-asset-note">' + (wallet ? '已结算至 ' + dayDate(wallet.lastDay) : '点击一键更新，建立你的账本') + (pending ? ' · ' + pending + ' 笔待结算' : '') + '</p>' +
+            '<p class="pp-asset-note">' + (wallet ? '已结算至 ' + dayDate(wallet.lastDay) : '点击一键更新，建立你的账本') + (pending ? ' · ' + pending + ' 笔待结算' : '') + '</p>' + (wallet?.skippedUnverified ? '<p class="pp-asset-note">上次更新跳过 ' + wallet.skippedUnverified + ' 条无法核对正文依据的新增收支，未入账。</p>' : '') +
             '<p class="pp-snap-status" role="status">' + assetEscape(working ? '正在更新…' : status || (locked ? '已更新' : '')) + '</p>' + body +
             '</div>' +
             '<nav class="pp-snap-tabs pp-asset-tabs" aria-label="小榴莲分类">' + Object.entries(labels).map(([key, label]) => '<button type="button" data-asset-action="tab" data-asset-tab="' + key + '" aria-pressed="' + (tab === key) + '">' + label + '</button>').join('') + '</nav></div>';
