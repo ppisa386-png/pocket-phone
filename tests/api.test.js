@@ -9,9 +9,23 @@ import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { createAssets } from '../src/assets.js';
+import { createX, xItems } from '../src/x.js';
 import { cashBalance, assetRows } from '../src/assets-core.js';
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
+
+test('independent X discovery appends account schema after host preparation and saves a trailing-comma result once',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
+ try{
+  f.reply(options=>{
+   calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);
+   assert.equal(last.role,'system');assert.match(last.content,/根字段 accounts 为数组/);
+   assert.match(last.content,/不使用尾逗号/);assert.ok(body.messages.length>1);
+   return '{"accounts":[{"name":"Alex","handle":"alex","bio":"hello","has_account":true,},],}';
+  });
+  const result=await x.discover('Alex');assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(xItems(f.phone.snapshot(),'account').length,1);
+ }finally{f.close();}
+});
 
 test('independent final output contract follows all preset hooks without mutating captured context',async()=>{
  const prepared={messages:[{role:'system',content:'Character and world'},{role:'user',content:'Task'},{role:'system',content:'Preset ending: continue roleplay prose'}],temperature:0.83,max_tokens:4321};

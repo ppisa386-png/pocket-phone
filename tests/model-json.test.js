@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseModelObject} from '../src/model-json.js';
+import {parseXObject} from '../src/x.js';
+
+test('X tolerates trailing delimiters only, preserving strings and all scalar values',()=>{
+ const raw='{"accounts":[{"name":"Alex","handle":"alex","bio":"Literal ,} and ,] and \\"quote\\"","has_account":true,"followers":12,},],}';
+ const value=parseXObject(raw);
+ assert.equal(value.accounts[0].bio,'Literal ,} and ,] and "quote"');assert.equal(value.accounts[0].followers,12);
+ assert.deepEqual(parseXObject('<think>{"wrong":1}</think><content>'+raw+'</content>'),value);
+ assert.throws(()=>parseModelObject(raw),e=>e.code==='MODEL_JSON_SYNTAX','financial parser stays strict');
+ for(const invalid of ['{"accounts":[,]}','{"accounts":[1,,]}','{"accounts":,}','{accounts:[]}',"{'accounts':[]}",'{}{}','{"accounts":[','{"bio":"Unescaped "quote"",}'])assert.throws(()=>parseXObject(invalid));
+});
 
 test('one complete ledger in a hidden wrapper is preserved, not discarded',()=>{
  const value={recoveredAssets:[{sourceIndex:2,name:'礼服',amount:null,marketValue:1234.56,evidence:'对方付清款项，将礼服送给Sam。'}]};

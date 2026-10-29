@@ -1,6 +1,6 @@
 // Extract one complete object without rewriting financial data. Presentation
 // blocks are ignored only outside JSON; markup inside quoted values is data.
-export function parseModelObject(raw) {
+export function parseModelObject(raw, { allowTrailingCommas = false } = {}) {
     const original = String(raw ?? ''), text = original.trim();
     let hiddenBlocks = 0, hiddenLedgers = 0, reasoningBlocks = 0;
     const fail = (code, reason, hint = '', extra = '') => {
@@ -17,8 +17,29 @@ export function parseModelObject(raw) {
         if (value && typeof value === 'object' && !Array.isArray(value)) return value;
         fail('MODEL_JSON_TYPE', '需要单个 JSON 对象', '不能用数组、文字或空值代替账本。');
     };
+    const parse = source => {
+        try { return JSON.parse(source); } catch (error) {
+            if (!allowTrailingCommas) throw error;
+            // Only remove a redundant delimiter after a value, outside strings.
+            // Never repair quotes, keys, missing values/brackets or scalar data.
+            let fixed='', quoted=false, escaped=false, previous='';
+            for (let i=0;i<source.length;i++) {
+                const c=source[i];
+                if (!quoted && c===',' && previous && !'{[:,'.includes(previous) && /^[\s]*[}\]]/.test(source.slice(i+1))) continue;
+                fixed+=c;
+                if (quoted) {
+                    if (escaped) escaped=false;
+                    else if (c==='\\') escaped=true;
+                    else if (c==='"') quoted=false;
+                } else if (c==='"') quoted=true;
+                if (!/\s/.test(c)) previous=c;
+            }
+            if (fixed===source) throw error;
+            return JSON.parse(fixed);
+        }
+    };
     const clean = text.replace(/^\x60\x60\x60(?:json)?\s*/i, '').replace(/\s*\x60\x60\x60$/, '').trim();
-    try { return object(JSON.parse(clean)); } catch (e) { if (e.diagnostic) throw e; }
+    try { return object(parse(clean)); } catch (e) { if (e.diagnostic) throw e; }
     const candidates = [];
     let start = -1, stack = [], quoted = false, escaped = false;
     for (let i = 0; i < text.length; i++) {
@@ -72,7 +93,7 @@ export function parseModelObject(raw) {
         candidates.length ? '返回多个 JSON，无法确定唯一账本' : '未返回 JSON 账本',
         candidates.length ? '需要唯一的账本结果，不会替你选择其中一份。' : '本次未识别出可用账本；未写入任何数据，可手动重试。仅凭此错误不能确定是预设还是模型输出造成。', '完整候选数：' + candidates.length);
     let value;
-    try { value = JSON.parse(candidates[0]); }
+    try { value = parse(candidates[0]); }
     catch (error) {
         // Native SyntaxError messages may include private response excerpts.
         const offset = String(error.message).match(/\bposition\s+(\d+)/i)?.[1];

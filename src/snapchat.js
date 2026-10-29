@@ -1,7 +1,7 @@
-import { parseModelObject } from './model-json.js?v=1.0.7';
-import { requireCash } from './assets-core.js?v=1.0.7';
-import { readStoryClock } from './story-clock.js?v=1.0.7';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.7';
+import { parseModelObject } from './model-json.js?v=1.0.8';
+import { requireCash } from './assets-core.js?v=1.0.8';
+import { readStoryClock } from './story-clock.js?v=1.0.8';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.8';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);

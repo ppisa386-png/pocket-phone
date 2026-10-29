@@ -15,6 +15,16 @@ function setup(getGenerationState,independent=false){
  return {x,memory,phone,context,settings,bus,state:()=>phone.snapshot(),reply:r=>{response=r;},count:()=>count,prompt:()=>lastPrompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
+test('X account discovery accepts trailing commas once and keeps existing accounts on other syntax failures',async()=>{
+ const f=setup();try{
+  f.reply(()=>'{"accounts":[{"name":"Alex","handle":"alex","has_account":true,"dm_policy":"requests",},],}');
+  ok(await f.x.discover('Alex'));assert.equal(f.count(),1);assert.equal(xItems(f.state(),'account').length,1);
+  assert.match(f.prompt(),/字段名及字符串必须用英文双引号/);
+  const before=structuredClone(f.state().x);
+  f.reply(()=>'{accounts:[]}');const failure=await f.x.discover('Another');assert.equal(failure.ok,false);assert.equal(failure.code,'MODEL_JSON_SYNTAX');assert.deepEqual(f.state().x,before);assert.equal(f.count(),2);
+  f.reply(()=>'{"accounts":[]}');ok(await f.x.discover('Nobody'));assert.deepEqual(f.state().x,before);
+ }finally{f.close();}
+});
 async function account(f,policy='requests'){
  ok(await f.x.saveProfile({alias:'Moon',bio:'Music'}));
  f.reply({accounts:[{name:'Alex',handle:'alex',has_account:true,dm_policy:policy}]});const r=await f.x.discover('Alex');ok(r);return r.value.ids[0];

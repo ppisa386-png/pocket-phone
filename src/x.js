@@ -1,7 +1,7 @@
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.0.7';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.7';
-import { parseModelObject } from './model-json.js?v=1.0.7';
-import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.0.7';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.0.8';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.8';
+import { parseModelObject } from './model-json.js?v=1.0.8';
+import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.0.8';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
@@ -19,7 +19,7 @@ const xRecord = (type,data) => ({id:crypto.randomUUID(),type,createdAt:Date.now(
 const xAccount = (state,id,unblocked=true) => {const a=state.x?.[id];if(a?.type!=='account')throw Error('账号不存在。');if(unblocked&&a.blocked)throw Error('此账号已被拉黑。');return a;};
 const xThread = (state,id) => xItems(state,'message').filter(m=>m.accountId===id).sort((a,b)=>a.createdAt-b.createdAt);
 export function parseXObject(text) {
-    try { return parseModelObject(text); }
+    try { return parseModelObject(text,{allowTrailingCommas:true}); }
     catch (error) {
         throw Object.assign(new Error(error.message.replaceAll('账本','X 数据')), {
             code:error.code, diagnostic:error.diagnostic?.replaceAll('资产评估','X').replaceAll('账本','X 数据'),
@@ -28,6 +28,7 @@ export function parseXObject(text) {
 }
 export const X_ACCOUNT_RULES = '先判断谁可能使用 X/Twitter：根据时代、地区、联网条件、年龄、性格和明确设定筛选，不假定每个 char 都有账号。与世隔绝、长期不接触网络、明确厌恶现代科技/社交平台或设定无账号者不得生成个人账号，不借官方/代运营账号冒充本人。已有合法账号和明确新使用事实优先，不能因有电话号码或别的平台账号推定。char 使用真名是命名规则，不代表必定使用平台。';
 const noAccount = row => row?.has_account === false || row?.has_account === 'false';
+const X_SEARCH_OUTPUT = '本次任务是搜索/添加 X 角色账号，不续写正文。最终仅输出一个 JSON 对象，根字段 accounts 为数组，最多10个；无合适账号返回 {"accounts":[]}。每条格式为 {"name":"姓名","handle":"唯一账号名","bio":"简介","has_account":true,"dm_policy":"requests"}，dm_policy 只选 open、requests、closed 之一。字段名及字符串必须用英文双引号；字符串内双引号、换行须按JSON转义，布尔值用true/false；不使用尾逗号、单引号、代码或说明。不抄占位内容，不用姓名替代字段名。内容语言及账号适用性保持原规则。';
 
 export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
@@ -135,7 +136,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             await commit(data);
         });},
         discover(query){return run(async(state,current,request,commit)=>{
-            const results=await ask(state,null,request,current,'当前任务：X 搜索账号。搜索词：'+JSON.stringify(xText(query,100))+'。根据角色和世界设定查找使用 X 的人物，char 默认用真名；不能因为已有电话号码或 Snapchat 好友就假定有 X 账号。输出 {"accounts":[{"name":"姓名","handle":"唯一账号名","bio":"简介","has_account":true,"dm_policy":"open/requests/closed"}]}，最多 10 个，不合适返回空数组。',d=>list(d,'accounts',10));
+            const results=await ask(state,null,request,current,'当前任务：X 搜索账号。搜索词：'+JSON.stringify(xText(query,100))+'。根据角色和世界设定查找使用 X 的人物，char 默认用真名；不能因为已有电话号码或 Snapchat 好友就假定有 X 账号。'+X_SEARCH_OUTPUT,d=>list(d,'accounts',10),{finalOutputContract:X_SEARCH_OUTPUT});
             state=structuredClone(state);state.x||={};const changes=[],ids=[];
             for(const item of results){if(item?.has_account!==true)continue;const a=register(state,item,changes);if(a&&!ids.includes(a.id))ids.push(a.id);}
             await commit(changes);return {ids};
