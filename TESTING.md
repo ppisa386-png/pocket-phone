@@ -1,3 +1,6 @@
+## 1.0.2 待估资产
+- ../valuation-tests.txt：资产45/45通过，模拟模型对已有赠品估值，不需新增正文价格，不改变余额，删楼回退。未调用真实模型。
+
 ## 1.0.1 静默后台生成
 - ../silent-background-service.txt：后台服务12/12通过。
 - ../silent-background-browser.txt：host/independent真实日报更新关闭后无悬浮元素、仍运行并保存四篇、重开不重复请求、失败保留旧期并显示在App；六个其他App使用共享服务受控任务检查无悬浮元素和保存。

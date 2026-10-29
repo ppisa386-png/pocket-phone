@@ -553,3 +553,14 @@ test('invalid classification IDs, duplicates, investment and missing reasons fai
   const copy=structuredClone(original);assert.throws(()=>applyAssessment(original,{...evaluation('2026-01-02'),classifications:rows},args),/分类修正无效/);assert.deepEqual(original,copy);
  }
 });
+
+test('one-click valuation of an existing gift needs no new prose or cash transaction',async()=>{
+ const f=setup();try{
+  const first=initial();first.initial.holdings=[{name:'12.5克拉枕形切割铂金钻戒',category:'luxury',value:null}];f.reply(first);ok(await f.assets.update());
+  await f.append('继续生活。','2026-01-02');const h=assetRows(f.state(),'holding')[0];const before=cashBalance(f.state());
+  f.reply({...evaluation('2026-01-02'),valuations:[{id:h.id,value:125000}]});ok(await f.assets.update());
+  assert.equal(f.state().assets[h.id].valueMinor,12500000);assert.equal(cashBalance(f.state()),before);
+  assert.match(f.prompt(),/无需正文写明价格/);assert.match(f.prompt(),/不是新增 events/);
+  f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets[h.id].valueMinor,null);
+ }finally{f.close();}
+});
