@@ -1,8 +1,8 @@
-import { assetRows, assetSet, assetText } from './assets-core.js?v=1.0.5';
-import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.0.5';
-import { financialEvidenceMatches } from './assets-policy.js?v=1.0.5';
-import { readStoryClock } from './story-clock.js?v=1.0.5';
-import { isMemoryHidden } from './journal.js?v=1.0.5';
+import { assetRows, assetSet, assetText } from './assets-core.js?v=1.0.6';
+import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.0.6';
+import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.0.6';
+import { readStoryClock } from './story-clock.js?v=1.0.6';
+import { isMemoryHidden } from './journal.js?v=1.0.6';
 
 // One migration audit for ledgers settled before ownership recovery existed.
 // This is NOT permission to reroll money, prices or the settlement period.
@@ -19,7 +19,7 @@ export function ownershipRecoveryProse(state, chat) {
 
 export const OWNERSHIP_RECOVERY_RULES = '本次还需一次性检查ownershipRecoveryProse中的旧版已结算正文，仅补登记漏掉的user实物财产。返回recoveredAssets数组（确无遗漏返回[]），每条为{sourceIndex:原楼层index,evidence:同楼逐字取得依据,name:具体物品名,category:"fixed或luxury",owner:"user",amount:null,marketValue:合理正常市价或null,details:已知规格及取得方式}。'
     + '只登记已经买到/获赠且当前仍属于user的财产，付款人可以是别人；试穿、试背、想买、计划、他人物品、回忆旧物、无法确定内容的购物袋不算。逐项对照ownershipRecoveryHoldings全部记录（含已出售/排除条目），同一物品即使换了名称也不得再登；整套和单件不能重复，已有笼统收藏不得遮蔽明确后续新取得的物品。'
-    + '旧楼仅恢复财产所有权，不补记现金、不重算旧生活费/工资/投资收益、不修改或重新估价已有财产，不回溯新增投资权益。旧楼提到的收支不能放入events绕过限制。不要续写剧情或补写正文注释。';
+    + '旧楼仅恢复财产所有权，不补记现金、不重算旧生活费/工资/投资收益、不修改或重新估价已有财产，不回溯新增投资权益。旧楼提到的收支不能放入events绕过限制。不要续写剧情或补写正文注释。' + ASSET_CATEGORY_RULES + ASSET_ITEM_RULES;
 
 const nameKey = name => assetText(name).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 export function applyOwnershipRecovery(original, data, chat) {

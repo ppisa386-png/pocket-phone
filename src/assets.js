@@ -1,12 +1,12 @@
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.0.5';
-import { ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.0.5';
-import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.0.5';
-import { parseModelObject } from './model-json.js?v=1.0.5';
-import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.0.5';
-import { readPreparedMemory } from './external-memory.js?v=1.0.5';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.0.5';
-import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.0.5';
-import { isMemoryHidden } from './journal.js?v=1.0.5';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.0.6';
+import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.0.6';
+import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.0.6';
+import { parseModelObject } from './model-json.js?v=1.0.6';
+import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.0.6';
+import { readPreparedMemory } from './external-memory.js?v=1.0.6';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.0.6';
+import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.0.6';
+import { isMemoryHidden } from './journal.js?v=1.0.6';
 
 export const ASSET_OUTPUT_CONTRACT = '本次是小榴莲后台数据任务，不是角色扮演正文续写。沿用上述人设、事实和世界观，仅临时改用本次任务要求的JSON输出格式。只返回一个完整JSON对象，以{开头、}结尾；不要写解释、对白、思考、状态栏、HTML注释、durian-money注释或多个结果。正文格式要求不适用于本次账本结果。按任务提供的真实资料填写，不能只复述示例；没有项目才用空数组，金额未知用null，不虚构事项。';
 
@@ -18,7 +18,7 @@ export const ASSET_ASSESSMENT_RULES = '小榴莲是美元剧情账本。除明�
     + '生活开销按完整经过天数和人设性格/居住/地区合理估算：节省者少、奢侈者多，但仅日常生活，不额外臆造购买名表珠宝；返回整个期间生活开销总额及已逐笔支付生活费用的交易 id，由程序扣除已记部分。'
     + '经营收益返回期间总净现金收益，并列已记收入/成本的交易 id，由程序扣除，不能重复入账。工资由程序按每月15日发放，不加入经营收入或其他估算。'
     + '工作月薪只在首次识别或明确升降职/换工作/调薪时确定一次，现有月薪不得随机变化；离职结束旧工作，不删除历史。'
-    + ASSET_CATEGORY_RULES + '工资是现金收入和工作资料，非投资。金额均为美元，非美元旧流水不直接相加；没有可靠换算依据时说明未结算，不冒充美元。'
+    + ASSET_CATEGORY_RULES + ASSET_ITEM_RULES + '工资是现金收入和工作资料，非投资。金额均为美元，非美元旧流水不直接相加；没有可靠换算依据时说明未结算，不冒充美元。'
     + '经济权益统一按性质、归属和收益机制处理，不按 user 职业、身份或行业预设，职业变化不取消仍成立的权益。参与、署名、创作、制作、发行或项目成功均不自动证明所有权/分成权，必须核对明确剧情、已有合同、人设与账本。'
     + '本次新作品、项目、合作、授权、交易或权利变动需检查是否新增持续权益或一次性收支。有依据取得的持续权利登记 investment，details 在600字内保留权利范围、归属比例、期限、收益基数、触发条件、成本扣除和结算周期，未知明确写未知。不保留持续权利的一次性付款只记收入，不虚构后续收益。'
     + '每次检查已有 investment 在指定期间的发行、销售、传播、市场表现、合作进展及合同变化；热度、播放量、票房、销售额只是估算依据，不是 user 的现金收入。结合持有比例、合同触发条件、成本扣除、结算周期和实际持有时段，分别判断 valuations 与 business。升值不入余额，遇冷不自动产生现金亏损。'

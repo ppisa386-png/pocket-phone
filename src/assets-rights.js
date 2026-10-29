@@ -1,4 +1,4 @@
-import { dateDay } from './story-clock.js?v=1.0.5';
+import { dateDay } from './story-clock.js?v=1.0.6';
 
 // Dates delimit [fromDay, toDay): changes take effect at the start of their day.
 // expiresOn is inclusive, so that right ends at the next day's boundary.

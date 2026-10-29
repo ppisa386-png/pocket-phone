@@ -1,4 +1,4 @@
-import { dateDay, dayDate } from './story-clock.js?v=1.0.5';
+import { dateDay, dayDate } from './story-clock.js?v=1.0.6';
 
 export const assetRows = (state, type) => Object.values(state.assets || {}).filter(x => x.type === type);
 export const assetSet = value => ({ collection: 'assets', key: value.id, value });
