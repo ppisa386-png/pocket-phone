@@ -111,7 +111,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 1.0.8/);
+    assert.match(log,/当前运行版本：榴莲手机 1.0.9/);
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -175,7 +175,7 @@ try {
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();
     await p.getByText(/43 天/).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
     console.log('PASS settlement mobile: failed offsets preserve balance, four pending aliases settle 43 days, expense offsets and salary visible, reload preserved');
-    // Simulate a 1.0.8 ledger that settled a gift floor without capturing it.
+    // Simulate a 1.0.9 ledger that settled a gift floor without capturing it.
     await p.evaluate(async()=>{
         await window.advance('日期：2026-06-25\n朋友付清红色礼服的款项，作为礼物交给Sam带走。');
         window.financeResponse={events:[],living:{total:0,bookedIds:[]},business:[]};

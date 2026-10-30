@@ -14,6 +14,19 @@ import { cashBalance, assetRows } from '../src/assets-core.js';
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
 
+test('all X refresh routes append feed schema, preserve old posts on syntax failure and make one request',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
+ try{
+  f.reply(()=>'{"posts":[{"name":"Alex","handle":"alex","text":"Old post"}]}');assert.equal((await x.refresh()).ok,true);
+  const a=xItems(f.phone.snapshot(),'account')[0];await x.follow(a.id,true);
+  const before=structuredClone(f.phone.snapshot().x);
+  f.reply(options=>{calls++;const last=JSON.parse(options.body).messages.at(-1);assert.equal(last.role,'system');assert.match(last.content,/本次为X刷新/);assert.match(last.content,/字符串内部/);return '{"posts":[{"text":"PRIVATE\nsecret"}]}';});
+  for(const mode of [false,true,'square']){const result=await x.refresh(mode);assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_SYNTAX');assert.match(result.error,/未转义换行/);assert.doesNotMatch(result.error,/PRIVATE|secret/);assert.deepEqual(f.phone.snapshot().x,before);}
+  assert.equal(calls,3);
+  f.reply(()=>'{"posts":[],"replies":[]}');assert.equal((await x.refresh()).ok,true);
+ }finally{f.close();}
+});
+
 test('independent X discovery appends account schema after host preparation and saves a trailing-comma result once',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
  try{

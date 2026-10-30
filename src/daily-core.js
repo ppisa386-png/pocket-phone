@@ -1,7 +1,7 @@
-import { DAILY_NARRATIVE_PROMPT } from './daily-prompts.js?v=1.0.8';
-import { readStoryClock, dayDate } from './story-clock.js?v=1.0.8';
-import { squareBasis } from './square-core.js?v=1.0.8';
-import { storyAnnotations } from './story-phone.js?v=1.0.8';
+import { DAILY_NARRATIVE_PROMPT } from './daily-prompts.js?v=1.0.9';
+import { readStoryClock, dayDate } from './story-clock.js?v=1.0.9';
+import { squareBasis } from './square-core.js?v=1.0.9';
+import { storyAnnotations } from './story-phone.js?v=1.0.9';
 
 export const dailyArticles = state => Object.values(state.daily || {}).filter(a => a.type === 'article' && a.editionId === state.daily?.edition?.editionId);
 // Current expired edition is visible immediately, without a write or API call.

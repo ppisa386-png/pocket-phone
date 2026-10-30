@@ -97,7 +97,14 @@ export function parseModelObject(raw, { allowTrailingCommas = false } = {}) {
     catch (error) {
         // Native SyntaxError messages may include private response excerpts.
         const offset = String(error.message).match(/\bposition\s+(\d+)/i)?.[1];
-        fail('MODEL_JSON_SYNTAX', 'JSON 语法无效', '请让模型返回合法 JSON；不会猜改账本数值。',
+        const message = String(error.message);
+        const detail = /control character/i.test(message) ? '字符串含未转义换行或控制字符'
+            : /escape|unicode/i.test(message) ? '字符串转义无效'
+            : /property name|property names/i.test(message) ? '字段名缺少英文双引号或分隔符错误'
+            : /after property value|after array element/i.test(message) ? '字段或数组项之间分隔错误（也可能是字符串内引号未转义）'
+            : /after property name/i.test(message) ? '字段名后缺少冒号'
+            : /unterminated string/i.test(message) ? '字符串未闭合' : '无法解析字段或值';
+        fail('MODEL_JSON_SYNTAX', 'JSON 语法无效：'+detail, '返回内容未通过语法检查，本次未保存，可手动重试。',
             offset === undefined ? '' : '候选内字符位置：' + (Number(offset) + 1));
     }
     return object(value);

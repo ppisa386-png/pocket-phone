@@ -59,7 +59,7 @@ test('X home accepts one complete wrapped result and explains invalid fields wit
   f.settings.retries=4;
   f.reply(()=>'<think>choose topics</think>\n动态如下：<content>'+JSON.stringify({posts:[{name:'School',handle:'school',text:'Open day'}]})+'</content>');
   ok(await f.x.refresh());assert.equal(f.count(),1);assert.equal(xItems(f.state(),'post').length,1);
-  assert.match(f.prompt(),/最终只返回本任务要求的单个完整 JSON/);
+  assert.match(f.prompt(),/最终只输出本任务要求的一个JSON对象/);
   const before=structuredClone(f.state().x);
   f.reply(()=>'{"posts":');const bad=await f.x.refresh();assert.equal(bad.ok,false);assert.match(bad.error,/X 数据返回格式不正确.*不完整/);
   assert.deepEqual(f.state().x,before);assert.equal(f.count(),2);
