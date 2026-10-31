@@ -1,4 +1,4 @@
-import { dateDay, dayDate } from './story-clock.js?v=1.0.9';
+import { dateDay, dayDate } from './story-clock.js?v=1.1.2';
 
 export const assetRows = (state, type) => Object.values(state.assets || {}).filter(x => x.type === type);
 export const assetSet = value => ({ collection: 'assets', key: value.id, value });
@@ -20,7 +20,7 @@ export function cashBalance(state) {
     return amount;
 }
 export function reservedCash(state, except = '') {
-    return Object.values(state.snapchat || {}).filter(t => t.type === 'transfer' && t.direction === 'outgoing' && t.status === 'pending' && t.currency === 'USD' && t.id !== except)
+    return ['snapchat','whatsapp','wechat'].flatMap(app=>Object.values(state[app] || {})).filter(t => t.type === 'transfer' && t.direction === 'outgoing' && t.status === 'pending' && t.currency === 'USD' && t.id !== except)
         .reduce((sum, t) => sum + t.amountMinor, 0);
 }
 export function requireCash(state, minor, currency = 'USD', except = '') {

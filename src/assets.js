@@ -1,12 +1,12 @@
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.0.9';
-import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.0.9';
-import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.0.9';
-import { parseModelObject } from './model-json.js?v=1.0.9';
-import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.0.9';
-import { readPreparedMemory } from './external-memory.js?v=1.0.9';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.0.9';
-import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.0.9';
-import { isMemoryHidden } from './journal.js?v=1.0.9';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.2';
+import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.2';
+import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.2';
+import { parseModelObject } from './model-json.js?v=1.1.2';
+import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.2';
+import { readPreparedMemory } from './external-memory.js?v=1.1.2';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.2';
+import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.2';
+import { isMemoryHidden } from './journal.js?v=1.1.2';
 
 export const ASSET_OUTPUT_CONTRACT = '本次是小榴莲后台数据任务，不是角色扮演正文续写。沿用上述人设、事实和世界观，仅临时改用本次任务要求的JSON输出格式。只返回一个完整JSON对象，以{开头、}结尾；不要写解释、对白、思考、状态栏、HTML注释、durian-money注释或多个结果。正文格式要求不适用于本次账本结果。按任务提供的真实资料填写，不能只复述示例；没有项目才用空数组，金额未知用null，不虚构事项。';
 
@@ -54,7 +54,7 @@ export function assessmentReferences(state) {
     const wallet = state.assets?.wallet;
     const excluded = new Set([...(wallet?.included || []), ...(wallet?.settledCashIds || [])]);
     const cash = assetRows(state, 'cash_transaction').filter(t => !excluded.has(t.id) && t.currency === 'USD' &&
-        ['story', 'amazon', 'snapcash'].includes(t.source) && !t.salaryEmployer && (t.day == null || !wallet || t.day >= wallet.lastDay));
+        ['story', 'amazon', 'snapcash', 'whatsapp', 'wechat'].includes(t.source) && !t.salaryEmployer && (t.day == null || !wallet || t.day >= wallet.lastDay));
     const pending = assetRows(state, 'story_event').filter(e => !e.processed && ['income', 'expense'].includes(e.kind) && !e.salary);
     return [...cash.map((t,i) => ({ref: 'C' + (i+1), id:t.id, type:t.type, amount: t.deltaMinor/100, date:dayDate(t.day), name:t.memo})),
         ...pending.map((e,i) => ({ref:'P' + (i+1), id:e.id, type:e.type, amount:null, date:dayDate(e.day), name:e.name}))];
@@ -196,7 +196,7 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
                 else if (t.currency !== 'USD') reason = '不是美元流水';
                 else if (before.included?.includes(id) || before.settledCashIds?.includes(id)) reason = '该笔已包含在初始余额或以前的结算中';
                 else if (credited.has(id) && !local.has(id)) reason = '同一笔流水已被其他结算项目抵扣';
-                else if (!['story', 'amazon', 'snapcash'].includes(t.source) || t.salaryEmployer) reason = '工资或自动结算流水不能作生活/经营费用抵扣';
+                else if (!['story', 'amazon', 'snapcash', 'whatsapp', 'wechat'].includes(t.source) || t.salaryEmployer) reason = '工资或自动结算流水不能作生活/经营费用抵扣';
                 else if (t.day != null && (t.day < before.lastDay || t.day > day)) reason = '流水日期不在本次结算期间';
                 else if (expenseOnly && t.deltaMinor > 0) reason = '生活开销只能抵扣支出，不能引用收入';
                 if (reason) throw Object.assign(new Error('费用抵扣失败：' + field + ' 第' + (position + 1) + '项，' + reason + '。本次结算未保存，原账本保留。'), {

@@ -268,6 +268,25 @@ function phoneFixture(onError = () => {}) {
     return {context,settings,phone,memory,bus,signal:()=>signal,reply:fn=>responder=fn,close(){client.cancel();phone.destroy();memory.destroy();}};
 }
 
+test('actual independent social payload retains unsummarized latest prose when host history was trimmed',async()=>{
+    const f=phoneFixture(),original=globalThis.qqj_v3_public_bridge_v1;let calls=0;
+    try{
+        f.context.chat.push({mes:'Alex JUST_FINISHED_THE_TRIP with Sam. This was private.'});
+        globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'})};
+        f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
+        f.reply(options=>{calls++;const payload=JSON.parse(options.body);
+            assert.ok(payload.messages.every(m=>m.role==='system'),'fixture stripped ordinary story messages');
+            assert.match(JSON.stringify(payload.messages),/JUST_FINISHED_THE_TRIP/);
+            assert.match(JSON.stringify(payload.messages),/This was private/);
+            assert.match(payload.messages.at(-1).content,/本次为X刷新/);
+            assert.equal(payload.temperature,0.83);return '{"posts":[]}';
+        });
+        const x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+        const result=await x.refresh();assert.equal(result.ok,true,result.error);assert.equal(calls,1);
+        assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/JUST_FINISHED_THE_TRIP/);
+    }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
+});
+
 test('independent phone and SMS work with host disconnected and roll back together', async () => {
     const f=phoneFixture(); f.settings.proactiveEnabled=false; try {
         await f.phone.scan(); assert.ok(f.phone.snapshot().contacts['card:alex.png']);

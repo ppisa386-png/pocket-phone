@@ -1,10 +1,10 @@
-import { migrateDailyArchives } from './daily-archive.js?v=1.0.9';
-import { syncSMSContext } from './sms-context.js?v=1.0.9';
-import { storyTime } from './story-clock.js?v=1.0.9';
-import { importStoryAssets } from './assets-story.js?v=1.0.9';
-import { importStorySquare } from './x-opinion.js?v=1.0.9';
-import { importStoryPhone } from './story-phone.js?v=1.0.9';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.0.9';
+import { migrateDailyArchives } from './daily-archive.js?v=1.1.2';
+import { syncSMSContext } from './sms-context.js?v=1.1.2';
+import { storyTime } from './story-clock.js?v=1.1.2';
+import { importStoryAssets } from './assets-story.js?v=1.1.2';
+import { importStorySquare } from './x-opinion.js?v=1.1.2';
+import { importStoryPhone } from './story-phone.js?v=1.1.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.1.2';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -216,7 +216,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                     const state=replayJournal(next), clock=storyTime(snapshot.context.chat.slice(0,index+1));
                     const changes=batch.changes.map(change=>{
                         const v=change.value, old=state[change.collection]?.[change.key];
-                        const communication=['messages','calls'].includes(change.collection)||(['snapchat','x'].includes(change.collection)&&['message','call','post','story','clip','comment','transfer'].includes(v?.type));
+                        const communication=['messages','calls'].includes(change.collection)||(['snapchat','whatsapp','wechat','x'].includes(change.collection)&&['message','call','post','story','clip','comment','transfer'].includes(v?.type));
                         if(!v||!communication)return change;
                         const value={...v};
                         if(!old&&!Object.hasOwn(value,'storyTime'))value.storyTime=clock;

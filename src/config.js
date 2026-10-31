@@ -1,10 +1,12 @@
-import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from './daily-prompts.js?v=1.0.9';
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from './daily-prompts.js?v=1.1.2';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.0.9';
+export const VERSION = '1.1.2';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
+    { id: 'whatsapp', name: 'WhatsApp', color: '#25d366' },
+    { id: 'wechat', name: '微信', color: '#07c160' },
     { id: 'snapchat', name: 'Snapchat', color: '#ffe34d' },
     { id: 'x', name: 'X', color: '#252733' },
     { id: 'daily', name: '榴莲日报', color: '#b66b3e' },
@@ -28,6 +30,8 @@ export const PROMPTS = {
     general: { name: '通用', text: '这是 user 的个人手机，所有互动均为文字扮演。继承酒馆当前角色卡、相关世界书、有效剧情与预设中的内容语言要求。界面标签使用中文。不得替 user 编造消息或决定。仅使用对应角色有依据获知的信息；未获知的私人内容不得跨角色、跨平台传播。' },
     phone: { name: '电话', text: '通过文字表现电话交流，只描写对白、可听见的语气、停顿和背景声音。不得描写通话另一端不可见的表情、动作、服装或内心活动。电话对应真实身份。user 仅能拨打已保存的电话联系人，包括正文获得号码或人设中既有亲友。char 发起来电必须有获取 user 号码的有效途径和依据。' },
     messages: { name: '短信', text: '以短信内容进行交流，继承角色的表达习惯及酒馆预设的语言要求。短信号码与真实身份绑定。依据已保存的电话联系人互动，包括正文获得号码或 user 人设中的既有亲友，不凭空补全号码。不得替 user 发送短信。' },
+    whatsapp: { name: 'WhatsApp', text: '生成 WhatsApp 内的文字聊天。好友按通讯录规则由用户按姓名或一键添加，不需要好友邀请审核。私聊、语音和视频遵守角色知情边界与预设语言，不替 user 发言。' },
+    wechat: { name: '微信', text: '生成微信内的文字聊天。好友按通讯录规则由用户按姓名或一键添加，不需要好友邀请审核。私聊、语音和视频遵守角色知情边界与预设语言，不替 user 发言。' },
     snapchat: { name: 'Snapchat', text: '生成 Snapchat 内的文字互动，区分好友邀请、私聊、Snap 与 Stories。遵守好友及内容可见范围。知道账号不代表知道真实身份；不得因为后台存在对应关系而认出匿名 user。已在有效剧情中确认的身份不会因改名而遗忘。' },
     x: { name: 'X', text: '生成 X 的帖子、回复或私信，遵循角色设定和酒馆预设的内容语言。char 默认使用真名账号。公开帖子可以被发现并互动，发现账号不等于知道账号背后的真实身份。私信遵守联系与可见范围。禁止把私人谈话直接当作公众已知信息。' },
     xSquare: { name: 'X 广场', text: '生成符合当前世界观、地域和年代的普通网友日常帖子，无需关注，不使用 user、char 或正文已有具名人物作为发帖者。联系近期地点和公开生活，不围绕 user 转；公共场所也不必有目击，私密场所更不应自动被看见，禁止传播私聊、秘密、内心或未公开关系。没有合理公开素材时写普通背景或留空，不制造热搜、舆论任务。帖子长短与语气自然有差异，语言遵循酒馆预设。' },

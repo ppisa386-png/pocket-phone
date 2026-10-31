@@ -1,16 +1,29 @@
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.0.9';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.9';
-import { parseModelObject } from './model-json.js?v=1.0.9';
-import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.0.9';
+import { publicationScenePrompt } from './social-context.js?v=1.1.2';
+import { xCommentKey, xComments } from './x-comments.js?v=1.1.2';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.2';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.2';
+import { parseModelObject } from './model-json.js?v=1.1.2';
+import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.2';
 // Story-local X simulation. No real social-network API or account is used.
-export const xItems = (state,type) => Object.values(state.x || {}).filter(item=>item.type===type);
+export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
 export const xUnread = state => xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + xItems(state,'comment').filter(c=>c.author!=='user'&&!c.read&&!c.ambient).length;
 const metric = n => Number.isFinite(Number(n)) ? Math.min(1000000000,Math.max(0,Math.floor(Number(n)))) : 0;
 export function xCounts(state,post) {
     const comments=xItems(state,'comment').filter(c=>c.postId===post.id);
+    const direct = comments.filter(c=>!c.ambient).length, ambient = comments.length-direct;
+    const aggregate = metric(post.metrics?.replies);
+    // Older snapshots counted ambient samples separately. When both old paths
+    // stored the same reply, it is already represented in the aggregate.
+    let covered = post.includedDirectReplies;
+    if (covered == null && aggregate && direct) {
+        const key = row => xCommentKey(post.id, row.author, row.text, row.replyTo);
+        const sampled = new Set(Object.values(state.x || {}).filter(row=>row.type==='comment' && row.postId===post.id && row.ambient).map(key));
+        covered = comments.filter(row=>!row.ambient && sampled.has(key(row))).length;
+    }
+    const included = Math.min(direct, covered || 0);
     return {likes:metric(post.metrics?.likes)+(post.liked?1:0),reposts:metric(post.metrics?.reposts)+(post.reposted?1:0),
-        replies:Math.max(metric(post.metrics?.replies),comments.filter(c=>c.ambient).length)+comments.filter(c=>!c.ambient).length};
+        replies:Math.max(aggregate,ambient+included)+direct-included};
 }
 const xSet = value => ({collection:'x',key:value.id,value});
 const xText = (s,max=6000) => typeof s==='string'?s.trim().slice(0,max):'';
@@ -36,10 +49,11 @@ export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
     const known=(state,a)=>({...a,identityKnown:a.identityKnown===true||profile(state).alias===getContext().name1});
     const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd});
-    const memoryQuery=(state,a)=>({
+    const memoryQuery=(state,a,task,actors=[])=>({
+        actors:(a?[a]:actors).filter(a=>!a.crowd).map(a=>({id:a.id,name:a.name,aliases:a.aliases})),
         names:(a?[a]:xItems(state,'account').filter(a=>!a.blocked)).flatMap(a=>[a.name,...(a.aliases||[])]),
         topic:xItems(state,'post').filter(p=>p.author==='user'||a&&p.author===a.id).slice(-15).map(p=>p.text).join('\n')+
-            (a?'\n'+xThread(state,a.id).slice(-3).map(m=>m.text).join('\n'):''),
+            (a?'\n'+xThread(state,a.id).slice(-3).map(m=>m.text).join('\n'):'')+'\n'+task,
     });
     function publicConversation(state) {
         const all=xItems(state,'post');
@@ -62,14 +76,14 @@ export function createX({memory,phone,getContext,getSettings}) {
         const p=profile(state);
         return getSettings().prompts.general+'\n'+getSettings().prompts.x+'\n'+getSettings().prompts.xStyle+
             '\n这是 X 文字扮演任务，不执行真实网络操作。只输出本任务指定 JSON，内容语言遵守酒馆预设；不替 user 发言。user 的公开个人资料：'+JSON.stringify({alias:p.alias,bio:p.bio})+
-            '\n真实剧情/人设/千千结记忆只作背景；私人电话、短信、其他 App 内容不能凭空变成公开消息。每人一个 X 账号，发现账号不等于认识真人。'+
+            '\n结合有效正文、人设和千千结记忆理解当前发言及其指代；私人电话、短信、其他 App 内容不能凭空变成公开消息。每人一个 X 账号，发现账号不等于认识真人。'+
             '\n人物认知连续性：先结合有效正文、已提供的千千结记忆和本帖既有评论，逐人区分已经亲历/目击/被明确告知的事实、只见过的公开内容及尚未知情的事。已确认账号身份的熟人应延续自己已有认知，不因换到 X 就把见过的物品、已获知的关系或计划当成首次听说。可以对新变化作反应（例如订婚不等于已经结婚、计划出行不等于已经抵达），不重复首次惊讶或已经回答的问题。私下已知可以影响措辞或选择沉默，不等于把私密细节公开，也不等于其他网友知道。未知身份账号仍不得利用私下经历认人；无记录不能断言从未发生。'+
             '\n身份基线：'+(p.alias===getContext().name1?'user 当前使用已设置的真实姓名，按原有真名账号规则识别；是否熟悉以及知道哪些事仍须逐人有依据。':'user 使用网名；只有明确 identityKnown 的账号可关联真人，其他账号保持匿名边界。')+
             (a?'\n当前对方：'+JSON.stringify({name:a.name,handle:a.handle})+'。'+(a.identityKnown?'此前已确认 user 账号对应的真实身份，改网名不会遗忘。':'对方不知道此网名是谁。不能凭后台 user 对应关系、角色卡、人设、正文中的私人称呼或私下经历认出 user；只知道网名及本账号公开过或本私信提供的信息。'):'\n逐个人物区分知情范围，不把后台账号对应关系当作人物已知。')+
             '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(-15).map(({id,text})=>({id,text})))+'\nuser 最近公开转发（不代表赞同）：'+JSON.stringify(xItems(state,'post').filter(p=>p.reposted&&p.author!=='user').slice(-10).map(p=>({author:state.x[p.author]?.name,text:p.text})))+'\n'+task;
     }
     const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
-        retries:0,parseResponse:parseXObject,memoryQuery:memoryQuery(state,a),finalOutputContract:X_JSON_OUTPUT,
+        retries:0,parseResponse:parseXObject,memoryQuery:memoryQuery(state,a,options?.memoryTopic ?? task,options?.memoryActors),finalOutputContract:X_JSON_OUTPUT,
         outputContract:X_JSON_OUTPUT+'\n当前是 X 应用任务，不续写正文、不输出状态栏或 HTML。保留人设、背景和语言约定，最终只返回本任务要求的单个完整 JSON 对象，数组无内容用[]；不要复述示例或输出多个候选。'+X_ACCOUNT_RULES,...options,
     });
     const audienceTask=state=>'\n'+AUDIENCE_RULES+'\n当前粉丝：'+JSON.stringify(xAudience(state)?{initialFollowers:xAudience(state).initialFollowers,followers:xAudience(state).followers}:null)+'\n可评估的公开传播来源：'+JSON.stringify(audienceSources(state).slice(-40).map(s=>({...s,creditedGain:xAudience(state)?.credited?.[s.sourceId]||0})))+
@@ -88,10 +102,14 @@ export function createX({memory,phone,getContext,getSettings}) {
     const list=(data,key,max)=>{if(!Array.isArray(data?.[key])||data[key].length>max)throw Error('X 返回字段 '+key+' 应为最多 '+max+' 条的数组，当前'+(data?.[key]==null?'缺失':Array.isArray(data[key])?'有 '+data[key].length+' 条':'类型不正确')+'。本次未保存。');return data[key];};
     const engagementRules = () => '\n'+getSettings().prompts.xInteractions;
     const engagementShape = '\n每条 post 可附 metrics:{"likes":0,"reposts":0,"replies":0} 以及 comments:[{"key":"本帖内唯一标记","accountId":"已知评论者账号 ID，未知留空","name":"评论者姓名或网名","handle":"账号名","text":"评论内容","replyTo":"回复本帖某条 comment 的 key；回复帖子留空","isAuthor":false}]。作者发言用 isAuthor:true，不必再给姓名。每帖最多 8 条可见评论（可为零），先给原评论再给它的回复；metrics.replies 至少涵盖这些评论，可以有更多未展示的讨论。评论只属于本帖。';
+    const findComment=(state,postId,author,body,parent=null)=>{
+        const key=xCommentKey(postId,author,body,parent);
+        return xComments(state).find(c=>xCommentKey(c.postId,c.author,c.text,c.replyTo)===key);
+    };
     function addEngagement(state,post,item,changes) {
         const raw=item.metrics||{};
-        post.metrics={likes:metric(raw.likes),reposts:metric(raw.reposts),replies:metric(raw.replies)};
-        const keys=new Map();let added=0;
+        post.metrics=Object.fromEntries(['likes','reposts','replies'].map(key=>[key,Math.max(metric(post.metrics?.[key]),metric(raw[key]))]));
+        const keys=new Map();
         for(const row of Array.isArray(item.comments)?item.comments.slice(0,8):[]){
             if(!xText(row?.text)||noAccount(row))continue;
             const parent=row.replyTo?keys.get(String(row.replyTo)):null;
@@ -100,13 +118,13 @@ export function createX({memory,phone,getContext,getSettings}) {
             if(a?.type!=='account')a=null;
             if(!a&&row.isAuthor!==true)a=register(state,row,changes);
             if(!a||a.blocked)continue;
-            const existing=xItems(state,'comment').find(c=>c.postId===post.id&&c.author===a.id&&c.text===xText(row.text)&&c.replyTo===(parent||null));
+            const existing=findComment(state,post.id,a.id,xText(row.text),parent);
             if(existing){if(row.key)keys.set(String(row.key),existing.id);continue;}
             const c=xRecord('comment',{postId:post.id,author:a.id,text:xText(row.text),replyTo:parent||null,ambient:true,read:true});
-            state.x[c.id]=c;changes.push(xSet(c));added++;
+            state.x[c.id]=c;changes.push(xSet(c));
             if(row.key&&!keys.has(String(row.key)))keys.set(String(row.key),c.id);
         }
-        post.metrics.replies=Math.max(post.metrics.replies,added);
+        if (raw.replies != null) post.includedDirectReplies=xComments(state).filter(c=>c.postId===post.id&&!c.ambient).length;
         changes.push(xSet(post));
     }
     function resolvePostAuthor(state,item,changes,following,square) {
@@ -146,7 +164,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         follow(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);await commit([xSet({...known(state,a),following:value===true})]);});},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
-        publish(value){return run(async(state,_c,_r,commit)=>{await commit([xSet(xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),liked:false,reposted:false}))]);});},
+        publish(value){return run(async(state,_c,_r,commit)=>{await commit([xSet(xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),includedDirectReplies:0,postedAtStory:squareClock(getContext().chat),sourceIndex:getContext().chat.length-1,liked:false,reposted:false}))]);});},
         toggleInjection(id){return run(async(state,_c,_r,commit)=>{
             const p=state.x[id],chat=getContext().chat;
             if(p?.type!=='post'||p.feed!=='square'||squareStatus(p,state,chat)!=='active')throw Error('这条内容已采用、过期或时间不明确，无法注入。');
@@ -161,9 +179,13 @@ export function createX({memory,phone,getContext,getSettings}) {
                 '当前任务：X 动态。'+X_ACCOUNT_RULES+(following?'仅生成已关注账号的公开帖子，不能添加列表外发帖账号；评论者不受关注列表限制。':
                     '为你推荐必须属于 user 生活的世界。优先考虑人设/有效剧情中已建立关系且可能使用 X 的朋友、同学、同事等账号；没有合适熟人时，按学校、职业、行业、城市、兴趣推荐机构或创作者。不能凭空捏造 user 与推荐者已认识，不强迫关注，也不能让推荐者知道未公开的 user 身份。可原创贴合背景的陌生账号，不让所有帖子围着 user 转。'+
                     '可附 accounts:[{name:"名称",handle:"账号",bio:"简介",has_account:true,followers:合理粉丝数}] 推荐最多8个账号。帖子新作者也须先做账号适用性筛选，并附has_account。')+audienceTask(state);
+            const userPosts=square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-15);
+            const reachPosts=userPosts.map(p=>({postId:p.id,publicText:p.text,postedAtStory:p.postedAtStory||null,sourceIndex:p.sourceIndex??null,counts:xCounts(state,p)}));
+            const reachTask=reachPosts.length ? publicationScenePrompt(getContext(),userPosts)+
+                '\n结合每条推文在发帖当时剧情里的实际含义，逐帖估算点赞、转发、讨论与可能的关注增长。分别判断事情对当事人和不同受众有多重要、哪些人有机会接触或愿意传播，以及经过了多少剧情时间。由这些条件推断可能发生的互动，无需正文先写出评论或传播结果。可见熟人的人数不能限制总互动。没有相关进展不因刷新而机械累加，也不因配文简短而压低传播。相关结果填 engagementUpdates，metrics 是包含已展示评论的累计数。当前剧情时间及推文：'+JSON.stringify({now:squareClock(chat),posts:reachPosts}) : '';
             const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须满足任务的逐字依据规则。':'');
-            const results=await ask(state,null,request,current,task+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新最多15条 user 帖子的累计公开互动，不得替 user 改写发言；根据这些互动一并评估growth。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；本次新提及的growth来源可用 mention:new:0（posts从0计数），已有提及继续用给出的来源ID。')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').slice(-20).map(p=>({id:p.id,author:p.author,text:p.text})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state))+
-                '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:近期原文索引,evidence:"recentProse 中对应 assistant 原文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&!square&&Array.isArray(d.accounts)?[]:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',8):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput,finalOutputContract:refreshOutput});
+            const results=await ask(state,null,request,current,task+reachTask+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新最多15条 user 帖子的累计公开互动，不得替 user 改写发言；根据这些互动一并评估growth。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；本次新提及的growth来源可用 mention:new:0（posts从0计数），已有提及继续用给出的来源ID。')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').slice(-20).map(p=>({id:p.id,author:p.author,text:p.text})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state))+
+                '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:近期原文索引,evidence:"recentProse 中对应 assistant 原文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&!square&&Array.isArray(d.accounts)?[]:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',8):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput,finalOutputContract:refreshOutput,memoryActors:square?[]:xItems(state,'account').filter(a=>!a.blocked)});
             state=structuredClone(state);state.x||={};const changes=[],newMentions=new Map();let added=0;
             if(!square&&!following){
                 for(const old of xItems(state,'account').filter(a=>a.recommended)){const next={...old,recommended:false};state.x[next.id]=next;changes.push(xSet(next));}
@@ -186,13 +208,13 @@ export function createX({memory,phone,getContext,getSettings}) {
                 const post=state.x[item?.postId];if(post?.type!=='post'||post.author!=='user'||!xText(item.text)||noAccount(item))continue;
                 let a=item.accountId?state.x[item.accountId]:null;if(a?.type!=='account')a=null;
                 if(!a)a=register(state,item,changes);if(!a||a.blocked)continue;
-                if(xItems(state,'comment').some(c=>c.postId===post.id&&c.author===a.id&&c.text===xText(item.text)))continue;
+                if(findComment(state,post.id,a.id,xText(item.text)))continue;
                 a=known(state,a);state.x[a.id]=a;changes.push(xSet(a));
-                const reply=xRecord('comment',{postId:post.id,author:a.id,text:xText(item.text)});state.x[reply.id]=reply;changes.push(xSet(reply));
+                const reply=xRecord('comment',{postId:post.id,author:a.id,text:xText(item.text),replyTo:null});state.x[reply.id]=reply;changes.push(xSet(reply));
             }
             for(const item of results.engagementUpdates){
                 const post=state.x[item?.postId];if(post?.type!=='post'||post.author!=='user')continue;
-                addEngagement(state,post,{...item,metrics:Object.fromEntries(['likes','reposts','replies'].map(k=>[k,Math.max(metric(post.metrics?.[k]),metric(item.metrics?.[k]))]))},changes);
+                addEngagement(state,post,item,changes);
             }
             const audience=results.audience&&typeof results.audience==='object'&&!Array.isArray(results.audience)?{...results.audience,growth:Array.isArray(results.audience.growth)?results.audience.growth.map(row=>({...row,sourceId:newMentions.get(row?.sourceId)||row?.sourceId})):results.audience.growth}:results.audience;
             changes.push(...audienceChanges(state,audience));
@@ -212,7 +234,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             // direct conversations and the regular home feed keep their replies.
             if(target&&p.feed!=='square'){
                 const exposureState=structuredClone(state);exposureState.x[comment.id]=comment;
-                const reply=await ask(state,target,request,current,'当前任务：X 评论。你是被回复的账号：'+JSON.stringify({name:target.name,handle:target.handle})+'；帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；公开帖子：'+JSON.stringify(p.text)+'；此前评论：'+JSON.stringify(xItems(state,'comment').filter(c=>c.postId===id).slice(-30).map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+'；user 回复的目标评论：'+JSON.stringify(parent?.text||null)+'；user 本次评论：'+JSON.stringify(body)+'。仅决定本账号是否回应 user，可保持沉默，不强制帖子作者出面。输出 {"text":"回复或空字符串"}。不得用私信或未公开剧情作为公众已知。'+engagementRules()+audienceTask(exposureState),d=>{if(typeof d.text!=='string')throw Error('评论格式不正确。');return {text:xText(d.text),audience:d.audience};});
+                const reply=await ask(state,target,request,current,'当前任务：X 评论。你是被回复的账号：'+JSON.stringify({name:target.name,handle:target.handle})+'；帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；公开帖子：'+JSON.stringify(p.text)+publicationScenePrompt(getContext(),[p])+'；此前评论：'+JSON.stringify(xItems(state,'comment').filter(c=>c.postId===id).slice(-30).map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+'；user 回复的目标评论：'+JSON.stringify(parent?.text||null)+'；user 本次评论：'+JSON.stringify(body)+'。仅决定本账号是否回应 user，可保持沉默，不强制帖子作者出面。输出 {"text":"回复或空字符串"}。不得用私信或未公开剧情作为公众已知。'+engagementRules()+audienceTask(exposureState),d=>{if(typeof d.text!=='string')throw Error('评论格式不正确。');return {text:xText(d.text),audience:d.audience};},{memoryTopic:[p.text,parent?.text,body].filter(Boolean).join('\n')});
                 changes.push(xSet(target));if(reply.text)changes.push(xSet(xRecord('comment',{postId:id,author:target.id,text:reply.text,replyTo:comment.id})));
                 for(const change of changes)exposureState.x[change.key]=change.value;
                 changes.push(...audienceChanges(exposureState,reply.audience));

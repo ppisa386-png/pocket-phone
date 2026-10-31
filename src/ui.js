@@ -1,19 +1,21 @@
-import { bindInputViewport } from './input-viewport.js?v=1.0.9';
-import { createDailyPanel } from './daily-view.js?v=1.0.9';
-import { storyTime } from './story-clock.js?v=1.0.9';
-import { createAssetPanel } from './assets-view.js?v=1.0.9';
-import { createAmazonPanel } from './amazon-view.js?v=1.0.9';
-import { bindComposerKeys } from './composer.js?v=1.0.9';
-import { createXPanel } from './x-view.js?v=1.0.9';
-import { xUnread } from './x.js?v=1.0.9';
-import { createSnapPanel } from './snapchat-view.js?v=1.0.9';
-import { snapUnread } from './snapchat.js?v=1.0.9';
-import { createApiPanel } from './api-view.js?v=1.0.9';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.0.9';
-import { icon } from './icons.js?v=1.0.9';
-import { renderMessagesScreen } from './messages-view.js?v=1.0.9';
-import { unreadMessages, messageParticipants } from './messages.js?v=1.0.9';
-import { renderPhoneScreen } from './phone-view.js?v=1.0.9';
+import { bindInputViewport } from './input-viewport.js?v=1.1.2';
+import { createDailyPanel } from './daily-view.js?v=1.1.2';
+import { storyTime } from './story-clock.js?v=1.1.2';
+import { createAssetPanel } from './assets-view.js?v=1.1.2';
+import { createAmazonPanel } from './amazon-view.js?v=1.1.2';
+import { bindComposerKeys } from './composer.js?v=1.1.2';
+import { createXPanel } from './x-view.js?v=1.1.2';
+import { xUnread } from './x.js?v=1.1.2';
+import { createChatPanel } from './chat-view.js?v=1.1.2';
+import { chatUnread } from './chat-apps.js?v=1.1.2';
+import { createSnapPanel } from './snapchat-view.js?v=1.1.2';
+import { snapUnread } from './snapchat.js?v=1.1.2';
+import { createApiPanel } from './api-view.js?v=1.1.2';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.2';
+import { icon } from './icons.js?v=1.1.2';
+import { renderMessagesScreen } from './messages-view.js?v=1.1.2';
+import { unreadMessages, messageParticipants } from './messages.js?v=1.1.2';
+import { renderPhoneScreen } from './phone-view.js?v=1.1.2';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -84,6 +86,20 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const title = shadow.querySelector('.pp-title');
     const noticeElement = shadow.querySelector('.pp-toast');
     const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
+
+    const chatPanels=Object.fromEntries(['whatsapp','wechat'].map(app=>[app,createChatPanel({app,adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:'+app)renderChat(app);},notice})]));
+    const currentChat=()=>chatPanels[route.slice(4)];
+    function renderChat(app) {
+        const active=shadow.activeElement,field=active?.dataset.chatField;
+        const selection=field&&['TEXTAREA','INPUT'].includes(active.tagName)&&active.type!=='number'?[active.selectionStart,active.selectionEnd]:null;
+        const old=content.querySelector('.pp-chat-scroll'),scroll=old?.scrollTop||0,page=old?.dataset.chatPage,count=old?.dataset.chatCount;
+        content.innerHTML=chatPanels[app].html();
+        const body=content.querySelector('.pp-chat-scroll');
+        if(body)body.scrollTop=content.querySelector('.is-thread')&&(page!==body.dataset.chatPage||count!==body.dataset.chatCount)?body.scrollHeight:page===body.dataset.chatPage?scroll:0;
+        const next=field?Array.from(content.querySelectorAll('[data-chat-field]')).find(el=>el.dataset.chatField===field):null;
+        if(next){next.focus({preventScroll:true});if(selection&&selection[0]!==null)next.setSelectionRange(...selection);}
+        queueMicrotask(()=>{if(opened&&route==='app:'+app)void chatPanels[app].readVisible();});
+    }
 
     const snapPanel = createSnapPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:snapchat')renderSnapchat();},notice});
 
@@ -184,7 +200,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function unreadCalls() { return Object.values(phoneView.calls || {}).filter(call => call.direction === 'incoming' && !call.read).length; }
     function appButton(app) {
-        const unread = app.id === 'messages' ? unreadMessages(phoneView.messages) : app.id === 'phone' ? unreadCalls() : app.id === 'snapchat' ? snapUnread(phoneView) : app.id === 'x' ? xUnread(phoneView) : 0;
+        const unread = app.id === 'messages' ? unreadMessages(phoneView.messages) : app.id === 'phone' ? unreadCalls() : chatPanels[app.id] ? chatUnread(phoneView,app.id) : app.id === 'snapchat' ? snapUnread(phoneView) : app.id === 'x' ? xUnread(phoneView) : 0;
         const badge = unread ? '<span class="pp-app-badge" aria-label="' + unread + (app.id === 'phone' ? ' 条待处理来电' : ' 条未读消息') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '';
         return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + badge + '</span><span class="pp-app-name">' + app.name + '</span></button>';
     }
@@ -246,7 +262,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信、Snapchat、X 和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信、Snapchat、WhatsApp、微信、X 和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 
@@ -331,6 +347,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (route === 'retry') renderRetry();
         else if (app?.id === 'phone') renderPhone();
         else if (app?.id === 'messages') renderMessages();
+        else if (chatPanels[app?.id]) renderChat(app.id);
         else if (app?.id === 'snapchat') renderSnapchat();
         else if (app?.id === 'x') renderX();
         else if (app?.id === 'daily') renderDaily();
@@ -354,6 +371,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (next === 'app:assets' && adapter.assets) phoneAction(() => adapter.assets.open());
         if (next === 'app:amazon' && adapter.amazon) phoneAction(() => adapter.amazon.open());
         if (next === 'app:x' && adapter.x) phoneAction(() => adapter.x.open());
+        if (chatPanels[next.slice(4)] && adapter[next.slice(4)]) phoneAction(()=>adapter[next.slice(4)].open());
         if (next === 'app:snapchat' && adapter.snapchat) phoneAction(() => adapter.snapchat.open());
     }
 
@@ -406,6 +424,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }
+        if (target.dataset.chatAction) { void currentChat()?.action(target.dataset.chatAction,target.dataset.chatId); return; }
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
         if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
         const action = target.dataset.action;
@@ -419,7 +438,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             else if(route==='app:messages'&&(selectedSMSContactId||pickingSMSContact)){
                 if(smsEditing){smsEditing=null;}else{selectedSMSContactId=null;pickingSMSContact=false;}
                 renderMessages();
-            }else if(route==='app:snapchat'&&snapPanel.back()){return;}
+            }else if(currentChat()?.back()){return;}
+            else if(route==='app:snapchat'&&snapPanel.back()){return;}
             else if(route==='app:x'&&xPanel.back()){return;}
             else if(route==='app:daily'&&dailyPanel.back()){return;}
             else if(route==='app:amazon'&&shopPanel.back()){return;}
@@ -470,6 +490,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
                 const result=await adapter.phone.queueMessage(id,draft);
                 if(result?.value?.saved&&smsDrafts[id]===draft)delete smsDrafts[id];
                 if(opened&&route==='app:messages'&&selectedSMSContactId===id){renderMessages();content.querySelector('[data-sms-draft]')?.focus({preventScroll:true});}
+            }else if(input.dataset.chatField==='message'){
+                const app=route.slice(4);await chatPanels[app]?.queueCurrent();
+                if(opened&&route==='app:'+app)content.querySelector('[data-chat-field="message"]')?.focus({preventScroll:true});
             }else{
                 await snapPanel.queueCurrent();
                 if(opened&&route==='app:snapchat')content.querySelector('[data-snap-field="message"]')?.focus({preventScroll:true});
@@ -489,6 +512,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
         if(event.target.dataset.shopForm){event.preventDefault();void shopPanel.submit(event.target);return;}
         if(event.target.dataset.xForm){event.preventDefault();void xPanel.submit(event.target);return;}
+        if(event.target.dataset.chatForm){event.preventDefault();void currentChat()?.submit(event.target);return;}
         if(event.target.dataset.snapForm){event.preventDefault();void snapPanel.submit(event.target);return;}
         if (event.target.hasAttribute('data-sms-form')) {
             event.preventDefault();
@@ -512,6 +536,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
+        if(target.dataset.chatField){currentChat()?.input(target);return;}
         if(target.dataset.snapField||target.dataset.snapSelect){snapPanel.input(target);return;}
         if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
         if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
@@ -540,6 +565,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(event.target.hasAttribute('data-sms-edit-text')){if(smsEditing)smsEditing.text=event.target.value;return;}
         if(event.target.dataset.shopField){shopPanel.input(event.target);return;}
         if(event.target.dataset.xField){xPanel.input(event.target);return;}
+        if(event.target.dataset.chatField){currentChat()?.input(event.target);return;}
         if(event.target.dataset.snapField){snapPanel.input(event.target);return;}
         if (event.target.dataset.apiField && event.target.tagName !== 'SELECT') {
             apiPanel.input(event.target.dataset.apiField, event.target.value);
@@ -652,6 +678,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             const keepSettings = lastScope === undefined && route === 'settings';
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
+            Object.values(chatPanels).forEach(panel=>panel.reset());
             snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
@@ -669,6 +696,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (selectedSMSContactId && !messageParticipants(view)[selectedSMSContactId]) selectedSMSContactId = null;
         if (opened && route === 'app:phone') renderPhone();
         if (opened && route === 'app:messages') renderMessages();
+        if (opened && currentChat()) renderChat(route.slice(4));
         if (opened && route === 'app:snapchat') renderSnapchat();
         if (opened && route === 'app:x') renderX();
         if (opened && route === 'app:daily') renderDaily();

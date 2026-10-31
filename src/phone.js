@@ -1,18 +1,20 @@
-import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=1.0.9';
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.0.9';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.0.9';
-import { exactStoryTime } from './story-clock.js?v=1.0.9';
-import { isMemoryHidden } from './journal.js?v=1.0.9';
-import { CHINESE_NAME_RULE } from './names.js?v=1.0.9';
-import { proactiveSources } from './proactive-evidence.js?v=1.0.9';
-import { phoneQuietOptions } from './api-context.js?v=1.0.9';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.0.9';
-export { validateContacts } from './contacts.js?v=1.0.9';
-import { readPreparedMemory, preparedMemoryPrompt, readXMemory, xMemoryPrompt } from './external-memory.js?v=1.0.9';
-import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=1.0.9';
-import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=1.0.9';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.0.9';
-import { incomingParticipant, validateIncoming } from './incoming.js?v=1.0.9';
+import { PROACTIVE_PACING_RULE, recentContactActivity } from './proactive-pacing.js?v=1.1.2';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.1.2';
+import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.1.2';
+import { exactStoryTime } from './story-clock.js?v=1.1.2';
+import { isMemoryHidden } from './journal.js?v=1.1.2';
+import { CHINESE_NAME_RULE } from './names.js?v=1.1.2';
+import { proactiveSources } from './proactive-evidence.js?v=1.1.2';
+import { phoneQuietOptions } from './api-context.js?v=1.1.2';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.2';
+export { validateContacts } from './contacts.js?v=1.1.2';
+import { readPreparedMemory, preparedMemoryPrompt, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.2';
+import { eventKey, isBlocked, eventChange, communicationEvent } from './contact-events.js?v=1.1.2';
+import { narrativeReplyCount, narrativeTurn, contactPolicy, validateProactive } from './contact-policy.js?v=1.1.2';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.1.2';
+import { incomingParticipant, validateIncoming } from './incoming.js?v=1.1.2';
+
+import { recentSocialStory, socialStoryPrompt } from './social-context.js?v=1.1.2';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -92,14 +94,20 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         }
         // Capture before host quiet generation clears the plugin's prepared slot.
         prompt += preparedMemoryPrompt(readPreparedMemory(context, getSettings()));
-        if (app === 'x' && options.memoryQuery) prompt += xMemoryPrompt(readXMemory(context, getSettings(), options.memoryQuery));
+        if (['x','snapchat','whatsapp','wechat'].includes(app)) {
+            const story = recentSocialStory(context);
+            const query = { ...options.memoryQuery, topic: String(options.memoryQuery?.topic || '').slice(-4000) + '\n' + story.rows.map(row => row.text).join('\n').slice(-4000) };
+            prompt += xMemoryPrompt(readXMemory(context, getSettings(), query), {x:'X',snapchat:'Snapchat',whatsapp:'WhatsApp',wechat:'微信'}[app]);
+            prompt += actorMemoryPrompt(await readActorMemory(context, getSettings(), query, isCurrent));
+            prompt += socialStoryPrompt(story);
+        }
         const smsPlan = contact?.id && ['phone','messages','incoming'].includes(app) && !options.skipSMSClassification
             ? smsClassificationPlan(state,contact.id,exactStoryTime(context.chat)) : null;
         const smsTicket = smsPlan ? await memory.begin() : null;
         if (smsPlan) prompt += smsPlan.prompt;
         if (options.outputContract) prompt += '\n' + options.outputContract;
         if (['phone','messages','incoming'].includes(app)) prompt += COMMUNICATION_LANGUAGE_RULE;
-        if (['x','snapchat'].includes(app)) prompt += SOCIAL_LANGUAGE_RULE;
+        if (['x','snapchat','whatsapp','wechat'].includes(app)) prompt += SOCIAL_LANGUAGE_RULE;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         const attempts = [];
         for (let attempt = 0; attempt <= retries; attempt++) {

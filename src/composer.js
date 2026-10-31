@@ -1,6 +1,6 @@
 // Desktop Enter and mobile soft-keyboard line breaks share the same local action.
 export function bindComposerKeys(root,{queue,onError=()=>{},signal}) {
-    const selector='textarea[data-sms-draft],textarea[data-snap-field="message"]';
+    const selector='textarea[data-sms-draft],textarea[data-snap-field="message"],textarea[data-chat-field="message"]';
     const composing=new WeakSet(),finishing=new WeakSet();
     let pending=false;
     const composer=event=>event.target?.matches?.(selector)?event.target:null;

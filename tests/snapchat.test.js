@@ -30,7 +30,8 @@ test('opening does not request; discovery deduplicates; unaccepted and blocked a
 
 test('aliases stay private until explicit disclosure; rename never erases recognition',async()=>{
  const f=setup();const id=await friend(f);assert.equal(f.state().snapchat[id].identityKnown,false);
- f.reply({status:'reply',text:'Hello Moon',kind:'voice'});ok(await f.snap.send(id,'text','Hi'));assert.match(f.prompt(),/不知道这个账号是谁/);assert.equal(snapUnread(f.state()),1);
+ f.context.chat.push({mes:'Alex JUST_OPENED_THE_BOX with Sam.'});await f.memory.read();
+ f.reply({status:'reply',text:'Hello Moon',kind:'voice'});ok(await f.snap.send(id,'text','Hi'));assert.match(f.prompt(),/JUST_OPENED_THE_BOX/);assert.match(f.prompt(),/不知道这个账号是谁/);assert.equal(snapUnread(f.state()),1);
  const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/\"identityKnown\":false/);
  ok(await f.snap.markRead(id));assert.equal(snapUnread(f.state()),0);ok(await f.snap.reveal(id));ok(await f.snap.saveProfile({alias:'New name',currency:'USD'}));assert.equal(f.state().snapchat[id].identityKnown,true);
  assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
@@ -197,4 +198,17 @@ test('own story replies and likes remain isolated per friend in chat and narrati
  const prompt=buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{instruction:'Remember',budget:50000});
  assert.match(prompt,/Alex private reply/);assert.match(prompt,/点赞/);assert.doesNotMatch(prompt,/Bea private reply/);assert.match(prompt,/不知道现实身份/);
  f.reply({status:'reply',text:'Thanks'});ok(await f.snap.send(id,'text','Hi'));assert.match(f.prompt(),/Alex private reply/);assert.doesNotMatch(f.prompt(),/Bea private reply/);f.close();
+});
+
+
+test('story reactions recover the publishing scene after later unrelated narrative',async()=>{
+ const f=setup();try{
+  await friend(f);
+  f.context.chat.push({mes:'闭馆多年的图书馆今天重新开门，镇上居民正在排队。'});await f.memory.read();ok(await f.snap.publish('video','回来了。'));
+  const story=snapItems(f.state(),'story').find(s=>s.author==='user');
+  for(let i=0;i<8;i++) f.context.chat.push({mes:'第二周的日常 '+i});await f.memory.read();
+  f.reply({items:[],reactions:[]});ok(await f.snap.refresh('stories'));
+  const scene=JSON.parse(f.prompt().split('partial 表示材料不全。\n')[1].split('\n')[0]);
+  assert.deepEqual(scene.links.map(l=>l.id),[story.id]);assert.match(JSON.stringify(scene.rows),/闭馆多年的图书馆/);assert.doesNotMatch(JSON.stringify(scene.rows),/第二周/);
+ }finally{f.close();}
 });

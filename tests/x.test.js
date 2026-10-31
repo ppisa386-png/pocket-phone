@@ -15,6 +15,39 @@ function setup(getGenerationState,independent=false){
  return {x,memory,phone,context,settings,bus,state:()=>phone.snapshot(),reply:r=>{response=r;},count:()=>count,prompt:()=>lastPrompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
+test('legacy duplicate roots display once, preserving their replies, different authors, and user-authored repeats',()=>{
+ const post={id:'p',type:'post',author:'user',metrics:{replies:1}},x={p:post};
+ const add=(id,author,text,fields={})=>{x[id]={id,type:'comment',postId:'p',author,text,...fields};};
+ add('first','A','好看！');add('old','A','好看！',{replyTo:null,ambient:true});add('child','B','赞',{replyTo:'old'});
+ add('other','B','好看！');add('thread','A','好看！',{replyTo:'child'});add('u1','user','好');add('u2','user','好');
+ const before=JSON.stringify(x),list=xItems({x},'comment');assert.equal(list.length,6);assert.equal(list.find(c=>c.id==='child').replyTo,'first');
+ assert.equal(xCounts({x},post).replies,6);assert.equal(JSON.stringify(x),before,'projection leaves saved evidence and journal IDs intact');
+});
+
+test('user post reach includes published evidence and story time, supports wider audiences and cumulative updates',async()=>{
+ const f=setup();try{
+  f.context.chat.push({mes:'2026-10-30 19:30\nAlex privately invited Sam backstage.'});await f.memory.read();
+  const publicText='今晚。';ok(await f.x.publish(publicText));
+  const post=xItems(f.state(),'post')[0];assert.equal(post.sourceIndex,1);
+  f.context.chat.push({mes:'2026-10-30 22:00\nThe show is over.'});await f.memory.read();
+  const update={postId:post.id,metrics:{likes:9800,reposts:770,replies:214},comments:[{name:'Fan',handle:'fan',text:'这个视角也太近了！'}]};
+  f.reply({posts:[],engagementUpdates:[update]});ok(await f.x.refresh());
+  assert.match(f.prompt(),/不同受众/);assert.match(f.prompt(),/熟人的人数不能限制总互动/);assert.match(f.prompt(),/私人经过/);assert.match(f.prompt(),/"postedAtStory"/);assert.match(f.prompt(),/"publicText":"今晚。"/);
+  assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),update.metrics);assert.equal(xItems(f.state(),'comment').length,1);
+  f.reply({posts:[],engagementUpdates:[{postId:post.id,metrics:{likes:10,reposts:1,replies:0}}]});ok(await f.x.refresh());assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),update.metrics);
+ }finally{f.close();}
+});
+test('same friend reply in both refresh channels is one thread and one counted response, including on refresh',async()=>{
+ const f=setup();try{
+  const id=await account(f);ok(await f.x.publish('近距离舞台照，画面里能认出演出者。'));const post=xItems(f.state(),'post')[0];
+  f.reply({posts:[],replies:[{postId:post.id,accountId:id,text:'看到了！'}],engagementUpdates:[{postId:post.id,metrics:{likes:28,reposts:3,replies:1},comments:[{key:'same',accountId:id,text:'看到了！'},{key:'nested',name:'Bea',handle:'bea',text:'我也是。',replyTo:'same'}]}]});
+  ok(await f.x.refresh());ok(await f.x.refresh());const state=f.state(),comments=xItems(state,'comment');
+  assert.equal(Object.values(state.x).filter(c=>c.type==='comment').length,2);
+  const first=comments.find(c=>c.author===id);assert.equal(comments.find(c=>c.text==='我也是。').replyTo,first.id);
+  assert.deepEqual(xCounts(state,state.x[post.id]),{likes:28,reposts:3,replies:2});
+  assert.equal(xUnread(state),1);
+ }finally{f.close();}
+});
 test('X account discovery accepts trailing commas once and keeps existing accounts on other syntax failures',async()=>{
  const f=setup();try{
   f.reply(()=>'{"accounts":[{"name":"Alex","handle":"alex","has_account":true,"dm_policy":"requests",},],}');
@@ -29,6 +62,23 @@ async function account(f,policy='requests'){
  ok(await f.x.saveProfile({alias:'Moon',bio:'Music'}));
  f.reply({accounts:[{name:'Alex',handle:'alex',has_account:true,dm_policy:policy}]});const r=await f.x.discover('Alex');ok(r);return r.value.ids[0];
 }
+
+for(const independent of [false,true])test('X '+(independent?'independent':'host')+' comments receive latest unsummarized prose and target memory with current topic',async()=>{
+ const f=setup(undefined,independent),original=globalThis.qqj_v3_public_bridge_v1;let calls=0,topic='';
+ try{
+  const id=await account(f);f.reply({posts:[{accountId:id,text:'My afternoon'}]});ok(await f.x.refresh());
+  const post=xItems(f.state(),'post')[0];
+  f.context.chat.push({mes:'Alex and Sam JUST_OPENED_THE_GIFT in private. Bea was absent.',name:'Alex'});await f.memory.read();
+  const identity={hostChatId:'x-test'};
+  globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'}),getSnapshot:()=>({status:'not-ready'}),getPeopleSnapshot:()=>({status:'ready',identity,people:{status:'ready',items:[{displayName:'Alex',entityId:'a'}]}}),readContext:async options=>{calls++;topic=options.query;assert.deepEqual(options.entityIds,['a']);return {status:'ready',identity,actors:[{entityId:'a',memoryText:'ALREADY_KNOWN, private; plan not completed'},{entityId:'b',memoryText:'OTHER_SECRET'}],routerText:'ROUTER_SECRET'};}};
+  f.reply({text:'I remember.'});const before=f.count();ok(await f.x.comment(post.id,'CURRENT_COMMENT_TOPIC'));
+  assert.equal(f.count(),before+1);assert.equal(calls,1);assert.match(topic,/CURRENT_COMMENT_TOPIC/);assert.match(topic,/JUST_OPENED_THE_GIFT/);
+  assert.match(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.match(f.prompt(),/ALREADY_KNOWN/);assert.doesNotMatch(f.prompt(),/OTHER_SECRET|ROUTER_SECRET/);
+  assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/JUST_OPENED_THE_GIFT|ALREADY_KNOWN/);
+  f.reply({posts:[]});ok(await f.x.refresh('square'));assert.equal(calls,1,'crowd-only square never requests actors private state');
+  f.settings.api.memorySource='none';f.reply({text:''});ok(await f.x.comment(post.id,'Another comment'));assert.match(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.doesNotMatch(f.prompt(),/ALREADY_KNOWN/);
+ }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
+});
 
 for(const independent of [false,true])test('X '+(independent?'independent':'host')+' request supplements recall with saved knowledge and existing public comments',async()=>{
  const f=setup(undefined,independent);const original=globalThis.qqj_v3_public_bridge_v1;
@@ -333,4 +383,25 @@ test('X feed requests preset dialogue translation and keeps original and transla
  const text='Guten Morgen.\n（早上好。）';f.reply({posts:[{name:'School',handle:'school',text}]});ok(await f.x.refresh());
  assert.match(f.prompt(),/帖子、转帖附言、评论、回复及私信/);assert.match(f.prompt(),/单语预设保持单语/);assert.match(f.prompt(),/不统一英语/);assert.equal(xItems(f.state(),'post')[0].text,text);
  }finally{f.close();}
+});
+
+for (const independent of [false,true]) test('X binds short captions to their own earlier events in feed and thread, '+(independent?'independent':'host'),async()=>{
+ const f=setup(undefined,independent);
+ const scenes=()=>JSON.parse(f.prompt().split('partial 表示材料不全。\n')[1].split('\n')[0]);
+ const textFor=(scene,id)=>scene.links.find(row=>row.id===id).floors.map(index=>scene.rows.find(row=>row.messageIndex===index).text).join(' ');
+ try {
+  const id=await account(f);
+  f.context.chat.push({mes:'校队在决赛最后一秒反超，拿下首个冠军。'});await f.memory.read();
+  ok(await f.x.publish('终于。'));const first=xItems(f.state(),'post')[0];
+  for(let i=0;i<7;i++)f.context.chat.push({mes:'之后的日常 '+i});
+  f.context.chat.push({mes:'两位室友私下和解了，约好暂时不告诉别人。'});await f.memory.read();
+  ok(await f.x.publish('终于。'));const second=xItems(f.state(),'post')[1];
+  for(let i=0;i<8;i++)f.context.chat.push({mes:'几天后 '+i});await f.memory.read();
+  f.reply({posts:[],replies:[{postId:first.id,accountId:id,text:'我还记得最后一秒。'}]});ok(await f.x.refresh());
+  const scene=scenes();assert.match(textFor(scene,first.id),/首个冠军/);assert.doesNotMatch(textFor(scene,first.id),/私下和解|几天后/);
+  assert.match(textFor(scene,second.id),/私下和解/);assert.doesNotMatch(textFor(scene,second.id),/首个冠军|几天后/);
+  f.reply({text:''});const comment=xItems(f.state(),'comment')[0];ok(await f.x.comment(first.id,'是啊。',comment.id));
+  assert.deepEqual(scenes().links.map(row=>row.id),[first.id]);assert.match(textFor(scenes(),first.id),/首个冠军/);
+  assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/校队在决赛|两位室友/);
+ } finally {f.close();}
 });

@@ -1,7 +1,8 @@
-import { smsForAI, syncSMSContext } from './sms-context.js?v=1.0.9';
-import { exactStoryTime } from './story-clock.js?v=1.0.9';
-import { nameAliases } from './names.js?v=1.0.9';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.0.9';
+import { xComments } from './x-comments.js?v=1.1.2';
+import { smsForAI, syncSMSContext } from './sms-context.js?v=1.1.2';
+import { exactStoryTime } from './story-clock.js?v=1.1.2';
+import { nameAliases } from './names.js?v=1.1.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.2';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -54,33 +55,34 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
         if (!turns.length && !['missed','declined','no_answer'].includes(call.status)) continue;
         entries.push({ time: Number(call.createdAt) || 0, data: { channel: '电话', conversation:call.contactId, counterpart:call.name||state.contacts[call.contactId]?.name||speaker.name, storyTime:call.storyTime||null, status: callLabels[call.status] || '已记录', turns } });
     }
-    const social = Object.values(state.snapchat || {});
     const matchesAccount=a=>a.type==='account'&&(allParticipants||((speaker.avatar&&a.characterId==='card:'+speaker.avatar)||(!a.characterId&&speaker.nameIsUnique&&nameAliases(a).some(name=>normalized(name)===normalized(speaker.name)))));
-    const snapAccounts=new Map(social.filter(matchesAccount).map(a=>[a.id,a]));
     const identity=(account,alias)=>({conversation:account.id,counterpart:account.name,identityKnown:!!account.identityKnown,otherParty:account.identityKnown?userName:alias||'匿名账号',...(account.identityKnown?{}:{boundary:'只知道该网名，不知道现实身份；不得映射为正文中的 user'})});
-    for (const item of social) {
-        const account=snapAccounts.get(item.accountId);if(!account)continue;
-        const who=identity(account,state.snapchat?.profile?.alias),time=Number(item.createdAt)||0;
-        if(item.type==='message'&&item.status!=='queued')entries.push({time,data:{channel:'Snapchat',...who,speaker:item.role==='user'?who.otherParty:account.name,storyTime:item.storyTime||null,kind:item.kind,text:item.text}});
-        if(item.type==='call'&&item.turns?.length)entries.push({time,data:{channel:'Snapchat '+(item.mode==='video'?'视频通话':'语音通话'),...who,status:callLabels[item.status],storyTime:item.storyTime||null,turns:item.turns.slice(-10).map(t=>({speaker:t.role==='user'?who.otherParty:account.name,text:t.text,storyTime:t.storyTime||null}))}});
-        if(item.type==='transfer')entries.push({time,data:{channel:'Snapcash',...who,text:JSON.stringify({direction:item.direction,status:item.status,amount:item.amountMinor/100,currency:item.currency,memo:item.memo})}});
-    }
-    for(const item of social){
-        if(!['story','clip'].includes(item.type))continue;
-        if(item.type==='story'&&item.author==='user'){
-            for(const account of snapAccounts.values()){
-                const who=identity(account,state.snapchat?.profile?.alias);
-                for(const c of (item.comments||[]).filter(c=>c.accountId===account.id))entries.push({time:Number(c.createdAt)||0,data:{channel:'Snapchat 故事回复',...who,speaker:account.name,text:c.text,post:item.text}});
-                if((item.friendLikes||[]).includes(account.id))entries.push({time:Number(item.reactionsCheckedAt)||0,data:{channel:'Snapchat 故事互动',...who,speaker:account.name,action:'点赞',post:item.text}});
-            }
-            continue;
+    for (const [app,label] of [['snapchat','Snapchat'],['whatsapp','WhatsApp'],['wechat','微信']]) {
+        const social=Object.values(state[app]||{}),snapAccounts=new Map(social.filter(matchesAccount).map(a=>[a.id,a]));
+        for (const item of social) {
+            const account=snapAccounts.get(item.accountId);if(!account)continue;
+            const who=identity(account,state[app]?.profile?.alias),time=Number(item.createdAt)||0;
+            if(item.type==='message'&&item.status!=='queued')entries.push({time,data:{channel:label,...who,speaker:item.role==='user'?who.otherParty:account.name,storyTime:item.storyTime||null,kind:item.kind,text:item.text}});
+            if(item.type==='call'&&item.turns?.length)entries.push({time,data:{channel:label+' '+(item.mode==='video'?'视频通话':'语音通话'),...who,status:callLabels[item.status],storyTime:item.storyTime||null,turns:item.turns.slice(-10).map(t=>({speaker:t.role==='user'?who.otherParty:account.name,text:t.text,storyTime:t.storyTime||null}))}});
+            if(item.type==='transfer')entries.push({time,data:{channel:app==='snapchat'?'Snapcash':label+' 转账',...who,text:JSON.stringify({direction:item.direction,status:item.status,amount:item.amountMinor/100,currency:item.currency,memo:item.memo})}});
         }
-        const account=snapAccounts.get(item.author);if(!account)continue;
-        const who=identity(account,state.snapchat?.profile?.alias);
-        for(const [i,c]of (item.comments||[]).entries())entries.push({time:Number(c.createdAt||item.createdAt)||i,data:{channel:'Snapchat 动态评论',...who,speaker:c.name===account.name?account.name:who.otherParty,text:c.text,post:item.text}});
-        if(item.liked)entries.push({time:Number(item.likedAt||item.createdAt)||0,data:{channel:'Snapchat 动态互动',...who,speaker:who.otherParty,action:'点赞',post:item.text}});
+        for(const item of social){
+            if(!['story','clip'].includes(item.type))continue;
+            if(item.type==='story'&&item.author==='user'){
+                for(const account of snapAccounts.values()){
+                    const who=identity(account,state[app]?.profile?.alias);
+                    for(const c of (item.comments||[]).filter(c=>c.accountId===account.id))entries.push({time:Number(c.createdAt)||0,data:{channel:label+' 故事回复',...who,speaker:account.name,text:c.text,post:item.text}});
+                    if((item.friendLikes||[]).includes(account.id))entries.push({time:Number(item.reactionsCheckedAt)||0,data:{channel:label+' 故事互动',...who,speaker:account.name,action:'点赞',post:item.text}});
+                }
+                continue;
+            }
+            const account=snapAccounts.get(item.author);if(!account)continue;
+            const who=identity(account,state[app]?.profile?.alias);
+            for(const [i,c]of (item.comments||[]).entries())entries.push({time:Number(c.createdAt||item.createdAt)||i,data:{channel:label+' 动态评论',...who,speaker:c.name===account.name?account.name:who.otherParty,text:c.text,post:item.text}});
+            if(item.liked)entries.push({time:Number(item.likedAt||item.createdAt)||0,data:{channel:label+' 动态互动',...who,speaker:who.otherParty,action:'点赞',post:item.text}});
+        }
     }
-    const xRecords=Object.values(state.x||{}),xAccounts=new Map(xRecords.filter(matchesAccount).map(a=>[a.id,a]));
+    const xRecords=[...Object.values(state.x||{}).filter(r=>r.type!=='comment'),...xComments(state)],xAccounts=new Map(xRecords.filter(matchesAccount).map(a=>[a.id,a]));
     for(const record of xRecords){
         const a=xAccounts.get(record.accountId),who=a?identity(a,state.x?.profile?.alias):null;
         if(record.type==='message'&&a)entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',...who,speaker:record.role==='user'?who.otherParty:a.name,storyTime:record.storyTime||null,text:record.text}});
@@ -101,7 +103,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
     }
     // At most ten recent relevant records per app/channel, before the overall
     // length budget. No private order or asset collection is included here.
-    const category=e=>e.data.channel==='短信'?'sms':e.data.channel==='电话'?'calls':e.data.channel.startsWith('X ')?'x':'snapchat';
+    const category=e=>e.data.channel==='短信'?'sms':e.data.channel==='电话'?'calls':e.data.channel.startsWith('X ')?'x':e.data.channel.startsWith('WhatsApp')?'whatsapp':e.data.channel.startsWith('微信')?'wechat':'snapchat';
     entries.sort((a,b)=>b.time-a.time);const counts={};
     const recent=entries.filter(e=>{const c=category(e)+':'+(e.data.conversation||'');counts[c]=(counts[c]||0)+1;return counts[c]<=10;});
     entries.length=0;entries.push(...recent);

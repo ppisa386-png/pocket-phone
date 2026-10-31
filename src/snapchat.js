@@ -1,7 +1,8 @@
-import { parseModelObject } from './model-json.js?v=1.0.9';
-import { requireCash } from './assets-core.js?v=1.0.9';
-import { readStoryClock } from './story-clock.js?v=1.0.9';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.0.9';
+import { publicationScenePrompt } from './social-context.js?v=1.1.2';
+import { parseModelObject } from './model-json.js?v=1.1.2';
+import { requireCash } from './assets-core.js?v=1.1.2';
+import { readStoryClock } from './story-clock.js?v=1.1.2';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.2';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
@@ -15,10 +16,10 @@ export function snapStoryRefreshState(state, revision = state.revision) {
     return {refreshed,pending,allowed:!refreshed||pending.length>0};
 }
 const setSnap = value => ({collection:'snapchat',key:value.id,value});
-export function parseSnapObject(raw) {
+export function parseSnapObject(raw, label = 'Snapchat') {
     try { return parseModelObject(raw); }
     catch (error) {
-        const local = value => value?.replaceAll('资产评估','Snapchat').replaceAll('账本','Snapchat 数据').replaceAll('金额','邀请或消息');
+        const local = value => value?.replaceAll('资产评估',label).replaceAll('账本',label+' 数据').replaceAll('金额','邀请或消息');
         throw Object.assign(new Error(local(error.message)), {code:error.code,diagnostic:local(error.diagnostic)});
     }
 }
@@ -29,41 +30,47 @@ export function snapAmount(value) {
     const [whole,fraction='']=s.split('.');const result=Number(whole)*100+Number(fraction.padEnd(2,'0'));if(!result)throw new Error('金额必须大于 0。');return result;
 }
 const currencyOf = value => { if(!/^[A-Z]{3}$/.test(value||''))throw new Error('币种请填写三个大写字母，例如 USD。');return value; };
-const accountBy = (state,id) => {const a=state.snapchat?.[id];if(a?.type!=='account')throw new Error('账号已不可用。');return a;};
-const friendBy = (state,id) => {const a=accountBy(state,id);if(a.friend!=='friends'||a.blocked)throw new Error('需要先成为好友，且不能处于拉黑状态。');return a;};
-const mediaKinds=['text','voice','image','video'];
-const threadFor=(state,id)=>snapItems(state,'message').filter(m=>m.accountId===id&&m.status!=='queued').sort((a,b)=>a.createdAt-b.createdAt);
 const newRecord=(type,fields)=>({id:crypto.randomUUID(),type,createdAt:Date.now(),...fields});
 
-export function createSnapchat({memory,phone,getContext,getSettings}) {
+export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapchat'}) {
+    const appName = {snapchat:'Snapchat',whatsapp:'WhatsApp',wechat:'微信'}[app];
+    if (!appName) throw new Error('未知聊天应用。');
+    const cashName = app === 'snapchat' ? 'Snapcash' : appName + ' 转账';
+    const cashSource = app === 'snapchat' ? 'snapcash' : app;
+    const snapItems = (state,type) => Object.values(state[app] || {}).filter(i=>i.type===type);
+    const setSnap = value => ({collection:app,key:value.id,value});
+    const accountBy = (state,id) => {const a=state[app]?.[id];if(a?.type!=='account')throw new Error('账号已不可用。');return a;};
+    const friendBy = (state,id) => {const a=accountBy(state,id);if(a.friend!=='friends'||a.blocked)throw new Error('需要先成为好友，且不能处于拉黑状态。');return a;};
+    const mediaKinds=['text','voice','image','video'];
+    const threadFor=(state,id)=>snapItems(state,'message').filter(m=>m.accountId===id&&m.status!=='queued').sort((a,b)=>a.createdAt-b.createdAt);
     const run=work=>phone.appTask(async(view,current,request)=>{
-        if(!current())throw new Error('Snapchat 已关闭或聊天已变化。');
+        if(!current())throw new Error(appName+' 已关闭或聊天已变化。');
         const ticket=await memory.begin();
         const commit=async changes=>{if(!current())throw new Error('聊天已变化，本次操作已取消。');if(changes.length)await memory.commit(ticket,changes);};
         return work(view.state,current,request,commit,view.revision);
-    });
-    const profile=state=>snapProfile(state,getContext().name1);
+    },app);
+    const profile=state=>snapProfile({snapchat:state[app]},getContext().name1);
     function target(state,account) {
-        return {id:account.characterId||account.id,name:account.name,channel:'snapchat',alias:profile(state).alias,identityKnown:account.identityKnown===true};
+        return {id:account.characterId||account.id,name:account.name,channel:app,alias:profile(state).alias,identityKnown:account.identityKnown===true};
     }
     function rules(state,account=null) {
         const p=profile(state);
-        return getSettings().prompts.general+'\n'+getSettings().prompts.snapchat+'\n这是 Snapchat 文字扮演任务。媒体用文字描述；语音只含可听见内容，视频通话仅限镜头内可见和可听见内容。不得替 user 发言，不产生真实操作。'+
+        return getSettings().prompts.general+'\n'+getSettings().prompts[app]+'\n这是 '+appName+' 文字扮演任务。媒体用文字描述；语音只含可听见内容，视频通话仅限镜头内可见和可听见内容。不得替 user 发言，不产生真实操作。'+
             '\n当前 user 公开网名：'+JSON.stringify(p.alias)+'。'+(account?'当前对方账号：'+JSON.stringify({name:account.name,handle:account.handle})+'；对方'+(account.identityKnown?'已通过此前披露知道账号的真实身份。':'不知道这个账号是谁。后台真人对应、角色卡、user 人设、私人剧情和记忆都不能据此暴露账号身份；只能认识网名及本账号公开过的内容。'):'发现账号不等于知道账号背后的真实身份。')+
             '\n仅使用对应账号已知的信息，不将正文中的私人剧情写成公开动态或据此公开 user 身份。user 未共享的位置不得显示给别人。'+
-            (account?'\n本账号此前互动与转账：'+JSON.stringify(Object.values(state.snapchat||{}).filter(i=>i.accountId===account.id&&['call','transfer'].includes(i.type)).slice(-20))+'\nuser 向好友公开的故事：'+JSON.stringify(snapItems(state,'story').filter(i=>i.author==='user'&&!snapExpired(i)).slice(-8).map(i=>({id:i.id,kind:i.kind,text:i.text,comments:(i.comments||[]).filter(c=>c.accountId===account.id),liked:(i.friendLikes||[]).includes(account.id)})))+'\nuser 共享位置：'+JSON.stringify(p.sharing?p.location:null):'')+
+            (account?'\n本账号此前互动与转账：'+JSON.stringify(Object.values(state[app]||{}).filter(i=>i.accountId===account.id&&['call','transfer'].includes(i.type)).slice(-20))+'\nuser 向好友公开的故事：'+JSON.stringify(snapItems(state,'story').filter(i=>i.author==='user'&&!snapExpired(i)).slice(-8).map(i=>({id:i.id,kind:i.kind,text:i.text,comments:(i.comments||[]).filter(c=>c.accountId===account.id),liked:(i.friendLikes||[]).includes(account.id)})))+'\nuser 共享位置：'+JSON.stringify(p.sharing?p.location:null):'')+
             '\n只输出本任务指定 JSON，内容语言遵守酒馆预设。';
     }
-    const ask=(state,account,request,current,prompt,validate)=>request(rules(state,account)+'\n'+prompt,validate,current,account?target(state,account):null,{retries:0,parseResponse:parseSnapObject,outputContract:'当前任务是 Snapchat，不续写正文或状态栏。最终只返回本任务要求的单个完整 JSON 对象，不能返回多个候选；保留预设语言与身份隔离规则。'});
+    const ask=(state,account,request,current,prompt,validate,actors=[])=>request(rules(state,account)+'\n'+prompt,validate,current,account?target(state,account):null,{retries:0,memoryQuery:{actors:(account?[account]:actors).map(a=>({id:a.id,name:a.name,aliases:a.aliases})),names:(account?[account]:snapItems(state,'account').filter(a=>a.friend==='friends'&&!a.blocked)).flatMap(a=>[a.name,...(a.aliases||[])]),topic:prompt},parseResponse:raw=>parseSnapObject(raw,appName),outputContract:'当前任务是 '+appName+'，不续写正文或状态栏。最终只返回本任务要求的单个完整 JSON 对象，不能返回多个候选；保留预设语言与身份隔离规则。'});
     const knownAtContact=(state,account)=>account.identityKnown||profile(state).alias===getContext().name1;
     function ledger(transfer) {
-        return {collection:'assets',key:'snapcash:'+transfer.id,value:{id:'snapcash:'+transfer.id,type:'cash_transaction',source:'snapcash',transferId:transfer.id,currency:transfer.currency,amountMinor:transfer.amountMinor,
-            deltaMinor:transfer.direction==='incoming'?transfer.amountMinor:-transfer.amountMinor,counterparty:transfer.accountId,memo:transfer.direction==='incoming'?'Snapchat 收款':'Snapchat 转出',day:readStoryClock(getContext().chat).day,createdAt:Date.now()}};
+        return {collection:'assets',key:cashSource+':'+transfer.id,value:{id:cashSource+':'+transfer.id,type:'cash_transaction',source:cashSource,transferId:transfer.id,currency:transfer.currency,amountMinor:transfer.amountMinor,
+            deltaMinor:transfer.direction==='incoming'?transfer.amountMinor:-transfer.amountMinor,counterparty:transfer.accountId,memo:transfer.direction==='incoming'?appName+' 收款':appName+' 转出',day:readStoryClock(getContext().chat).day,createdAt:Date.now()}};
     }
     function replyData(data) {
-        if(!['reply','no_reply'].includes(data.status))throw new Error('Snapchat 回复格式不正确。');
+        if(!['reply','no_reply'].includes(data.status))throw new Error(appName+' 回复格式不正确。');
         const source=data.messages??(data.text?[{kind:data.kind,text:data.text}]:[]);
-        if(!Array.isArray(source)||source.length>8)throw new Error('Snapchat 消息格式不正确。');
+        if(!Array.isArray(source)||source.length>8)throw new Error(appName+' 消息格式不正确。');
         const messages=source.map(m=>({kind:mediaKinds.includes(m.kind)?m.kind:'text',text:text(m.text)}));
         if(data.status==='reply'&&(!messages.length||messages.some(m=>!m.text)))throw new Error('回复没有文字内容。');
         if(messages.some(m=>m.text.length>600))throw new Error('回复过长，请分成简短消息。');
@@ -72,7 +79,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
     }
     async function answerMessage(state,account,message,request,current,commit) {
         const batch=message.batchId?threadFor(state,account.id).filter(m=>m.role==='user'&&m.batchId===message.batchId):[message];
-        const result=await ask(state,account,request,current,'当前任务：Snapchat 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
+        const result=await ask(state,account,request,current,'当前任务：'+appName+' 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
             '\n本次 user 消息：'+JSON.stringify(batch.map(m=>({kind:m.kind,text:m.text})))+
             '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null}。语言和翻译要求遵守预设。转账统一美元 USD。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"USD 等三字母币种","memo":"附言"}；仅为待收款邀请，不自动收款。',replyData);
         const changes=batch.map(m=>setSnap({...m,status:result.status==='reply'?'answered':'no_reply'}));
@@ -88,22 +95,22 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
         });},
         discover(query=''){return run(async(state,current,request,commit)=>{
             const visible=(getContext().chat||[]).filter(m=>!m.is_system&&!m.hidden&&!m.is_hidden).slice(-80).map(m=>m.mes);
-            const data=await ask(state,null,request,current,'当前任务：Snapchat 新增联系人。搜索 '+JSON.stringify(text(query,100))+'。可见剧情：'+JSON.stringify(visible)+
-                '\n根据当前设定判断哪些人物确实有 Snapchat 账号，不能因为是亲友或已有电话号码就自动添加；不合适用空数组。char 默认用真名、各只有一个账户。仅发现账号，不自动成为好友。可返回合理的待接受邀请。输出 {"accounts":[{"name":"姓名","handle":"唯一账号名","has_account":true,"invitation":"none 或 incoming"}]}，最多 10 个。',d=>{if(!Array.isArray(d.accounts)||d.accounts.length>10)throw new Error('账号搜索结果格式不正确。');return d.accounts;});
+            const data=await ask(state,null,request,current,'当前任务：'+appName+' 新增联系人。搜索 '+JSON.stringify(text(query,100))+'。可见剧情：'+JSON.stringify(visible)+
+                '\n根据当前设定判断哪些人物确实有 '+appName+' 账号，不能因为是亲友或已有电话号码就自动添加；不合适用空数组。char 默认用真名、各只有一个账户。仅发现账号，不自动成为好友。可返回合理的待接受邀请。输出 {"accounts":[{"name":"姓名","handle":"唯一账号名","has_account":true,"invitation":"none 或 incoming"}]}，最多 10 个。',d=>{if(!Array.isArray(d.accounts)||d.accounts.length>10)throw new Error('账号搜索结果格式不正确。');return d.accounts;});
             const changes=[],used=new Set(),handles=new Set();
             for(const item of data){if(item.has_account!==true)continue;const identity=localizedPerson(item,getContext(),snapItems(state,'account')),name=identity.name,handle=text(item.handle,60).replace(/^@/,'');if(!name||!handle||/[\s<>]/.test(handle))continue;
                 const characterId=identity.cardId;
                 const old=snapItems(state,'account').find(a=>(characterId&&a.characterId===characterId)||sameNamedPerson(a,identity)||a.handle.toLowerCase()===handle.toLowerCase());
-                if(old){if(old.name!==name||(!old.characterId&&characterId)||identity.aliases.some(alias=>!old.aliases?.includes(alias))){const next={...old,name,aliases:identity.aliases,characterId:old.characterId||characterId};state.snapchat[old.id]=next;changes.push(setSnap(next));}continue;}
+                if(old){if(old.name!==name||(!old.characterId&&characterId)||identity.aliases.some(alias=>!old.aliases?.includes(alias))){const next={...old,name,aliases:identity.aliases,characterId:old.characterId||characterId};state[app][old.id]=next;changes.push(setSnap(next));}continue;}
                 if(used.has(name)||handles.has(handle.toLowerCase())||name===getContext().name1)continue;used.add(name);handles.add(handle.toLowerCase());
-                const account=newRecord('account',{name,aliases:identity.aliases,handle,characterId,friend:item.invitation==='incoming'?'incoming':'none',identityKnown:false,blocked:false});state.snapchat[account.id]=account;changes.push(setSnap(account));
+                const account=newRecord('account',{name,aliases:identity.aliases,handle,characterId,friend:item.invitation==='incoming'?'incoming':'none',identityKnown:false,blocked:false});state[app][account.id]=account;changes.push(setSnap(account));
             }
             await commit(changes);return {added:changes.length};
         });},
         invite(id){return run(async(state,current,request,commit)=>{
             const account=accountBy(state,id);if(account.blocked||account.friend==='friends')throw new Error('无需再次添加这个账号。');
             const known={...account,identityKnown:knownAtContact(state,account)};
-            const data=await ask(state,known,request,current,'当前任务：Snapchat 好友邀请。user 请求添加对方。根据角色决定，输出 {"status":"friends 或 pending 或 declined"}。',d=>{if(!['friends','pending','declined'].includes(d.status))throw new Error('好友邀请结果格式不正确。');return d;});
+            const data=await ask(state,known,request,current,'当前任务：'+appName+' 好友邀请。user 请求添加对方。根据角色决定，输出 {"status":"friends 或 pending 或 declined"}。',d=>{if(!['friends','pending','declined'].includes(d.status))throw new Error('好友邀请结果格式不正确。');return d;});
             await commit([setSnap({...known,friend:data.status})]);
         });},
         inviteMany(ids){return run(async(state,current,request,commit)=>{
@@ -111,7 +118,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             const selected=[...new Set(ids)].map(id=>accountBy(state,id));
             if(selected.some(a=>a.blocked||['friends','incoming'].includes(a.friend)))throw new Error('选择中有已处理或不可添加的账号，请重新选择。');
             const accounts=selected.map(a=>({...a,identityKnown:knownAtContact(state,a)}));
-            const data=await ask(state,null,request,current,'当前任务：批量 Snapchat 好友邀请。只处理下列已勾选账号，每人独立决定接受、等待或拒绝；不强制全部通过。各账号之间不能共享私人认知，identityKnown=false 时只知道公开网名，不得依据后台真人对应关系认出 user。账号资料：'+JSON.stringify(accounts.map(({id,name,handle,characterId,identityKnown})=>({id,name,handle,characterId,identityKnown})))+'\n只输出 {"results":[{"id":"给定账号ID","status":"friends 或 pending 或 declined"}]}。每个给定 ID 恰好一次，不增不漏。',d=>{
+            const data=await ask(state,null,request,current,'当前任务：批量 '+appName+' 好友邀请。只处理下列已勾选账号，每人独立决定接受、等待或拒绝；不强制全部通过。各账号之间不能共享私人认知，identityKnown=false 时只知道公开网名，不得依据后台真人对应关系认出 user。账号资料：'+JSON.stringify(accounts.map(({id,name,handle,characterId,identityKnown})=>({id,name,handle,characterId,identityKnown})))+'\n只输出 {"results":[{"id":"给定账号ID","status":"friends 或 pending 或 declined"}]}。每个给定 ID 恰好一次，不增不漏。',d=>{
                 if(!Array.isArray(d.results)||d.results.length!==accounts.length)throw new Error('好友邀请结果人数不匹配，本次未保存。');
                 const expected=new Set(accounts.map(a=>a.id)),seen=new Set();
                 for(const row of d.results){if(!row||!expected.has(row.id)||seen.has(row.id)||!['friends','pending','declined'].includes(row.status))throw new Error('好友邀请结果含未知、重复账号或无效状态，本次未保存。');seen.add(row.id);}
@@ -138,13 +145,13 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             catch(error){if(current())await memory.commit(ticket,batch.map(m=>setSnap({...m,status:'failed'})));throw error;}
         });},
         editMessage(id,value){return run(async(state,_c,_r,commit)=>{
-            const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能修改对方的消息。');
+            const m=state[app][id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能修改对方的消息。');
             await commit([setSnap({...m,text:required(value,'消息内容')})]);
         });},
         rerollMessage(id){return run(async(state,current,request,commit)=>{
-            const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能重新生成对方的消息。');
+            const m=state[app][id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能重新生成对方的消息。');
             const a=friendBy(state,m.accountId),thread=threadFor(state,a.id),before=thread.slice(0,thread.findIndex(x=>x.id===id));
-            const result=await ask(state,a,request,current,'当前任务：仅重写选中的一条 Snapchat 消息。只用它之前的聊天，不预知后续；简短自然，通常一句话。保持消息类型，不生成其他消息，不触发或改变转账。此前聊天：'+JSON.stringify(before.map(({role,kind,text})=>({role,kind,text})))+'\n被选中的消息：'+JSON.stringify({kind:m.kind,text:m.text})+'\n输出 {"text":"这条消息的新内容"}。',d=>({text:required(d.text,'回复内容',600)}));
+            const result=await ask(state,a,request,current,'当前任务：仅重写选中的一条 '+appName+' 消息。只用它之前的聊天，不预知后续；简短自然，通常一句话。保持消息类型，不生成其他消息，不触发或改变转账。此前聊天：'+JSON.stringify(before.map(({role,kind,text})=>({role,kind,text})))+'\n被选中的消息：'+JSON.stringify({kind:m.kind,text:m.text})+'\n输出 {"text":"这条消息的新内容"}。',d=>({text:required(d.text,'回复内容',600)}));
             await commit([setSnap({...m,text:result.text})]);
         });},
         send(id,kind,value){return run(async(state,current,request,commit)=>{
@@ -155,18 +162,18 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             try{await answerMessage(fresh.state,a,message,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(nextTicket,changes);});}
             catch(error){if(current())await memory.commit(nextTicket,[setSnap({...message,status:'failed'})]);throw error;}
         });},
-        retryMessage(id){return run(async(state,current,request,commit)=>{const m=state.snapchat[id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending'].includes(m.status))throw new Error('此消息不需要重试。');const a=friendBy(state,m.accountId);const last=m.batchId?threadFor(state,a.id).filter(x=>x.role==='user'&&x.batchId===m.batchId).at(-1):m;await answerMessage(state,a,last,request,current,commit);});},
+        retryMessage(id){return run(async(state,current,request,commit)=>{const m=state[app][id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending'].includes(m.status))throw new Error('此消息不需要重试。');const a=friendBy(state,m.accountId);const last=m.batchId?threadFor(state,a.id).filter(x=>x.role==='user'&&x.batchId===m.batchId).at(-1):m;await answerMessage(state,a,last,request,current,commit);});},
         markRead(id){return run(async(state,_c,_r,commit)=>{await commit(threadFor(state,id).filter(m=>m.role==='assistant'&&!m.read).map(m=>setSnap({...m,read:true})));});},
         call(id,mode,value='',callId=null){return run(async(state,current,request,commit)=>{
             const a=friendBy(state,id);if(!['voice','video'].includes(mode))throw new Error('通话类型不可用。');
             if(!callId&&snapItems(state,'call').some(c=>c.status==='connected'))throw new Error('请先挂断当前通话。');
-            const old=callId?state.snapchat[callId]:null;if(callId&&(old?.type!=='call'||old.accountId!==id||old.status!=='connected'))throw new Error('通话已结束。');
+            const old=callId?state[app][callId]:null;if(callId&&(old?.type!=='call'||old.accountId!==id||old.status!=='connected'))throw new Error('通话已结束。');
             const turns=old?[...old.turns,{role:'user',text:required(value,'通话内容')}]:[];
-            const data=await ask(state,a,request,current,'当前任务：Snapchat '+(mode==='voice'?'语音通话，只允许听觉内容。':'视频通话，可描述镜头内画面与声音，不写镜头外或内心。')+(old?'通话已接通，回应 user。':'user 拨出，决定接听或未接。')+'记录：'+JSON.stringify(turns)+'\n输出 {"status":"answered 或 no_answer","text":"对方回复"}。',d=>{if(!['answered','no_answer'].includes(d.status)||d.status==='answered'&&!text(d.text))throw new Error('通话回复格式不正确。');return d;});
+            const data=await ask(state,a,request,current,'当前任务：'+appName+' '+(mode==='voice'?'语音通话，只允许听觉内容。':'视频通话，可描述镜头内画面与声音，不写镜头外或内心。')+(old?'通话已接通，回应 user。':'user 拨出，决定接听或未接。')+'记录：'+JSON.stringify(turns)+'\n输出 {"status":"answered 或 no_answer","text":"对方回复"}。',d=>{if(!['answered','no_answer'].includes(d.status)||d.status==='answered'&&!text(d.text))throw new Error('通话回复格式不正确。');return d;});
             if(data.status==='answered')turns.push({role:'assistant',text:text(data.text)});
             await commit([setSnap({...(old||newRecord('call',{})),accountId:id,mode,status:data.status==='answered'?'connected':'no_answer',turns})]);
         });},
-        hangup(id){return run(async(state,_c,_r,commit)=>{const call=state.snapchat[id];if(call?.type==='call')await commit([setSnap({...call,status:'ended'})]);});},
+        hangup(id){return run(async(state,_c,_r,commit)=>{const call=state[app][id];if(call?.type==='call')await commit([setSnap({...call,status:'ended'})]);});},
         publish(kind,value){return run(async(state,_c,_r,commit)=>{if(!['image','video'].includes(kind))throw new Error('故事请选择照片或视频。');await commit([setSnap(newRecord('story',{author:'user',name:profile(state).alias,kind,text:required(value,'故事内容'),comments:[],liked:false}))]);});},
         refresh(tab){return run(async(state,current,request,commit,revision)=>{
             if(!['stories','spotlight','map'].includes(tab))throw new Error('页面不可刷新。');
@@ -177,10 +184,10 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             const pending=refreshState?.pending||[];
             const spec=tab==='stories'?(reactionsOnly?'本回合好友故事已刷新，只检查下列新发布的 user 故事的好友互动，items 必须为空数组，不再生成好友故事。':'只为给定好友生成已发布的照片/视频故事。每项 {accountId,kind:"image/video",text}。')+
                 '\n同时按每位好友的关系、性格、当前处境以及是否有条件看到/回应，自行决定是否给下列故事点赞或简短回复；可以只有点赞，也可以无人互动，不要求每人回应，不为凑数互动。只允许列表中已添加且未拉黑的好友。各账号认知独立，identityKnown 为 false 时不能依据后台人设或私人剧情认出 user；不得把某人私下知道的事变成所有好友都知道，不虚构 user 发言。回复语言遵循当前预设的对白与翻译规则。'+
-                '\n待检查的 user 故事（只可针对这些ID互动）：'+JSON.stringify(pending.map(({id,kind,text})=>({id,kind,text})))+
+                '\n待检查的 user 故事（只可针对这些ID互动）：'+JSON.stringify(pending.map(({id,kind,text})=>({id,kind,text})))+publicationScenePrompt(getContext(),pending)+
                 '\n输出 {"items":[],"reactions":[{"storyId":"给定故事ID","accountId":"好友ID","liked":true,"text":"回复或空字符串"}]}。同一好友对同一故事最多一项，无互动返回 reactions:[]。'
                 :tab==='spotlight'?'生成陌生人/创作者公开短视频。每项 {name,text}，text 是视频画面、声音与字幕的文字描述。':'生成好友明确共享的位置或世界各地公开动态。每项 {accountId:null 或给定好友ID,name,place,text,shared:true}；不得泄漏不分享位置的好友。';
-            const data=await ask(state,null,request,current,'当前任务：Snapchat '+tab+' 刷新。'+spec+'好友列表：'+JSON.stringify(friends)+'\n'+(tab==='stories'?'items 最多 5 条。':'输出 {"items": [...]}，最多 5 条。')+'不替 user 发布内容。',d=>{
+            const data=await ask(state,null,request,current,'当前任务：'+appName+' '+tab+' 刷新。'+spec+'好友列表：'+JSON.stringify(friends)+'\n'+(tab==='stories'?'items 最多 5 条。':'输出 {"items": [...]}，最多 5 条。')+'不替 user 发布内容。',d=>{
                 if(!Array.isArray(d.items)||d.items.length>5||reactionsOnly&&d.items.length)throw new Error('动态内容格式不正确。');
                 if(tab!=='stories')return {items:d.items,reactions:[]};
                 const reactions=d.reactions??(pending.length?null:[]);
@@ -192,7 +199,7 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
                     seen.add(key);
                 }
                 return {items:d.items,reactions};
-            });
+            },tab==='stories'?friends.map(a=>state[app][a.id]):[]);
             const items=data.items;
             const changes=[];
             for(const item of items){const a=friends.find(a=>a.id===item.accountId);if(tab==='stories'&&!a)continue;if(tab==='map'&&(item.shared!==true||item.accountId&&!a))continue;
@@ -210,18 +217,18 @@ export function createSnapchat({memory,phone,getContext,getSettings}) {
             }
             await commit(changes);
         });},
-        like(id){return run(async(state,_c,_r,commit)=>{const item=state.snapchat[id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');await commit([setSnap({...item,liked:!item.liked,likedAt:Date.now()})]);});},
-        comment(id,value){return run(async(state,current,request,commit)=>{const item=state.snapchat[id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');const content=required(value,'评论');const a=state.snapchat[item.author];
+        like(id){return run(async(state,_c,_r,commit)=>{const item=state[app][id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');await commit([setSnap({...item,liked:!item.liked,likedAt:Date.now()})]);});},
+        comment(id,value){return run(async(state,current,request,commit)=>{const item=state[app][id];if(!['story','clip'].includes(item?.type))throw new Error('动态不存在。');const content=required(value,'评论');const a=state[app][item.author];
             if(a?.blocked)throw new Error('此账号已拉黑。');
-            const reply=item.author==='user'?{text:''}:await ask(state,a?.type==='account'?a:null,request,current,'当前任务：Snapchat 动态评论。动态：'+JSON.stringify({name:item.name,text:item.text})+'；user 网名 '+JSON.stringify(profile(state).alias)+' 评论：'+JSON.stringify(content)+'。仅生成作者的简短回复或不回复，输出 {"text":"回复或空字符串"}。',d=>({text:text(d.text,1000)}));
+            const reply=item.author==='user'?{text:''}:await ask(state,a?.type==='account'?a:null,request,current,publicationScenePrompt(getContext(),[item])+'当前任务：'+appName+' 动态评论。动态：'+JSON.stringify({name:item.name,text:item.text})+'；user 网名 '+JSON.stringify(profile(state).alias)+' 评论：'+JSON.stringify(content)+'。仅生成作者的简短回复或不回复，输出 {"text":"回复或空字符串"}。',d=>({text:text(d.text,1000)}));
             const comments=[...(item.comments||[]),{name:profile(state).alias,text:content,createdAt:Date.now()},...(reply.text?[{name:item.name,text:reply.text,createdAt:Date.now()+1}]:[])];await commit([setSnap({...item,comments})]);
         });},
         transfer(id,amount,currency,memo){return run(async(state,_c,_r,commit)=>{friendBy(state,id);const t=newRecord('transfer',{accountId:id,direction:'outgoing',status:'pending',amountMinor:snapAmount(amount),currency:currencyOf(currency),memo:text(memo,300)});requireCash(state,t.amountMinor,t.currency);await commit([setSnap(t)]);return t.id;});},
         settle(id,accept=true){return run(async(state,current,request,commit)=>{
-            const t=state.snapchat[id];if(t?.type!=='transfer'||t.status!=='pending')throw new Error('这笔转账已处理。');const a=accept?friendBy(state,t.accountId):null;
+            const t=state[app][id];if(t?.type!=='transfer'||t.status!=='pending')throw new Error('这笔转账已处理。');const a=accept?friendBy(state,t.accountId):null;
             let status=accept?'accepted':'declined';
             if(accept&&t.currency!=='USD')throw Error('旧的非美元转账不自动换算，请取消并使用 USD。');
-            if(t.direction==='outgoing'&&accept){requireCash(state,t.amountMinor,t.currency,t.id);const data=await ask(state,a,request,current,'当前任务：Snapcash 收款判断。user 转账 '+JSON.stringify({amount:t.amountMinor/100,currency:t.currency,memo:t.memo})+'。决定是否收下，输出 {"status":"accepted 或 declined 或 pending"}。',d=>{if(!['accepted','declined','pending'].includes(d.status))throw new Error('收款结果格式不正确。');return d;});status=data.status;}
+            if(t.direction==='outgoing'&&accept){requireCash(state,t.amountMinor,t.currency,t.id);const data=await ask(state,a,request,current,'当前任务：'+cashName+' 收款判断。user 转账 '+JSON.stringify({amount:t.amountMinor/100,currency:t.currency,memo:t.memo})+'。决定是否收下，输出 {"status":"accepted 或 declined 或 pending"}。',d=>{if(!['accepted','declined','pending'].includes(d.status))throw new Error('收款结果格式不正确。');return d;});status=data.status;}
             const updated={...t,status};await commit([setSnap(updated),...(status==='accepted'?[ledger(updated)]:[])]);
         });},
     };
