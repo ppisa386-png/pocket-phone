@@ -1,4 +1,4 @@
-import { readJournal, replayJournal, appendChange } from './journal.js?v=1.1.5';
+import { readJournal, replayJournal, appendChange } from './journal.js?v=1.1.6';
 
 // Older versions kept past edition changes in the journal but no folder.
 // Recover only recorded dates and complete editions, never infer a date.

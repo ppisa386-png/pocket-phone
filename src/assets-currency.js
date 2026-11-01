@@ -1,5 +1,5 @@
-import { assetSet, cashBalance } from './assets-core.js?v=1.1.5';
-import { walletCurrency, unitScale } from './currency.js?v=1.1.5';
+import { assetSet, cashBalance } from './assets-core.js?v=1.1.6';
+import { walletCurrency, unitScale } from './currency.js?v=1.1.6';
 
 // Re-denominate a settled wallet only at a rate explicitly supplied by the
 // player. The journal keeps the previous projection and rolls back the batch.

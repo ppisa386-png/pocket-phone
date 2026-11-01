@@ -37,3 +37,21 @@ test('bracketed scene date ranges use the final date and time, not arbitrary men
  assert.equal(storyTime([{mes:'2026-05-20 09:30 约好2026-06-24见面。'}]).date,'2026-05-20');
  assert.equal(storyTime([{mes:'2026-05-20 至 2026-02-30'}]).date,'2026-05-20');
 });
+
+test('SDC wrapped in a narrative code block works without calendar and the final valid marker wins',()=>{
+ const start='<!-- SDC-start | date=2026-03-02 | weekday=周一 | time=08:00 -->';
+ const end='<!-- SDC-end | date=2026-03-02 | weekday=周一 | time=14:25 -->';
+ const message={mes:'```html\n'+start+'\n<now_plot><content>正文</content></now_plot>\n'+end+'\n```\n<calendar>2026年3月2日 08:00</calendar>'};
+ assert.equal(storyTime([message]).time,'14:25');assert.equal(storyTime([{mes:'```\n'+start+'\n正文\n```'}]).time,'08:00');
+ assert.equal(readStoryClock([message],null,{exact:true}).hour,14+25/60);
+});
+test('SDC validates dates and times atomically, ignores user examples and thought blocks, and rolls back',()=>{
+ const mark=(date,time)=>'<!-- SDC-end | date='+date+' | time='+time+' -->';
+ const chat=[{mes:mark('2026-03-02','23:59')},{mes:'```\n'+mark('2026-03-03','00:05')+'\n```'}];
+ assert.equal(storyTime(chat).date,'2026-03-03');assert.equal(storyTime(chat).time,'00:05');
+ chat.pop();assert.equal(storyTime(chat).time,'23:59');
+ chat.push({mes:mark('2099-01-01','10:00'),is_user:true});assert.equal(storyTime(chat).date,'2026-03-02');
+ for(const invalid of [mark('2026-02-30','09:00'),mark('2099-01-01','25:00'),mark('2099-01-01','08:99'),mark('2099-01-01','08:00oops'),'<think>'+mark('2099-01-01','09:00')+'</think>','<analysis>'+mark('2099-01-01','09:00')+'</analysis>']){
+  assert.equal(storyTime([...chat,{mes:invalid}]).time,'23:59');assert.equal(storyTime([...chat,{mes:invalid}]).date,'2026-03-02');
+ }
+});

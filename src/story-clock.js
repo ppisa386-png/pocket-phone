@@ -5,16 +5,33 @@ export function dateDay(value) {
     return d.getUTCFullYear()===+m[1]&&d.getUTCMonth()===+m[2]-1&&d.getUTCDate()===+m[3]?Math.floor(d.getTime()/86400000):null;
 }
 export const dayDate = day => Number.isInteger(day)?new Date(day*86400000).toISOString().slice(0,10):'';
+// SDC is explicit scene metadata, even when a preset wraps prose in a code
+// fence. Read it before stripping presentation wrappers; never use wall time.
+function lastSDC(source) {
+    let result=null;
+    for(const match of source.matchAll(/<!--\s*SDC-(?:start|end)\s*\|([\s\S]*?)-->/gi)) {
+        const fields={};let duplicate=false;
+        for(const part of match[1].split('|')) {
+            const field=part.match(/^\s*(date|time)\s*=\s*(.*?)\s*$/i);
+            if(!field)continue;
+            const key=field[1].toLowerCase();if(key in fields)duplicate=true;fields[key]=field[2];
+        }
+        const date=fields.date?.match(/^(\d{4})[-年/.](\d{1,2})[-月/.](\d{1,2})日?$/);
+        const time=fields.time?.match(/^(\d{1,2}):(\d{2})$/);
+        if(duplicate||!date||!time||+time[1]>23||+time[2]>59)continue;
+        const day=dateDay(`${date[1]}-${date[2].padStart(2,'0')}-${date[3].padStart(2,'0')}`);
+        if(day!==null)result={day,hour:+time[1]+time[2]/60};
+    }
+    return result;
+}
 export function readStoryClock(chat, seed=null, { exact = false } = {}) {
     let day=seed?.day??null,hour=seed?.hour??null;
     for(const m of chat||[]){
-        if(m.is_system&&!m.extra?.qianqianjieAutoHide)continue;
-        const text=String(m.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(script|style|think|thinking)[^>]*>[\s\S]*?<\/\1>/gi,'')
-            .replace(/<!--\s*SDC-(?:start|end)\s*\|([\s\S]*?)-->/gi,(_,body)=>{
-                const date=body.match(/(?:^|\|)\s*date\s*=\s*([^|]+)/i)?.[1]?.trim();
-                const time=body.match(/(?:^|\|)\s*time\s*=\s*(\d{1,2}:\d{2})/i)?.[1];
-                return date?'\n'+date+(time?' '+time:'')+'\n':'';
-            }).replace(/<!--[\s\S]*?-->/g,'').replace(/<[^>]*>/g,'\n');
+        if(!m||m.role==='system'||m.isPhoneMessage||m.is_system&&!m.extra?.qianqianjieAutoHide)continue;
+        const source=String(m.mes??m.content??'').replace(/<(script|style|think|thinking|analysis)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi,'');
+        const sdc=!m.is_user&&m.role!=='user'?lastSDC(source):null;
+        if(sdc){day=sdc.day;hour=sdc.hour;continue;}
+        const text=source.replace(/```[\s\S]*?```/g,'').replace(/<!--[\s\S]*?-->/g,'').replace(/<[^>]*>/g,'\n');
         const lines=text.split('\n').map(s=>s.replace(/^[\s*#|]+|[\s*|]+$/g,'')).filter(Boolean);
         for(const rawLine of lines){
             let line=rawLine.replace(/^[【\[]\s*/, '').replace(/\s*[】\]]$/, '');

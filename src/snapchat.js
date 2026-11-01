@@ -1,9 +1,9 @@
-import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.5';
-import { publicationScenePrompt } from './social-context.js?v=1.1.5';
-import { parseModelObject } from './model-json.js?v=1.1.5';
-import { requireCash, moneyMinor } from './assets-core.js?v=1.1.5';
-import { readStoryClock } from './story-clock.js?v=1.1.5';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.5';
+import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.6';
+import { publicationScenePrompt } from './social-context.js?v=1.1.6';
+import { parseModelObject } from './model-json.js?v=1.1.6';
+import { requireCash, moneyMinor } from './assets-core.js?v=1.1.6';
+import { readStoryClock } from './story-clock.js?v=1.1.6';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.6';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);

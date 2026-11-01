@@ -84,6 +84,20 @@ async function addPhoneContact(p,query='Alex',click=false){
 }
 const check = (condition, message) => { assert.ok(condition, message); console.log('PASS ' + message); };
 try {
+    {
+        const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+        const p=await ctx.newPage();track(p);await p.goto(origin+'/phone-fixture');
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.chat=[{is_user:false,mes:'```html\n<!-- SDC-start | date=2026-03-02 | weekday=周一 | time=08:00 -->\n<content>正文</content>\n<!-- SDC-end | date=2026-03-02 | weekday=周一 | time=14:25 -->\n```'}];});
+        await p.locator('.pp-launcher').tap();
+        check(await p.locator('.pp-big-time').innerText()==='14:25','home clock reads final fenced SDC without calendar');
+        check(await p.locator('.pp-status-time').innerText()==='14:25','status clock agrees with home clock');
+        check(await p.locator('.pp-date').innerText()==='2026-03-02','home date uses SDC story date');
+        await p.getByRole('button',{name:'收起手机',exact:true}).tap();
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='<!-- SDC-start | date=2026-03-03 | weekday=周二 | time=00:05 -->';await c.saveMetadata();});
+        await p.locator('.pp-launcher').tap();check(await p.locator('.pp-big-time').innerText()==='00:05','start-only SDC updates after reopening');
+        await p.reload();await p.locator('.pp-launcher').tap();check(await p.locator('.pp-big-time').innerText()==='00:05','SDC clock survives reload');
+        check(await p.evaluate(()=>window.modelCalls)===0,'clock parsing calls no model');await ctx.close();
+    }
     if (process.env.QA_PART !== 'integration') {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await context.newPage(); track(page);
