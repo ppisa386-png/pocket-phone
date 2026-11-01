@@ -104,3 +104,11 @@ test('X home displays posts without duplicate recommendation cards and opens acc
  panel.back();assert.match(panel.html(),/Recommended post/);assert.doesNotMatch(panel.html(),/Account biography/);
  await panel.action('tab','search');assert.match(panel.html(),/查看主页/);assert.doesNotMatch(panel.html(),/data-x-action="follow"|data-x-action="thread"/);
 });
+
+test('X search trends open original user posts and return locally, with escaped content and no automatic refresh',async()=>{
+ let calls=0;const state={x:{p:{id:'p',type:'post',author:'user',text:'My original post'},'trend-edition':{id:'trend-edition',type:'trends',topics:[{title:'<img src=x>',summary:'<script>no</script>',scope:'Local',postCount:1000,sourcePostIds:['p']}]}}};
+ const panel=createXPanel({getView:()=>state,redraw(){},notice(){},adapter:{x:{refreshTrends:async()=>{calls++;return {ok:true};}}}});
+ await panel.action('tab','search');assert.match(panel.html(),/趋势/);assert.match(panel.html(),/&lt;img/);assert.doesNotMatch(panel.html(),/<script>/);assert.equal(calls,0);
+ await panel.action('comments','p');assert.match(panel.html(),/My original post/);assert.equal(panel.back(),true);assert.match(panel.html(),/data-x-trend="0"/);assert.equal(calls,0);
+ await panel.action('trends-refresh');assert.equal(calls,1);panel.reset();assert.doesNotMatch(panel.html(),/data-x-trend="0"/);
+});

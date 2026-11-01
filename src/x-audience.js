@@ -1,4 +1,4 @@
-import { xComments } from './x-comments.js?v=1.1.3';
+import { xComments } from './x-comments.js?v=1.1.4';
 // Followers are story-local. Keep the opening baseline separate from earned
 // reach; cumulative per-source high water marks survive a manual reset.
 export const xAudience = state => state.x?.audience || null;

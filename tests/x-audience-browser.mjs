@@ -14,7 +14,8 @@ event_types:{APP_READY:'APP_READY'},eventSource:{on(n,f){if(n==='APP_READY')queu
 setExtensionPrompt(){},generateQuietPrompt:async o=>{window.calls++;window.lastPrompt=o.quietPrompt;return typeof window.result==='string'?window.result:'<think>Plan</think><content>'+JSON.stringify(window.result)+'</content>';}};
 window.SillyTavern={getContext:()=>ctx};</script><script type="module" src="/index.js"></script></body></html>`;
 const server=createServer(async(req,res)=>{try{
- const pathname=new URL(req.url,'http://localhost').pathname;if(pathname==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fixture);return;}
+ const pathname=new URL(req.url,'http://localhost').pathname;if(pathname==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(process.env.CJK_QA_FONT?fixture.replace('</head>','<style>@font-face{font-family:"Microsoft YaHei";src:url(/qa-font);unicode-range:U+2E80-9FFF,U+F900-FAFF}</style></head>'):fixture);return;}
+ if(pathname==='/qa-font'&&process.env.CJK_QA_FONT){res.setHeader('Content-Type','font/woff2');res.end(await readFile(process.env.CJK_QA_FONT));return;}
  const path=resolve(root,'.'+pathname);if(!path.startsWith(root+sep)){res.writeHead(403).end();return;}
  res.setHeader('Content-Type',extname(path)==='.js'?'text/javascript; charset=utf-8':extname(path)==='.css'?'text/css':'text/plain');res.end(await readFile(path));
 }catch{res.writeHead(404).end();}});
@@ -46,5 +47,16 @@ try{
  await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');assert.equal(await p.evaluate(()=>window.calls),0);
  await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.evaluate(()=>{window.result='<content>{"posts":';});await p.locator('[data-x-action="refresh"]').tap();
  await p.getByText(/X 数据返回格式不正确.*不完整/).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);await p.getByText('My public project',{exact:true}).waitFor();
+ // Trends share the real search page and link back to the original post.
+ await p.evaluate(id=>{window.result={topics:[{title:'Public project discussion',summary:'Local residents discuss the new project.',scope:'Local community',postCount:1200,sourcePostIds:[id]}],evaluations:[{postId:id,eligible:true,reason:'Public impact supports wider discussion'}]};},postId);
+ await p.locator('[data-x-action="tab"][data-x-id="search"]').tap();assert.equal(await p.evaluate(()=>window.calls),1);
+ await p.getByRole('button',{name:'刷新趋势',exact:true}).tap();await p.locator('[data-x-trend="0"]').waitFor();assert.equal(await p.evaluate(()=>window.calls),2);
+ for(const width of [390,320]){await p.setViewportSize({width,height:844});assert.ok(await p.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await p.screenshot({path:resolve(root,'../qa-results/x-trends-'+width+'.png')});}
+ await p.getByRole('button',{name:'查看你的推文',exact:true}).tap();await p.getByText('My public project',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),2);
+ await p.getByRole('button',{name:'‹ 返回',exact:true}).tap();await p.locator('[data-x-trend="0"]').waitFor();
+ await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="search"]').tap();await p.locator('[data-x-trend="0"]').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
+ await p.evaluate(()=>{window.result={topics:[],evaluations:[]};});await p.getByRole('button',{name:'刷新趋势',exact:true}).tap();await p.getByText(/趋势返回格式或推文关联不正确/).waitFor();await p.locator('[data-x-trend="0"]').waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
+ await p.evaluate(id=>{window.result={topics:[],evaluations:[{postId:id,eligible:false,reason:'Discussion has faded'}]};},postId);await p.getByRole('button',{name:'刷新趋势',exact:true}).tap();await p.getByText('当前暂无趋势话题',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-trend]').count(),0);assert.equal(await p.evaluate(()=>window.calls),2);
+ console.log('PASS X trends: mobile 390/320px, original post links/back, one request, persistence, failure preserves list, no forced inclusion');
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log('PASS X audience mobile: wrapped home response, related accounts, opt-in follow, initial/growth/reset, dedup, persistence, 320px, detailed failure, no external requests');
 }finally{await browser.close();server.close();}

@@ -1,4 +1,4 @@
-import { isMemoryHidden } from './journal.js?v=1.1.3';
+import { isMemoryHidden } from './journal.js?v=1.1.4';
 
 // A request-local projection, never a second persisted copy of the story.
 export function recentSocialStory(context, endIndex = context.chat?.length - 1) {

@@ -405,3 +405,82 @@ for (const independent of [false,true]) test('X binds short captions to their ow
   assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/校队在决赛|两位室友/);
  } finally {f.close();}
 });
+
+const trendResult=(posts,eligible=true,title='公开项目引发讨论')=>({
+ topics:eligible?[{title,summary:'围绕公开内容的讨论',scope:'本地社区',postCount:1200,sourcePostIds:posts.map(p=>p.id)}]:[],
+ evaluations:posts.map(p=>({postId:p.id,eligible,reason:eligible?'内容与公共生活相关，具有传播价值':'目前只涉及日常问候，没有持续讨论'})),
+});
+for(const independent of [false,true])test('X trends '+(independent?'independent':'host')+' evaluates recent user posts with original scenes, reputation, counts and current progress in one call',async()=>{
+ const f=setup(undefined,independent);try{
+  f.context.powerUserSettings={persona_description:'Sam is a well-known athlete. PRIVATE_PERSONA_DETAIL is not public.'};
+  f.context.chat.push({mes:'2026-10-30 19:30\nSam WON_THE_PUBLIC_CHAMPIONSHIP. The victory is broadcast live.'});await f.memory.read();
+  ok(await f.x.publish('终于。'));const victory=xItems(f.state(),'post').at(-1);
+  f.context.chat.push({mes:'2026-10-30 20:00\nSam PRIVATELY_RECONCILED at home, without public witnesses.'});await f.memory.read();
+  ok(await f.x.publish('终于。'));const personal=xItems(f.state(),'post').at(-1);
+  for(let i=0;i<8;i++)f.context.chat.push({mes:'Unrelated later event '+i});await f.memory.read();
+  const before=structuredClone(f.state().x),response=trendResult([victory]);response.evaluations.push({postId:personal.id,eligible:false,reason:'匿名短句未公开私人和解，不能把私人经过当作话题'});
+  f.reply(response);ok(await f.x.refreshTrends());assert.equal(f.count(),1);
+  const prompt=f.prompt(),raw=prompt.split('partial 表示材料不全。\n')[1].split('\n')[0],scene=JSON.parse(raw);
+  assert.ok(scene.rows.some(r=>r.text.includes('WON_THE_PUBLIC_CHAMPIONSHIP')));
+  assert.ok(scene.links.find(l=>l.id===victory.id).floors.every(i=>i<=victory.sourceIndex));
+  assert.ok(scene.links.find(l=>l.id===personal.id).floors.includes(personal.sourceIndex));
+  assert.match(prompt,/well-known athlete/);assert.match(prompt,/"audience":null/);assert.match(prompt,/"counts":\{"likes":0/);
+  assert.match(prompt,/匿名账号不能直接继承真人名气/);assert.match(prompt,/零计数不构成不上榜的硬门槛/);assert.match(prompt,/知名人物的平常帖子也可以不上榜/);
+  assert.match(prompt,/"sourcePostIds"/);assert.equal(f.state().x['trend-edition'].topics[0].sourcePostIds[0],victory.id);
+  assert.equal(xAudience(f.state()),null);for(const [id,value] of Object.entries(before))assert.deepEqual(f.state().x[id],value,'ranking never fabricates post engagement');
+  f.reply(response);ok(await f.x.refreshTrends());assert.equal(f.count(),2);assert.match(f.prompt(),/"previous":\{"clock"/);
+  assert.equal(xItems(f.state(),'trends').length,1);assert.deepEqual(f.state().x['trend-edition'].topics,response.topics);
+  f.reply(trendResult([victory,personal],false));ok(await f.x.refreshTrends());assert.deepEqual(f.state().x['trend-edition'].topics,[],'posts can leave the list');
+ }finally{f.close();}
+});
+
+test('X trend candidates are the last 15 current user posts; merged topics preserve original sources and known followers',async()=>{
+ const f=setup();try{
+  for(let i=0;i<17;i++)ok(await f.x.publish('Post '+i));
+  f.reply({initialFollowers:70000});ok(await f.x.resetFollowers());
+  const posts=xItems(f.state(),'post').slice(-15),result=trendResult(posts,false);
+  result.topics=[{title:'One event',summary:'Two posts concern the same event',scope:'Sports',postCount:null,sourcePostIds:posts.slice(-2).map(p=>p.id)}];
+  for(const evaluation of result.evaluations.slice(-2))evaluation.eligible=true;
+  f.reply(result);const n=f.count();ok(await f.x.refreshTrends());assert.equal(f.count(),n+1);
+  const payload=JSON.parse(f.prompt().split('趋势评估资料（人设用于判断身份和公开知名度，不等于向网友公开）：')[1].split('\n')[0]);
+  assert.equal(payload.candidates.length,15);assert.equal(payload.candidates[0].publicText,'Post 2');assert.equal(payload.audience.followers,70000);
+  assert.equal(f.state().x['trend-edition'].topics.length,1);assert.equal(xAudience(f.state()).followers,70000);
+  assert.equal(xItems(f.state(),'post').length,17);assert.equal(xItems(f.state(),'account').length,0);
+ }finally{f.close();}
+});
+
+test('X trends reject missing/duplicate assessments and invented/mismatched sources atomically without automatic retries',async()=>{
+ const f=setup();try{
+  ok(await f.x.publish('Public project'));const posts=xItems(f.state(),'post'),valid=trendResult(posts);f.reply(valid);ok(await f.x.refreshTrends());
+  const before=structuredClone(f.state().x);
+  const bad=[{topics:[],evaluations:[]},{...valid,evaluations:[...valid.evaluations,...valid.evaluations]},
+   {...valid,evaluations:[{...valid.evaluations[0],postId:'fake'}]}, {...valid,evaluations:[{...valid.evaluations[0],eligible:false}]},
+   {...valid,topics:[]}, {...valid,topics:[{...valid.topics[0],sourcePostIds:['fake']}]},
+   {...valid,topics:[{...valid.topics[0],postCount:-1}]}, {...valid,topics:[valid.topics[0],{...valid.topics[0],title:'Other'}]},
+   {...valid,topics:[...valid.topics,{...valid.topics[0],sourcePostIds:[]}]}, {...valid,topics:[{...valid.topics[0],sourcePostIds:[posts[0].id,posts[0].id]}]}];
+  for(const reply of bad){f.reply(reply);const n=f.count();assert.equal((await f.x.refreshTrends()).ok,false);assert.equal(f.count(),n+1);assert.deepEqual(f.state().x,before);}
+  f.reply(()=>'{"topics":');assert.equal((await f.x.refreshTrends()).ok,false);assert.deepEqual(f.state().x,before);
+ }finally{f.close();}
+});
+
+test('X trends accept empty candidates, persist per chat and roll back their source floor',async()=>{
+ const f=setup();try{
+  f.reply({topics:[{title:'Local fair',summary:'A community event',scope:'Town',postCount:200,sourcePostIds:[]}],evaluations:[]});ok(await f.x.refreshTrends());
+  const previous=structuredClone(f.state().x['trend-edition']);
+  f.context.chat.push({mes:'2026-11-01 10:00\nA new day'});await f.memory.read();ok(await f.x.publish('New project'));
+  f.reply(trendResult(xItems(f.state(),'post')));ok(await f.x.refreshTrends());
+  await f.memory.read();assert.equal(f.state().x['trend-edition'].topics[0].title,'公开项目引发讨论');
+  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.deepEqual(f.state().x['trend-edition'],previous);assert.equal(xItems(f.state(),'post').length,0);
+  f.context.chatId='another';f.context.chatMetadata={};f.bus.emit('CHAT_CHANGED');await f.memory.read();assert.equal(f.state().x['trend-edition'],undefined);
+ }finally{f.close();}
+});
+for(const change of ['persona','chat','disabled'])test('X trends discard delayed results after '+change+' changes',async()=>{
+ const f=setup();try{
+  let start,finish;const ready=new Promise(r=>start=r);f.reply(()=>{start();return new Promise(r=>finish=r);});
+  const pending=f.x.refreshTrends();await ready;
+  if(change==='persona')f.context.powerUserSettings={persona_description:'A different public identity'};
+  if(change==='disabled')f.settings.apps.x=false;
+  if(change==='chat'){f.context.chat[0].mes='Edited story';f.bus.emit('MESSAGE_EDITED');await f.memory.read();}
+  finish(JSON.stringify({topics:[],evaluations:[]}));assert.equal((await pending).ok,false);assert.equal(f.state().x['trend-edition'],undefined);assert.equal(f.count(),1);
+ }finally{f.close();}
+});

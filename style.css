@@ -721,3 +721,9 @@ h2, p { margin: 0; }
 .pp-phone[data-active-app="whatsapp"] .pp-topline,.pp-phone[data-active-app="whatsapp"] .pp-header,.pp-phone[data-active-app="whatsapp"] .pp-footer{background:#fff;color:#17251e}
 .pp-phone[data-active-app="wechat"] .pp-topline,.pp-phone[data-active-app="wechat"] .pp-header,.pp-phone[data-active-app="wechat"] .pp-footer{background:#ededed;color:#181818}
 .pp-phone:is([data-active-app="whatsapp"],[data-active-app="wechat"]) .pp-content{overflow:hidden}
+
+.pp-x-trends{padding-bottom:12px}
+.pp-x-trend{padding:14px 0;border-bottom:1px solid var(--pp-line);overflow-wrap:anywhere}
+.pp-x-trend h4{margin:4px 0;font-size:16px;font-weight:750}
+.pp-x-trend>small,.pp-x-trends>small{color:var(--pp-muted);font-size:12px}
+.pp-x-trend .pp-snap-copy{margin:5px 0 8px}

@@ -1,8 +1,8 @@
-import { icon } from './icons.js?v=1.1.3';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.1.3';
-import { displayStoryTime } from './story-clock.js?v=1.1.3';
-import { xItems, xProfile, xCounts } from './x.js?v=1.1.3';
-import { xAudience } from './x-audience.js?v=1.1.3';
+import { icon } from './icons.js?v=1.1.4';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.1.4';
+import { displayStoryTime } from './story-clock.js?v=1.1.4';
+import { xItems, xProfile, xCounts } from './x.js?v=1.1.4';
+import { xAudience } from './x-audience.js?v=1.1.4';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;
@@ -47,6 +47,15 @@ export function createXPanel({adapter,getView,redraw,notice}) {
                 }).join('')+(target?'<div class="pp-snap-actions"><span>回复 @'+xEscape(commenter(target))+'</span>'+button('cancel-reply','取消')+'</div>':'')+form('comment',field('comment',target?'回复内容':'回复帖子','',true),'回复')+'</div>':'')+'</article>';
         }).join('')||(empty('暂无帖子'));
     }
+    function trendsHTML(state) {
+        const edition=state.x?.['trend-edition'];
+        return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions"><h3>趋势</h3>'+button('trends-refresh','刷新趋势')+'</div>'+
+            (edition?'<small>上次刷新结果</small>':'')+
+            (edition?.topics?.length?edition.topics.map((topic,i)=>'<article class="pp-x-trend" data-x-trend="'+i+'"><small>'+ (i+1)+' · '+xEscape(topic.scope)+'</small><h4>'+xEscape(topic.title)+'</h4><p class="pp-snap-copy">'+xEscape(topic.summary)+'</p>'+
+                (topic.postCount===null?'':'<small>'+xEscape(topic.postCount.toLocaleString('zh-CN'))+' 条讨论</small>')+
+                '<div class="pp-snap-actions">'+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
+                empty(edition?'当前暂无趋势话题':'刷新后查看当前话题趋势'))+'</section>';
+    }
     function inbox(state) {
         const accounts=xItems(state,'account').filter(a=>xItems(state,'message').some(m=>m.accountId===a.id));
         return accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xEscape(last.text)+'</p>'+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
@@ -64,7 +73,10 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         else if(page==='account'&&a)body=button('back','‹ 返回')+accountHTML(a,true)+postsHTML(state,xItems(state,'post').filter(p=>p.author===a.id).reverse());
         else if(page==='thread'&&a)body=threadHTML(state,a);
         else if(page.startsWith('post:'))body=button('back','‹ 返回')+postsHTML(state,[state.x?.[page.slice(5)]].filter(p=>p?.type==='post'));
-        else if(tab==='search')body=form('search',field('query','搜索用户'),'搜索')+(results?.length===0?empty('没有找到相关用户'):xItems(state,'account').filter(a=>results===null||results.includes(a.id)).map(a=>accountHTML(a)).join(''));
+        else if(tab==='search'){
+            const accounts=results?.length===0?empty('没有找到相关用户'):xItems(state,'account').filter(a=>results===null||results.includes(a.id)).map(a=>accountHTML(a)).join('');
+            body=form('search',field('query','搜索用户'),'搜索')+(results===null?trendsHTML(state)+accounts:accounts+trendsHTML(state));
+        }
         else if(tab==='messages')body=inbox(state);
         else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3>'+refreshButton(true)+'</div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>p.feed==='square'&&(!state.x['square-edition']||p.publication?.editionId===state.x['square-edition'].editionId)).reverse());
         else body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton()+'</div>'+form('post',field('post','有什么新鲜事？','',true),'发帖')+postsHTML(state,xItems(state,'post').filter(p=>p.feed!=='square'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
@@ -105,7 +117,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             if(action==='comments'){replyTarget=null;selected=null;page=page==='post:'+id?'':'post:'+id;redraw();return;}
             if(action==='all'||action==='following'){following=action==='following';page='';redraw();return;}
             if(action==='reset-followers'){await perform('resetFollowers',[],'已还原初始粉丝');return;}
-            const map={inject:['toggleInjection',[id]],'square-refresh':['refresh',['square']],refresh:['refresh',[following]],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]]};
+            const map={'trends-refresh':['refreshTrends',[]],inject:['toggleInjection',[id]],'square-refresh':['refresh',['square']],refresh:['refresh',[following]],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]]};
             if(map[action])await perform(...map[action]);
         },
         async submit(el) {

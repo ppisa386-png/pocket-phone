@@ -382,3 +382,20 @@ test('SMS shows preparation and network progress, then clears it after completio
         assert.equal(f.phone.snapshot().progress,'');stop();
     } finally {f.close();}
 });
+
+test('independent trends preserve original publication scene and use trend schema after host presets',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
+ try{
+  f.context.powerUserSettings.persona_description='Sam is a local resident.';
+  f.context.chat.push({mes:'Sam filmed a PUBLIC_BRIDGE_FAILURE. Passengers were evacuated.'});await f.memory.read();assert.equal((await x.publish('刚刚。')).ok,true);
+  const post=xItems(f.phone.snapshot(),'post')[0];for(let i=0;i<8;i++)f.context.chat.push({mes:'Later '+i});await f.memory.read();
+  f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
+  f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);
+   assert.equal(last.role,'system');assert.match(last.content,/本次刷新趋势仅输出/);assert.match(last.content,/sourcePostIds/);assert.doesNotMatch(last.content,/本次为X刷新/);
+   assert.match(JSON.stringify(body.messages),/PUBLIC_BRIDGE_FAILURE/);assert.match(JSON.stringify(body.messages),/local resident/);assert.equal(body.temperature,0.83);
+   return JSON.stringify({topics:[{title:'Bridge closed',summary:'Commuters discuss the closure',scope:'Local',postCount:3200,sourcePostIds:[post.id]}],evaluations:[{postId:post.id,eligible:true,reason:'The public event affects commuters'}]});
+  });
+  const result=await x.refreshTrends();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(f.phone.snapshot().x['trend-edition'].topics.length,1);
+  assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/PUBLIC_BRIDGE_FAILURE/);
+ }finally{f.close();}
+});

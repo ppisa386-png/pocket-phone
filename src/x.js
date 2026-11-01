@@ -1,9 +1,10 @@
-import { publicationScenePrompt } from './social-context.js?v=1.1.3';
-import { xCommentKey, xComments } from './x-comments.js?v=1.1.3';
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.3';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.3';
-import { parseModelObject } from './model-json.js?v=1.1.3';
-import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.3';
+import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.4';
+import { publicationScenePrompt } from './social-context.js?v=1.1.4';
+import { xCommentKey, xComments } from './x-comments.js?v=1.1.4';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.4';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.4';
+import { parseModelObject } from './model-json.js?v=1.1.4';
+import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.4';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
@@ -169,6 +170,24 @@ export function createX({memory,phone,getContext,getSettings}) {
             const p=state.x[id],chat=getContext().chat;
             if(p?.type!=='post'||p.feed!=='square'||squareStatus(p,state,chat)!=='active')throw Error('这条内容已采用、过期或时间不明确，无法注入。');
             await commit([xSet({...p,publication:{...p.publication,selected:!p.publication.selected,selectedIndex:chat.length-1}})]);
+        });},
+        refreshTrends(){return run(async(state,current,request,commit)=>{
+            const context=getContext(),chat=context.chat||[],persona=String(context.powerUserSettings?.persona_description||'');
+            const valid=()=>current()&&String(getContext().powerUserSettings?.persona_description||'')===persona;
+            const candidates=xItems(state,'post').filter(p=>p.author==='user').slice(-15);
+            const clock=squareClock(chat),audience=xAudience(state),previous=state.x?.['trend-edition'];
+            const data={now:clock,userPersona:persona,publicProfile:{alias:profile(state).alias,bio:profile(state).bio},
+                audience:audience?{initialFollowers:audience.initialFollowers,followers:audience.followers}:null,
+                candidates:candidates.map(p=>({postId:p.id,publicText:p.text,postedAtStory:p.postedAtStory||null,sourceIndex:p.sourceIndex??null,counts:xCounts(state,p)})),
+                publicComments:publicConversation(state),
+                previous:previous?{clock:previous.clock,topics:previous.topics}:null};
+            const output=X_JSON_OUTPUT+'\n'+X_TRENDS_OUTPUT;
+            const result=await ask(state,null,request,valid,X_TRENDS_RULES+publicationScenePrompt(context,candidates)+
+                '\n趋势评估资料（人设用于判断身份和公开知名度，不等于向网友公开）：'+JSON.stringify(data)+'\n'+output,
+                d=>validateTrends(d,candidates),{outputContract:output,finalOutputContract:output,memoryActors:[]});
+            if(!valid())throw Error('人设或聊天已变化，请重新刷新趋势。');
+            await commit([xSet({id:'trend-edition',type:'trends',clock,...result})]);
+            return {added:result.topics.length};
         });},
         refresh(following=false){const square=following==='square';following=following===true;return run(async(state,current,request,commit)=>{
             const chat=structuredClone(getContext().chat||[]),prose=recentSquareProse(chat);
