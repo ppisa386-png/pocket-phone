@@ -17,23 +17,23 @@ test('recent story preserves whole latest floors, roles, privacy clauses and cur
     const c=context();c.chat=Array.from({length:10},(_,i)=>({mes:'正文 '+i,name:'Alex'}));
     c.chat[9]={mes:'<think>REASONING_SECRET</think>两人刚拆了礼物。只有两人知道。<!-- durian-sms HIDDEN_RECORD -->'};
     c.chat.push({mes:'我希望明天出发。',is_user:true});const before=JSON.stringify(c);
-    const result=recentSocialStory(c);assert.equal(result.rows.length,6);assert.equal(result.rows.at(-1).role,'user');
+    const result=recentSocialStory(c);assert.equal(result.rows.length,5);assert.equal(result.rows.at(-1).role,'assistant');assert.ok(result.rows.every(r=>r.role==='assistant'));assert.doesNotMatch(JSON.stringify(result),/我希望明天/);
     assert.match(socialStoryPrompt(result),/两人刚拆了礼物。只有两人知道。/);
     assert.doesNotMatch(JSON.stringify(result),/REASONING_SECRET|HIDDEN_RECORD|正文 0/);assert.equal(JSON.stringify(c),before);
     c.chat[9].mes='已取消出发';assert.match(socialStoryPrompt(recentSocialStory(c)),/已取消出发/);
     c.chat.splice(9);assert.doesNotMatch(socialStoryPrompt(recentSocialStory(c)),/已取消出发|礼物/);
 });
 
-test('manual hidden/system floors stay out, current QQJ auto-hidden prose stays in',()=>{
+test('manual and QQJ hidden prose remain readable; explicit system and injected messages stay out',()=>{
     const c=context();const hidden=chatId=>({is_system:true,extra:{qianqianjieAutoHide:{schemaVersion:1,chatId}}});
     c.chat=[{mes:'MANUAL',is_system:true},{mes:'FLAG_HIDDEN',hidden:true},{mes:'WRONG_CHAT',...hidden('other')},{mes:'已发生的正文',...hidden('memory')},{mes:'SYSTEM',role:'system'},{mes:'PHONE',isPhoneMessage:true},{mes:'<thinking>UNFINISHED'}];
-    assert.deepEqual(recentSocialStory(c).rows.map(row=>row.text),['已发生的正文']);
+    assert.deepEqual(recentSocialStory(c).rows.map(row=>row.text),['MANUAL','FLAG_HIDDEN','WRONG_CHAT','已发生的正文']);
 });
 
-test('whole-floor budget reports omission instead of removing a private qualifier',()=>{
+test('full AI floors are not shortened or omitted by the former 48k budget',()=>{
     const c=context();c.chat=[{mes:'x'.repeat(50000)+'只有本人知道'},{mes:'刚刚的短正文。只有本人知道。'}];
-    const result=recentSocialStory(c);assert.equal(result.omitted,1);assert.equal(result.rows.length,1);assert.match(result.rows[0].text,/只有本人知道。$/);
-    assert.ok(JSON.stringify(result.rows).length<=48000);assert.match(socialStoryPrompt(result),/因过长未附入/);
+    const result=recentSocialStory(c);assert.equal(result.omitted,0);assert.equal(result.rows.length,2);assert.match(result.rows[0].text,/只有本人知道$/);
+    assert.ok(JSON.stringify(result.rows).length>48000);assert.doesNotMatch(socialStoryPrompt(result),/因过长未附入/);
 });
 
 test('actor memory uses exact unique identity, filters unrelated actors and keeps private labels',async()=>{
@@ -83,4 +83,12 @@ test('publication links use the first surviving journal entry for old posts even
     journal=appendChange(journal,['floor0','floor1','floor2'],change({...post,metrics:{likes:7}}));
     assert.equal(replayJournal(journal).x.p.sourceIndex,0);
     assert.equal(journal.events[0].changes[0].value.sourceIndex,undefined);
+});
+
+test('publication scene retains five complete assistant floors before the post, including hidden floors and excluding later prose',async()=>{
+ const {publicationScenePrompt}=await import('../src/social-context.js');const c=context();
+ for(let i=0;i<7;i++){c.chat.push({mes:'FLOOR_'+i+' '+('z'.repeat(12000))+' END_'+i,is_system:true});c.chat.push({mes:'USER_ONLY_'+i,is_user:true});}
+ c.chat.push({mes:'FUTURE_ONLY'});const data=JSON.parse(publicationScenePrompt(c,[{id:'p',sourceIndex:13}]).split('partial 表示材料不全。\n')[1]);
+ assert.equal(data.rows.length,5);assert.deepEqual(data.links[0].floors,[4,6,8,10,12]);
+ assert.ok(JSON.stringify(data).length>48000);assert.match(JSON.stringify(data),/END_6/);assert.doesNotMatch(JSON.stringify(data),/USER_ONLY|FUTURE_ONLY|FLOOR_0|FLOOR_1/);
 });

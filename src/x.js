@@ -1,10 +1,10 @@
-import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.4';
-import { publicationScenePrompt } from './social-context.js?v=1.1.4';
-import { xCommentKey, xComments } from './x-comments.js?v=1.1.4';
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.4';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.4';
-import { parseModelObject } from './model-json.js?v=1.1.4';
-import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.4';
+import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.5';
+import { publicationScenePrompt } from './social-context.js?v=1.1.5';
+import { xCommentKey, xComments } from './x-comments.js?v=1.1.5';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.5';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.5';
+import { parseModelObject } from './model-json.js?v=1.1.5';
+import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.5';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};

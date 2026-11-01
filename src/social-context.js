@@ -1,14 +1,13 @@
-import { isMemoryHidden } from './journal.js?v=1.1.4';
-
 // A request-local projection, never a second persisted copy of the story.
 export function recentSocialStory(context, endIndex = context.chat?.length - 1) {
     const rows = [];
-    let size = 2, omitted = 0;
+    const omitted = 0;
     const chat = Array.isArray(context.chat) ? context.chat : [];
-    for (let index = endIndex, count = 0; index >= 0 && count < 6; index--) {
+    for (let index = endIndex, count = 0; index >= 0 && count < 5; index--) {
         const message = chat[index];
-        const memoryHidden = isMemoryHidden(message) && message.extra.qianqianjieAutoHide.chatId === context.chatMetadata?.qianqianjie?.chatId;
-        if (!message || message.is_hidden || message.hidden || (message.is_system && !memoryHidden) || message.role === 'system' || message.isPhoneMessage) continue;
+        // SillyTavern also uses is_system to hide ordinary assistant prose.
+        // Explicit system roles/types and phone injections are not story floors.
+        if (!message || message.is_user || message.role && message.role !== 'assistant' || message.isPhoneMessage || message.isGaigaiPrompt || message.isGaigaiData || message.extra?.type) continue;
         const text = String(message.mes ?? message.content ?? '')
             .replace(/<(think|thinking|analysis|script|style)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '')
             .replace(/<!--[\s\S]*?(?:-->|$)/g, '')
@@ -17,11 +16,8 @@ export function recentSocialStory(context, endIndex = context.chat?.length - 1) 
             .trim();
         if (!text) continue;
         count++;
-        const row = { messageIndex: index, role: message.is_user || message.role === 'user' ? 'user' : 'assistant', name: String(message.name || ''), text };
-        const length = JSON.stringify(row).length + 1;
-        // Keep whole floors: cutting a sentence can lose a negation or audience.
-        if (size + length > 48000) { omitted++; continue; }
-        rows.unshift(row); size += length;
+        const row = { messageIndex: index, role: 'assistant', name: String(message.name || ''), text };
+        rows.unshift(row);
     }
     return { rows, omitted };
 }
@@ -32,7 +28,7 @@ export function socialStoryPrompt(story) {
         '按楼号先后核对状态变化，最新有效正文优先于旧摘要。user 的愿望、计划不自动等于已完成的事实。' +
         '角色亲历、目击或已被告知的事情应延续已有认知，不要因改用社媒而再次当作第一次听说；新进展可以正常询问。' +
         '正文的作者视角不等于所有角色知情；本人私下知道不等于可以公开，更不能凭后台对应识破匿名账号。' +
-        '这是最近最多6条、48k字符的整楼窗口，不是完整历史；缺少材料不证明事情没发生或人物从未知情。' +
+        '这是最近最多5条 AI 完整正文的窗口（含仍保留原文的隐藏楼，不含 user 回复），不是完整历史；缺少材料不证明事情没发生或人物从未知情。' +
         (story.omitted ? '其中有'+story.omitted+'条因过长未附入，不能当作完整近况。' : '') + '\n' + JSON.stringify(story.rows).replaceAll('{{', '\\u007b\\u007b');
 }
 
@@ -48,16 +44,12 @@ export function publicationScenePrompt(context, publications) {
     });
     // Give each publication its nearest floor before adding older context.
     const selected = new Map();
-    let used = 2;
-    for (let depth = 1; depth <= 6; depth++) {
+    for (let depth = 1; depth <= 5; depth++) {
         for (const link of links) {
             const row = windows.get(link.sourceIndex)?.rows.at(-depth);
             if (!row) continue;
             if (!selected.has(row.messageIndex)) {
-                const cost = JSON.stringify(row).length + 1;
-                if (used + cost > 48000) { link.partial = true; continue; }
                 selected.set(row.messageIndex, row);
-                used += cost;
             }
             link.floors.unshift(row.messageIndex);
         }

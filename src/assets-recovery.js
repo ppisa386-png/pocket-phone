@@ -1,9 +1,9 @@
-import { walletCurrency } from './currency.js?v=1.1.4';
-import { assetRows, assetSet, assetText } from './assets-core.js?v=1.1.4';
-import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.1.4';
-import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.4';
-import { readStoryClock } from './story-clock.js?v=1.1.4';
-import { isMemoryHidden } from './journal.js?v=1.1.4';
+import { walletCurrency } from './currency.js?v=1.1.5';
+import { assetRows, assetSet, assetText } from './assets-core.js?v=1.1.5';
+import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.1.5';
+import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.5';
+import { readStoryClock } from './story-clock.js?v=1.1.5';
+import { isMemoryHidden } from './journal.js?v=1.1.5';
 
 // One migration audit for ledgers settled before ownership recovery existed.
 // This is NOT permission to reroll money, prices or the settlement period.

@@ -22,9 +22,9 @@ test('X selects saved whole floor summaries even when last recall is empty; no p
     let reads=0;
     const bridge={getSnapshot(){reads++;return snapshot;},readMemory(){throw Error('must not initiate recall');}};
     const result=readXMemory(c,settings(),{names:['索菲娅·费尔南德斯'],topic:''},bridge);
-    assert.equal(reads,1);assert.equal(result.status,'ready');assert.equal(result.count,21);
+    assert.equal(reads,1);assert.equal(result.status,'ready');assert.equal(result.count,1);
     assert.match(result.text,/已亲眼见过礼物/);assert.match(result.text,/其他人并不知情/);
-    assert.doesNotMatch(result.text,/Unrelated record 3"/);assert.match(result.text,/Unrelated record 99/);
+    assert.doesNotMatch(result.text,/Unrelated record 3"/);assert.doesNotMatch(result.text,/Unrelated record 99/);
     assert.match(xMemoryPrompt(result),/不代表完整记忆/);
 });
 
@@ -32,7 +32,7 @@ test('X saved selection respects active chat, disabled source, invalidation and 
     const c={...context(),chat:[{},{}]};const valid=savedSnapshot([{messageIndex:0,summary:'Alex knows.'},{messageIndex:2,summary:'Deleted future.'}]);
     let current=valid,reads=0;const bridge={getSnapshot(){reads++;return current;}};
     assert.equal(readXMemory(c,{api:{memorySource:'none'}},{},bridge).status,'disabled');assert.equal(reads,0);
-    assert.equal(readXMemory(c,settings(),{},bridge).count,1);
+    assert.equal(readXMemory(c,settings(),{names:['Alex']},bridge).count,1);
     assert.equal(readXMemory({...c,getCurrentChatId:()=> 'other'},settings(),{},bridge).status,'stale');
     current={...valid,identity:{...valid.identity,qqjChatId:'other'}};assert.equal(readXMemory(c,settings(),{},bridge).text,'');
     current={...valid,memory:{status:'not-ready',floors:valid.memory.floors}};assert.equal(readXMemory(c,settings(),{},bridge).text,'');
@@ -131,4 +131,24 @@ test('prepared memory follows the active host chat ID and only falls back when i
     assert.equal(readPreparedMemory({...context(),chatId:'',getCurrentChatId:()=> 'test-chat'},settings(),bridge).status,'ready');
     assert.equal(readPreparedMemory({...context(),getCurrentChatId:()=> 'active-other-chat'},settings(),bridge).status,'stale');
     assert.equal(readPreparedMemory({...context(),getCurrentChatId:()=> ''},settings(),bridge).status,'ready');
+});
+
+for(const app of ['x','snapchat','whatsapp','wechat'])test(app+' generation skips prepared recall and unrelated recent summaries but sends five full hidden AI floors',async()=>{
+ const f=fixture(),old=globalThis.qqj_v3_public_bridge_v1;let preparedReads=0;
+ try{
+  f.c.chat=[];
+  for(let i=0;i<7;i++){f.c.chat.push({mes:'AI_'+i+' '+(i===6?'x'.repeat(50000)+'END_FULL_TEXT':''),is_user:false,is_system:i%2===0,hidden:i===5});f.c.chat.push({mes:'USER_EXCLUDED_'+i,is_user:true});}
+  globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot(){preparedReads++;return prepared();},getSnapshot:()=>savedSnapshot([{messageIndex:0,summary:'Alex knows TOPIC_MATCH.'},{messageIndex:1,summary:'UNRELATED_RECENT_SUMMARY'}])};
+  const result=await f.phone.appTask(async(view,current,request)=>request('TOPIC_MATCH',d=>d,current,null,{memoryQuery:{names:['Alex'],topic:'TOPIC_MATCH'},retries:0}),app);
+  assert.equal(result.ok,true,result.error);assert.equal(preparedReads,0);const prompt=f.prompts.at(-1);
+  assert.match(prompt,/TOPIC_MATCH/);assert.match(prompt,/AI_2/);assert.match(prompt,/AI_6/);assert.match(prompt,/END_FULL_TEXT/);
+  assert.doesNotMatch(prompt,/USER_EXCLUDED|AI_0|AI_1|UNRELATED_RECENT_SUMMARY|agreed to meet at the station|Earlier they met in London/);
+ }finally{globalThis.qqj_v3_public_bridge_v1=old;f.close();}
+});
+test('related summaries have a strict twenty-floor cap and no recent fallback',()=>{
+ const c={...context(),chat:Array.from({length:50},()=>({}))};
+ const floors=Array.from({length:50},(_,i)=>({messageIndex:i,summary:'Alex remembers event '+i}));
+ const b={getSnapshot:()=>savedSnapshot(floors)};
+ assert.equal(readXMemory(c,settings(),{names:['Alex']},b).count,20);
+ assert.equal(readXMemory(c,settings(),{topic:'no_match_zzzz'},b).count,0);
 });
