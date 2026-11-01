@@ -1,12 +1,13 @@
-import { publicationScenePrompt } from './social-context.js?v=1.1.2';
-import { parseModelObject } from './model-json.js?v=1.1.2';
-import { requireCash } from './assets-core.js?v=1.1.2';
-import { readStoryClock } from './story-clock.js?v=1.1.2';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.2';
+import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.3';
+import { publicationScenePrompt } from './social-context.js?v=1.1.3';
+import { parseModelObject } from './model-json.js?v=1.1.3';
+import { requireCash, moneyMinor } from './assets-core.js?v=1.1.3';
+import { readStoryClock } from './story-clock.js?v=1.1.3';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.3';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
-export const snapProfile = (state, name = 'user') => state.snapchat?.profile || { id:'profile',type:'profile',alias:name,currency:'USD',location:'',sharing:false };
+export const snapProfile = (state, name = 'user') => ({id:'profile',type:'profile',alias:name,location:'',sharing:false,...state.snapchat?.profile,currency:walletCurrency(state)});
 export const snapExpired = (item, now = Date.now()) => now - item.createdAt >= 86400000;
 export const snapUnread = state => snapItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + snapItems(state,'account').filter(a=>a.friend==='incoming').length;
 // The journal rolls both the floor marker and story checks back with their source floor.
@@ -25,9 +26,11 @@ export function parseSnapObject(raw, label = 'Snapchat') {
 }
 const text = (value,max=6000) => typeof value==='string' ? value.trim().slice(0,max) : '';
 const required = (value,label,max=6000) => { const result=text(value,max);if(!result)throw new Error('请填写'+label+'。');return result; };
-export function snapAmount(value) {
-    const s=String(value).trim();if(!/^\d{1,9}(\.\d{1,2})?$/.test(s))throw new Error('金额需为正数，最多两位小数。');
-    const [whole,fraction='']=s.split('.');const result=Number(whole)*100+Number(fraction.padEnd(2,'0'));if(!result)throw new Error('金额必须大于 0。');return result;
+export function snapAmount(value,currency='USD') {
+    if (!validCurrency(currency) || !/^\d{1,9}(?:\.\d+)?$/.test(String(value).trim())) throw Error('转账金额或币种无效。');
+    const result=moneyMinor(String(value).trim(),false,currency);
+    if(!result) throw Error('金额必须大于 0。');
+    return result;
 }
 const currencyOf = value => { if(!/^[A-Z]{3}$/.test(value||''))throw new Error('币种请填写三个大写字母，例如 USD。');return value; };
 const newRecord=(type,fields)=>({id:crypto.randomUUID(),type,createdAt:Date.now(),...fields});
@@ -49,7 +52,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
         const commit=async changes=>{if(!current())throw new Error('聊天已变化，本次操作已取消。');if(changes.length)await memory.commit(ticket,changes);};
         return work(view.state,current,request,commit,view.revision);
     },app);
-    const profile=state=>snapProfile({snapchat:state[app]},getContext().name1);
+    const profile=state=>snapProfile({snapchat:state[app],assets:state.assets},getContext().name1);
     function target(state,account) {
         return {id:account.characterId||account.id,name:account.name,channel:app,alias:profile(state).alias,identityKnown:account.identityKnown===true};
     }
@@ -67,31 +70,31 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
         return {collection:'assets',key:cashSource+':'+transfer.id,value:{id:cashSource+':'+transfer.id,type:'cash_transaction',source:cashSource,transferId:transfer.id,currency:transfer.currency,amountMinor:transfer.amountMinor,
             deltaMinor:transfer.direction==='incoming'?transfer.amountMinor:-transfer.amountMinor,counterparty:transfer.accountId,memo:transfer.direction==='incoming'?appName+' 收款':appName+' 转出',day:readStoryClock(getContext().chat).day,createdAt:Date.now()}};
     }
-    function replyData(data) {
+    function replyData(data,currency) {
         if(!['reply','no_reply'].includes(data.status))throw new Error(appName+' 回复格式不正确。');
         const source=data.messages??(data.text?[{kind:data.kind,text:data.text}]:[]);
         if(!Array.isArray(source)||source.length>8)throw new Error(appName+' 消息格式不正确。');
         const messages=source.map(m=>({kind:mediaKinds.includes(m.kind)?m.kind:'text',text:text(m.text)}));
         if(data.status==='reply'&&(!messages.length||messages.some(m=>!m.text)))throw new Error('回复没有文字内容。');
         if(messages.some(m=>m.text.length>600))throw new Error('回复过长，请分成简短消息。');
-        if(data.transfer){snapAmount(data.transfer.amount);if(data.transfer.currency!=='USD')throw Error('转账请使用美元 USD。');}
+        if(data.transfer){snapAmount(data.transfer.amount,data.transfer.currency);if(currency && data.transfer.currency!==currency)throw Error('转账请使用账本币种 '+currency+'。');}
         return {status:data.status,messages:data.status==='reply'?messages:[],transfer:data.transfer};
     }
     async function answerMessage(state,account,message,request,current,commit) {
         const batch=message.batchId?threadFor(state,account.id).filter(m=>m.role==='user'&&m.batchId===message.batchId):[message];
         const result=await ask(state,account,request,current,'当前任务：'+appName+' 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
             '\n本次 user 消息：'+JSON.stringify(batch.map(m=>({kind:m.kind,text:m.text})))+
-            '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null}。语言和翻译要求遵守预设。转账统一美元 USD。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"USD 等三字母币种","memo":"附言"}；仅为待收款邀请，不自动收款。',replyData);
+            '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null}。语言和翻译要求遵守预设。转账币种：'+(walletCurrency(state)||'按 user 常住地区确定；依据不足不发送转账')+'。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"当地三位货币代码","memo":"附言"}；仅为待收款邀请，不自动收款。',data=>replyData(data,walletCurrency(state)));
         const changes=batch.map(m=>setSnap({...m,status:result.status==='reply'?'answered':'no_reply'}));
         const time=Math.max(Date.now(),...threadFor(state,account.id).map(m=>m.createdAt+1));
         result.messages.forEach((m,i)=>changes.push(setSnap({id:'reply:'+message.id+(i?':'+i:''),type:'message',accountId:account.id,role:'assistant',kind:m.kind,text:m.text,replyTo:message.id,createdAt:time+i/1000,read:false})));
-        if(result.transfer)changes.push(setSnap({id:'transfer:'+message.id,type:'transfer',accountId:account.id,direction:'incoming',status:'pending',amountMinor:snapAmount(result.transfer.amount),currency:currencyOf(result.transfer.currency),memo:text(result.transfer.memo,300),createdAt:time}));
+        if(result.transfer)changes.push(setSnap({id:'transfer:'+message.id,type:'transfer',accountId:account.id,direction:'incoming',status:'pending',amountMinor:snapAmount(result.transfer.amount,result.transfer.currency),currency:currencyOf(result.transfer.currency),memo:text(result.transfer.memo,300),createdAt:time}));
         await commit(changes);
     }
     return {
         async open(){await memory.read();},
         saveProfile(values){return run(async(state,_c,_r,commit)=>{
-            const p=profile(state);await commit([setSnap({...p,alias:required(values.alias,'网名',60),currency:currencyOf(values.currency),location:text(values.location,200),sharing:values.sharing===true})]);
+            const p=profile(state);await commit([setSnap({...p,alias:required(values.alias,'网名',60),currency:walletCurrency(state),location:text(values.location,200),sharing:values.sharing===true})]);
         });},
         discover(query=''){return run(async(state,current,request,commit)=>{
             const visible=(getContext().chat||[]).filter(m=>!m.is_system&&!m.hidden&&!m.is_hidden).slice(-80).map(m=>m.mes);
@@ -223,12 +226,12 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             const reply=item.author==='user'?{text:''}:await ask(state,a?.type==='account'?a:null,request,current,publicationScenePrompt(getContext(),[item])+'当前任务：'+appName+' 动态评论。动态：'+JSON.stringify({name:item.name,text:item.text})+'；user 网名 '+JSON.stringify(profile(state).alias)+' 评论：'+JSON.stringify(content)+'。仅生成作者的简短回复或不回复，输出 {"text":"回复或空字符串"}。',d=>({text:text(d.text,1000)}));
             const comments=[...(item.comments||[]),{name:profile(state).alias,text:content,createdAt:Date.now()},...(reply.text?[{name:item.name,text:reply.text,createdAt:Date.now()+1}]:[])];await commit([setSnap({...item,comments})]);
         });},
-        transfer(id,amount,currency,memo){return run(async(state,_c,_r,commit)=>{friendBy(state,id);const t=newRecord('transfer',{accountId:id,direction:'outgoing',status:'pending',amountMinor:snapAmount(amount),currency:currencyOf(currency),memo:text(memo,300)});requireCash(state,t.amountMinor,t.currency);await commit([setSnap(t)]);return t.id;});},
+        transfer(id,amount,currency,memo){return run(async(state,_c,_r,commit)=>{friendBy(state,id);if(!walletCurrency(state))throw Error('请先在小榴莲建立账本。');const t=newRecord('transfer',{accountId:id,direction:'outgoing',status:'pending',amountMinor:snapAmount(amount,currency),currency:currencyOf(currency),memo:text(memo,300)});requireCash(state,t.amountMinor,t.currency);await commit([setSnap(t)]);return t.id;});},
         settle(id,accept=true){return run(async(state,current,request,commit)=>{
             const t=state[app][id];if(t?.type!=='transfer'||t.status!=='pending')throw new Error('这笔转账已处理。');const a=accept?friendBy(state,t.accountId):null;
             let status=accept?'accepted':'declined';
-            if(accept&&t.currency!=='USD')throw Error('旧的非美元转账不自动换算，请取消并使用 USD。');
-            if(t.direction==='outgoing'&&accept){requireCash(state,t.amountMinor,t.currency,t.id);const data=await ask(state,a,request,current,'当前任务：'+cashName+' 收款判断。user 转账 '+JSON.stringify({amount:t.amountMinor/100,currency:t.currency,memo:t.memo})+'。决定是否收下，输出 {"status":"accepted 或 declined 或 pending"}。',d=>{if(!['accepted','declined','pending'].includes(d.status))throw new Error('收款结果格式不正确。');return d;});status=data.status;}
+            if(accept&&walletCurrency(state)&&t.currency!==walletCurrency(state))throw Error('旧转账币种与当前账本不同，请取消并以当前币种重发。');
+            if(t.direction==='outgoing'&&accept){requireCash(state,t.amountMinor,t.currency,t.id);const data=await ask(state,a,request,current,'当前任务：'+cashName+' 收款判断。user 转账 '+JSON.stringify({amount:majorAmount(t.amountMinor,t.currency),currency:t.currency,memo:t.memo})+'。决定是否收下，输出 {"status":"accepted 或 declined 或 pending"}。',d=>{if(!['accepted','declined','pending'].includes(d.status))throw new Error('收款结果格式不正确。');return d;});status=data.status;}
             const updated={...t,status};await commit([setSnap(updated),...(status==='accepted'?[ledger(updated)]:[])]);
         });},
     };

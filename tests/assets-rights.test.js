@@ -14,10 +14,10 @@ import { dateDay } from '../src/story-clock.js';
 import { buildAssetPrompt } from '../src/assets-story.js';
 import { normalizeSettings } from '../src/config.js';
 const ok = r => assert.equal(r?.ok,true,r?.error);
-const initial = (date='2026-01-01')=>({date,initial:{balance:1000,holdings:[],jobs:[]}});
+const initial = (date='2026-01-01')=>({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},date,initial:{balance:1000,holdings:[],jobs:[]}});
 function setup(date = '2026-01-01') {
     const bus = new EventEmitter(); let reply = initial(date), calls = 0, prompt = '';
-    const c = { chatId: 'money', name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
+    const c = { chatId: 'money', powerUserSettings:{persona_description:'Sam 常住美国。'}, name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
         chat: [{ mes: '日期：' + date + '\nSam 在咖啡馆工作。', is_user: false }], chatMetadata: {}, saveMetadata: async () => {},
         onlineStatus: 'connected', extensionPrompts: {}, setExtensionPrompt(k, v) { this.extensionPrompts[k] = v; },
         eventSource: bus, event_types: Object.fromEntries(['CHAT_CHANGED', 'GENERATION_STARTED', 'GENERATION_AFTER_COMMANDS', 'GENERATION_ENDED', 'MESSAGE_EDITED', 'MESSAGE_DELETED'].map(n => [n, n])),

@@ -52,7 +52,7 @@ test('independent final output contract follows all preset hooks without mutatin
 test('independent legacy repair sends final schema and reads wrapped JSON once; non-JSON keeps ledger untouched',async()=>{
  const f=phoneFixture();const assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
  try{
-  f.context.chat=[{mes:'日期：2026-05-17\n平常的一天。'}];f.reply(()=>JSON.stringify({initial:{balance:1000,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
+  f.context.chat=[{mes:'日期：2026-05-17\n平常的一天。'}];f.reply(()=>JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:1000,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
   const evidence='朋友付清礼服的款项，把礼服作为礼物交给Sam带走。';f.context.chat.push({mes:'日期：2026-05-18\n'+evidence});await f.memory.read();
   f.reply(()=>JSON.stringify({events:[],living:{total:0,bookedIds:[]},business:[]}));assert.equal((await assets.update()).ok,true);
   const ticket=await f.memory.begin(),wallet={...f.phone.snapshot().assets.wallet};delete wallet.ownershipAuditVersion;
@@ -259,7 +259,7 @@ test('API config or key changes invalidate generation while context is prepared'
 const quote='Alex gives you his number: +1 212 555 0123.';
 function phoneFixture(onError = () => {}) {
     const bus=new HostEvents(); const event_types=Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]));
-    const context={chatId:'A',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
+    const context={chatId:'A',powerUserSettings:{persona_description:'Sam 常住美国。'},characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
     installHostGeneration(context);
     const settings=normalizeSettings({api:apiConfig(),retries:0}); let responder=()=>JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:quote}]}); let signal;
     const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,fetchImpl:async(_url,options)=>{signal=options.signal;const result=await responder(options);return typeof result==='string'?response(result):result;}});

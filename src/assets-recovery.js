@@ -1,8 +1,9 @@
-import { assetRows, assetSet, assetText } from './assets-core.js?v=1.1.2';
-import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.1.2';
-import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.2';
-import { readStoryClock } from './story-clock.js?v=1.1.2';
-import { isMemoryHidden } from './journal.js?v=1.1.2';
+import { walletCurrency } from './currency.js?v=1.1.3';
+import { assetRows, assetSet, assetText } from './assets-core.js?v=1.1.3';
+import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.1.3';
+import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.3';
+import { readStoryClock } from './story-clock.js?v=1.1.3';
+import { isMemoryHidden } from './journal.js?v=1.1.3';
 
 // One migration audit for ledgers settled before ownership recovery existed.
 // This is NOT permission to reroll money, prices or the settlement period.
@@ -42,7 +43,7 @@ export function applyOwnershipRecovery(original, data, chat) {
         if (names.has(name)) continue;
         const id = 'recovered:' + source.index + ':' + name;
         if (state.assets[id]) continue;
-        const event = validateFinancialEvent({ ...raw, kind: 'asset', action: 'acquire', amount: null, date: undefined }, id, source.index, source.day);
+        const event = validateFinancialEvent({ ...raw, kind: 'asset', action: 'acquire', amount: null, date: undefined }, id, source.index, source.day,walletCurrency(state));
         add(applyFinancialEvent(state, event)); names.add(name);
     }
     add([assetSet({ ...state.assets.wallet, ownershipAuditVersion: 1 })]);

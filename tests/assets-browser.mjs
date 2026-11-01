@@ -8,8 +8,8 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const require = createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + '/');
 const { chromium } = require('playwright');
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="extensions_settings"></div><script>
-const saved=JSON.parse(localStorage.getItem('assets-test')||'null');window.calls=0;window.financeResponse={date:'2026-01-15',initial:{balance:5000,holdings:[{name:'凯迪拉克 XT5',category:'fixed',value:35000},{name:'复古名表',category:'luxury',value:12000},{name:'小理发店',category:'investment',value:25000}],jobs:[{name:'设计师',monthlySalary:4000}]}};
-const handlers={};const ctx={chatId:'assets',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{},saveSettingsDebounced(){},
+const saved=JSON.parse(localStorage.getItem('assets-test')||'null');window.calls=0;window.financeResponse={residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},date:'2026-01-15',initial:{balance:5000,holdings:[{name:'凯迪拉克 XT5',category:'fixed',value:35000},{name:'复古名表',category:'luxury',value:12000},{name:'小理发店',category:'investment',value:25000}],jobs:[{name:'设计师',monthlySalary:4000}]}};
+const handlers={};const ctx={chatId:'assets',powerUserSettings:{persona_description:'Sam 常住美国。'},name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{},saveSettingsDebounced(){},
 chat:saved?.chat||[{mes:'日期：2026-01-15\\nSam 是一名设计师。',is_user:false}],chatMetadata:saved?.metadata||{},
 saveMetadata:async()=>localStorage.setItem('assets-test',JSON.stringify({chat:ctx.chat,metadata:ctx.chatMetadata})),
 event_types:Object.fromEntries(['APP_READY','CHAT_CHANGED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','MESSAGE_DELETED'].map(n=>[n,n])),
@@ -111,7 +111,7 @@ try {
     await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="errors"]').tap();
     await p.locator('[data-running-version]').waitFor();
     const log=await p.locator('[data-error-log]').inputValue();
-    assert.match(log,/当前运行版本：榴莲手机 1.0.9/);
+    assert.ok(log.includes('当前运行版本：榴莲手机 '+JSON.parse(await readFile(resolve(root,'manifest.json'),'utf8')).version));
     assert.match(log,/失败阶段：解析返回格式/);assert.match(log,/MODEL_JSON_TRUNCATED/);
     assert.ok(!log.includes('<content>'),'no raw response saved');
     assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -146,7 +146,7 @@ try {
     assert.match(dateLog,/正文日期：2026-01-17；模型日期：2026-01-16/);
 
     await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
-    await p.evaluate(()=>{window.financeResponse={initial:{balance:1000,holdings:[{name:'项目持续收益权',category:'investment',value:null,details:'保留10%收益权',rights:{sharePercent:10}}],jobs:[]}};});
+    await p.evaluate(()=>{window.financeResponse={residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:1000,holdings:[{name:'项目持续收益权',category:'investment',value:null,details:'保留10%收益权',rights:{sharePercent:10}}],jobs:[]}};});
     await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByRole('button',{name:'一键更新',exact:true}).tap();await p.getByText('$1,000.00',{exact:true}).waitFor();
     await p.locator('[data-asset-tab="investment"]').tap();await p.getByText('待估值',{exact:true}).waitFor();await checkBottom();await p.screenshot({path:resolve(root,'../qa-results/assets-rights-pending-320.png')});
     await p.evaluate(async()=>{const evidence='Sam将部分权益转让，保留比例变为5%。';await window.advance('日期：2026-01-20\n'+evidence+'<!--durian-money:'+JSON.stringify({kind:'asset',name:'项目持续收益权',action:'amend',holdingId:'initial:holding:0',details:'保留5%收益权',rights:{sharePercent:5},evidence})+'-->');window.financeResponse={date:'2026-02-01',events:[],living:{total:0,bookedIds:[]},business:[{id:'initial:holding:0',netIncome:100,bookedIds:[]}]};await window.advance('日期：2026-02-01\n月末结算。');});
@@ -157,7 +157,7 @@ try {
     console.log('PASS rights mobile: unknown value saves, partial amendment, invalid period rejected, valid split income, persistence');
 
     await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
-    await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.chat=[{mes:'日期：2026-05-12\nSam工作中。',is_user:false}];window.financeResponse={initial:{balance:12000,holdings:[],jobs:[{name:'文学作者',monthlySalary:4500}]}};});
+    await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.chat=[{mes:'日期：2026-05-12\nSam工作中。',is_user:false}];window.financeResponse={residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:12000,holdings:[],jobs:[{name:'文学作者',monthlySalary:4500}]}};});
     await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-action="update"]').tap();await p.getByText('$12,000.00',{exact:true}).waitFor();
     await p.evaluate(async()=>{
         const rows=['餐费','交通费','酒店费','日用品'].map(name=>({kind:'expense',name,evidence:'Sam支付了'+name+'。'}));
@@ -198,5 +198,14 @@ try {
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-tab="luxury"]').tap();
     await p.getByText('红色礼服',{exact:true}).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);assert.equal(await p.evaluate(()=>window.calls),0);
     console.log('PASS ownership recovery: legacy settled floor repaired once, no cash change, UI status and persisted lock, 320px');
+    // Same floor: editing the persona rechecks only the currency, without settling the period again.
+    await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings.persona_description='Sam 在上海长期居住。';window.financeResponse={residence:{region:'CN',currency:'CNY',place:'上海',evidence:'Sam 在上海长期居住。'},currency:'CNY'};});
+    await p.locator('[data-asset-tab="cash"]').tap();
+    await p.locator('[data-asset-action="update"]').tap();
+    await p.locator('[data-asset-rate]').fill('7');
+    await p.locator('[data-asset-action="convert"]').tap();
+    await p.getByText('可支配资金 · CNY',{exact:true}).waitFor();
+    await p.getByText('¥104,650.00',{exact:true}).waitFor();
+    console.log('PASS regional wallet: changed persona rechecked on same floor, USD legacy balance converted at entered rate and displayed in CNY');
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

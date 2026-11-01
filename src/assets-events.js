@@ -1,23 +1,24 @@
-import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=1.1.2';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=1.1.2';
-import { dateDay, dayDate } from './story-clock.js?v=1.1.2';
+import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.3';
+import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=1.1.3';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=1.1.3';
+import { dateDay, dayDate } from './story-clock.js?v=1.1.3';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
 export const financialEventKey = row => JSON.stringify([row.kind, assetText(row.name), row.action || (row.kind === 'job' ? 'start' : 'acquire')]);
-export function validateFinancialEvent(row, id, index, fallbackDay = null) {
+export function validateFinancialEvent(row, id, index, fallbackDay = null, currency = 'USD') {
     if (!['income', 'expense', 'asset', 'job'].includes(row?.kind)) throw Error('收支类型不正确。');
     const name = assetText(row.name); if (!name) throw Error('收支名称缺失。');
-    if (row.currency && row.currency !== 'USD') throw Error('非美元收支不能直接记作美元。');
+    if ((currency && !validCurrency(currency)) || (row.currency && row.currency !== currency)) throw Error('外币收支不能直接记作账本货币。');
     const day = row.date ? dateDay(row.date) : fallbackDay;
     if (row.date && day === null) throw Error('收支日期无效。');
-    const amountMinor = row.amount == null ? null : moneyMinor(row.amount);
-    const monthlyMinor = row.monthlySalary == null ? null : moneyMinor(row.monthlySalary);
-    const marketMinor = row.marketValue == null ? null : moneyMinor(row.marketValue);
+    const amountMinor = row.amount == null ? null : moneyMinor(row.amount,false,currency);
+    const monthlyMinor = row.monthlySalary == null ? null : moneyMinor(row.monthlySalary,false,currency);
+    const marketMinor = row.marketValue == null ? null : moneyMinor(row.marketValue,false,currency);
     if (row.category && !ASSET_CATEGORIES.includes(row.category)) throw Error('资产分类不正确。');
     const rights = validateRights(row.rights);
     if (row.kind === 'asset' && row.action && !['acquire','amend','dispose'].includes(row.action)) throw Error('资产变化类型不正确。');
     if (row.action === 'amend' && (row.kind !== 'asset' || !assetText(row.details, 600))) throw Error('权益修改必须是asset事件，并提供修改后的完整条款摘要。');
-    return { rights, id, type: 'story_event', sourceIndex: index, name, kind: row.kind, day, amountMinor, monthlyMinor, marketMinor,
+    return { rights, currency, id, type: 'story_event', sourceIndex: index, name, kind: row.kind, day, amountMinor, monthlyMinor, marketMinor,
         category: row.category || null, details: assetText(row.details, 600), action: row.action || (row.kind === 'job' ? 'start' : 'acquire'),
         holdingId: assetText(row.holdingId, 4000), jobId: assetText(row.jobId), salaryEmployer: assetText(row.salaryEmployer),
         payDate: dateDay(row.payDate) !== null ? row.payDate : null,
@@ -53,11 +54,11 @@ export function applyFinancialEvent(state, event) {
         let delta = event.kind === 'income' ? event.amountMinor : -event.amountMinor;
         // A prose salary may describe a payday already paid by the app.
         if (event.salaryEmployer && event.payDate) {
-            const paid = assetRows(state, 'cash_transaction').filter(t => t.salaryEmployer === event.salaryEmployer && t.payDate === event.payDate)
+            const paid = assetRows(state, 'cash_transaction').filter(t => t.currency === (event.currency||walletCurrency(state)) && t.salaryEmployer === event.salaryEmployer && t.payDate === event.payDate)
                 .reduce((sum, t) => sum + Math.max(0, t.deltaMinor), 0);
             delta = Math.max(0, delta - paid);
         }
-        changes.push(assetSet(cashRecord('cash:' + event.id, delta, event.name, { source: 'story', eventId: event.id, day: event.day, salaryEmployer: event.salaryEmployer, payDate: event.payDate })));
+        changes.push(assetSet(cashRecord('cash:' + event.id, delta, event.name, { currency:event.currency||walletCurrency(state), source: 'story', eventId: event.id, day: event.day, salaryEmployer: event.salaryEmployer, payDate: event.payDate })));
     }
     if (event.category || event.kind === 'asset' || event.action === 'dispose') {
         const id = event.holdingId || 'holding:' + event.id;
@@ -95,4 +96,4 @@ export function applyFinancialEvent(state, event) {
 export function applyAssetChanges(state, changes) {
     for (const c of changes) { if (c.value === null) delete state.assets[c.key]; else state.assets[c.key] = structuredClone(c.value); }
 }
-export const publicEvent = e => ({ ...e, date: dayDate(e.day), amount: e.amountMinor == null ? null : e.amountMinor / 100 });
+export const publicEvent = e => ({ ...e, date: dayDate(e.day), amount: e.amountMinor == null ? null : majorAmount(e.amountMinor,e.currency||'USD') });

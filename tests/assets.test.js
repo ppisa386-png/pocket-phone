@@ -16,10 +16,10 @@ import { normalizeSettings } from '../src/config.js';
 import { dateDay } from '../src/story-clock.js';
 const day = dateDay;
 const ok = r => assert.equal(r?.ok, true, r?.error);
-const initial = (date = '2026-01-01', balance = 1000) => ({ date, initial: { balance, holdings: [], jobs: [{ name: '咖啡师', monthlySalary: 3100 }] } });
+const initial = (date = '2026-01-01', balance = 1000) => ({ residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'}, date, initial: { balance, holdings: [], jobs: [{ name: '咖啡师', monthlySalary: 3100 }] } });
 function setup(date = '2026-01-01') {
     const bus = new EventEmitter(); let reply = initial(date), calls = 0, prompt = '';
-    const c = { chatId: 'money', name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
+    const c = { chatId: 'money', powerUserSettings:{persona_description:'Sam 常住美国。'}, name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
         chat: [{ mes: '日期：' + date + '\nSam 在咖啡馆工作。', is_user: false }], chatMetadata: {}, saveMetadata: async () => {},
         onlineStatus: 'connected', extensionPrompts: {}, setExtensionPrompt(k, v) { this.extensionPrompts[k] = v; },
         eventSource: bus, event_types: Object.fromEntries(['CHAT_CHANGED', 'GENERATION_STARTED', 'GENERATION_AFTER_COMMANDS', 'GENERATION_ENDED', 'MESSAGE_EDITED', 'MESSAGE_DELETED'].map(n => [n, n])),
@@ -279,7 +279,7 @@ test('Amazon receives actual available balance even after more than thirty ledge
         ok(await f.assets.update());
         await f.memory.commit(await f.memory.begin(),Array.from({length:35},(_,i)=>({collection:'assets',key:'extra:'+i,value:{id:'extra:'+i,type:'cash_transaction',currency:'USD',deltaMinor:100}})));
         f.reply({products:[]}); ok(await f.shop.search('外套'));
-        assert.match(f.prompt(),/"balanceUSD":1035/); assert.match(f.prompt(),/"availableUSD":1035/);
+        assert.match(f.prompt(),/"balance":1035/); assert.match(f.prompt(),/"available":1035/);
         assert.doesNotMatch(f.prompt(),/extra:34/,'raw recent transactions are not mistaken for wealth');
     } finally { f.close(); }
 });
@@ -427,7 +427,7 @@ test('failure makes one model attempt, no partial write; chat change discards la
 test('memory date can initialize but stale or mismatching evidence cannot; real date is never a fallback', () => {
     const args = { chat: [{ mes: '没有日期的剧情。' }], index: 0, revision: 'a', memoryText: '日期：1999-03-02\n当前记忆。' };
     const data = { ...initial('1999-03-02'), dateEvidence: '日期：1999-03-02' };
-    assert.equal(applyAssessment({ assets: {} }, data, args).at(-1).value.lastDay, day('1999-03-02'));
+    assert.equal(applyAssessment({ assets: {} }, data, {...args,persona:'Sam 常住美国。'}).at(-1).value.lastDay, day('1999-03-02'));
     assert.throws(() => applyAssessment({ assets: {} }, { ...data, date: '1999-03-03' }, args));
     assert.throws(() => applyAssessment({ assets: {} }, data, { ...args, memoryText: '' }));
 });
@@ -555,7 +555,7 @@ test('wrapped asset JSON preserves quoted annotation text and rejects unsafe amo
 
 test('month leap resolves four pending short references, deducts living once and persists a transparent settlement', async () => {
  const f=setup('2026-05-12');try{
-  f.reply({initial:{balance:12000,holdings:[],jobs:[{name:'文学作者',monthlySalary:4500}]}});ok(await f.assets.update());
+  f.reply({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:12000,holdings:[],jobs:[{name:'文学作者',monthlySalary:4500}]}});ok(await f.assets.update());
   const rows=['餐费','交通费','酒店费','日用品'].map(name=>({kind:'expense',name,evidence:'Sam支付了'+name+'。'}));
   await f.append(rows.map(r=>r.evidence+marker(r)).join('\n'),'2026-05-20');
   await f.append('【2026年5月20日 09:30 星期三 至 2026年6月24日 19:40 星期三|旅行结束】');
@@ -672,5 +672,52 @@ test('unverified new event is skipped while valid valuation and living expense s
   assert.equal(assetRows(f.state(),'cash_transaction').some(t=>t.memo==='虚构购买'),false);
   const panel=createAssetPanel({adapter:{},getView:f.state,redraw(){},notice(){}});assert.match(panel.html(),/跳过 1 条/);
   f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets[h.id].valueMinor,null);assert.equal(cashBalance(f.state()),100000);
+ }finally{f.close();}
+});
+
+test('Chinese persona and narrative resolve local money, independent of language, nationality or travel',async()=>{
+ for(const [region,currency,evidence,price] of [
+  ['CN','CNY','Sam 常住中国上海，在当地工作。',3.25],
+  ['JP','JPY','Sam 在日本东京长期生活。',325],
+  ['HK','HKD','Sam 常住香港。',3.25],
+  ['KW','KWD','Sam 常住科威特。',3.251]
+ ]) {
+  const f=setup();try{
+   f.c.powerUserSettings.persona_description=region==='JP'?'Sam 是中国籍，最近去北京旅行。':evidence;
+   if(region==='JP')f.c.chat[0].mes+='\n'+evidence;
+   f.reply({...initial(),residence:{region,currency,evidence},currency});
+   ok(await f.assets.update());assert.equal(f.count(),1);assert.equal(f.state().assets.wallet.currency,currency);
+   assert.match(f.prompt(),/正文语言/);assert.ok(f.prompt().includes(evidence));
+   const scale=region==='JP'?1:region==='KW'?1000:100;
+   assert.equal(cashBalance(f.state()),1000*scale);
+   await f.append('Sam 短期去别国旅游。她支付了'+price+'。'+marker({kind:'expense',name:'饮料',currency,amount:price,evidence:'她支付了'+price+'。'}),'2026-01-02');
+   assert.equal(cashBalance(f.state()),1000*scale-Math.round(price*scale));
+   f.reply({...evaluation('2026-01-02'),residence:null});ok(await f.assets.update());assert.equal(f.state().assets.wallet.currency,currency);
+   f.reply({products:[{name:'水杯',price:String(price),currency}]});ok(await f.shop.search('水杯'));
+   const item=Object.values(f.state().orders).find(r=>r.type==='product');ok(await f.shop.add(item.id,'',1));ok(await f.shop.checkout());
+   assert.equal(cashBalance(f.state()),1000*scale-2*Math.round(price*scale));
+  }finally{f.close();}
+ }
+});
+
+test('unresolved residence, travel-only evidence, invented source and wrong region/currency cannot open a wallet',async()=>{
+ for(const home of [null,{region:'CN',currency:'CNY',evidence:'Sam 使用中文。'},{region:'JP',currency:'JPY',evidence:'Sam 正在日本旅游。'},{region:'JP',currency:'CNY',evidence:'Sam 常住日本。'},{region:'JP',currency:'JPY',evidence:'不存在的原句'}]){
+  const f=setup();try{f.c.powerUserSettings.persona_description='Sam 使用中文。Sam 正在日本旅游。';f.reply({...initial(),residence:home});assert.equal((await f.assets.update()).ok,false);assert.equal(f.state().assets.wallet,undefined);}finally{f.close();}
+ }
+});
+
+test('legacy USD migration quotes the pair, converts atomically using a user rate and rolls back with its floor',async()=>{
+ const f=setup();try{
+  ok(await f.assets.update());const original={...f.state().assets.wallet};delete original.currency;delete original.region;
+  await f.memory.commit(await f.memory.begin(),[{collection:'assets',key:'wallet',value:original}]);
+  f.c.powerUserSettings.persona_description='Sam 已经搬到日本并在东京定居。';
+  await f.append('Sam 开始在东京生活。','2026-01-02');
+  f.reply({residence:{region:'JP',currency:'JPY',evidence:f.c.powerUserSettings.persona_description},currency:'JPY'});
+  const proposal=await f.assets.update();ok(proposal);assert.equal(proposal.value.switchFrom,'USD');assert.equal(proposal.value.switchTo,'JPY');
+  assert.equal(cashBalance(f.state()),100000);
+  assert.equal((await f.assets.convert('0')).ok,false);assert.equal(cashBalance(f.state()),100000);
+  const calls=f.count();ok(await f.assets.convert('150'));assert.equal(f.count(),calls);assert.equal(cashBalance(f.state()),150000);
+  assert.equal(assetRows(f.state(),'job')[0].monthlyMinor,465000);assert.equal(f.state().assets.wallet.currency,'JPY');
+  f.c.chat.pop();await f.memory.read();assert.equal(cashBalance(f.state()),100000);assert.equal(f.state().assets.wallet.currency,undefined);
  }finally{f.close();}
 });

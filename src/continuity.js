@@ -1,8 +1,9 @@
-import { xComments } from './x-comments.js?v=1.1.2';
-import { smsForAI, syncSMSContext } from './sms-context.js?v=1.1.2';
-import { exactStoryTime } from './story-clock.js?v=1.1.2';
-import { nameAliases } from './names.js?v=1.1.2';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.2';
+import { majorAmount } from './currency.js?v=1.1.3';
+import { xComments } from './x-comments.js?v=1.1.3';
+import { smsForAI, syncSMSContext } from './sms-context.js?v=1.1.3';
+import { exactStoryTime } from './story-clock.js?v=1.1.3';
+import { nameAliases } from './names.js?v=1.1.3';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.3';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
@@ -64,7 +65,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
             const who=identity(account,state[app]?.profile?.alias),time=Number(item.createdAt)||0;
             if(item.type==='message'&&item.status!=='queued')entries.push({time,data:{channel:label,...who,speaker:item.role==='user'?who.otherParty:account.name,storyTime:item.storyTime||null,kind:item.kind,text:item.text}});
             if(item.type==='call'&&item.turns?.length)entries.push({time,data:{channel:label+' '+(item.mode==='video'?'视频通话':'语音通话'),...who,status:callLabels[item.status],storyTime:item.storyTime||null,turns:item.turns.slice(-10).map(t=>({speaker:t.role==='user'?who.otherParty:account.name,text:t.text,storyTime:t.storyTime||null}))}});
-            if(item.type==='transfer')entries.push({time,data:{channel:app==='snapchat'?'Snapcash':label+' 转账',...who,text:JSON.stringify({direction:item.direction,status:item.status,amount:item.amountMinor/100,currency:item.currency,memo:item.memo})}});
+            if(item.type==='transfer')entries.push({time,data:{channel:app==='snapchat'?'Snapcash':label+' 转账',...who,text:JSON.stringify({direction:item.direction,status:item.status,amount:majorAmount(item.amountMinor,item.currency),currency:item.currency,memo:item.memo})}});
         }
         for(const item of social){
             if(!['story','clip'].includes(item.type))continue;

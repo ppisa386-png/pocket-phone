@@ -1,21 +1,21 @@
-import { bindInputViewport } from './input-viewport.js?v=1.1.2';
-import { createDailyPanel } from './daily-view.js?v=1.1.2';
-import { storyTime } from './story-clock.js?v=1.1.2';
-import { createAssetPanel } from './assets-view.js?v=1.1.2';
-import { createAmazonPanel } from './amazon-view.js?v=1.1.2';
-import { bindComposerKeys } from './composer.js?v=1.1.2';
-import { createXPanel } from './x-view.js?v=1.1.2';
-import { xUnread } from './x.js?v=1.1.2';
-import { createChatPanel } from './chat-view.js?v=1.1.2';
-import { chatUnread } from './chat-apps.js?v=1.1.2';
-import { createSnapPanel } from './snapchat-view.js?v=1.1.2';
-import { snapUnread } from './snapchat.js?v=1.1.2';
-import { createApiPanel } from './api-view.js?v=1.1.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.2';
-import { icon } from './icons.js?v=1.1.2';
-import { renderMessagesScreen } from './messages-view.js?v=1.1.2';
-import { unreadMessages, messageParticipants } from './messages.js?v=1.1.2';
-import { renderPhoneScreen } from './phone-view.js?v=1.1.2';
+import { bindInputViewport } from './input-viewport.js?v=1.1.3';
+import { createDailyPanel } from './daily-view.js?v=1.1.3';
+import { storyTime } from './story-clock.js?v=1.1.3';
+import { createAssetPanel } from './assets-view.js?v=1.1.3';
+import { createAmazonPanel } from './amazon-view.js?v=1.1.3';
+import { bindComposerKeys } from './composer.js?v=1.1.3';
+import { createXPanel } from './x-view.js?v=1.1.3';
+import { xUnread } from './x.js?v=1.1.3';
+import { createChatPanel } from './chat-view.js?v=1.1.3';
+import { chatUnread } from './chat-apps.js?v=1.1.3';
+import { createSnapPanel } from './snapchat-view.js?v=1.1.3';
+import { snapUnread } from './snapchat.js?v=1.1.3';
+import { createApiPanel } from './api-view.js?v=1.1.3';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.3';
+import { icon } from './icons.js?v=1.1.3';
+import { renderMessagesScreen } from './messages-view.js?v=1.1.3';
+import { unreadMessages, messageParticipants } from './messages.js?v=1.1.3';
+import { renderPhoneScreen } from './phone-view.js?v=1.1.3';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -421,7 +421,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const target = event.target.closest('button');
         if (!target) return;
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
-        if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab);return;}
+        if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }
         if (target.dataset.chatAction) { void currentChat()?.action(target.dataset.chatAction,target.dataset.chatId); return; }

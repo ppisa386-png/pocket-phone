@@ -1,12 +1,15 @@
-import { dateDay, dayDate } from './story-clock.js?v=1.1.2';
+import { walletCurrency, currencyDigits, unitScale, validCurrency } from './currency.js?v=1.1.3';
+import { dateDay, dayDate } from './story-clock.js?v=1.1.3';
 
 export const assetRows = (state, type) => Object.values(state.assets || {}).filter(x => x.type === type);
 export const assetSet = value => ({ collection: 'assets', key: value.id, value });
-export const dollars = minor => '$' + (minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export const assetText = (s, max = 180) => typeof s === 'string' ? s.trim().slice(0, max) : '';
-export function moneyMinor(value, signed = false) {
-    if (!new RegExp(signed ? '^-?\\d{1,12}(\\.\\d{1,2})?$' : '^\\d{1,12}(\\.\\d{1,2})?$').test(String(value))) throw Error('账本金额格式不正确。');
-    const n = Math.round(Number(value) * 100);
+export function moneyMinor(value, signed = false, currency = 'USD') {
+    const digits = currencyDigits(currency);
+    const match = /^(-?)(\d{1,12})(?:\.(\d+))?$/.exec(String(value));
+    if (!match || (!signed && match[1]) || (match[3] || '').replace(/0+$/,'').length > digits) throw Error('账本金额格式不正确。');
+    const n = (match[1] ? -1 : 1) * (Number(match[2]) * unitScale(currency) + Number((match[3] || '').slice(0,digits).padEnd(digits,'0')));
     if (!Number.isSafeInteger(n)) throw Error('账本金额超出范围。');
     return n;
 }
@@ -14,25 +17,26 @@ export function cashBalance(state) {
     const wallet = state.assets?.wallet;
     if (!wallet) return null;
     const ignored = new Set(wallet.included || []);
-    const amount = assetRows(state, 'cash_transaction').filter(t => t.currency === 'USD' && !ignored.has(t.id))
+    const amount = assetRows(state, 'cash_transaction').filter(t => t.currency === walletCurrency(state) && !ignored.has(t.id))
         .reduce((sum, t) => sum + t.deltaMinor, wallet.openingMinor);
     if (!Number.isSafeInteger(amount)) throw Error('账本金额超出范围。');
     return amount;
 }
 export function reservedCash(state, except = '') {
-    return ['snapchat','whatsapp','wechat'].flatMap(app=>Object.values(state[app] || {})).filter(t => t.type === 'transfer' && t.direction === 'outgoing' && t.status === 'pending' && t.currency === 'USD' && t.id !== except)
+    return ['snapchat','whatsapp','wechat'].flatMap(app=>Object.values(state[app] || {})).filter(t => t.type === 'transfer' && t.direction === 'outgoing' && t.status === 'pending' && t.currency === walletCurrency(state) && t.id !== except)
         .reduce((sum, t) => sum + t.amountMinor, 0);
 }
-export function requireCash(state, minor, currency = 'USD', except = '') {
-    if (currency !== 'USD') throw Error('小榴莲统一使用美元，请使用 USD。');
+export function requireCash(state, minor, currency = walletCurrency(state), except = '') {
+    if (walletCurrency(state) && currency !== walletCurrency(state)) throw Error('请使用账本货币 '+walletCurrency(state)+'。');
     const balance = cashBalance(state);
     if (balance === null) throw Error('请先在小榴莲点击「一键更新」建立账本。');
     if (assetRows(state, 'story_event').some(e => e.kind === 'expense' && !e.processed)) throw Error('还有待结算的支出，请先在小榴莲点击「一键更新」。');
     if (balance - reservedCash(state, except) < minor) throw Error('可用余额不足。');
 }
 export function cashRecord(id, deltaMinor, memo, fields = {}) {
+    if (!validCurrency(fields.currency)) throw Error('流水缺少有效币种。');
     if (!Number.isSafeInteger(deltaMinor)) throw Error('账本金额超出范围。');
-    return { id, type: 'cash_transaction', currency: 'USD', deltaMinor, memo: assetText(memo), createdAt: Date.now(), ...fields };
+    return { id, type: 'cash_transaction', deltaMinor, memo: assetText(memo), createdAt: Date.now(), ...fields };
 }
 
 // Payday covers [previous month's 15th, this month's 15th). Partial employment
@@ -62,10 +66,10 @@ export function salaryPayments(state, throughDay) {
         }
         for (const [employer, group] of groups) {
             const id = 'salary:' + employer + ':' + dayDate(due);
-            const explicit = assetRows(state, 'cash_transaction').filter(t => t.salaryEmployer === employer && t.payDate === dayDate(due) && t.id !== id)
+            const explicit = assetRows(state, 'cash_transaction').filter(t => t.currency === walletCurrency(state) && t.salaryEmployer === employer && t.payDate === dayDate(due) && t.id !== id)
                 .reduce((sum, t) => sum + Math.max(0, t.deltaMinor), 0);
             const amount = Math.max(0, Math.round(group.amount) - explicit);
-            if (!state.assets[id]) changes.push(assetSet(cashRecord(id, amount, group.name + ' · ' + dayDate(due) + ' 工资', { source: 'salary', salaryEmployer: employer, payDate: dayDate(due), day: due })));
+            if (!state.assets[id]) changes.push(assetSet(cashRecord(id, amount, group.name + ' · ' + dayDate(due) + ' 工资', { currency:walletCurrency(state), source: 'salary', salaryEmployer: employer, payDate: dayDate(due), day: due })));
         }
     }
     return changes;
@@ -79,7 +83,7 @@ export function debtEpisode(state) {
     if (cashBalance(state) === null) return null;
     const wallet = state.assets.wallet, ignored = new Set(wallet.included || []);
     let balance = wallet.openingMinor, id = balance < 0 ? 'debt:opening' : null;
-    for (const t of assetRows(state, 'cash_transaction').filter(t => t.currency === 'USD' && !ignored.has(t.id))) {
+    for (const t of assetRows(state, 'cash_transaction').filter(t => t.currency === walletCurrency(state) && !ignored.has(t.id))) {
         const prior = balance; balance += t.deltaMinor;
         if (balance >= 0) id = null;
         else if (prior >= 0) id = 'debt:' + t.id;
