@@ -1,4 +1,5 @@
-import { walletCurrency, majorAmount, unitScale, resolveResidence, RESIDENCE_RULE, personaStamp } from './currency.js?v=1.1.8';
+import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.9';
+import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.1.8';
 import { changeWalletCurrency } from './assets-currency.js?v=1.1.8';
 import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.8';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.8';
@@ -78,7 +79,7 @@ export function assessmentReferences(state) {
     return [...cash.map((t,i) => ({ref: 'C' + (i+1), id:t.id, type:t.type, amount: majorAmount(t.deltaMinor,t.currency), date:dayDate(t.day), name:t.memo})),
         ...pending.map((e,i) => ({ref:'P' + (i+1), id:e.id, type:e.type, amount:null, date:dayDate(e.day), name:e.name}))];
 }
-export function applyAssessment(original, data, { chat, index, revision, memoryText = '', persona = '' }) {
+export function applyAssessment(original, data, { chat, index, revision, memoryText = '', persona = '', residenceSummaries = [] }) {
     if (!data || typeof data !== 'object') throw Error('账本评估没有返回有效结果。');
     const state = structuredClone(original); state.assets ||= {};
     const before = state.assets.wallet, initializing = !before;
@@ -101,7 +102,7 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
         if (!evidence || !memoryText.includes(evidence) || readStoryClock([{ mes: evidence }]).day !== day) throw Error('记忆中的剧情日期未通过核对，未更改账本。');
     }
     if (before && day < before.lastDay) throw Error('剧情日期早于上次结算，请先核对时间或回退对应正文。');
-    const home=resolveResidence(data.residence,persona,newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden));
+    const home=assessmentResidence(before,data,persona,hasResidence(before)?[]:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden),residenceSummaries);
     if (!before && !home) throw Error('无法确定 user 常住地区，请在人设或正文说明 user 通常在哪里生活后再建账。');
     const currency=home?.currency || walletCurrency(original);
     if (before && currency!==walletCurrency(original)) throw Error('换币须先确认换算比例。');
@@ -283,7 +284,7 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
 
 export function createAssets({ memory, phone, getContext, getSettings }) {
     let pendingSwitch=null;
-    const needsResidenceCheck=wallet=>!!wallet && (!wallet.region || wallet.personaStamp!==personaStamp(getContext().powerUserSettings?.persona_description||''));
+    const needsResidenceCheck=wallet=>!!wallet && !hasResidence(wallet);
     return {
         open: () => memory.read(),
         needsResidenceCheck,
@@ -329,11 +330,14 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 : '正文尚未识别出明确日期。date 必须来自当前千千结记忆，按 YYYY-MM-DD 返回，dateEvidence 填记忆中含日期的逐字原句；没有可靠日期不能用现实日期猜填。';
             const persona=context.powerUserSettings?.persona_description||'';
             const currency=walletCurrency(view.state);
+            const residenceSummaries=expenseFloorSummaries(context,getSettings(),view.state);
+            const homeContract=residenceContract(wallet);
             const pending=wallet?pendingAssessments(view.state,chat):[];
             const pendingSalaries=wallet?assetRows(view.state,'job').filter(j=>j.monthlyMinor==null).map(({id,name})=>({id,name})):[];
             const pendingContract=wallet?PENDING_ASSESSMENT_RULES+'本次必须处理的事项：'+JSON.stringify(pending.map(({id,ref,kind,name,needs})=>({id,ref,kind,name,needs})))+'另外pendingSalaries中的每个工作必须估算固定月薪并在salaries按id返回：'+JSON.stringify(pendingSalaries):'首次建账用initial快照吸收已有事实，未知余额和月薪合理估算，不单独重复结算开场前事件。';
             const payload = { persona, currency, pendingAssessments:pending, pendingSalaries, previousResidence:wallet?.region||null,
-                residenceContext:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden).filter((row,i,rows)=>i<4||i>=rows.length-12).map(row=>({...row,text:row.text})),
+                expenseFloorSummaries:residenceSummaries,
+                residenceContext:hasResidence(wallet)?[]:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden).filter((row,i,rows)=>i<4||i>=rows.length-12).map(row=>({...row,text:row.text})),
                 currencyChanges:wallet?.currencyChanges||[], ...recoveryPayload, initialized: !!wallet, from: wallet ? dayDate(wallet.lastDay) : null,
                 assessmentDate: assessmentDate || null, elapsedDays, clock: { ...clock, date: assessmentDate || null }, balance: cashBalance(view.state) === null ? null : majorAmount(cashBalance(view.state),currency), ledger: {
                     holdings: assetRows(view.state, 'holding').filter(h => h.active !== false || h.endDay >= wallet?.lastDay).map(h=>({...h,settlementPeriods:businessPeriods(h,wallet?.lastDay,clock.day).map(p=>({...p,from:dayDate(p.fromDay),to:dayDate(p.toDay)}))})),
@@ -344,7 +348,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 },
                 orders: Object.values(view.state.orders || {}).filter(o => o.type === 'order' && o.sourceIndex > (wallet?.lastIndex ?? -1)),
                 newProse: newProse(chat, wallet ? wallet.lastIndex + 1 : 0) };
-            const prompt = getSettings().prompts.general + '\n' + getSettings().prompts.assetAssessment + '\n' + ASSET_ASSESSMENT_RULES + '\n' + RESIDENCE_RULE + '\n'+pendingContract+'\n金额以常住地区本币为单位。顶层 currency 与金额的单位必须相符。现有账本如判断为真正迁居至另一币区，只返回 residence 和 currency 等待换币，不在本次结算。' +
+            const prompt = getSettings().prompts.general + '\n' + getSettings().prompts.assetAssessment + '\n' + ASSET_ASSESSMENT_RULES + '\n' + homeContract + '\n'+pendingContract+'\n金额以常住地区本币为单位。顶层 currency 与金额的单位必须相符。现有账本的地区变更仅按本次常住地规则处理，跨币区须先确认换币，不在本次结算。' +
                 (recovery ? '\n' + OWNERSHIP_RECOVERY_RULES : '') + '\n输入账本字段以 Minor 结尾的是最小货币单位，本币每单位对应 '+(currency?unitScale(currency):'所选币种的标准倍率')+' 个最小单位。输出金额统一使用主要货币单位的数字，日元等零小数币种填整数。只输出以下 JSON，未用数组填空。' + dateContract +
                 '\n首次：{"date":"YYYY-MM-DD","dateEvidence":"","initial":{"balance":1000,"holdings":[{"name":"名称","category":"fixed/luxury/investment","value":100,"details":"已知权利范围及合同条件，未知写未知","rights":{}}],"jobs":[{"name":"工作","monthlySalary":3000}]},"note":"可选简短说明"}。initial 是截至当前的完整快照，已到账工资已在余额，不追发开场前工资。'+
                 '\n后续：{"date":"YYYY-MM-DD","dateEvidence":"","events":[{"id":"已有未处理 story_event 的 id；补漏事件省略","sourceIndex":0,"evidence":"补漏时新增正文逐字原句","kind":"income/expense/asset/job","name":"事项","amount":5,"date":"YYYY-MM-DD","category":"可选 fixed/luxury/investment","action":"资产 acquire/amend/dispose 或工作 start/change/end","holdingId":"amend修改或dispose终止时已有资产id","details":"新资产或amend生效后的完整合同摘要","rights":{},"jobId":"调薪/离职时旧工作id","monthlySalary":3000,"salaryEmployer":"仅工资到账的 employer","payDate":"对应发薪日"}],"salaries":[{"id":"monthlyMinor 为 null 的新工作id","monthlySalary":3000}],"valuations":[{"id":"资产id","value":100}],"living":{"total":0,"bookedIds":[]},"business":[{"id":"投资资产id","from":"本段起日 YYYY-MM-DD","to":"本段止日 YYYY-MM-DD","netIncome":0,"bookedIds":[]}],"note":"可选简短说明"}。'+
@@ -354,14 +358,14 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             // One assessment attempt per click; failure commits nothing. A saved
             // revision remains locked across reloads and changes of API settings.
             const changes = await request(prompt, data => {
-                const home=resolveResidence(data.residence,persona,newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden));
+                const home=assessmentResidence(wallet,data,persona,hasResidence(wallet)?[]:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden),residenceSummaries);
                 if(wallet && home && currency!==home.currency) return {home};
                 if(currencyOnly) {
                     if(!home) throw Error('无法确定 user 常住地区，旧账保持原币。请补充常住地后再试。');
                     return [assetSet({...wallet,...home,personaStamp:personaStamp(persona)})];
                 }
-                return applyAssessment(view.state,data,{chat,index,revision:view.revision,memoryText:prepared.text,persona});
-            }, current, null, { retries: 0, parseResponse: parseModelObject, finalOutputContract: ASSET_OUTPUT_CONTRACT + RESIDENCE_RULE + dateContract + pendingContract + (wallet ? '已有账本，返回events/salaries/valuations/living/business，不得重置initial。' : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? '本次已有账本：只使用后续格式，禁止 initial。' : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + '返回顶层 residence，金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
+                return applyAssessment(view.state,data,{chat,index,revision:view.revision,memoryText:prepared.text,persona,residenceSummaries});
+            }, current, null, { retries: 0, parseResponse: parseModelObject, finalOutputContract: ASSET_OUTPUT_CONTRACT + homeContract + dateContract + pendingContract + (wallet ? '已有账本，返回events/salaries/valuations/living/business，不得重置initial。' : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? '本次已有账本：只使用后续格式，禁止 initial。' : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + (hasResidence(wallet)?'沿用已确认常住地；无明确迁居返回residenceChange:null。':'返回顶层 residence。') + '金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
             if (!current()) throw Error('剧情或设置已变化，本次评估未保存。');
             if (persona!==(getContext().powerUserSettings?.persona_description||'')) throw Error('user 人设已变化，请重新一键更新。');
             if(changes.home) {

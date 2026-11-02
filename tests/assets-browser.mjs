@@ -198,15 +198,23 @@ try {
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-tab="luxury"]').tap();
     await p.getByText('红色礼服',{exact:true}).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);assert.equal(await p.evaluate(()=>window.calls),0);
     console.log('PASS ownership recovery: legacy settled floor repaired once, no cash change, UI status and persisted lock, 320px');
-    // Same floor: editing the persona rechecks only the currency, without settling the period again.
+    // Established home stays fixed after persona edits; only an expense summary can propose relocation.
     await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings.persona_description='Sam 在上海长期居住。';window.financeResponse={residence:{region:'CN',currency:'CNY',place:'上海',evidence:'Sam 在上海长期居住。'},currency:'CNY'};});
     await p.locator('[data-asset-tab="cash"]').tap();
+    assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
+    await p.evaluate(async()=>{
+        const fact='Sam已搬到上海定居，支付了搬家费用。';
+        await window.advance('日期：2026-06-26\n'+fact+'<!--durian-money:'+JSON.stringify({kind:'expense',name:'搬家费',amount:null,evidence:fact})+'-->');
+        const c=window.SillyTavern.getContext(),i=c.chat.length-1;
+        window.qqj_v3_public_bridge_v1={getSnapshot:()=>({status:'ready',identity:{hostChatId:'assets'},memory:{status:'ready',floors:[{messageIndex:i,summary:fact}]}})};
+        window.financeResponse={residenceChange:{subject:'user',status:'completed',sourceIndex:i,region:'CN',currency:'CNY',place:'上海',evidence:fact},currency:'CNY'};
+    });
     await p.locator('[data-asset-action="update"]').tap();
     await p.locator('[data-asset-rate]').fill('7');
     await p.locator('[data-asset-action="convert"]').tap();
-    await p.getByText('可支配资金 · CNY',{exact:true}).waitFor();
+    await p.getByText('可支配资金 · CNY',{exact:true}).waitFor().catch(async e=>{console.log('CONVERSION STATUS',await p.locator('.pp-snap-status').innerText());throw e;});
     await p.getByText('¥104,650.00',{exact:true}).waitFor();
-    console.log('PASS regional wallet: changed persona rechecked on same floor, USD legacy balance converted at entered rate and displayed in CNY');
+    console.log('PASS regional wallet: persona edit stays locked, expense-floor relocation summary proposes conversion, USD balance converted only at entered rate');
     await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
     await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings.persona_description='Nationality: 美国\nIdentity: 高中毕业班学生';c.chat=[{is_user:false,mes:'日期：2026-01-15\n南加州的清晨。\n你走进学校，开始高三开学第一天。'}];window.financeResponse={residence:{region:'US',currency:'USD',place:'南加州',evidence:['Identity: 高中毕业班学生','南加州的清晨。你走进学校，开始高三开学第一天。']},initial:{balance:500,holdings:[],jobs:[]}};});
     await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-action="update"]').tap();
@@ -214,7 +222,7 @@ try {
     console.log('PASS residence evidence: combined persona and school setting, regional place name, whitespace normalization, one request opens USD wallet');
     await p.evaluate(async()=>{const fact='Sam支付了午餐费用。';await window.advance('日期：2026-01-16\n'+fact+'<!--durian-money:'+JSON.stringify({kind:'expense',name:'午餐',amount:null,evidence:fact})+'-->');for(let i=0;i<3;i++)await window.advance('学习继续。');window.financeResponse={events:[],living:{total:0,bookedIds:[]},business:[]};});
     await p.locator('[data-asset-action="update"]').tap();await p.getByText(/模型仍未完成 1 笔待处理事项/).waitFor();await p.getByText('$500.00',{exact:true}).waitFor();
-    await p.evaluate(()=>{window.financeResponse={events:[{ref:'P1',amount:15}],living:{total:15,bookedIds:['P1']},business:[]};});
+    await p.evaluate(()=>{window.financeResponse={residence:{region:'US',currency:'USD',evidence:'unverifiable old model quote'},events:[{ref:'P1',amount:15}],living:{total:15,bookedIds:['P1']},business:[]};});
     await p.locator('[data-asset-action="update"]').tap();await p.getByText('$485.00',{exact:true}).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByText('$485.00',{exact:true}).waitFor();
     console.log('PASS pending estimate: no number in prose, several later floors, omitted estimate preserves balance, retry uses model amount once and persists');

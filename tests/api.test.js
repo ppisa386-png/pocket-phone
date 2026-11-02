@@ -405,7 +405,7 @@ test('independent assessment puts pending IDs and mandatory estimation after hos
  try{
   f.context.chat=[{mes:'日期：2026-01-01\nSam生活在美国。'}];f.reply(()=>JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:80,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
   const fact='Sam支付了公交车费。';f.context.chat.push({mes:'日期：2026-01-02\n'+fact+'<!--durian-money:'+JSON.stringify({kind:'expense',name:'车费',amount:null,evidence:fact})+'-->'});await f.memory.read();
-  f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);assert.match(last.content,/不要求正文后来补数字/);assert.match(last.content,/P1/);assert.match(last.content,/车费/);assert.doesNotMatch(last.content,/金额未知用null/);
+  f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);assert.match(last.content,/不要求正文后来补数字/);assert.match(last.content,/P1/);assert.match(last.content,/车费/);assert.doesNotMatch(last.content,/金额未知用null/);assert.match(last.content,/常住地已经确认并保存为 US/);assert.match(last.content,/expenseFloorSummaries/);assert.doesNotMatch(last.content,/无法确定就返回 residence:null/);
    return JSON.stringify({events:[{ref:'P1',amount:3}],living:{total:3,bookedIds:['P1']},business:[]});});
   const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(cashBalance(f.phone.snapshot()),7700);
  }finally{f.close();}

@@ -768,3 +768,74 @@ test('pending salary and new job monthly salary are estimated together without n
   ok(await f.assets.update());assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,0);assert.equal(assetRows(f.state(),'job')[0].monthlyMinor,300000);
  }finally{f.close();}
 });
+
+function residenceBridge(f, floors, identity={hostChatId:'money'}) {
+ const previous=globalThis.qqj_v3_public_bridge_v1;
+ let reads=0;
+ globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;return {status:'ready',identity,memory:{status:'ready',floors}};}};
+ return {reads:()=>reads,close(){globalThis.qqj_v3_public_bridge_v1=previous;}};
+}
+test('established home ignores missing and invalid repeat evidence and persona changes while settling unknown expenses',async()=>{
+ const f=setup();try{
+  f.reply({...initial(),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  f.c.powerUserSettings.persona_description='新的人设描述，没有居住地。';
+  assert.equal(f.assets.needsResidenceCheck(f.state().assets.wallet),false);
+  const calls=f.count();assert.equal((await f.assets.update()).ok,false);assert.equal(f.count(),calls);
+  for(const residence of [null,{region:'US',currency:'USD',evidence:'并不存在的常住地依据'},{region:'JP',currency:'CNY',evidence:'错误地区币种'}]){
+   const fact='Sam付了午餐费。';await f.append(fact+marker({kind:'expense',name:'午餐',amount:null,evidence:fact}),'2026-01-02');
+   f.reply({...evaluation('2026-01-02'),residence,events:[{ref:'P1',amount:10}],living:{total:0,bookedIds:[]}});
+   ok(await f.assets.update());assert.equal(f.state().assets.wallet.region,'US');assert.equal(f.state().assets.wallet.currency,'USD');
+  }
+  assert.equal(cashBalance(f.state()),5000);assert.match(f.prompt(),/不重新核实人设/);assert.match(f.prompt(),/"residenceContext":\[\]/);
+  assert.doesNotMatch(buildAssetPrompt(f.state(),f.settings),/expenseFloorSummaries|residenceChange/);
+ }finally{f.close();}
+});
+test('only new expense floor summaries are read for completed relocation, conversion and rollback',async()=>{
+ const f=setup();let bridge;try{
+  f.reply({...initial(),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  await f.append('朋友已经移居英国。','2026-01-02');
+  const fact='Sam已经搬到东京定居，并支付了搬家费用。';await f.append(fact+marker({kind:'expense',name:'搬家费',amount:null,evidence:fact}));
+  const i=f.c.chat.length-1;
+  bridge=residenceBridge(f,[{messageIndex:0,summary:'OLD_HOME_SUMMARY'},{messageIndex:1,summary:'NON_EXPENSE_SUMMARY'},{messageIndex:i,summary:fact},{messageIndex:i+1,summary:'FUTURE_SUMMARY'}]);
+  f.reply({residenceChange:{sourceIndex:i,subject:'user',status:'completed',region:'JP',currency:'JPY',place:'东京',evidence:fact},currency:'JPY'});
+  const calls=f.count(),r=await f.assets.update();ok(r);assert.equal(r.value.switchTo,'JPY');assert.equal(f.count(),calls+1);assert.equal(bridge.reads(),1);
+  assert.equal(cashBalance(f.state()),8000);assert.doesNotMatch(f.prompt(),/OLD_HOME_SUMMARY|NON_EXPENSE_SUMMARY|FUTURE_SUMMARY/);assert.match(f.prompt(),/expenseFloorSummaries/);
+  ok(await f.assets.convert('150'));assert.equal(cashBalance(f.state()),12000);assert.equal(f.state().assets.wallet.region,'JP');
+  f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets.wallet.region,'US');assert.equal(cashBalance(f.state()),8000);
+ }finally{bridge?.close();f.close();}
+});
+test('unavailable, disabled and cross-chat summaries never block the existing currency',async()=>{
+ for(const mode of ['stale','missing','disabled']){
+  const f=setup();let bridge;try{
+   f.reply({...initial(),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+   const fact='Sam已经搬到东京定居并支付搬家费。';await f.append(fact+marker({kind:'expense',name:'搬家费',amount:null,evidence:fact}),'2026-01-02');
+   bridge=residenceBridge(f,mode==='missing'?[]:[{messageIndex:1,summary:fact}],{hostChatId:mode==='stale'?'other-chat':'money'});
+   if(mode==='disabled')f.settings.api.memorySource='none';
+   f.reply({...evaluation('2026-01-02'),events:[{ref:'P1',amount:10}],residenceChange:{sourceIndex:1,subject:'user',status:'completed',region:'JP',currency:'JPY',place:'东京',evidence:fact}});
+   ok(await f.assets.update());assert.equal(cashBalance(f.state()),7000);assert.equal(f.state().assets.wallet.region,'US');assert.match(f.prompt(),/"expenseFloorSummaries":\[\]/);
+  }finally{bridge?.close();f.close();}
+ }
+});
+test('travel, planned relocation, another person and invented relocation evidence keep the confirmed home',async()=>{
+ for(const [fact,subject,evidence] of [
+  ['Sam去东京旅行，支付了餐费。','user',null],
+  ['Sam计划搬到东京定居，支付了餐费。','user',null],
+  ['朋友搬到东京定居，Sam支付了餐费。','friend',null],
+  ['Sam支付了餐费。','user','Sam已搬到东京定居。']
+ ]){
+  const f=setup();let bridge;try{
+   f.reply({...initial(),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+   await f.append(fact+marker({kind:'expense',name:'餐费',amount:null,evidence:fact}),'2026-01-02');bridge=residenceBridge(f,[{messageIndex:1,summary:fact}]);
+   f.reply({...evaluation('2026-01-02'),events:[{ref:'P1',amount:10}],residenceChange:{sourceIndex:1,subject,status:'completed',region:'JP',currency:'JPY',place:'东京',evidence:evidence||fact}});
+   ok(await f.assets.update());assert.equal(f.state().assets.wallet.region,'US');assert.equal(cashBalance(f.state()),7000);
+  }finally{bridge?.close();f.close();}
+ }
+});
+test('completed same-currency move inferred from an expense summary updates the region without conversion',async()=>{
+ const f=setup();let bridge;try{
+  f.c.powerUserSettings.persona_description='Sam常住德国。';f.reply({residence:{region:'DE',currency:'EUR',evidence:'Sam常住德国。'},initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  const fact='Sam结束德国生活，如今以巴黎为永久居所，支付了租金。';await f.append(fact+marker({kind:'expense',name:'租金',amount:null,evidence:fact}),'2026-01-02');bridge=residenceBridge(f,[{messageIndex:1,summary:fact}]);
+  f.reply({...evaluation('2026-01-02'),events:[{ref:'P1',amount:10}],residenceChange:{sourceIndex:1,subject:'user',status:'completed',region:'FR',currency:'EUR',place:'巴黎',evidence:fact}});
+  const r=await f.assets.update();ok(r);assert.equal(r.value.switchTo,undefined);assert.equal(f.state().assets.wallet.region,'FR');assert.equal(cashBalance(f.state()),7000);
+ }finally{bridge?.close();f.close();}
+});
