@@ -839,3 +839,45 @@ test('completed same-currency move inferred from an expense summary updates the 
   const r=await f.assets.update();ok(r);assert.equal(r.value.switchTo,undefined);assert.equal(f.state().assets.wallet.region,'FR');assert.equal(cashBalance(f.state()),7000);
  }finally{bridge?.close();f.close();}
 });
+
+test('legacy actual wage on a non-payday settles without inventing a job even if the model omits the known receipt',async()=>{
+ const f=setup('2024-09-02');try{
+  f.reply({...initial('2024-09-02'),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  const fact='Sam工作三小时后领到超市兼职工资48美元。';await f.append(fact+marker({kind:'income',name:'超市兼职工资',amount:48,currency:'USD',date:'2024-09-02',salaryEmployer:'超市',payDate:'2024-09-02',evidence:fact}));
+  assert.equal(cashBalance(f.state()),8000);assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,1);
+  for(let i=0;i<3;i++)await f.append('Sam继续当天的生活。');
+  f.reply(evaluation('2024-09-02'));const calls=f.count();ok(await f.assets.update());assert.equal(f.count(),calls+1);
+  assert.equal(cashBalance(f.state()),12800);assert.equal(assetRows(f.state(),'job').length,0);assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,0);
+  const receipt=assetRows(f.state(),'cash_transaction').find(t=>t.memo==='超市兼职工资');assert.equal(receipt.deltaMinor,4800);assert.equal(receipt.salaryMode,'one_off');assert.equal(receipt.payDate,null);
+  assert.equal((await f.assets.update()).ok,false);await f.memory.read();assert.equal(cashBalance(f.state()),12800);
+  f.c.chat.pop();await f.memory.read();assert.equal(cashBalance(f.state()),8000);assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,1);
+ }finally{f.close();}
+});
+test('unknown one-off wage is assessed once and never creates a recurring monthly job',async()=>{
+ const f=setup('2024-09-02');try{
+  f.reply({...initial('2024-09-02'),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  const fact='Sam收到了三小时兼职的报酬。';await f.append(fact+marker({kind:'income',name:'兼职工资',amount:null,evidence:fact}));
+  f.reply({...evaluation('2024-09-02'),events:[{ref:'E1',salaryMode:'one_off',amount:48}]});ok(await f.assets.update());assert.equal(cashBalance(f.state()),12800);assert.equal(assetRows(f.state(),'job').length,0);
+  assert.match(f.prompt(),/不能从三小时或一日收入臆推固定月薪/);assert.match(f.prompt(),/salaryMode:one_off/);
+  await f.append('Sam继续生活。','2024-10-15');f.reply(evaluation('2024-10-15'));ok(await f.assets.update());assert.equal(cashBalance(f.state()),12800);assert.equal(assetRows(f.state(),'cash_transaction').filter(t=>t.source==='salary').length,0);
+ }finally{f.close();}
+});
+test('one-off wages alongside a monthly job remain separate while scheduled payday still pays exactly once',async()=>{
+ const f=setup('2026-01-15');try{
+  ok(await f.assets.update());const fact='Sam临时帮忙，领到另一份兼职工资48美元。';await f.append(fact+marker({kind:'income',name:'临时兼职工资',amount:48,evidence:fact}),'2026-02-02');
+  assert.equal(cashBalance(f.state()),100000);f.reply({...evaluation('2026-02-02'),events:[{ref:'E1',salaryMode:'one_off',amount:999}]});ok(await f.assets.update());assert.equal(cashBalance(f.state()),104800,'known 48 cannot be overwritten by model 999');
+  await f.append('Sam收到咖啡馆固定月薪3100美元。'+marker({kind:'income',name:'固定月薪',amount:3100,salaryMode:'scheduled',salaryEmployer:'initial:job:0',payDate:'2026-02-15',evidence:'Sam收到咖啡馆固定月薪3100美元。'}),'2026-02-15');
+  f.reply(evaluation('2026-02-15'));ok(await f.assets.update());assert.equal(cashBalance(f.state()),414800);assert.equal(assetRows(f.state(),'job').length,1);
+ }finally{f.close();}
+});
+test('explicit one-off prose receipt posts on its actual date and initial snapshot absorbs pre-opening wages',async()=>{
+ const f=setup('2024-09-02');try{
+  f.reply({...initial('2024-09-02'),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  const fact='Sam领到日结工资48美元。';await f.append(fact+marker({kind:'income',name:'日结工资',salaryMode:'one_off',amount:48,evidence:fact}));assert.equal(cashBalance(f.state()),12800);await f.memory.read();assert.equal(cashBalance(f.state()),12800);
+  assert.match(buildAssetPrompt(f.state(),f.settings),/一次性报酬用income、salaryMode:one_off/);
+ }finally{f.close();}
+ const g=setup('2024-09-02');try{
+  const fact='Sam领到日结工资48美元。';await g.append(fact+marker({kind:'income',name:'日结工资',currency:'USD',salaryMode:'one_off',amount:48,evidence:fact}));
+  g.reply({...initial('2024-09-02'),initial:{balance:128,holdings:[],jobs:[]}});ok(await g.assets.update());assert.equal(cashBalance(g.state()),12800);assert.equal(assetRows(g.state(),'job').length,0);
+ }finally{g.close();}
+});

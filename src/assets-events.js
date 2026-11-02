@@ -15,14 +15,16 @@ export function validateFinancialEvent(row, id, index, fallbackDay = null, curre
     const monthlyMinor = row.monthlySalary == null ? null : moneyMinor(row.monthlySalary,false,currency);
     const marketMinor = row.marketValue == null ? null : moneyMinor(row.marketValue,false,currency);
     if (row.category && !ASSET_CATEGORIES.includes(row.category)) throw Error('资产分类不正确。');
+    if(row.salaryMode!=null&&!['one_off','scheduled'].includes(row.salaryMode))throw Error('劳动报酬类型须为one_off或scheduled。');
     const rights = validateRights(row.rights);
     if (row.kind === 'asset' && row.action && !['acquire','amend','dispose'].includes(row.action)) throw Error('资产变化类型不正确。');
     if (row.action === 'amend' && (row.kind !== 'asset' || !assetText(row.details, 600))) throw Error('权益修改必须是asset事件，并提供修改后的完整条款摘要。');
     return { rights, currency, id, type: 'story_event', sourceIndex: index, name, kind: row.kind, day, amountMinor, monthlyMinor, marketMinor,
         category: row.category || null, details: assetText(row.details, 600), action: row.action || (row.kind === 'job' ? 'start' : 'acquire'),
         holdingId: assetText(row.holdingId, 4000), jobId: assetText(row.jobId), salaryEmployer: assetText(row.salaryEmployer),
+        salaryMode: row.salaryMode || null,
         payDate: dateDay(row.payDate) !== null ? row.payDate : null,
-        salary: row.kind === 'income' && (!!row.salaryEmployer || row.salary === true || /工资|薪水|薪资|salary|paycheck/i.test(name)),
+        salary: row.kind === 'income' && (!!row.salaryMode || !!row.salaryEmployer || row.salary === true || /工资|薪水|薪资|salary|paycheck/i.test(name)),
         evidence: assetText(row.evidence, 1500), processed: false };
 }
 export function applyFinancialEvent(state, event) {
@@ -49,7 +51,8 @@ export function applyFinancialEvent(state, event) {
                 category: event.category, details: event.details, rights:event.rights||{}, active: true, valueMinor: event.marketMinor ?? null, valued: event.marketMinor != null, purchaseMinor: null, startDay: event.day, eventId: event.id }));
             return [...changes, assetSet(event)];
         }
-        if (event.salary && (!event.salaryEmployer || !event.payDate || !event.payDate.endsWith('-15') ||
+        if(event.salaryMode==='one_off')event={...event,salaryEmployer:'',payDate:null};
+        if (event.salary && event.salaryMode!=='one_off' && (!event.salaryEmployer || !event.payDate || !event.payDate.endsWith('-15') ||
             !assetRows(state, 'job').some(j => j.employer === event.salaryEmployer))) return [assetSet(event)];
         let delta = event.kind === 'income' ? event.amountMinor : -event.amountMinor;
         // A prose salary may describe a payday already paid by the app.
@@ -58,7 +61,7 @@ export function applyFinancialEvent(state, event) {
                 .reduce((sum, t) => sum + Math.max(0, t.deltaMinor), 0);
             delta = Math.max(0, delta - paid);
         }
-        changes.push(assetSet(cashRecord('cash:' + event.id, delta, event.name, { currency:event.currency||walletCurrency(state), source: 'story', eventId: event.id, day: event.day, salaryEmployer: event.salaryEmployer, payDate: event.payDate })));
+        changes.push(assetSet(cashRecord('cash:' + event.id, delta, event.name, { currency:event.currency||walletCurrency(state), source: 'story', eventId: event.id, day: event.day, salaryMode:event.salaryMode, salaryEmployer: event.salaryEmployer, payDate: event.payDate })));
     }
     if (event.category || event.kind === 'asset' || event.action === 'dispose') {
         const id = event.holdingId || 'holding:' + event.id;

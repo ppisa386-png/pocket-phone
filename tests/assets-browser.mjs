@@ -226,5 +226,14 @@ try {
     await p.locator('[data-asset-action="update"]').tap();await p.getByText('$485.00',{exact:true}).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
     await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByText('$485.00',{exact:true}).waitFor();
     console.log('PASS pending estimate: no number in prose, several later floors, omitted estimate preserves balance, retry uses model amount once and persists');
+    await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
+    await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.chat=[{is_user:false,mes:'日期：2024-09-02\nSam常住美国。'}];window.financeResponse={residence:{region:'US',currency:'USD',evidence:'Sam常住美国。'},initial:{balance:80,holdings:[],jobs:[]}};});
+    await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-action="update"]').tap();await p.getByText('$80.00',{exact:true}).waitFor();
+    await p.evaluate(async()=>{const fact='Sam工作三小时后领到超市兼职工资48美元。';await window.advance(fact+'<!--durian-money:'+JSON.stringify({kind:'income',name:'超市兼职工资',amount:48,currency:'USD',date:'2024-09-02',evidence:fact})+'-->');for(let i=0;i<3;i++)await window.advance('Sam继续当天的生活。');window.financeResponse={events:[],living:{total:0,bookedIds:[]},business:[]};});
+    await p.getByText(/1 笔待结算/).waitFor();await p.getByText('$80.00',{exact:true}).waitFor();
+    const wageCalls=await p.evaluate(()=>window.calls);await p.locator('[data-asset-action="update"]').tap();await p.getByText('$128.00',{exact:true}).waitFor();
+    assert.equal(await p.evaluate(()=>window.calls),wageCalls+1);assert.equal(await p.getByText(/1 笔待结算/).count(),0);assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);await p.getByText('暂无工作记录',{exact:true}).waitFor();
+    await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByText('$128.00',{exact:true}).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
+    console.log('PASS actual wages: legacy pending 48 on September 2 with no job settles 80 to 128 once, no invented salary and reload preserved');
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

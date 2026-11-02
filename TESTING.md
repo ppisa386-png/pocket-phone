@@ -1,5 +1,11 @@
 ## 1.1.8 待处理收支智能估算
 
+## v1.1.10 实际工资到账分类（2026-11-02）
+- `node --test tests/assets.test.js tests/api.test.js`：98/98通过，日志`../qa-results/wages110-targeted.log`。已知48美元、无job、非15日旧工资待处理可更新至128；未知金额API估算、已知金额保护、有固定工作时单独兼职收入、固定月薪去重、初始吸收、回退及独立API最终工资分类提示均覆盖。
+- 财务浏览器`tests/assets-browser.mjs`通过，日志`../qa-results/wages110-browser.log`。旧格式无salaryMode的48美元兼职收入先出现1笔待结算，跨三楼后一次更新80→128，待处理清零、无虚构工作、更新锁及刷新持久；既有财务/常住地回归通过，无页面脚本错误/外部请求。
+- `npm run build:preview`通过，日志`../qa-results/wages110-build.log`。仅本次模块与必要依赖缓存更新；README不变。测试使用合成事实与受控API返回，不使用用户密钥或完整私人剧情。
+
+
 ## v1.1.9 常住地持久沿用（2026-11-02）
 - `node --test tests/assets.test.js tests/api.test.js`：93/93通过，日志`../qa-results/residence119-targeted.log`。新增已确认地区忽略重复无效引文、人设改变不解锁、只读新增花费楼层摘要、聊天隔离/关闭/摘要缺失、旅行/计划/他人迁居不切换、跨币区换算与回退、同币区迁居无需换算；独立API最终约束验证沿用已保存地区。
 - `tests/assets-browser.mjs`：通过，日志`../qa-results/residence119-browser.log`。财务页面中人设编辑后仍保持同楼更新锁，明确花费摘要迁居才显示比例确认，换算显示CNY；旧residence引文无效时未知午餐费仍成功结算并持久保存。保留原有财务结算/抵扣/回退检查；无页面脚本异常及外部请求。浏览器首次试验夹具误用早于已结算日期的迁居日期，修正为顺序日期后通过，产品代码未为此放宽时间检查。

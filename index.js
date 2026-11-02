@@ -1,7 +1,7 @@
 import { createDaily } from './src/daily.js?v=1.1.8';
 import { createDailyBridge } from './src/daily-story.js?v=1.1.8';
-import { createAssets } from './src/assets.js?v=1.1.9';
-import { createAssetBridge } from './src/assets-story.js?v=1.1.8';
+import { createAssets } from './src/assets.js?v=1.1.10';
+import { createAssetBridge } from './src/assets-story.js?v=1.1.10';
 import { createOpinionBridge } from './src/x-opinion.js?v=1.1.8';
 import { createAmazon } from './src/amazon.js?v=1.1.8';
 import { createDeliveryBridge } from './src/delivery.js?v=1.1.8';
@@ -13,12 +13,12 @@ import { createSnapchat } from './src/snapchat.js?v=1.1.8';
 import { readPreparedMemory } from './src/external-memory.js?v=1.1.8';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.1.8';
 import { captureHostRequest } from './src/api-context.js?v=1.1.8';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.1.9';
-import { mountPhone } from './src/ui.js?v=1.1.9';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.1.8';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.1.10';
+import { mountPhone } from './src/ui.js?v=1.1.10';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.1.10';
 import { createPhoneService } from './src/phone.js?v=1.1.8';
 import { createContinuityBridge } from './src/continuity.js?v=1.1.8';
-import { normalizeSettings } from './src/config.js?v=1.1.9';
+import { normalizeSettings } from './src/config.js?v=1.1.10';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.1.8';
 

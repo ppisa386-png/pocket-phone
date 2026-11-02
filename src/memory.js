@@ -1,7 +1,7 @@
 import { migrateDailyArchives } from './daily-archive.js?v=1.1.8';
 import { syncSMSContext } from './sms-context.js?v=1.1.8';
 import { storyTime } from './story-clock.js?v=1.1.8';
-import { importStoryAssets } from './assets-story.js?v=1.1.8';
+import { importStoryAssets } from './assets-story.js?v=1.1.10';
 import { importStorySquare } from './x-opinion.js?v=1.1.8';
 import { importStoryPhone } from './story-phone.js?v=1.1.8';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.1.8';

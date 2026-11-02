@@ -410,3 +410,13 @@ test('independent assessment puts pending IDs and mandatory estimation after hos
   const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(cashBalance(f.phone.snapshot()),7700);
  }finally{f.close();}
 });
+
+test('independent assessment explains actual wages after host presets and repairs a known receipt without payroll',async()=>{
+ const f=phoneFixture(),assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
+ try{
+  f.context.chat=[{mes:'日期：2024-09-02\nSam生活在美国。'}];f.reply(()=>JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:80,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
+  const fact='Sam领到三小时兼职工资48美元。';f.context.chat.push({mes:fact+'<!--durian-money:'+JSON.stringify({kind:'income',name:'兼职工资',amount:48,currency:'USD',date:'2024-09-02',evidence:fact})+'-->'});await f.memory.read();
+  f.reply(options=>{calls++;const last=JSON.parse(options.body).messages.at(-1).content;assert.match(last,/salaryMode:one_off/);assert.match(last,/不要求已有工作/);assert.match(last,/不得将已有自动发薪的同笔工资改成one_off/);assert.match(last,/兼职工资/);return JSON.stringify({events:[],living:{total:0,bookedIds:[]},business:[]});});
+  const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(cashBalance(f.phone.snapshot()),12800);
+ }finally{f.close();}
+});
