@@ -1,5 +1,6 @@
 import { isMemoryHidden } from './journal.js?v=1.1.8';
-import { resolveResidence, RESIDENCE_RULE } from './currency.js?v=1.1.8';
+import { resolveResidence, RESIDENCE_RULE } from './currency.js?v=1.1.11';
+
 
 export const hasResidence = wallet => !!(wallet?.region && wallet?.currency);
 export function residenceContract(wallet) {
@@ -32,7 +33,7 @@ export function expenseFloorSummaries(context, settings, state, bridge = globalT
 }
 
 export function assessmentResidence(wallet, data, persona, prose, summaries=[]) {
-    if(!hasResidence(wallet))return resolveResidence(data.residence,persona,prose);
+    if(!hasResidence(wallet))return resolveResidence(data.residence,persona,prose,{allowInference:true});
     const change=data.residenceChange;
     if(!change||change.subject!=='user'||change.status!=='completed')return null;
     const source=summaries.find(f=>f.messageIndex===change.sourceIndex);

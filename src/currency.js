@@ -155,7 +155,7 @@ const territories = {
     ZMW: 'ZM',
     ZWG: 'ZW',
 };
-export const RESIDENCE_RULE = '根据 user 人设及正文里 user 长期居住、定居、工作学习和日常生活的地点确定常住地区和当地通货。当前真实定居情况优先于过时设定；短期旅游、出差、char 所在地、姓名、正文语言、界面语言不能用来决定常住地区。香港、澳门、台湾等按各自地区的货币处理。无法确定就返回 residence:null，不猜美元或人民币。能够确定则返回顶层 residence:{region:两位地区代码,currency:当地三位货币代码,place:依据原文中的城市或地区原名,evidence:[人设或正文的原文片段1,原文片段2]}。地区可由城市、省州、区域等地名推断，不要求原文出现国家全名，也不要求出现“常住”二字；结合 user 在当地上学、工作、家庭住处等日常生活判断。国籍只能作辅助，不可单独作常住依据。需要多处资料时分别引用，多条 evidence 可以来自不同正文楼或人设；不得把推断结论改写成原文。place填写实际引用的地名，不将地方名自行扩写成原文没有的国家名。';
+export const RESIDENCE_RULE = '根据调取的 user 人设及最近不超过十轮正文里 user 长期居住、定居、工作学习和日常生活的环境，确定常住地区和当地通货。首次地区判断只使用persona与residenceContext（最近至多十条AI正文，按时间顺序）；不要使用其他财务资料中的更早正文判断常住地。明确的当前生活环境优先于过时设定。没有准确的国家或城市名称时，允许结合人物姓名、生活方式、学校与工作制度、社会文化及日常环境智能推断。例如人物普遍使用中国名字，整体生活环境也明显符合中国，即使没有写出中国或具体中国城市名，也可判断为中国；其他国家和地区同理。不能仅因为正文使用中文就判断为中国；明确的国外生活背景优先于姓名线索。旅游、出差或他人所在地不等于user常住地。返回residence:{region:两位地区代码,currency:当地三位货币代码,place:判断出的国家或地区或城市,inferred:是否基于环境推断,reason:简述判断依据,evidence:可选的原文片段数组}。place允许填写推断出的真实地区，不要求该地名逐字出现在原文；可以只确定国家或地区，不必编造具体城市。推断时inferred:true、reason说明所用环境线索，evidence可省略，不把推断结论伪装为原文引文。直接引用明确地点时inferred:false，evidence填写原文片段，可来自人设或近期多轮正文；不要求原文出现国家全名或“常住”二字。综合资料仍无法合理判断时返回residence:null，不按正文语言默认币种。';
 // Compare quoted facts, tolerating display markup/spacing but never paraphrase.
 function residenceText(value) {
     return String(value||'').normalize('NFKC').replace(/<[^>]*>/g,' ')
@@ -177,13 +177,19 @@ function residenceQuotes(value, sources) {
     }
     return matched.join('\n');
 }
-export function resolveResidence(value, persona, prose) {
+export function resolveResidence(value, persona, prose, { allowInference = false } = {}) {
     if (value == null) return null;
     const region=String(value.region||'').trim().toUpperCase(), currency=String(value.currency||'').trim().toUpperCase();
     const sources=[persona,...prose.map(p=>p.text)].filter(text=>typeof text==='string').map(residenceText);
     const evidence=residenceQuotes(value.evidence,sources);
     if (!Object.hasOwn(territories,currency) || !region || !territories[currency].split(' ').includes(region))
         throw Error('常住地区与当地币种不匹配，本次未保存。');
+    // Initial assessment may infer geography from the overall living setting.
+    // Keep inference separate from a purported literal quotation.
+    if(allowInference && value.inferred===true){
+        if(!sources.some(Boolean) || typeof value.reason!=='string' || !value.reason.trim())throw Error('请说明根据人设与近期生活环境推断常住地区的理由。');
+        return {region,currency};
+    }
     if (!evidence)
         throw Error('无法在 user 人设或正文中核对常住地依据，本次未保存。');
     // A sentence written in a particular language is not a location.

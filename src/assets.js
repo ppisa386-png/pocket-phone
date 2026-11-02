@@ -1,4 +1,4 @@
-import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.9';
+import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.11';
 import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.1.8';
 import { changeWalletCurrency } from './assets-currency.js?v=1.1.8';
 import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.10';
@@ -68,6 +68,9 @@ function array(data, key, max = 300) {
     if (!Array.isArray(value) || value.length > max) throw Error('评估条目数量或格式不正确：' + key);
     return value;
 }
+function initialResidenceProse(chat) {
+    return newProse(chat,0).filter(row=>!chat[row.index].is_user && !['user','system'].includes(chat[row.index].role) && row.text.trim()).slice(-10);
+}
 function newProse(chat, from) {
     return chat.map((m, index) => ({ index, text: String(m.mes || '').replace(/<(think|thinking|script|style)[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<!--[\s\S]*?-->/g, '') }))
         .filter(({ index }) => index >= from && (!chat[index].is_system || isMemoryHidden(chat[index])));
@@ -104,7 +107,7 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
         if (!evidence || !memoryText.includes(evidence) || readStoryClock([{ mes: evidence }]).day !== day) throw Error('记忆中的剧情日期未通过核对，未更改账本。');
     }
     if (before && day < before.lastDay) throw Error('剧情日期早于上次结算，请先核对时间或回退对应正文。');
-    const home=assessmentResidence(before,data,persona,hasResidence(before)?[]:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden),residenceSummaries);
+    const home=assessmentResidence(before,data,persona,hasResidence(before)?[]:initialResidenceProse(chat),residenceSummaries);
     if (!before && !home) throw Error('无法确定 user 常住地区，请在人设或正文说明 user 通常在哪里生活后再建账。');
     const currency=home?.currency || walletCurrency(original);
     if (before && currency!==walletCurrency(original)) throw Error('换币须先确认换算比例。');
@@ -352,7 +355,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             const pendingContract=WAGE_ASSESSMENT_RULES+(wallet?PENDING_ASSESSMENT_RULES+'本次必须处理的事项：'+JSON.stringify(pending.map(({id,ref,kind,name,needs})=>({id,ref,kind,name,needs})))+'另外pendingSalaries中的每个工作必须估算固定月薪并在salaries按id返回：'+JSON.stringify(pendingSalaries):'首次建账用initial快照吸收已有事实，未知余额和已确认固定工作的月薪合理估算，不单独重复结算开场前事件。');
             const payload = { persona, currency, pendingAssessments:pending, pendingSalaries, previousResidence:wallet?.region||null,
                 expenseFloorSummaries:residenceSummaries,
-                residenceContext:hasResidence(wallet)?[]:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden).filter((row,i,rows)=>i<4||i>=rows.length-12).map(row=>({...row,text:row.text})),
+                residenceContext:hasResidence(wallet)?[]:initialResidenceProse(chat),
                 currencyChanges:wallet?.currencyChanges||[], ...recoveryPayload, initialized: !!wallet, from: wallet ? dayDate(wallet.lastDay) : null,
                 assessmentDate: assessmentDate || null, elapsedDays, clock: { ...clock, date: assessmentDate || null }, balance: cashBalance(view.state) === null ? null : majorAmount(cashBalance(view.state),currency), ledger: {
                     holdings: assetRows(view.state, 'holding').filter(h => h.active !== false || h.endDay >= wallet?.lastDay).map(h=>({...h,settlementPeriods:businessPeriods(h,wallet?.lastDay,clock.day).map(p=>({...p,from:dayDate(p.fromDay),to:dayDate(p.toDay)}))})),
@@ -373,7 +376,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             // One assessment attempt per click; failure commits nothing. A saved
             // revision remains locked across reloads and changes of API settings.
             const changes = await request(prompt, data => {
-                const home=assessmentResidence(wallet,data,persona,hasResidence(wallet)?[]:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden),residenceSummaries);
+                const home=assessmentResidence(wallet,data,persona,hasResidence(wallet)?[]:initialResidenceProse(chat),residenceSummaries);
                 if(wallet && home && currency!==home.currency) return {home};
                 if(currencyOnly) {
                     if(!home) throw Error('无法确定 user 常住地区，旧账保持原币。请补充常住地后再试。');

@@ -881,3 +881,32 @@ test('explicit one-off prose receipt posts on its actual date and initial snapsh
   g.reply({...initial('2024-09-02'),initial:{balance:128,holdings:[],jobs:[]}});ok(await g.assets.update());assert.equal(cashBalance(g.state()),12800);assert.equal(assetRows(g.state(),'job').length,0);
  }finally{g.close();}
 });
+
+test('initial residence accepts environmental inference without a literal country or city name',async()=>{
+ for(const [region,currency,text,reason] of [
+  ['CN','CNY','林晓和王芳放学后回到小区，晚饭后讨论高考志愿。','人物姓名、学校升学制度与日常社区生活共同指向中国。'],
+  ['JP','JPY','佐藤葵穿着水手服去社团活动，放学后到便利店买饭团。','人物姓名、学校社团与生活环境共同指向日本。'],
+  ['US','USD','Emily在高中参加返校节筹备，放学后乘黄色校车回家。','高中返校节和校车等日常环境支持美国背景，正文语言不参与判断。']
+ ]){
+  const f=setup();try{
+   f.c.powerUserSettings.persona_description='user是一名高中生。';f.c.chat=[{mes:'日期：2026-01-01\n'+text}];
+   f.reply({...initial(),residence:{region,currency,place:region,inferred:true,reason}});ok(await f.assets.update());assert.equal(f.state().assets.wallet.currency,currency);assert.equal(f.count(),1);
+  }finally{f.close();}
+ }
+});
+test('initial residence uses latest ten AI prose turns, excluding user replies and older location evidence',async()=>{
+ const f=setup();try{
+  f.c.powerUserSettings.persona_description='';f.c.chat=[{mes:'日期：2026-01-01\nSam常住美国。'}];
+  for(let i=0;i<12;i++)f.c.chat.push({mes:'最近正文'+i+'：林晓回到小区准备高考。'},{mes:'用户回复'+i,is_user:true});
+  f.reply({...initial(),residence:{region:'US',currency:'USD',place:'美国',evidence:'Sam常住美国。'}});assert.equal((await f.assets.update()).ok,false);
+  const rows=JSON.parse(f.prompt().match(/"residenceContext":(\[[\s\S]*?\]),"currencyChanges"/)[1]);assert.equal(rows.length,10);assert.equal(rows[0].index,5);assert.equal(rows.at(-1).index,23);assert.ok(rows.every(r=>!r.text.includes('用户回复')));
+  f.reply({...initial(),residence:{region:'CN',currency:'CNY',place:'中国',inferred:true,reason:'近期人物、生活和高考环境共同指向中国。'}});ok(await f.assets.update());assert.equal(f.state().assets.wallet.region,'CN');
+ }finally{f.close();}
+});
+test('inference still requires supplied context, an explanation and a valid local currency pair',async()=>{
+ const {resolveResidence}=await import('../src/currency.js');
+ assert.throws(()=>resolveResidence({region:'JP',currency:'CNY',inferred:true,reason:'学校环境'},'学生',[],{allowInference:true}));
+ assert.throws(()=>resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:''},'学生',[],{allowInference:true}));
+ assert.throws(()=>resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:'无资料猜测'},'',[],{allowInference:true}));
+ assert.throws(()=>resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:'迁居猜测'},'学生',[]));
+});

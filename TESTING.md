@@ -1,5 +1,9 @@
 ## 1.1.8 待处理收支智能估算
 
+## v1.1.11 首次地区推断（2026-11-02）
+- 财务及API针对测试101/101通过：`node --test tests/assets.test.js tests/api.test.js`，日志`../qa-results/residence111.log`。覆盖中日美环境推断、没有原文地名、最近十条AI正文而非user回复、旧楼地名不参与直接确认、空资料及错误币种拒绝；原财务与迁居回归通过。
+- `npm run build:preview`通过，日志`../qa-results/residence111-build.log`；diff检查通过。未改页面流程，本轮无浏览器复测，未调用真实用户模型。
+
 ## v1.1.10 实际工资到账分类（2026-11-02）
 - `node --test tests/assets.test.js tests/api.test.js`：98/98通过，日志`../qa-results/wages110-targeted.log`。已知48美元、无job、非15日旧工资待处理可更新至128；未知金额API估算、已知金额保护、有固定工作时单独兼职收入、固定月薪去重、初始吸收、回退及独立API最终工资分类提示均覆盖。
 - 财务浏览器`tests/assets-browser.mjs`通过，日志`../qa-results/wages110-browser.log`。旧格式无salaryMode的48美元兼职收入先出现1笔待结算，跨三楼后一次更新80→128，待处理清零、无虚构工作、更新锁及刷新持久；既有财务/常住地回归通过，无页面脚本错误/外部请求。

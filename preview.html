@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 1.1.10</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat、WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Modern legal tender by territory, from Unicode CLDR supplemental currencyData
+</style></head><body><main><small>POCKET PHONE · 1.1.11</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 Snapchat、WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Modern legal tender by territory, from Unicode CLDR supplemental currencyData
 // (2026-11-01). Several territories have more than one local currency.
 const territories = {
     AED: 'AE',
@@ -159,7 +159,7 @@ const territories = {
     ZMW: 'ZM',
     ZWG: 'ZW',
 };
-const RESIDENCE_RULE = '根据 user 人设及正文里 user 长期居住、定居、工作学习和日常生活的地点确定常住地区和当地通货。当前真实定居情况优先于过时设定；短期旅游、出差、char 所在地、姓名、正文语言、界面语言不能用来决定常住地区。香港、澳门、台湾等按各自地区的货币处理。无法确定就返回 residence:null，不猜美元或人民币。能够确定则返回顶层 residence:{region:两位地区代码,currency:当地三位货币代码,place:依据原文中的城市或地区原名,evidence:[人设或正文的原文片段1,原文片段2]}。地区可由城市、省州、区域等地名推断，不要求原文出现国家全名，也不要求出现“常住”二字；结合 user 在当地上学、工作、家庭住处等日常生活判断。国籍只能作辅助，不可单独作常住依据。需要多处资料时分别引用，多条 evidence 可以来自不同正文楼或人设；不得把推断结论改写成原文。place填写实际引用的地名，不将地方名自行扩写成原文没有的国家名。';
+const RESIDENCE_RULE = '根据调取的 user 人设及最近不超过十轮正文里 user 长期居住、定居、工作学习和日常生活的环境，确定常住地区和当地通货。首次地区判断只使用persona与residenceContext（最近至多十条AI正文，按时间顺序）；不要使用其他财务资料中的更早正文判断常住地。明确的当前生活环境优先于过时设定。没有准确的国家或城市名称时，允许结合人物姓名、生活方式、学校与工作制度、社会文化及日常环境智能推断。例如人物普遍使用中国名字，整体生活环境也明显符合中国，即使没有写出中国或具体中国城市名，也可判断为中国；其他国家和地区同理。不能仅因为正文使用中文就判断为中国；明确的国外生活背景优先于姓名线索。旅游、出差或他人所在地不等于user常住地。返回residence:{region:两位地区代码,currency:当地三位货币代码,place:判断出的国家或地区或城市,inferred:是否基于环境推断,reason:简述判断依据,evidence:可选的原文片段数组}。place允许填写推断出的真实地区，不要求该地名逐字出现在原文；可以只确定国家或地区，不必编造具体城市。推断时inferred:true、reason说明所用环境线索，evidence可省略，不把推断结论伪装为原文引文。直接引用明确地点时inferred:false，evidence填写原文片段，可来自人设或近期多轮正文；不要求原文出现国家全名或“常住”二字。综合资料仍无法合理判断时返回residence:null，不按正文语言默认币种。';
 // Compare quoted facts, tolerating display markup/spacing but never paraphrase.
 function residenceText(value) {
     return String(value||'').normalize('NFKC').replace(/<[^>]*>/g,' ')
@@ -181,13 +181,19 @@ function residenceQuotes(value, sources) {
     }
     return matched.join('\n');
 }
-function resolveResidence(value, persona, prose) {
+function resolveResidence(value, persona, prose, { allowInference = false } = {}) {
     if (value == null) return null;
     const region=String(value.region||'').trim().toUpperCase(), currency=String(value.currency||'').trim().toUpperCase();
     const sources=[persona,...prose.map(p=>p.text)].filter(text=>typeof text==='string').map(residenceText);
     const evidence=residenceQuotes(value.evidence,sources);
     if (!Object.hasOwn(territories,currency) || !region || !territories[currency].split(' ').includes(region))
         throw Error('常住地区与当地币种不匹配，本次未保存。');
+    // Initial assessment may infer geography from the overall living setting.
+    // Keep inference separate from a purported literal quotation.
+    if(allowInference && value.inferred===true){
+        if(!sources.some(Boolean) || typeof value.reason!=='string' || !value.reason.trim())throw Error('请说明根据人设与近期生活环境推断常住地区的理由。');
+        return {region,currency};
+    }
     if (!evidence)
         throw Error('无法在 user 人设或正文中核对常住地依据，本次未保存。');
     // A sentence written in a particular language is not a location.
@@ -360,7 +366,7 @@ const PREVIOUS_DAILY_PROMPTS = {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '1.1.10';
+const VERSION = '1.1.11';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
