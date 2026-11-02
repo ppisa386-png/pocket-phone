@@ -1,14 +1,14 @@
-import { walletCurrency, majorAmount, unitScale, resolveResidence, RESIDENCE_RULE, personaStamp } from './currency.js?v=1.1.6';
-import { changeWalletCurrency } from './assets-currency.js?v=1.1.6';
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.6';
-import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.6';
-import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.6';
-import { parseModelObject } from './model-json.js?v=1.1.6';
-import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.6';
-import { readPreparedMemory } from './external-memory.js?v=1.1.6';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.6';
-import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.6';
-import { isMemoryHidden } from './journal.js?v=1.1.6';
+import { walletCurrency, majorAmount, unitScale, resolveResidence, RESIDENCE_RULE, personaStamp } from './currency.js?v=1.1.7';
+import { changeWalletCurrency } from './assets-currency.js?v=1.1.7';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.7';
+import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.7';
+import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.7';
+import { parseModelObject } from './model-json.js?v=1.1.7';
+import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.7';
+import { readPreparedMemory } from './external-memory.js?v=1.1.7';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.7';
+import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.7';
+import { isMemoryHidden } from './journal.js?v=1.1.7';
 
 export const ASSET_OUTPUT_CONTRACT = '本次是小榴莲后台数据任务，不是角色扮演正文续写。沿用上述人设、事实和世界观，仅临时改用本次任务要求的JSON输出格式。只返回一个完整JSON对象，以{开头、}结尾；不要写解释、对白、思考、状态栏、HTML注释、durian-money注释或多个结果。正文格式要求不适用于本次账本结果。按任务提供的真实资料填写，不能只复述示例；没有项目才用空数组，金额未知用null，不虚构事项。';
 
@@ -304,7 +304,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             const persona=context.powerUserSettings?.persona_description||'';
             const currency=walletCurrency(view.state);
             const payload = { persona, currency, previousResidence:wallet?.region||null,
-                residenceContext:wallet ? newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden).filter((row,i,rows)=>i<4||i>=rows.length-12).map(row=>({...row,text:row.text.slice(0,4000)})):[],
+                residenceContext:newProse(chat,0).filter(row=>!chat[row.index].is_hidden && !chat[row.index].hidden).filter((row,i,rows)=>i<4||i>=rows.length-12).map(row=>({...row,text:row.text})),
                 currencyChanges:wallet?.currencyChanges||[], ...recoveryPayload, initialized: !!wallet, from: wallet ? dayDate(wallet.lastDay) : null,
                 assessmentDate: assessmentDate || null, elapsedDays, clock: { ...clock, date: assessmentDate || null }, balance: cashBalance(view.state) === null ? null : majorAmount(cashBalance(view.state),currency), ledger: {
                     holdings: assetRows(view.state, 'holding').filter(h => h.active !== false || h.endDay >= wallet?.lastDay).map(h=>({...h,settlementPeriods:businessPeriods(h,wallet?.lastDay,clock.day).map(p=>({...p,from:dayDate(p.fromDay),to:dayDate(p.toDay)}))})),

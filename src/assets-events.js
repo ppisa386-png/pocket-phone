@@ -1,7 +1,7 @@
-import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.6';
-import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=1.1.6';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=1.1.6';
-import { dateDay, dayDate } from './story-clock.js?v=1.1.6';
+import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.7';
+import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=1.1.7';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=1.1.7';
+import { dateDay, dayDate } from './story-clock.js?v=1.1.7';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
 export const financialEventKey = row => JSON.stringify([row.kind, assetText(row.name), row.action || (row.kind === 'job' ? 'start' : 'acquire')]);

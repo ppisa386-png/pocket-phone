@@ -207,5 +207,10 @@ try {
     await p.getByText('可支配资金 · CNY',{exact:true}).waitFor();
     await p.getByText('¥104,650.00',{exact:true}).waitFor();
     console.log('PASS regional wallet: changed persona rechecked on same floor, USD legacy balance converted at entered rate and displayed in CNY');
+    await p.evaluate(()=>localStorage.removeItem('assets-test'));await p.reload();
+    await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.powerUserSettings.persona_description='Nationality: 美国\nIdentity: 高中毕业班学生';c.chat=[{is_user:false,mes:'日期：2026-01-15\n南加州的清晨。\n你走进学校，开始高三开学第一天。'}];window.financeResponse={residence:{region:'US',currency:'USD',place:'南加州',evidence:['Identity: 高中毕业班学生','南加州的清晨。你走进学校，开始高三开学第一天。']},initial:{balance:500,holdings:[],jobs:[]}};});
+    await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-action="update"]').tap();
+    await p.getByText('可支配资金 · USD',{exact:true}).waitFor();await p.getByText('$500.00',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
+    console.log('PASS residence evidence: combined persona and school setting, regional place name, whitespace normalization, one request opens USD wallet');
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

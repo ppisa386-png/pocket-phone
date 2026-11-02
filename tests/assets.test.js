@@ -721,3 +721,25 @@ test('legacy USD migration quotes the pair, converts atomically using a user rat
   f.c.chat.pop();await f.memory.read();assert.equal(cashBalance(f.state()),100000);assert.equal(f.state().assets.wallet.currency,undefined);
  }finally{f.close();}
 });
+
+test('residence combines persona and everyday school geography without requiring a country-name sentence',async()=>{
+ for(const [place,region,currency] of [['南加州','US','USD'],['关东地区','JP','JPY'],['苏格兰','GB','GBP']]){
+  const f=setup();try{
+   f.c.powerUserSettings.persona_description='Nationality: '+(region==='US'?'美国':'其他')+'\nIdentity: 高中毕业班学生';
+   f.c.chat[0].mes='日期：2026-01-01\n'+place+'的清晨。\n你走进学校，开始高三开学第一天。';
+   f.reply({...initial(),residence:{place,region,currency,evidence:['Identity: 高中毕业班学生',place+'的清晨。你走进学校，开始高三开学第一天。']}});
+   const n=f.count();ok(await f.assets.update());assert.equal(f.count(),n+1);assert.equal(f.state().assets.wallet.currency,currency);
+   assert.match(f.prompt(),/不要求原文出现国家全名/);assert.match(f.prompt(),/residenceContext/);
+  }finally{f.close();}
+ }
+});
+test('residence accepts separate literal excerpts and formatting but still rejects invented conclusions and nationality-only evidence',async()=>{
+ const {resolveResidence}=await import('../src/currency.js');
+ const persona='Nationality: 美国\nIdentity: 高中毕业班学生';
+ const prose=[{text:'<p>南加州的清晨。</p>你走进学校。'},{text:'这里是你上学的地方。'}];
+ for(const evidence of [['Nationality: 美国','南加州的清晨。你走进学校。'], '南加州的清晨。……这里是你上学的地方。'])
+  assert.deepEqual(resolveResidence({region:'US',currency:'USD',place:'南加州',evidence},persona,prose),{region:'US',currency:'USD'});
+ for(const evidence of ['你常住美国。',['南加州的清晨。','你已永久定居美国。'],'Nationality: 美国'])
+  assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:evidence==='Nationality: 美国'?'美国':'南加州',evidence},persona,prose));
+ assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:'南加州',evidence:['你正在南加州旅游。']},'',[{text:'你正在南加州旅游。'}]));
+});
