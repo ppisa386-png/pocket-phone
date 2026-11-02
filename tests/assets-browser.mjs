@@ -212,5 +212,11 @@ try {
     await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.locator('[data-asset-action="update"]').tap();
     await p.getByText('可支配资金 · USD',{exact:true}).waitFor();await p.getByText('$500.00',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
     console.log('PASS residence evidence: combined persona and school setting, regional place name, whitespace normalization, one request opens USD wallet');
+    await p.evaluate(async()=>{const fact='Sam支付了午餐费用。';await window.advance('日期：2026-01-16\n'+fact+'<!--durian-money:'+JSON.stringify({kind:'expense',name:'午餐',amount:null,evidence:fact})+'-->');for(let i=0;i<3;i++)await window.advance('学习继续。');window.financeResponse={events:[],living:{total:0,bookedIds:[]},business:[]};});
+    await p.locator('[data-asset-action="update"]').tap();await p.getByText(/模型仍未完成 1 笔待处理事项/).waitFor();await p.getByText('$500.00',{exact:true}).waitFor();
+    await p.evaluate(()=>{window.financeResponse={events:[{ref:'P1',amount:15}],living:{total:15,bookedIds:['P1']},business:[]};});
+    await p.locator('[data-asset-action="update"]').tap();await p.getByText('$485.00',{exact:true}).waitFor();assert.equal(await p.locator('[data-asset-action="update"]').isDisabled(),true);
+    await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="assets"]').tap();await p.getByText('$485.00',{exact:true}).waitFor();
+    console.log('PASS pending estimate: no number in prose, several later floors, omitted estimate preserves balance, retry uses model amount once and persists');
     assert.deepEqual(errors, []); assert.deepEqual(external, []); console.log('PASS assets mobile: open/tabs zero API, four categories, explicit expense, payday, persisted lock, rollback, blocked transfer cancellation, 320px layout, no external requests');
 } finally { await browser.close(); server.close(); }

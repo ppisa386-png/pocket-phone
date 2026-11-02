@@ -1,7 +1,7 @@
-import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.7';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.7';
-import { displayStoryTime } from './story-clock.js?v=1.1.7';
-import { icon } from './icons.js?v=1.1.7';
+import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.8';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.8';
+import { displayStoryTime } from './story-clock.js?v=1.1.8';
+import { icon } from './icons.js?v=1.1.8';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const chatKinds={text:'文字',voice:'语音',image:'照片',video:'视频'};

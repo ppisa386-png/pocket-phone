@@ -743,3 +743,28 @@ test('residence accepts separate literal excerpts and formatting but still rejec
   assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:evidence==='Nationality: 美国'?'美国':'南加州',evidence},persona,prose));
  assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:'南加州',evidence:['你正在南加州旅游。']},'',[{text:'你正在南加州旅游。'}]));
 });
+
+for(const mode of ['id','ref','source'])test('API estimates an actual expense with no narrative number after several floors via '+mode,async()=>{
+ const f=setup();try{
+  f.reply({...initial(),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  const fact='Sam 支付了当天的午餐费用。';await f.append(fact+marker({kind:'expense',name:'午餐',amount:null,evidence:fact}),'2026-01-02');
+  const event=assetRows(f.state(),'story_event').find(e=>!e.processed);
+  for(let i=0;i<5;i++)await f.append('下午的学习继续。');
+  f.reply(evaluation('2026-01-02'));const failed=await f.assets.update();assert.equal(failed.ok,false);assert.equal(failed.code,'ASSET_PENDING_UNRESOLVED');assert.equal(cashBalance(f.state()),8000);
+  const item=mode==='id'?{id:event.id}:mode==='ref'?{ref:'P1'}:{kind:'expense',name:'午餐',sourceIndex:event.sourceIndex,evidence:fact};
+  f.reply({...evaluation('2026-01-02'),events:[{...item,amount:15}],living:{total:15,bookedIds:['P1']}});
+  const before=f.count();ok(await f.assets.update());assert.equal(f.count(),before+1);assert.equal(cashBalance(f.state()),6500);assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,0);
+  assert.equal(assetRows(f.state(),'cash_transaction').filter(t=>t.eventId===event.id).length,1);assert.match(f.prompt(),/pendingAssessments/);assert.match(f.prompt(),/不要求正文后来补数字/);assert.ok(f.prompt().includes(fact));
+  assert.equal((await f.assets.update()).ok,false);assert.equal(cashBalance(f.state()),6500);
+  f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(cashBalance(f.state()),8000);assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,1);
+ }finally{f.close();}
+});
+test('pending salary and new job monthly salary are estimated together without narrative numbers',async()=>{
+ const f=setup('2026-01-15');try{
+  f.reply({...initial('2026-01-15'),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
+  await f.append('Sam 开始新工作并领到工资。'+marker({kind:'job',name:'服务员',action:'start',evidence:'Sam 开始新工作并领到工资。'})+marker({kind:'income',name:'工资',amount:null,evidence:'Sam 开始新工作并领到工资。'}),'2026-02-15');
+  const job=assetRows(f.state(),'story_event').find(e=>e.kind==='job'),salary=assetRows(f.state(),'story_event').find(e=>e.salary);
+  f.reply({...evaluation('2026-02-15'),events:[{id:salary.id,amount:100,salaryEmployer:'job:'+job.id,payDate:'2026-02-15'}],salaries:[{id:'job:'+job.id,monthlySalary:3000}]});
+  ok(await f.assets.update());assert.equal(assetRows(f.state(),'story_event').filter(e=>!e.processed).length,0);assert.equal(assetRows(f.state(),'job')[0].monthlyMinor,300000);
+ }finally{f.close();}
+});
