@@ -1,5 +1,5 @@
 import { walletCurrency, formatMoney } from './currency.js?v=1.1.8';
-import { needsOwnershipRecovery } from './assets-recovery.js?v=1.1.12';
+import { needsOwnershipRecovery } from './assets-recovery.js?v=1.1.13';
 import { assetRows, cashBalance, reservedCash, recentCash } from './assets-core.js?v=1.1.12';
 import { dayDate } from './story-clock.js?v=1.1.12';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

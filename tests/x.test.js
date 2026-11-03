@@ -484,3 +484,21 @@ for(const change of ['persona','chat','disabled'])test('X trends discard delayed
   finish(JSON.stringify({topics:[],evaluations:[]}));assert.equal((await pending).ok,false);assert.equal(f.state().x['trend-edition'],undefined);assert.equal(f.count(),1);
  }finally{f.close();}
 });
+
+test('anonymous brand request, negotiation and explicit X contract use distinct transitions',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-11-03';ok(await f.x.saveProfile({alias:'tea diary',bio:'茶评'}));
+  await f.memory.commit(await f.memory.begin(),audienceChanges(f.state(),{initialFollowers:1200}));
+  const evidence='茶商发来春茶合作邀约。';
+  const row={kind:'offer',brand:'山茶',project:'春茶品鉴',terms:'品鉴后发帖，500元',text:'您好，请问愿意为春茶写一条品鉴推文吗？预算500元。',evidence};
+  for(let i=0;i<14;i++)f.context.chat.push({mes:'故事继续。'});
+  f.context.chat.push({mes:evidence+'<!--durian-business:'+JSON.stringify(row)+'-->'});
+  await f.memory.read();
+  const p=Object.values(f.state().business).find(p=>p.id);
+  ok(await f.x.decideRequest(p.accountId,true));assert.equal(f.state().business[p.id].status,'invited');
+  f.reply({status:'reply',text:'样品明天可以寄出。'});ok(await f.x.send(p.accountId,'样品何时寄出？'));
+  assert.equal(f.state().business[p.id].status,'invited');assert.match(f.prompt(),/不等于合作/);
+  f.reply({status:'reply',text:'成交。',deal:{kind:'accept',id:p.id,evidence:'我接受这项合作',terms:'500元品鉴推文'}});
+  ok(await f.x.send(p.accountId,'我接受这项合作'));assert.equal(f.state().business[p.id].status,'active');assert.deepEqual(f.state().assets,{});
+ }finally{f.close();}
+});

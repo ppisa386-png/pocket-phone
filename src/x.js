@@ -1,7 +1,10 @@
+import {dmDealTask,dealDecision} from './x-business.js?v=1.1.13';
+import {JOURNAL_KEY} from './journal.js?v=1.1.13';
+import {readStoryClock} from './story-clock.js?v=1.1.12';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.8';
 import { publicationScenePrompt } from './social-context.js?v=1.1.8';
 import { xCommentKey, xComments } from './x-comments.js?v=1.1.8';
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.12';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.13';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
 import { parseModelObject } from './model-json.js?v=1.1.8';
 import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.8';
@@ -139,9 +142,14 @@ export function createX({memory,phone,getContext,getSettings}) {
     }
     async function answer(state,a,m,current,request,commit) {
         const result=await ask(state,a,request,current,'当前任务：X 私信。仅回应本会话最后一条 user 消息，不查看其他账号的私信。对方的私信设置：'+a.dmPolicy+'；会话此前已通过：'+!!a.dmAccepted+'；记录：'+JSON.stringify(xThread(state,a.id).slice(-40).map(({role,text})=>({role,text})))+
-            '\n根据角色判断是否接受并回复。输出 {"status":"reply/no_reply/request","text":"回复内容；不回复时为空"}。requests 且未通过时可返回 request（等待对方接受），reply 表示本次同意并回复，no_reply 表示保持沉默。',d=>{if(!['reply','no_reply','request'].includes(d.status)||d.status==='reply'&&!xText(d.text))throw Error('私信回复格式不正确。');return {status:d.status,text:xText(d.text)};});
+            '\n根据角色判断是否接受并回复。输出 {"status":"reply/no_reply/request","text":"回复内容；不回复时为空"}。requests 且未通过时可返回 request（等待对方接受），reply 表示本次同意并回复，no_reply 表示保持沉默。'+dmDealTask(state,a.id),d=>{if(!['reply','no_reply','request'].includes(d.status)||d.status==='reply'&&!xText(d.text))throw Error('私信回复格式不正确。');return {status:d.status,text:xText(d.text),deal:d.deal};});
         const changes=[xSet({...a,dmAccepted:a.dmAccepted||result.status==='reply'}),xSet({...m,status:result.status==='reply'?'answered':result.status})];
         if(result.status==='reply')changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false}));
+        const deal=result.deal,p=state.business?.[deal?.id];
+        if(p?.accountId===a.id&&['accept','reject'].includes(deal?.kind)&&typeof deal.evidence==='string'&&deal.evidence.trim()&&m.text.includes(deal.evidence)){
+            const context=getContext(),draw=context.chatMetadata?.[JOURNAL_KEY]?.businessDraws?.[p.id];
+            changes.push(...dealDecision(p,deal.kind,state.business.counter.turn,readStoryClock(context.chat).day,draw,deal.terms));
+        }
         await commit(changes);
     }
     return {

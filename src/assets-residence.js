@@ -1,4 +1,4 @@
-import { isMemoryHidden } from './journal.js?v=1.1.8';
+import { isMemoryHidden } from './journal.js?v=1.1.13';
 import { resolveResidence, RESIDENCE_RULE } from './currency.js?v=1.1.11';
 
 

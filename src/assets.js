@@ -1,7 +1,7 @@
-import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.11';
+import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.13';
 import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.1.8';
 import { changeWalletCurrency } from './assets-currency.js?v=1.1.12';
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.12';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.13';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.8';
 import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.12';
 import { parseModelObject } from './model-json.js?v=1.1.8';
@@ -9,7 +9,7 @@ import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.12';
 import { readPreparedMemory } from './external-memory.js?v=1.1.8';
 import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.12';
 import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.12';
-import { isMemoryHidden } from './journal.js?v=1.1.8';
+import { isMemoryHidden } from './journal.js?v=1.1.13';
 
 export const ASSET_OUTPUT_CONTRACT = '本次是小榴莲后台数据任务，不是角色扮演正文续写。沿用上述人设、事实和世界观，仅临时改用本次任务要求的JSON输出格式。只返回一个完整JSON对象，以{开头、}结尾；不要写解释、对白、思考、状态栏、HTML注释、durian-money注释或多个结果。正文格式要求不适用于本次账本结果。按任务提供的真实资料填写，不能只复述示例；没有项目才用空数组。事实已发生但金额未知的收支必须按本次评估规则估算，不能因正文没写数字就填null；实物估值确实无法合理判断时才可暂留null，不虚构事项。';
 

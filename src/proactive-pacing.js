@@ -1,5 +1,5 @@
 import { exactStoryTime } from './story-clock.js?v=1.1.12';
-import { smsForAI } from './sms-context.js?v=1.1.12';
+import { smsForAI } from './sms-context.js?v=1.1.13';
 
 // Only timing/direction metadata: no expired message text, excerpts or topic summaries.
 export function recentContactActivity(state, chat, contactId = null) {

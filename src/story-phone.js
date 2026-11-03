@@ -1,14 +1,15 @@
+import {businessPrompt,importBusiness} from './x-business.js?v=1.1.13';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.1.12';
-import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.12';
-import { recentContactActivity } from './proactive-pacing.js?v=1.1.12';
+import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.13';
+import { recentContactActivity } from './proactive-pacing.js?v=1.1.13';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.1.8';
-import { smsReplyClassification } from './sms-context.js?v=1.1.12';
+import { smsReplyClassification } from './sms-context.js?v=1.1.13';
 import { storyTime } from './story-clock.js?v=1.1.12';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.1.8';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.1.8';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.1.13';
 import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
-import { effectiveReply, narrativeReplyCount } from './contact-policy.js?v=1.1.12';
-import { isBlocked } from './contact-events.js?v=1.1.8';
+import { effectiveReply, narrativeReplyCount } from './contact-policy.js?v=1.1.13';
+import { isBlocked } from './contact-events.js?v=1.1.13';
 import { financialEvidenceMatches } from './assets-policy.js?v=1.1.8';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
@@ -106,18 +107,20 @@ export function importStoryPhone(raw,revisions,chat,context){
             journal=appendChange(journal,revisions.slice(0,index+1),changes,eventId);state=replayJournal(journal);changed=true;
         }
     }
-    return {journal,changed};
+    const business=importBusiness(journal,revisions,chat,settings,storyAnnotations);
+    return {journal:business.journal,changed:changed||business.changed};
 }
 export function buildStoryPhonePrompt(state,context,settings,chat){
     const channels={phone:!!settings.apps.phone,messages:!!settings.apps.messages};
-    if(!availableChannels(settings,state,context.name1).length)return '';
+    const business=businessPrompt(state,settings,chat,context.name1);
+    if(!availableChannels(settings,state,context.name1).length)return business;
     const due=(narrativeReplyCount(chat)+1)%5===0;
     const contacts=Object.values(state.contacts).map(c=>({id:c.id,name:c.name}));
     const blocked=Object.entries(state.profiles).filter(([id,p])=>id.startsWith('blocked:')&&(p.phone||p.messages)).map(([id,p])=>({id:id.slice(8),phone:!!p.phone,messages:!!p.messages}));
     const group=context.groups?.find(g=>String(g.id)===String(context.groupId));
     const actors=(context.characters||[]).filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
     const calls=Object.values(state.calls).filter(c=>['ringing','connected'].includes(c.status)).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
-    return CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due)+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
+    return (business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due)+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
         '\n这是 user 个人的手机。只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。收到的短信可只在 text 放全文，但正文必须有确实到达 user 手机的事实；user 发出的短信必须在正文已经逐字写出并实际发送，不能借记录补写 user 发言。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,calls})+
         '\n按本轮实际通信发生顺序，每条短信及通话状态在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms 或 call","evidence":"本次正文中确实发送或收到该通信且能识别双方的连续逐字原句","text":"仅 sms：实际发送或收到的完整短信原文，不得改写；收到时正文可只描写通知，发出时必须已在正文逐字写明","read":false,"status":"仅 call：ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"replyable":true}-->。短信附 sms_category（A=日常问候/闲聊/生活分享/即时状态，B=待办/约定/持续请求/情感纠纷；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断）。短信一条一注释，不抄回旧记录。隐藏号码不可回拨时 replyable:false。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。'+COMMUNICATION_LANGUAGE_RULE;
