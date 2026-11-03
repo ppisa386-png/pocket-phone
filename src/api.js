@@ -192,7 +192,14 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             if (typeof options.finalOutputContract === 'string' && options.finalOutputContract.trim()) {
                 payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
             }
-            return post('generate', config, key, payload, current, onProgress);
+            try { return await post('generate', config, key, payload, current, onProgress); }
+            catch (error) {
+                if (error.diagnostic) {
+                    const sizes=payload.messages.map(m=>JSON.stringify(m).length);
+                    error.diagnostic+='\n手机任务提示字符数：'+prompt.length+'；最终各条消息字符数（按发送顺序，含结构）：'+sizes.join('、');
+                }
+                throw error;
+            }
         },
         async models(config, key, isCurrent) {
             const data = await post('status', config, key, {}, isCurrent);

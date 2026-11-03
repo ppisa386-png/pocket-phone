@@ -1,4 +1,4 @@
-import { dailyArticles, dailyExpiry, dailyStatus, dailyArchives } from './daily-core.js?v=1.1.14';
+import { dailyArticles, dailyExpiry, dailyStatus, dailyArchives } from './daily-core.js?v=1.1.15';
 import { dayDate } from './story-clock.js?v=1.1.12';
 const dailyEscape = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createDailyPanel({adapter,getView,redraw,notice}) {

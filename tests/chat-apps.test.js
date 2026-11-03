@@ -118,3 +118,21 @@ test('saved old default friend prompts migrate on load, custom dialogue prompts 
         assert.equal(normalizeSettings({prompts:{[app]:'自定义聊天规则'}}).prompts[app],'自定义聊天规则');
     }
 });
+
+for(const app of ['whatsapp','wechat'])test(app+' accepts an unambiguous given name and reuses the full-name account',async()=>{
+    const f=fixture(app);try{
+        f.ctx.characters[0].name=f.ctx.name2='Alex Morgan';f.reply({accepted:true,name:'亚历克斯·摩根',aliases:['Alex Morgan']});
+        ok(await f.api.addByName('Alex'));const [a]=chatItems(f.state(),app,'account');
+        assert.equal(a.name,'亚历克斯·摩根');assert.equal(a.id,'card:alex.png');
+        const count=f.count();assert.equal((await f.api.addByName('Alex')).value.already,true);assert.equal(f.count(),count);
+        ok(await f.api.block(a.id,true));assert.equal((await f.api.addByName('亚历克斯')).ok,false);
+    }finally{f.close();}
+});
+test('Chinese given name identifies the current character; two same-name group members need clarification',async()=>{
+    const f=fixture('wechat');try{
+        f.ctx.characters=[{name:'林清妍',avatar:'lin.png'},{name:'陈清妍',avatar:'chen.png'}];f.ctx.groupId='g';f.ctx.groups=[{id:'g',members:['lin.png','chen.png']}];
+        assert.match((await f.api.addByName('清妍')).error,/多位/);assert.equal(f.count(),0);
+        delete f.ctx.groupId;f.ctx.name2='林清妍';f.reply({accepted:true,name:'林清妍'});
+        ok(await f.api.addByName('清妍'));assert.equal(chatItems(f.state(),'wechat','account')[0].id,'card:lin.png');
+    }finally{f.close();}
+});

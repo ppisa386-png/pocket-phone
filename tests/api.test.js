@@ -347,6 +347,7 @@ test('transport diagnostics distinguish no headers, gateway response, and HTTP 2
         await assert.rejects(f.client.generate('private-story',null,()=>true),error=>{
             assert.equal(error.retryable,false);
             assert.match(error.diagnostic,/上下文消息数：1/);
+            assert.match(error.diagnostic,/手机任务提示字符数：13；最终各条消息字符数/);
             assert.match(error.diagnostic,/回复上限：4321/);
             assert.match(error.diagnostic,kind==='timeout'?/HTTP：尚未收到/:kind==='gateway'?/HTTP：502/:/HTTP：200/);
             assert.doesNotMatch(error.message+error.diagnostic,/private|personal-story|test-phone-key|provider\.example/);
