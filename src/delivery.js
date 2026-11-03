@@ -1,4 +1,4 @@
-import { readStoryClock, dayDate } from './story-clock.js?v=1.1.8';
+import { readStoryClock, dayDate } from './story-clock.js?v=1.1.12';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.8';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.1.8';
 export const DELIVERY_KEY='durian_phone_delivery';

@@ -1,7 +1,7 @@
 import { majorAmount } from './currency.js?v=1.1.8';
 import { xComments } from './x-comments.js?v=1.1.8';
-import { smsForAI, syncSMSContext } from './sms-context.js?v=1.1.8';
-import { exactStoryTime } from './story-clock.js?v=1.1.8';
+import { smsForAI, syncSMSContext } from './sms-context.js?v=1.1.12';
+import { exactStoryTime } from './story-clock.js?v=1.1.12';
 import { nameAliases } from './names.js?v=1.1.8';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.8';
 
@@ -86,7 +86,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
     const xRecords=[...Object.values(state.x||{}).filter(r=>r.type!=='comment'),...xComments(state)],xAccounts=new Map(xRecords.filter(matchesAccount).map(a=>[a.id,a]));
     for(const record of xRecords){
         const a=xAccounts.get(record.accountId),who=a?identity(a,state.x?.profile?.alias):null;
-        if(record.type==='message'&&a)entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',...who,speaker:record.role==='user'?who.otherParty:a.name,storyTime:record.storyTime||null,text:record.text}});
+        if(record.type==='message'&&a)entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',...who,speaker:record.role==='user'?who.otherParty:a.name,storyTime:record.storyTime||null,text:a.inboundRequest&&!a.dmAccepted&&['image','video'].includes(record.kind)?'[请求中的媒体已隐藏]':record.text}});
         if(record.type==='comment'&&!record.ambient){
             const post=state.x[record.postId],parent=state.x[record.replyTo],fromUser=record.author==='user';
             const counterpart=fromUser?(parent?.author||post?.author):record.author;

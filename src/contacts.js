@@ -7,7 +7,7 @@ const quoteText = value => String(value).normalize('NFKC').replace(/[“”]/g,'
 
 export function establishedSources(context) {
     const names = { user: context.name1 || 'user', char: context.name2 || 'char' };
-    const expand = text => String(text || '').replace(/\{\{\s*(user|char)\s*\}\}/gi, (_, key) => names[key.toLowerCase()]);
+    const expand = text => String(text || '').replace(/data:[\w.+/-]+;base64,[A-Za-z0-9+/=]+/gi,'[内嵌附件]').replace(/\{\{\s*(user|char)\s*\}\}/gi, (_, key) => names[key.toLowerCase()]);
     const sources = [{ source: 'persona', text: expand(context.powerUserSettings?.persona_description) }];
     const grouped = context.groupId != null && context.groupId !== '';
     const members = grouped ? context.groups?.find(g => String(g.id) === String(context.groupId))?.members || [] : [];

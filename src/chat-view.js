@@ -1,6 +1,6 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.8';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.8';
-import { displayStoryTime } from './story-clock.js?v=1.1.8';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.12';
+import { displayStoryTime } from './story-clock.js?v=1.1.12';
 import { icon } from './icons.js?v=1.1.8';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -31,7 +31,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     }
     function listHTML() {
         const q=value('filter').trim().toLocaleLowerCase();
-        let friends=records('account').filter(a=>a.friend==='friends'&&(!q||[a.name,...(a.aliases||[]),a.number].some(n=>String(n||'').toLocaleLowerCase().includes(q))));
+        let friends=records('account').filter(a=>(a.friend==='friends'||tab==='chats'&&a.friend==='incoming')&&(!q||[a.name,...(a.aliases||[]),a.number].some(n=>String(n||'').toLocaleLowerCase().includes(q))));
         friends.sort(tab==='contacts'?(a,b)=>a.name.localeCompare(b.name,'zh'):(a,b)=>(threadItems(b.id).at(-1)?.createdAt||0)-(threadItems(a.id).at(-1)?.createdAt||0));
         const search='<label class="pp-chat-search">'+icon('search')+'<input data-chat-field="filter" aria-label="搜索好友" placeholder="搜索" value="'+chatEsc(value('filter'))+'"></label>';
         const actions='<div class="pp-chat-add-actions">'+button('add','添加好友','','plus')+button('bulk','一键添加好友','','people',disabled())+'<span>添加好友 · 一键添加</span></div>';
@@ -58,6 +58,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     }
     function composerHTML(a) {
         if(a.blocked)return '<div class="pp-chat-composer"><p>已拉黑，不能发送消息或通话。</p>'+button('unblock','解除拉黑',a.id,'',disabled())+'</div>';
+        if(a.friend==='incoming')return button('accept-request','接受联系人',a.id)+button('later-request','暂不处理',a.id)+button('decline-request','拒绝',a.id)+button('block','拉黑',a.id);
         const call=threadItems(a.id).find(i=>i.type==='call'&&i.status==='connected');
         if(call)return '<div class="pp-chat-composer">'+form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',call.id,'',disabled())+'</div>';
         return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(chatKinds).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,'cash',disabled())+'<small>换行暂存 · 点击发送</small></div></div>';
@@ -109,8 +110,9 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
             if(['add','info','cash'].includes(action)){page=action;editingId=null;redraw();return;}
             if(action==='edit'){editingId=id;drafts[key('editText')]=getView()[app]?.[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
+            if(action==='later-request'){accountId=null;page='';redraw();return;}
             if(action==='bulk'){await bulk();return;}
-            const handlers={reroll:['rerollMessage',[id]],retry:['retryMessage',[id]],block:['block',[id,true]],unblock:['block',[id,false]],reveal:['reveal',[id]],voice:['call',[id,'voice']],video:['call',[id,'video']],hangup:['hangup',[id]],settle:['settle',[id,true]],cancel:['settle',[id,false]]};
+            const handlers={'accept-request':['accept',[id,true]],'decline-request':['accept',[id,false]],reroll:['rerollMessage',[id]],retry:['retryMessage',[id]],block:['block',[id,true]],unblock:['block',[id,false]],reveal:['reveal',[id]],voice:['call',[id,'voice']],video:['call',[id,'video']],hangup:['hangup',[id]],settle:['settle',[id,true]],cancel:['settle',[id,false]]};
             if(handlers[action])await perform(...handlers[action]);
         },
         async submit(element){

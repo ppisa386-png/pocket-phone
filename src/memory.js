@@ -1,9 +1,10 @@
+import { reservedCash } from './assets-core.js?v=1.1.12';
 import { migrateDailyArchives } from './daily-archive.js?v=1.1.8';
-import { syncSMSContext } from './sms-context.js?v=1.1.8';
-import { storyTime } from './story-clock.js?v=1.1.8';
-import { importStoryAssets } from './assets-story.js?v=1.1.10';
-import { importStorySquare } from './x-opinion.js?v=1.1.8';
-import { importStoryPhone } from './story-phone.js?v=1.1.8';
+import { syncSMSContext } from './sms-context.js?v=1.1.12';
+import { storyTime } from './story-clock.js?v=1.1.12';
+import { importStoryAssets } from './assets-story.js?v=1.1.12';
+import { importStorySquare } from './x-opinion.js?v=1.1.12';
+import { importStoryPhone } from './story-phone.js?v=1.1.12';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.1.8';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
@@ -175,12 +176,13 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         epoch: () => generation,
         subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
         read() { return schedule(async () => { const snapshot = await sync(); return { scope: snapshot?.scope ?? null, state: replayJournal(snapshot?.journal), revision: snapshot?.revisions.at(-1) ?? null }; }); },
-        begin() {
+        begin(view) {
             return schedule(async () => {
                 const snapshot = await sync();
                 if (!snapshot?.revisions.length) throw unavailableError();
+                if (view && (view.scope !== snapshot.scope || view.revision !== snapshot.revisions.at(-1))) throw new Error('聊天已变化，请重新操作。');
                 const ticket = {};
-                tickets.set(ticket, { scope: snapshot.scope, metadata: snapshot.metadata, revision: snapshot.revisions.at(-1), generation });
+                tickets.set(ticket, { scope: snapshot.scope, metadata: snapshot.metadata, revision: snapshot.revisions.at(-1), generation, state: view ? structuredClone(view.state) : replayJournal(snapshot.journal) });
                 return ticket;
             });
         },
@@ -208,6 +210,16 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
                     basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) {
                     throw new Error('聊天已变化，本次手机操作已取消。');
+                }
+                const latest = replayJournal(snapshot.journal);
+                const changed = (before, after) => JSON.stringify(before) !== JSON.stringify(after);
+                const writes = batches.flatMap(batch => batch.changes);
+                const touchesFunds = writes.some(({collection,value}) => collection === 'assets' ||
+                    (value?.type === 'transfer' && value.direction === 'outgoing'));
+                const fundsChanged = touchesFunds && (changed(basis.state.assets, latest.assets) ||
+                    reservedCash(basis.state) !== reservedCash(latest));
+                if (fundsChanged || writes.some(({collection,key}) => changed(basis.state[collection]?.[key], latest[collection]?.[key]))) {
+                    throw new Error('其他操作已更改相关记录，请重新操作。');
                 }
                 let next = snapshot.journal;
                 for (const batch of batches) {

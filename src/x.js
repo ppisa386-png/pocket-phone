@@ -1,14 +1,14 @@
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.8';
 import { publicationScenePrompt } from './social-context.js?v=1.1.8';
 import { xCommentKey, xComments } from './x-comments.js?v=1.1.8';
-import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.8';
+import { SQUARE_RULES, squareClock, recentSquareProse, squareBasis, squareStatus } from './square-core.js?v=1.1.12';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
 import { parseModelObject } from './model-json.js?v=1.1.8';
 import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.8';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
-export const xUnread = state => xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + xItems(state,'comment').filter(c=>c.author!=='user'&&!c.read&&!c.ambient).length;
+export const xUnread = state => xItems(state,'post').filter(p=>p.outreachMention&&!p.read&&!state.x[p.author]?.blocked).length + xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + xItems(state,'comment').filter(c=>c.author!=='user'&&!c.read&&!c.ambient).length;
 const metric = n => Number.isFinite(Number(n)) ? Math.min(1000000000,Math.max(0,Math.floor(Number(n)))) : 0;
 export function xCounts(state,post) {
     const comments=xItems(state,'comment').filter(c=>c.postId===post.id);
@@ -146,7 +146,8 @@ export function createX({memory,phone,getContext,getSettings}) {
     }
     return {
         open:()=>memory.read(),
-        saveProfile(values){return run(async(state,_c,_r,commit)=>{await commit([xSet({...profile(state),alias:xRequired(values.alias,'名称',60),bio:xText(values.bio,500)})]);});},
+        decideRequest(id,accept){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest!=='pending'||a.blocked)throw Error('请求已失效');await commit([xSet({...a,inboundRequest:accept?'accepted':'declined',dmAccepted:accept})]);});},
+        saveProfile(values){return run(async(state,_c,_r,commit)=>{await commit([xSet({...profile(state),alias:xRequired(values.alias,'名称',60),bio:xText(values.bio,500),requestsOpen:values.requestsOpen===undefined?profile(state).requestsOpen:values.requestsOpen==='true'||values.requestsOpen===true})]);});},
         resetFollowers(){return run(async(state,current,request,commit)=>{
             const saved=xAudience(state);
             if(saved){await commit([xSet({...saved,followers:saved.initialFollowers})]);return;}
@@ -164,7 +165,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         });},
         follow(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);await commit([xSet({...known(state,a),following:value===true})]);});},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
-        reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
+        reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
         publish(value){return run(async(state,_c,_r,commit)=>{await commit([xSet(xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),includedDirectReplies:0,postedAtStory:squareClock(getContext().chat),sourceIndex:getContext().chat.length-1,liked:false,reposted:false}))]);});},
         toggleInjection(id){return run(async(state,_c,_r,commit)=>{
             const p=state.x[id],chat=getContext().chat;
@@ -261,14 +262,14 @@ export function createX({memory,phone,getContext,getSettings}) {
             await commit(changes);
         });},
         send(id,value){return run(async(state,current,request,commit)=>{
-            const a=known(state,xAccount(state,id));if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');
+            const a=known(state,xAccount(state,id));if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');
             const m=xRecord('message',{accountId:id,role:'user',text:xRequired(value,'消息'),status:'pending',read:true});await commit([xSet(a),xSet(m)]);
             const fresh=await memory.read(),ticket=await memory.begin();
             try{await answer(fresh.state,a,m,current,request,async changes=>{if(!current())throw Error('聊天已变化。');await memory.commit(ticket,changes);});}
             catch(error){if(current())await memory.commit(ticket,[xSet({...m,status:'failed'})]);throw error;}
         });},
-        retryMessage(id){return run(async(state,current,request,commit)=>{const m=state.x[id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending','request'].includes(m.status))throw Error('此消息不需要重试。');const a=xAccount(state,m.accountId);if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await answer(state,a,m,current,request,commit);});},
-        markPostRead(id){return run(async(state,_c,_r,commit)=>{await commit(xItems(state,'comment').filter(c=>c.postId===id&&c.author!=='user'&&!c.read).map(c=>xSet({...c,read:true})));});},
+        retryMessage(id){return run(async(state,current,request,commit)=>{const m=state.x[id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending','request'].includes(m.status))throw Error('此消息不需要重试。');const a=xAccount(state,m.accountId);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await answer(state,a,m,current,request,commit);});},
+        markPostRead(id){return run(async(state,_c,_r,commit)=>{await commit([...(state.x[id]?.outreachMention?[xSet({...state.x[id],read:true})]:[]),...xItems(state,'comment').filter(c=>c.postId===id&&c.author!=='user'&&!c.read).map(c=>xSet({...c,read:true}))]);});},
         markRead(id){return run(async(state,_c,_r,commit)=>{await commit(xThread(state,id).filter(m=>m.role==='assistant'&&!m.read).map(m=>xSet({...m,read:true})));});},
     };
 }

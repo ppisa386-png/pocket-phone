@@ -1,6 +1,6 @@
 import { walletCurrency, majorAmount, formatMoney, validCurrency } from './currency.js?v=1.1.8';
-import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.1.8';
-import { dateDay, readStoryClock } from './story-clock.js?v=1.1.8';
+import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.1.12';
+import { dateDay, readStoryClock } from './story-clock.js?v=1.1.12';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>formatMoney(minor,currency)+' '+currency;
@@ -18,7 +18,7 @@ export function validateProducts(data,currency = null) {
 }
 export function createAmazon({memory,phone,getContext,getSettings}) {
     const run=work=>phone.appTask(async(view,current,request)=>{
-        const ticket=await memory.begin();
+        const ticket=await memory.begin(view);
         const commit=async changes=>{if(!current())throw Error('聊天已变化，请重试。');await memory.commit(ticket,changes);};
         return work(view.state,current,request,commit);
     },'amazon');

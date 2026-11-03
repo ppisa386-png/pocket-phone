@@ -1,21 +1,21 @@
 import { bindInputViewport } from './input-viewport.js?v=1.1.8';
-import { createDailyPanel } from './daily-view.js?v=1.1.8';
-import { storyTime } from './story-clock.js?v=1.1.8';
-import { createAssetPanel } from './assets-view.js?v=1.1.10';
-import { createAmazonPanel } from './amazon-view.js?v=1.1.8';
+import { createDailyPanel } from './daily-view.js?v=1.1.12';
+import { storyTime, displayStoryDate } from './story-clock.js?v=1.1.12';
+import { createAssetPanel } from './assets-view.js?v=1.1.12';
+import { createAmazonPanel } from './amazon-view.js?v=1.1.12';
 import { bindComposerKeys } from './composer.js?v=1.1.8';
-import { createXPanel } from './x-view.js?v=1.1.8';
-import { xUnread } from './x.js?v=1.1.8';
-import { createChatPanel } from './chat-view.js?v=1.1.8';
-import { chatUnread } from './chat-apps.js?v=1.1.8';
-import { createSnapPanel } from './snapchat-view.js?v=1.1.8';
-import { snapUnread } from './snapchat.js?v=1.1.8';
-import { createApiPanel } from './api-view.js?v=1.1.8';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.11';
+import { createXPanel } from './x-view.js?v=1.1.12';
+import { xUnread } from './x.js?v=1.1.12';
+import { createChatPanel } from './chat-view.js?v=1.1.12';
+import { chatUnread } from './chat-apps.js?v=1.1.12';
+import { createSnapPanel } from './snapchat-view.js?v=1.1.12';
+import { snapUnread } from './snapchat.js?v=1.1.12';
+import { createApiPanel } from './api-view.js?v=1.1.12';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.12';
 import { icon } from './icons.js?v=1.1.8';
-import { renderMessagesScreen } from './messages-view.js?v=1.1.8';
+import { renderMessagesScreen } from './messages-view.js?v=1.1.12';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.1.8';
-import { renderPhoneScreen } from './phone-view.js?v=1.1.8';
+import { renderPhoneScreen } from './phone-view.js?v=1.1.12';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -33,11 +33,20 @@ function esc(value) {
 
 export function mountPhone({ adapter, styles, container = document.body }) {
     let settings = normalizeSettings(adapter.load());
+    const visibleApps = APPS.filter(app => app.id !== 'snapchat');
     let route = 'home';
     let history = [];
     let promptId = 'general';
     let phoneTab = 'history';
     let phoneView = { contacts: {}, calls: {}, busy: false, error: '' };
+    function viewFor(app) {
+        if (!phoneView.requests) return phoneView;
+        const channels = ['phone','messages'].includes(app) ? [app,'contacts','incoming'] : [app];
+        const running = channels.find(kind => Object.hasOwn(phoneView.requests, kind));
+        const failed = channels.find(kind => phoneView.failures?.[kind]);
+        return {...phoneView, busy: !!running, requestKind: running, progress: phoneView.requests[running] || '',
+            error: phoneView.failures?.[failed] || '', errorKind: failed};
+    }
     let selectedCallId = null;
     let callDraft = '';
     let previousActiveCallId = null;
@@ -87,7 +96,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const noticeElement = shadow.querySelector('.pp-toast');
     const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
 
-    const chatPanels=Object.fromEntries(['whatsapp','wechat'].map(app=>[app,createChatPanel({app,adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:'+app)renderChat(app);},notice})]));
+    const chatPanels=Object.fromEntries(['whatsapp','wechat'].map(app=>[app,createChatPanel({app,adapter,getView:()=>viewFor(app),redraw:()=>{if(!destroyed&&opened&&route==='app:'+app)renderChat(app);},notice})]));
     const currentChat=()=>chatPanels[route.slice(4)];
     function renderChat(app) {
         const active=shadow.activeElement,field=active?.dataset.chatField;
@@ -101,7 +110,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         queueMicrotask(()=>{if(opened&&route==='app:'+app)void chatPanels[app].readVisible();});
     }
 
-    const snapPanel = createSnapPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:snapchat')renderSnapchat();},notice});
+    const snapPanel = createSnapPanel({adapter,getView:()=>viewFor('snapchat'),redraw:()=>{if(!destroyed&&opened&&route==='app:snapchat')renderSnapchat();},notice});
 
     function renderSnapchat() {
         const active=shadow.activeElement;const field=active?.dataset.snapField;
@@ -118,7 +127,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         queueMicrotask(()=>{if(opened&&route==='app:snapchat')void snapPanel.readVisible();});
     }
 
-    const xPanel = createXPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:x')renderX();},notice});
+    const xPanel = createXPanel({adapter,getView:()=>viewFor('x'),redraw:()=>{if(!destroyed&&opened&&route==='app:x')renderX();},notice});
     function renderX() {
         const active=shadow.activeElement,field=active?.dataset.xField;
         const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
@@ -131,9 +140,38 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         queueMicrotask(()=>{if(opened&&route==='app:x')void xPanel.readVisible();});
     }
 
-    const dailyPanel=createDailyPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice});
+    const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice});
+    function editDailyArticle(id) {
+        const article = phoneView.daily?.[id];
+        if (!article || !adapter.daily?.edit || shadow.querySelector('.pp-daily-editor')) return;
+        const dialog = document.createElement('dialog');
+        dialog.className = 'pp-daily-editor';
+        dialog.setAttribute('aria-label', '编辑报道');
+        dialog.innerHTML = '<form><h3>编辑报道</h3><label>标题<input name="headline" required maxlength="500"></label><label>导语<textarea name="summary" required maxlength="2000" rows="3"></textarea></label><label>正文<textarea name="body" required maxlength="20000" rows="8"></textarea></label><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存</button></footer></form>';
+        const form = dialog.querySelector('form');
+        for (const key of ['headline','summary','body']) form.elements[key].value = article[key];
+        dialog.addEventListener('close', () => dialog.remove(), {once:true});
+        dialog.addEventListener('keydown', event => { if (event.key === 'Escape') event.stopPropagation(); });
+        form.querySelector('[type="button"]').onclick = () => dialog.close();
+        form.onsubmit = async event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const save = form.querySelector('[type="submit"]');
+            if (save.disabled) return;
+            save.disabled = true;
+            try {
+                const result = await adapter.daily.edit(id, Object.fromEntries(new FormData(form)));
+                if (!result?.ok) throw Error(result?.error || '请稍后再保存。');
+                if (dialog.open) dialog.close();
+            } catch (error) {
+                form.querySelector('[role="status"]').textContent = error.message;
+            } finally { save.disabled = false; }
+        };
+        shadow.append(dialog);
+        dialog.showModal();
+    }
     function renderDaily(){const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
-    const assetPanel=createAssetPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:assets')renderAssets();},notice});
+    const assetPanel=createAssetPanel({adapter,getView:()=>viewFor('assets'),redraw:()=>{if(!destroyed&&opened&&route==='app:assets')renderAssets();},notice});
     function renderAssets(){
         const old=content.querySelector('.pp-asset-body'), scroll=old?.scrollTop||0, page=old?.dataset.assetPage;
         content.innerHTML=assetPanel.html();
@@ -141,7 +179,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(body?.dataset.assetPage===page)body.scrollTop=scroll;
     }
     const shopScroll=new Map();
-    const shopPanel=createAmazonPanel({adapter,getView:()=>phoneView,redraw:()=>{if(!destroyed&&opened&&route==='app:amazon')renderAmazon();},notice});
+    const shopPanel=createAmazonPanel({adapter,getView:()=>viewFor('amazon'),redraw:()=>{if(!destroyed&&opened&&route==='app:amazon')renderAmazon();},notice});
     function renderAmazon(){
         const active=shadow.activeElement,field=active?.dataset.shopField;
         const selection=field&&active.type==='text'?[active.selectionStart,active.selectionEnd]:null;
@@ -206,7 +244,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderHome() {
-        const enabled = APPS.filter(app => settings.apps[app.id]);
+        const enabled = visibleApps.filter(app => settings.apps[app.id]);
         content.innerHTML = '<div class="pp-home"><div class="pp-home-clock"><div class="pp-date"></div><div class="pp-big-time"></div></div>' +
             '<div class="pp-app-grid">' + enabled.filter(app => !app.dock).map(appButton).join('') + '</div>' +
             '<div class="pp-dock">' + enabled.filter(app => app.dock).map(appButton).join('') + appButton({ id: 'settings', name: '设置', color: '#778298' }) + '</div></div>';
@@ -257,18 +295,18 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderApps() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-card">' + APPS.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p></div>';
+        content.innerHTML = '<div class="pp-page"><div class="pp-card">' + visibleApps.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p></div>';
     }
 
     function renderPrompts() {
-        content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
-            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信、Snapchat、WhatsApp、微信、X 和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
+        content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).filter(([id]) => !['snapchat','incoming','incomingMessages','storyContact'].includes(id)).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
+            '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信、WhatsApp、微信、X 和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
         content.querySelector('[data-prompt-editor]').value = settings.prompts[promptId];
     }
 
     function renderContactSettings() {
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
-            selectField('proactiveEnabled', '允许主动联系', [['true', '开启'], ['false', '关闭']], String(settings.proactiveEnabled)) + '</div></div>';
+            selectField('proactiveEnabled', '允许主动联系', [['true', '开启'], ['false', '关闭']], String(settings.proactiveEnabled)) + (settings.proactiveEnabled?selectField('proactiveFrequency','主动联系频率',[['low','低'],['medium','中'],['high','高']],settings.proactiveFrequency):'') + '</div></div>';
     }
 
     function renderRetry() {
@@ -276,7 +314,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function contactSearchHTML() {
-        return contactSearchOpen?'<form data-contact-search class="pp-card pp-form"><label class="pp-field"><span>联系人姓名</span><input data-contact-query value="'+esc(contactQuery)+'" maxlength="100" placeholder="姓名或部分名字" required></label><div class="pp-api-actions"><button type="submit" class="pp-text-button"'+(phoneView.busy?' disabled':'')+'>确认添加</button><button type="button" class="pp-text-button" data-contact-cancel>取消</button></div></form>':'';
+        return contactSearchOpen?'<form data-contact-search class="pp-card pp-form"><label class="pp-field"><span>联系人姓名</span><input data-contact-query value="'+esc(contactQuery)+'" maxlength="100" placeholder="姓名或部分名字" required></label><div class="pp-api-actions"><button type="submit" class="pp-text-button"'+(viewFor('contacts').busy?' disabled':'')+'>确认添加</button><button type="button" class="pp-text-button" data-contact-cancel>取消</button></div></form>':'';
     }
     function openContactSearch(){contactSearchOpen=true;route==='app:phone'?renderPhone():renderMessages();content.querySelector('[data-contact-query]')?.focus();}
     function renderPhone() {
@@ -284,7 +322,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const focused = input && shadow.activeElement === input;
         const selection = input ? [input.selectionStart, input.selectionEnd] : null;
         const scroll = content.scrollTop;
-        content.innerHTML = renderPhoneScreen(phoneView, phoneTab, selectedCallId, callDraft);
+        content.innerHTML = renderPhoneScreen(viewFor('phone'), phoneTab, selectedCallId, callDraft);
         if(phoneTab==='contacts')content.querySelector('.pp-phone-toolbar')?.insertAdjacentHTML('afterend',contactSearchHTML());
         content.scrollTop = scroll;
         const next = shadow.querySelector('[data-phone-draft]');
@@ -298,7 +336,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const scroll = (content.querySelector('.pp-sms-bubbles') || content).scrollTop;
         const count = Object.values(phoneView.messages || {}).filter(item => item.contactId === selectedSMSContactId).length;
         const key = selectedSMSContactId + ':' + count;
-        content.innerHTML = renderMessagesScreen(phoneView, selectedSMSContactId, pickingSMSContact, smsDrafts, smsEditing);
+        content.innerHTML = renderMessagesScreen(viewFor('messages'), selectedSMSContactId, pickingSMSContact, smsDrafts, smsEditing);
         if(pickingSMSContact===true)content.insertAdjacentHTML('afterbegin',contactSearchHTML());
         const scroller = content.querySelector('.pp-sms-bubbles') || content;
         scroller.scrollTop = key === smsRenderKey ? scroll : scroller.scrollHeight;
@@ -315,7 +353,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderEmptyApp(id) {
-        const app = APPS.find(item => item.id === id);
+        const app = visibleApps.find(item => item.id === id);
         const words = {
             phone: phoneTab === 'contacts' ? ['暂无联系人', '点击「新增联系人」添加。'] : ['暂无通话记录', '电话功能将在下一阶段接入。'],
             messages: ['暂无短信', '短信功能将在后续阶段接入。'],
@@ -334,7 +372,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         phone.dataset.home = String(route === 'home');
         phone.dataset.activeApp = route.startsWith('app:') ? route.slice(4) : '';
         shadow.querySelector('[data-action="back"]').hidden = route === 'home';
-        const app = APPS.find(item => route === 'app:' + item.id);
+        const app = visibleApps.find(item => route === 'app:' + item.id);
         title.textContent = route === 'home' ? '' : route === 'settings' ? '设置' : app ? app.name : SECTIONS.find(section => section.id === route)?.name || '';
         if (route === 'home') renderHome();
         else if (route === 'settings') renderSettings();
@@ -407,7 +445,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const clock = content.querySelector('.pp-big-time');
         if (clock) clock.textContent = time;
         const date = content.querySelector('.pp-date');
-        if (date) date.textContent = clockValue.date;
+        if (date) date.textContent = displayStoryDate(clockValue.date);
     }
 
     shadow.addEventListener('pointerdown', () => { pendingLauncherClick = false; }, { capture: true, signal: lifetime.signal });
@@ -420,6 +458,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
+        if(target.dataset.dailyAction==='edit'){editDailyArticle(target.dataset.dailyId);return;}
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
         if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
@@ -483,7 +522,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     bindComposerKeys(shadow, {
         signal:lifetime.signal,
         async queue(input){
-            if(phoneView.busy)return;
+            if(viewFor('contacts').busy)return;
             if(input.hasAttribute('data-sms-draft')){
                 const id=selectedSMSContactId,draft=input.value;
                 if(!draft.trim()||!adapter.phone)return;
@@ -554,6 +593,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             }
             if (['proactiveEnabled'].includes(key)) value = value === 'true';
             if (persist({ [key]: value })) {
+                if(key==='proactiveEnabled')renderContactSettings();
                 const output = shadow.querySelector('[data-output="' + key + '"]');
                 if (output) output.textContent = settings[key];
             }
@@ -676,6 +716,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const unsubscribeMemory = adapter.memory?.subscribe(({ scope }) => {
         if (scope !== lastScope) {
             const keepSettings = lastScope === undefined && route === 'settings';
+            shadow.querySelector('.pp-daily-editor')?.close();
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             Object.values(chatPanels).forEach(panel=>panel.reset());

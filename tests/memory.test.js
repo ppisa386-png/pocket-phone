@@ -218,3 +218,26 @@ test('ended event before host idle flag gets a deferred sync without unlocking a
  unsubscribe();
  }finally{f.memory.destroy();}
 });
+
+test('overlapping writes from separate app tickets cannot overwrite a newer value', async()=>{
+    const f=fixture();
+    try {
+        const older=await f.memory.begin(), newer=await f.memory.begin();
+        await f.memory.commit(newer,change('shared',{name:'newer'}));
+        await assert.rejects(f.memory.commit(older,change('shared',{name:'older'})),/其他操作/);
+        assert.equal((await f.memory.read()).state.contacts.shared.name,'newer');
+    } finally {f.memory.destroy();}
+});
+
+test('two apps cannot reserve the same wallet funds from the same balance',async()=>{
+    const f=fixture();
+    try {
+        await f.put('wallet',{id:'wallet',currency:'USD',openingMinor:8000},'assets');
+        const view=await f.memory.read();
+        const transfer={type:'transfer',direction:'outgoing',status:'pending',currency:'USD',amountMinor:6000};
+        await f.memory.commit(await f.memory.begin(view),change('one',{...transfer,id:'one'},'wechat'));
+        const stale=await f.memory.begin(view);
+        await assert.rejects(f.memory.commit(stale,change('two',{...transfer,id:'two'},'snapchat')),/其他操作/);
+        assert.equal((await f.memory.read()).state.snapchat.two,undefined);
+    } finally {f.memory.destroy();}
+});

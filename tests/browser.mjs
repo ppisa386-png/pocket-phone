@@ -91,7 +91,7 @@ try {
         await p.locator('.pp-launcher').tap();
         check(await p.locator('.pp-big-time').innerText()==='14:25','home clock reads final fenced SDC without calendar');
         check(await p.locator('.pp-status-time').innerText()==='14:25','status clock agrees with home clock');
-        check(await p.locator('.pp-date').innerText()==='2026-03-02','home date uses SDC story date');
+        check(await p.locator('.pp-date').innerText()==='2026-03-02 星期一','home date includes the story weekday');
         await p.getByRole('button',{name:'收起手机',exact:true}).tap();
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='<!-- SDC-start | date=2026-03-03 | weekday=周二 | time=00:05 -->';await c.saveMetadata();});
         await p.locator('.pp-launcher').tap();check(await p.locator('.pp-big-time').innerText()==='00:05','start-only SDC updates after reopening');

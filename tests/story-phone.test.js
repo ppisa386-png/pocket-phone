@@ -29,7 +29,7 @@ test('marker-only, non-user communications, absent evidence and user-authored an
  f.context.chat.push(annotation({...row,recipient:'Bea'},'Alex texted Bea: Hello'),{mes:'A different scene.<!--durian-contact:'+JSON.stringify({...row,evidence:'Alex texted Sam: Hello'})+'-->',is_user:false},{...annotation(row,'Alex texted Sam: Hello'),is_user:true},{mes:'<!--durian-contact:'+JSON.stringify({...row,evidence:'Alex texted Sam: Hello'})+'-->',is_user:false});await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,0);}finally{f.close();}
 });
 test('normal generation asks the main model to decide; no independent proactive request or forced followup',async()=>{
- const f=setup();try{f.context.chat.push({mes:'A second reply.',is_user:false});await f.bridge.prepare();assert.match(f.prompts[STORY_PHONE_KEY].value,/每三条角色正文一次/);assert.match(f.prompts[STORY_PHONE_KEY].value,/追求、听闻消息/);assert.equal(f.prompts[STORY_PHONE_KEY].filter(),true);await f.phone.checkIncoming();assert.equal(f.requests(),0);await f.bridge.prepare('quiet');assert.equal(f.prompts[STORY_PHONE_KEY].value,'');f.settings.proactiveEnabled=false;await f.bridge.prepare();assert.match(f.prompts[STORY_PHONE_KEY].value,/主动联系已关闭/);}finally{f.close();}
+ const f=setup();try{f.context.chat.push(...Array.from({length:3},()=>({mes:'A reply.',is_user:false})));await f.bridge.prepare();assert.match(f.prompts[STORY_PHONE_KEY].value,/每五条有效角色正文一次/);assert.match(f.prompts[STORY_PHONE_KEY].value,/无需证明取得号码/);assert.equal(f.prompts[STORY_PHONE_KEY].filter(),true);await f.phone.checkIncoming();assert.equal(f.requests(),0);await f.bridge.prepare('quiet');assert.equal(f.prompts[STORY_PHONE_KEY].value,'');f.settings.proactiveEnabled=false;await f.bridge.prepare();assert.match(f.prompts[STORY_PHONE_KEY].value,/主动联系已关闭/);}finally{f.close();}
 });
 
 test('blocked narrative contact is not revived after unblocking; incomplete streaming never writes',async()=>{
@@ -185,8 +185,10 @@ test('quiet contact opportunities do not manufacture messages, calls, requests o
  for(let n=0;n<9;n++){
   f.context.chat.push({mes:'日期：2026-10-26 10:00\n继续当前场景，没有发生通信。',is_user:false});
   await f.memory.read();await f.bridge.prepare();const prompt=f.prompts[STORY_PHONE_KEY].value;
-  assert.match(prompt,/连续多个考虑时机都无人联系也正常/);assert.match(prompt,/联系人多少不决定消息数量/);
-  assert.match(prompt,/正常对话/);assert.match(prompt,/不要为绕过少打扰原则临时制造危机/);
+  const opportunity=(n+3)%5===0;
+  assert.equal(prompt.includes('本轮是每五条'),opportunity);
+  if(opportunity)assert.match(prompt,/可无人联系，也可多人/);
+
  }
  assert.equal(Object.keys(f.phone.snapshot().messages).length,0);assert.equal(Object.keys(f.phone.snapshot().calls).length,0);assert.equal(f.requests(),0);
  }finally{f.close();}

@@ -86,3 +86,10 @@ export function storyTime(chat) {
     return {date:dayDate(day), time:hour==null?'':String(Math.floor(hour)).padStart(2,'0')+':'+String(Math.round((hour%1)*60)).padStart(2,'0'), precision:'scene'};
 }
 export const displayStoryTime = item => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(item?.storyTime?.time||'') ? item.storyTime.time : '—';
+
+export function displayStoryDate(date) {
+    const day = dateDay(date);
+    if (day === null) return '';
+    const weekday = new Date(day * 86400000).getUTCDay();
+    return date + ' 星期' + '日一二三四五六'[weekday];
+}

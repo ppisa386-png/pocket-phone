@@ -1,8 +1,8 @@
 import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.8';
 import { publicationScenePrompt } from './social-context.js?v=1.1.8';
 import { parseModelObject } from './model-json.js?v=1.1.8';
-import { requireCash, moneyMinor } from './assets-core.js?v=1.1.8';
-import { readStoryClock } from './story-clock.js?v=1.1.8';
+import { requireCash, moneyMinor } from './assets-core.js?v=1.1.12';
+import { readStoryClock } from './story-clock.js?v=1.1.12';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
@@ -48,7 +48,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
     const threadFor=(state,id)=>snapItems(state,'message').filter(m=>m.accountId===id&&m.status!=='queued').sort((a,b)=>a.createdAt-b.createdAt);
     const run=work=>phone.appTask(async(view,current,request)=>{
         if(!current())throw new Error(appName+' 已关闭或聊天已变化。');
-        const ticket=await memory.begin();
+        const ticket=await memory.begin(view);
         const commit=async changes=>{if(!current())throw new Error('聊天已变化，本次操作已取消。');if(changes.length)await memory.commit(ticket,changes);};
         return work(view.state,current,request,commit,view.revision);
     },app);
@@ -130,7 +130,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             await commit(accounts.map(a=>setSnap({...a,friend:data.get(a.id)})));
             return {friends:accounts.filter(a=>data.get(a.id)==='friends').length,pending:accounts.filter(a=>data.get(a.id)==='pending').length,declined:accounts.filter(a=>data.get(a.id)==='declined').length};
         });},
-        accept(id,accept){return run(async(state,_c,_r,commit)=>{const a=accountBy(state,id);if(a.friend!=='incoming')throw new Error('邀请已处理。');await commit([setSnap({...a,friend:accept?'friends':'declined',identityKnown:accept?knownAtContact(state,a):a.identityKnown})]);});},
+        accept(id,accept){return run(async(state,_c,_r,commit)=>{const a=accountBy(state,id);if(a.blocked||a.friend!=='incoming')throw new Error('邀请已处理。');await commit([setSnap({...a,friend:accept?'friends':'declined',...(a.inboundRequest?{inboundRequest:accept?'accepted':'declined'}:{}),identityKnown:accept?knownAtContact(state,a):a.identityKnown})]);});},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=accountBy(state,id);const changes=[setSnap({...a,blocked:value})];for(const call of snapItems(state,'call').filter(c=>c.accountId===id&&c.status==='connected'))changes.push(setSnap({...call,status:'ended'}));await commit(changes);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=friendBy(state,id);await commit([setSnap({...a,identityKnown:true}),setSnap(newRecord('message',{accountId:id,role:'user',kind:'text',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
         queueMessage(id,kind,value){return run(async(state,_c,_r,commit)=>{
@@ -143,7 +143,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             if(!queued.length)throw new Error('请先填写消息。');
             const batchId=crypto.randomUUID(),batch=queued.map(m=>({...m,status:'pending',batchId})),last=batch.at(-1);
             await commit(batch.map(setSnap));
-            const fresh=await memory.read(),ticket=await memory.begin();
+            const fresh=await memory.read(),ticket=await memory.begin(fresh);
             try{await answerMessage(fresh.state,a,last,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(ticket,changes);});}
             catch(error){if(current())await memory.commit(ticket,batch.map(m=>setSnap({...m,status:'failed'})));throw error;}
         });},
@@ -161,7 +161,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             const a=friendBy(state,id);if(!mediaKinds.includes(kind))throw new Error('消息类型不可用。');
             const message=newRecord('message',{accountId:id,role:'user',kind,text:required(value,'消息内容'),status:'pending',read:true});
             await commit([setSnap(message)]);
-            const fresh=await memory.read();const nextTicket=await memory.begin();
+            const fresh=await memory.read();const nextTicket=await memory.begin(fresh);
             try{await answerMessage(fresh.state,a,message,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(nextTicket,changes);});}
             catch(error){if(current())await memory.commit(nextTicket,[setSnap({...message,status:'failed'})]);throw error;}
         });},

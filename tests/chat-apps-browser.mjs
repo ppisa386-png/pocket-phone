@@ -19,6 +19,22 @@ try{
  for(const width of [390,320]){
   const context=await browser.newContext({viewport:{width,height:844},isMobile:true,hasTouch:true});const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.route('**/*',route=>{if(route.request().url().startsWith(origin))return route.continue();external.push(route.request().url());return route.abort();});
   await p.goto(origin);await p.locator('.pp-launcher').tap();
+  assert.equal(await p.locator('[data-app="snapchat"]').count(),0);
+  await p.locator('[data-app="settings"]').tap();
+  await p.locator('[data-section="contact"]').tap();
+  await p.locator('[data-setting="proactiveFrequency"]').selectOption('high');
+  await p.locator('[data-setting="proactiveEnabled"]').selectOption('false');
+  assert.equal(await p.locator('[data-setting="proactiveFrequency"]').count(),0);
+  await p.locator('[data-setting="proactiveEnabled"]').selectOption('true');
+  assert.equal(await p.locator('[data-setting="proactiveFrequency"]').inputValue(),'high');
+  assert.equal(await p.evaluate(()=>SillyTavern.getContext().extensionSettings.personal_pocket_phone.proactiveFrequency),'high');
+  await p.locator('[data-action="back"]').tap();
+  await p.locator('[data-section="apps"]').tap();
+  assert.equal(await p.getByText('Snapchat',{exact:true}).count(),0);
+  await p.locator('[data-action="back"]').tap();
+  await p.locator('[data-section="prompts"]').tap();
+  assert.equal(await p.locator('[data-prompt-selector] option[value="snapchat"]').count(),0);
+  await p.locator('[data-action="home"]').tap();
   for(const app of ['whatsapp','wechat']){
    await p.locator('[data-app="'+app+'"]').tap();assert.equal(await p.locator('.pp-'+app).count(),1);
    const before=await p.evaluate(()=>window.modelCalls);
@@ -48,6 +64,20 @@ try{
   }
   await p.reload();await p.locator('.pp-launcher').tap();for(const app of ['whatsapp','wechat']){await p.locator('[data-app="'+app+'"]').tap();await p.locator('.pp-chat-row').filter({hasText:'陈默'}).tap();await p.getByText('周六两点，店门口见。',{exact:true}).waitFor();await p.locator('[data-action="home"]').tap();}
   await p.evaluate(async()=>{const ctx=window.SillyTavern.getContext();ctx.chat[0].mes='另一条时间线。';await ctx.eventSource.emit('MESSAGE_EDITED');});await p.locator('[data-app="whatsapp"]').tap();await p.getByText('与朋友开始聊天',{exact:true}).waitFor();
+  await p.locator('[data-action="home"]').tap();
+  await p.evaluate(async()=>{
+   const c=window.SillyTavern.getContext();
+   const rows=[['whatsapp','金梅'],['wechat','赵凡'],['x_dm','林洋'],['x_mention','刘星']];
+   const story=rows.map(([channel,sender])=>{const evidence=sender+'主动联系了小林。';return evidence+'<!--durian-outreach:'+JSON.stringify({channel,sender,recipient:'user',evidence,text:channel==='x_mention'?'大家好 @小林':'周末见。',media:'image'})+'-->';}).join('\n');
+   c.chat=[...Array.from({length:4},()=>({mes:'普通的一天。'})),{mes:story}];await c.eventSource.emit('MESSAGE_EDITED');
+  });
+  await p.locator('[data-app="whatsapp"]').tap();await p.locator('.pp-chat-row').filter({hasText:'金梅'}).tap();
+  await p.getByRole('button',{name:'接受联系人'}).tap();await p.locator('[data-chat-field="message"]').waitFor();
+  await p.locator('[data-action="home"]').tap();await p.locator('[data-app="x"]').tap();
+  await p.locator('[data-x-action="tab"][data-x-id="messages"]').tap();
+  await p.getByRole('button',{name:'公开提及 · 刘星'}).waitFor();
+  await p.locator('[data-x-action="thread"]').first().tap();await p.getByText('[请求中的媒体已隐藏]',{exact:true}).waitFor();
+  await p.getByRole('button',{name:'接受私信'}).tap();await p.getByText('周末见。',{exact:true}).waitFor();
   await context.close();
  }
  const preview=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});preview.on('pageerror',e=>errors.push(e.message));await preview.goto(origin+'/preview.html');await preview.locator('.pp-phone').waitFor({state:'visible'});for(const app of ['whatsapp','wechat']){await preview.locator('[data-app="'+app+'"]').tap();assert.equal(await preview.locator('.pp-'+app).count(),1);await preview.locator('[data-action="home"]').tap();}await preview.close();

@@ -48,3 +48,25 @@ for(const mode of ['narrative','switch','edit','disable','destroy']) {
         } finally {f.destroy();}
     });
 }
+
+test('follow-host mode can finish another app while the first app is waiting',async()=>{
+    const f=fixture();
+    let release;
+    const held=new Promise(resolve=>release=resolve);
+    let signal;
+    const started=new Promise(resolve=>signal=resolve);
+    let calls=0;
+    f.context.generateQuietPrompt=async()=>{
+        if(++calls===1){signal();await held;}
+        return '{"result":"saved"}';
+    };
+    try {
+        const first=f.run('assets');
+        await started;
+        assert.equal((await f.run('amazon')).ok,true);
+        assert.equal(f.phone.snapshot().requestKind,'assets');
+        release();
+        assert.equal((await first).ok,true);
+        assert.deepEqual((await f.memory.read()).state.profiles.amazon,{result:'saved'});
+    } finally {release();f.destroy();}
+});

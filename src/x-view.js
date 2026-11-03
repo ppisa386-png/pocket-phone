@@ -1,7 +1,7 @@
 import { icon } from './icons.js?v=1.1.8';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.1.8';
-import { displayStoryTime } from './story-clock.js?v=1.1.8';
-import { xItems, xProfile, xCounts } from './x.js?v=1.1.8';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.1.12';
+import { displayStoryTime } from './story-clock.js?v=1.1.12';
+import { xItems, xProfile, xCounts } from './x.js?v=1.1.12';
 import { xAudience } from './x-audience.js?v=1.1.8';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
@@ -58,18 +58,20 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     }
     function inbox(state) {
         const accounts=xItems(state,'account').filter(a=>xItems(state,'message').some(m=>m.accountId===a.id));
-        return accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xEscape(last.text)+'</p>'+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
+        const mentions=xItems(state,'post').filter(p=>p.outreachMention&&!state.x[p.author]?.blocked);
+        const notices=mentions.map(p=>button('comments','公开提及 · '+(state.x[p.author]?.name||'用户'),p.id)).join('');
+        return notices+accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&last.kind&&last.kind!=='text'?'[请求中的媒体已隐藏]':last.text)+'</p>'+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
     }
     function threadHTML(state,a) {
         const messages=xItems(state,'message').filter(m=>m.accountId===a.id).sort((a,b)=>a.createdAt-b.createdAt);
-        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(m.text)+'</p>'+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):['failed','pending'].includes(m.status)?button('retry','重试',m.id):m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
-            (a.blocked?empty('已拉黑'):a.dmPolicy==='closed'?empty('此账号暂不接收私信'):form('message',field('message','消息','',true),'发送'));
+        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text)+'</p>'+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):['failed','pending'].includes(m.status)?button('retry','重试',m.id):m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
+            (a.blocked?empty('已拉黑'):a.inboundRequest==='pending'?button('accept-request','接受私信',a.id)+button('inbox','暂不处理')+button('decline-request','拒绝请求',a.id)+button('block','拉黑',a.id):a.inboundRequest==='declined'?empty('已拒绝'):a.dmPolicy==='closed'?empty('此账号暂不接收私信'):form('message',field('message','消息','',true),'发送'));
     }
     function html() {
         const state=getView();const p=profile();if(selected&&!state.x?.[selected]){selected=null;page='';}const a=state.x?.[selected];
         let body;
         if(page.startsWith('post:')&&!state.x?.[page.slice(5)]){page='';replyTarget=null;}
-        if(page==='profile')body=button('back','‹ 返回')+'<div class="pp-x-audience"><strong data-x-followers>'+xEscape(xAudience(state)?.followers?.toLocaleString('en-US')??'—')+'</strong><span> 粉丝</span> · <strong>'+xItems(state,'account').filter(a=>a.following&&!a.blocked).length+'</strong><span> 正在关注</span>'+button('reset-followers','还原初始粉丝')+'</div>'+form('profile',field('alias','名称',p.alias)+field('bio','简介',p.bio,true),'保存')+'<h3>帖子与转发</h3>'+postsHTML(state,xItems(state,'post').filter(p=>p.author==='user'||p.reposted).reverse());
+        if(page==='profile')body=button('back','‹ 返回')+'<div class="pp-x-audience"><strong data-x-followers>'+xEscape(xAudience(state)?.followers?.toLocaleString('en-US')??'—')+'</strong><span> 粉丝</span> · <strong>'+xItems(state,'account').filter(a=>a.following&&!a.blocked).length+'</strong><span> 正在关注</span>'+button('reset-followers','还原初始粉丝')+'</div>'+form('profile',field('alias','名称',p.alias)+field('bio','简介',p.bio,true)+'<label>陌生私信请求<select name="requestsOpen"><option value="true">允许</option><option value="false"'+(p.requestsOpen===false?' selected':'')+'>关闭</option></select></label>','保存')+'<h3>帖子与转发</h3>'+postsHTML(state,xItems(state,'post').filter(p=>p.author==='user'||p.reposted).reverse());
         else if(page==='account'&&a)body=button('back','‹ 返回')+accountHTML(a,true)+postsHTML(state,xItems(state,'post').filter(p=>p.author===a.id).reverse());
         else if(page==='thread'&&a)body=threadHTML(state,a);
         else if(page.startsWith('post:'))body=button('back','‹ 返回')+postsHTML(state,[state.x?.[page.slice(5)]].filter(p=>p?.type==='post'));
@@ -101,11 +103,12 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             if(reading||working||getView().busy||!adapter.x)return;
             const postId=page.startsWith('post:')?page.slice(5):null;
             const messageUnread=page==='thread'&&selected&&xItems(getView(),'message').some(m=>m.accountId===selected&&m.role==='assistant'&&!m.read);
-            const postUnread=postId&&xItems(getView(),'comment').some(c=>c.postId===postId&&c.author!=='user'&&!c.read);
+            const postUnread=postId&&((getView().x[postId]?.outreachMention&&!getView().x[postId].read)||xItems(getView(),'comment').some(c=>c.postId===postId&&c.author!=='user'&&!c.read));
             if(!messageUnread&&!postUnread)return;reading=true;
             try{if(messageUnread)await adapter.x.markRead(selected);else await adapter.x.markPostRead(postId);}finally{reading=false;}
         },
         async action(action,id) {
+            if(['accept-request','decline-request'].includes(action)){await perform('decideRequest',[id,action==='accept-request']);return;}
             if(action==='tab'){replyTarget=null;tab=id;page='';selected=null;status='';redraw();return;}
             if(action==='back'){back();return;}
             if(action==='profile'){page='profile';selected=null;redraw();return;}

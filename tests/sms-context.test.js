@@ -8,7 +8,7 @@ import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { buildContinuityPrompt } from '../src/continuity.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
-import { proactiveSources } from '../src/proactive-evidence.js';
+import { outreachPrompt } from '../src/outreach.js';
 import { normalizeSettings } from '../src/config.js';
 
 const stamp = (date,time='12:00') => ({date,time,precision:'exact'});
@@ -152,8 +152,8 @@ test('phone request, proactive sources, event evidence and narrative injection c
     try{
         await f.advance('2026-10-05 12:00');
         const state=(await f.memory.read()).state;
-        const sources=proactiveSources(f.context,f.settings,{id:'card:alex.png',name:'Alex',characterId:0},state);
-        assert.equal(sources.some(s=>s.id.startsWith('message:')),false);
+        const decision=outreachPrompt(f.settings,state,f.context.name1,true);
+        assert.doesNotMatch(decision,/TEXT_a|TEXT_b|TEXT_other/);
         const event={origin:'communication',channel:'sms',participant:{id:'card:alex.png'},active:true,evidence:'TEXT_a',reason:'TEXT_a',smsSourceIds:['a']};
         assert.equal(smsEventForAI(state,event,stamp('2026-10-05')),null);
         assert.equal(event.active,true,'not a completed matter');

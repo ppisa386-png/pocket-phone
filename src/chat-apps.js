@@ -1,5 +1,5 @@
-import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.1.8';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.8';
+import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.1.12';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.12';
 
 export const CHAT_APPS = {whatsapp:'WhatsApp',wechat:'微信'};
 export const chatItems = (state,app,type) => Object.values(state[app]||{}).filter(i=>i.type===type);
@@ -12,7 +12,7 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
     if(!label)throw new Error('未知聊天应用。');
     const engine=createSnapchat({app,memory,phone,getContext,getSettings});
     const acquire=(query,bulk)=>phone.appTask(async(view,current,request)=>{
-        const context=getContext(),chat=structuredClone(context.chat);
+        const context=getContext(),chat=bulk?context.chat:structuredClone(context.chat);
         const name=typeof query==='string'?query.trim().slice(0,100):'';
         if(!bulk&&!name)throw new Error('请输入要添加的姓名。');
         const source=()=>bulk?establishedSources(getContext()):contactSources(getContext().chat,getContext(),name);
@@ -24,20 +24,23 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
         const settings=getSettings();
         const prompt=bulk?establishedContactPrompt(settings.prompts.establishedContacts,context,sources,existing)
             :contactPrompt(settings.prompts.contacts,context,sources,existing);
-        const found=await request(settings.prompts.general+'\n'+settings.prompts[app]+'\n'+prompt+
+        const found=await request(settings.prompts.general+'\n'+(bulk?'':settings.prompts[app]+'\n')+prompt+
             '\n本次是'+label+'的好友添加入口，完全沿用上述通讯录的姓名、资料来源与资格规则。验证通过者直接成为本 App 好友，不另判好友邀请或是否拥有社媒账号，不新增电话通讯录记录。不编造账号名或号码。输出仍为上述 contacts 结构。',data=>{
                 const rejected=[];
                 const contacts=bulk?validateEstablishedContacts(data,chat,context,sources,existing,(n,reason)=>{if(rejected.length<10)rejected.push('第 '+n+' 项：'+reason);})
                     :validateContacts(data,chat,context,sources,existing);
                 if(data.contacts?.length&&!contacts.length)throw Object.assign(new Error('未能核对姓名或联系依据，本次没有添加好友。'),{diagnostic:rejected.join('\n')});
                 return contacts;
-            },valid,null,{retries:0,parseResponse:raw=>parseSnapObject(raw,label)});
+            },valid,null,{
+                retries:0,parseResponse:raw=>parseSnapObject(raw,label),establishedImport:bulk,
+                finalOutputContract:bulk?'当前任务是从已给编号设定片段提取开局好友。只返回一个有效JSON对象，根字段contacts必须是数组。候选填写name、source_name、aliases、relationship、established:true、incidental:false、evidence_refs及number。没有符合的人物也必须输出{"contacts":[]}，不要留空、续写正文或生成聊天回复。':undefined,
+            });
         if(!valid())throw new Error('聊天或设定已变化，本次添加已取消。');
         let added=0,updated=0;
         const changes=found.map(contact=>{
             const old=view.state[app]?.[contact.id];
             const characterId=contact.id.startsWith('card:')?contact.id:null;
-            const value=old?{...old,name:contact.name,aliases:contact.aliases,
+            const value=old?{...old,friend:'friends',name:contact.name,aliases:contact.aliases,
                 ...(contact.number?{number:contact.number}:{}),characterId:old.characterId||characterId}
                 :{...contact,characterId,type:'account',handle:'',friend:'friends',blocked:false,
                     identityKnown:(view.state[app]?.profile?.alias||context.name1)===context.name1,createdAt:Date.now()};
@@ -48,5 +51,5 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
         return {added,updated};
     },app);
     const {discover,invite,inviteMany,accept,publish,refresh,like,comment,...conversation}=engine;
-    return {...conversation,addByName:query=>acquire(query,false),addEstablished:()=>acquire('',true)};
+    return {...conversation,accept,addByName:query=>acquire(query,false),addEstablished:()=>acquire('',true)};
 }

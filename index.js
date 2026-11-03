@@ -1,26 +1,25 @@
-import { createDaily } from './src/daily.js?v=1.1.8';
-import { createDailyBridge } from './src/daily-story.js?v=1.1.8';
-import { createAssets } from './src/assets.js?v=1.1.11';
-import { createAssetBridge } from './src/assets-story.js?v=1.1.10';
-import { createOpinionBridge } from './src/x-opinion.js?v=1.1.8';
-import { createAmazon } from './src/amazon.js?v=1.1.8';
-import { createDeliveryBridge } from './src/delivery.js?v=1.1.8';
+import { createDaily } from './src/daily.js?v=1.1.12';
+import { createDailyBridge } from './src/daily-story.js?v=1.1.12';
+import { createAssets } from './src/assets.js?v=1.1.12';
+import { createAssetBridge } from './src/assets-story.js?v=1.1.12';
+import { createOpinionBridge } from './src/x-opinion.js?v=1.1.12';
+import { createAmazon } from './src/amazon.js?v=1.1.12';
+import { createDeliveryBridge } from './src/delivery.js?v=1.1.12';
 import { createGenerationReader } from './src/host-state.js?v=1.1.8';
 import { createDiagnostics } from './src/diagnostics.js?v=1.1.8';
-import { createX } from './src/x.js?v=1.1.8';
-import { createChatApp } from './src/chat-apps.js?v=1.1.8';
-import { createSnapchat } from './src/snapchat.js?v=1.1.8';
+import { createX } from './src/x.js?v=1.1.12';
+import { createChatApp } from './src/chat-apps.js?v=1.1.12';
 import { readPreparedMemory } from './src/external-memory.js?v=1.1.8';
-import { createApiClient, createKeyStore } from './src/api.js?v=1.1.8';
+import { createApiClient, createKeyStore } from './src/api.js?v=1.1.12';
 import { captureHostRequest } from './src/api-context.js?v=1.1.8';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.1.11';
-import { mountPhone } from './src/ui.js?v=1.1.11';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.1.10';
-import { createPhoneService } from './src/phone.js?v=1.1.8';
-import { createContinuityBridge } from './src/continuity.js?v=1.1.8';
-import { normalizeSettings } from './src/config.js?v=1.1.11';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.1.12';
+import { mountPhone } from './src/ui.js?v=1.1.12';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.1.12';
+import { createPhoneService } from './src/phone.js?v=1.1.12';
+import { createContinuityBridge } from './src/continuity.js?v=1.1.12';
+import { normalizeSettings } from './src/config.js?v=1.1.12';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.1.8';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.1.12';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -60,7 +59,7 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=1.1.8', import.meta.url), { cache: 'no-cache' });
+        const response = await fetch(new URL('./style.css?v=1.1.12', import.meta.url), { cache: 'no-cache' });
         if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         let hostModule=null;
@@ -106,7 +105,6 @@ async function start() {
                 memoryStatus: settings => readPreparedMemory(globalThis.SillyTavern.getContext(), settings),
                 continuitySupported: continuityBridge?.supported ?? false,
                 phone: phoneService,
-                snapchat: enabled ? createSnapchat({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 ...Object.fromEntries(['whatsapp','wechat'].map(app=>[app,enabled ? createChatApp({app,memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null])),
                 x: enabled ? createX({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 userName:()=>globalThis.SillyTavern.getContext().name1,

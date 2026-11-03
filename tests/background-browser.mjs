@@ -61,8 +61,10 @@ try {
   const release=async()=>{if(mode==='host')await p.evaluate(()=>{const r=window.release;window.release=null;r();});else releaseNetwork();};
   const count=async()=>mode==='host'?await p.evaluate(()=>window.calls):networkCalls;
   await p.goto(origin+'/?mode='+mode);await p.waitForFunction(()=>window.ready);
-  await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();
+  await p.locator('.pp-launcher').tap();assert.equal(await p.locator('.pp-date').innerText(),'2026-10-27 星期二');await p.locator('[data-app="daily"]').tap();
   await p.locator('[data-daily-action="update"]').tap();await waitRequest();
+  await p.locator('[data-action="back"]').tap();await p.locator('[data-app="assets"]').tap();
+  assert.equal(await p.locator('[data-asset-action="update"]').isEnabled(),true);
   await p.locator('[data-action="close"]').tap();assert.equal(await p.locator('.pp-phone').isVisible(),false);
   assert.equal(await p.locator('.pp-background-task').count(),0);assert.equal(await p.evaluate(()=>window.state().busy),true,'generation continues without a notice');
   // Reopening/reclosing the same running request must not repeat the notice.

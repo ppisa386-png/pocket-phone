@@ -250,3 +250,17 @@ test('old built-in daily prompts migrate, customized and blank prompts remain in
  const migrated=normalizeSettings({prompts:PREVIOUS_DAILY_PROMPTS});assert.equal(migrated.prompts.daily,DAILY_EDITORIAL_PROMPT);assert.equal(migrated.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
  const custom=normalizeSettings({prompts:{daily:'我的自定义选题',dailyStory:''}});assert.equal(custom.prompts.daily,'我的自定义选题');assert.equal(custom.prompts.dailyStory,'');
 });
+
+test('manual editing preserves article identity and selection, updates injection, and makes no model request',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());const article=first(f);ok(await f.daily.toggle(article.id));
+  const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
+  assert.equal((panel.html().match(/data-daily-action="edit"/g)||[]).length,dailyArticles(f.state()).length);
+  const fields={headline:'修改后的标题',summary:'修改后的导语',body:'修改后的正文 <script>。'};
+  ok(await f.daily.edit(article.id,fields));await f.memory.read();
+  assert.deepEqual(first(f),{...article,...fields,selected:true,selectedIndex:f.c.chat.length-1});
+  assert.match(buildDailyPrompt(f.state(),f.c.chat),/修改后的标题/);
+  assert.equal((await f.daily.edit(article.id,{...fields,body:' '})).ok,false);
+  assert.equal(first(f).body,fields.body);assert.equal(f.calls(),1);
+ }finally{f.close();}
+});

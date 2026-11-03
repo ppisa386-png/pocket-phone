@@ -90,18 +90,12 @@ test('narrative communication annotation preserves bilingual text and existing r
     }finally{f.close();}
 });
 
-test('legacy proactive SMS also receives the dialogue rules and preserves both languages',async()=>{
-    const f=fixture('independent',false);
+test('narrative incoming SMS keeps the original dialogue and translation',async()=>{
+    const f=fixture('independent');
     try{
-        const evidence='Bea has Sam’s number and agrees to give it to Alex.';
-        f.context.chat[0].mes=evidence;
-        const text='Bis morgen.\n（明天见。）';
-        f.setPreset('叙述中文，角色对白母语加中文译文。');
-        f.reply({status:'message',can_obtain_number:true,route:'mutual_contact',channel:'Bea',evidence,
-            reason:'Confirm the meeting.',reason_kind:'commitment',reason_evidence:evidence,requires_live_conversation:false,text});
-        assert.equal((await f.phone.checkIncoming()).ok,true);
-        assert.equal(f.requests.length,1);
-        assert.ok(f.requests[0].messages.at(-1).content.endsWith(COMMUNICATION_LANGUAGE_RULE));
-        assert.equal(Object.values(f.phone.snapshot().messages)[0].text,text);
+        const text='Bis morgen.\n（明天见。）',evidence='Alex给Sam发来了消息。';
+        f.context.chat.push({mes:evidence+'<!--durian-contact:'+JSON.stringify({sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text,evidence})+'-->'});
+        await f.memory.read();assert.equal(Object.values(f.phone.snapshot().messages)[0].text,text);
+        assert.equal(f.requests.length,0);
     }finally{f.close();}
 });

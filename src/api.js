@@ -105,6 +105,7 @@ export function extractApiText(data) {
 export function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
     const active = new Set();
     let cancelEpoch = 0;
+    let preparation = null;
     async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}) {
         if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
         const endpoint = normalizeApiUrl(config.baseUrl);
@@ -173,7 +174,17 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             const fingerprint = JSON.stringify(config), epoch = cancelEpoch;
             const current = () => epoch === cancelEpoch && isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
-            const prepared = await prepareRequest(getContext(), prompt, contact, current);
+            // The host uses shared prompt hooks. Release this queue before the network call.
+            const prepare = async () => {
+                if (!current()) throw failure('本次操作已取消。');
+                return prepareRequest(getContext(), prompt, contact, current);
+            };
+            const handoff = preparation ? preparation.then(prepare) : prepare();
+            const tail = handoff.catch(() => {});
+            preparation = tail;
+            let prepared;
+            try { prepared = await handoff; }
+            finally { if (preparation === tail) preparation = null; }
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
             const payload = independentPayload(prepared, config);
             // Only the caller's task contract is appended, after preset hooks.

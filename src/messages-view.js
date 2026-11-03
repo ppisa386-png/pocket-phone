@@ -1,4 +1,4 @@
-import { displayStoryTime } from './story-clock.js?v=1.1.8';
+import { displayStoryTime } from './story-clock.js?v=1.1.12';
 import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.1.8';
 import { isBlocked } from './contact-events.js?v=1.1.8';
 import { icon } from './icons.js?v=1.1.8';

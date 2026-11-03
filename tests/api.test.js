@@ -420,3 +420,57 @@ test('independent assessment explains actual wages after host presets and repair
   const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(cashBalance(f.phone.snapshot()),12800);
  }finally{f.close();}
 });
+
+test('assets waits on its own transport while another app finishes or receives a provider error',async()=>{
+    for (const rejectSecond of [false,true]) {
+        const f=phoneFixture();
+        let entered,release;
+        const started=new Promise(resolve=>entered=resolve);
+        const hold=new Promise(resolve=>release=resolve);
+        try {
+            f.context.chat=[{mes:'日期：2024-09-02\nSam 常住美国。'}];
+            f.reply(async options=>{
+                const messages=JSON.parse(options.body).messages;
+                if(messages.at(-1).content.includes('首次建账')){
+                    entered();await hold;
+                    return JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:80,holdings:[],jobs:[]}});
+                }
+                if(rejectSecond)return {ok:false,status:429,json:async()=>({error:{message:'rate limit'}})};
+                return '{"posts":[],"replies":[]}';
+            });
+            const args={memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings};
+            const assets=createAssets(args),pending=assets.update();
+            await started;
+            assert.equal((await assets.update()).skipped,true);
+            const other=await createX(args).refresh(false);
+            assert.equal(other.ok,!rejectSecond,other.error);
+            assert.equal(!!f.phone.snapshot().requests.assets,true);
+            assert.equal(f.phone.snapshot().requests.x,undefined);
+            if(rejectSecond)assert.ok(f.phone.snapshot().failures.x);
+            release();assert.equal((await pending).ok,true);assert.equal(cashBalance(f.phone.snapshot()),8000);
+            assert.deepEqual(f.phone.snapshot().requests,{});
+        } finally {release();f.close();}
+    }
+});
+
+test('WhatsApp bulk import sends roster references and a contacts contract without the extra social generation context',async()=>{
+    const {createChatApp}=await import('../src/chat-apps.js');
+    const f=phoneFixture();
+    try {
+        f.context.powerUserSettings.persona_description='Alex is Sam’s old friend.\ndata:image/png;base64,'+'A'.repeat(5900000);
+        const whatsapp=createChatApp({app:'whatsapp',memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+        let calls=0;
+        f.reply(options=>{
+            calls++;
+            const messages=JSON.parse(options.body).messages;
+            assert.match(messages.at(-1).content,/contacts必须是数组/);
+            const task=messages.find(m=>typeof m.content==='string'&&m.content.includes('编号设定片段'));
+            assert.match(task.content,/Alex is Sam’s old friend/);
+            assert.ok(task.content.length<100000);
+            assert.doesNotMatch(task.content,/已保存剧情记忆补充/);
+            return JSON.stringify({contacts:[{name:'Alex',source_name:'Alex',relationship:'old friend',established:true,incidental:false,evidence_refs:['S1.P1'],number:null}]});
+        });
+        const result=await whatsapp.addEstablished();
+        assert.equal(result.ok,true,result.error);assert.equal(result.value.added,1);assert.equal(calls,1);
+    } finally {f.close();}
+});

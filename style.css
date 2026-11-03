@@ -727,3 +727,11 @@ h2, p { margin: 0; }
 .pp-x-trend h4{margin:4px 0;font-size:16px;font-weight:750}
 .pp-x-trend>small,.pp-x-trends>small{color:var(--pp-muted);font-size:12px}
 .pp-x-trend .pp-snap-copy{margin:5px 0 8px}
+
+.pp-daily-editor{pointer-events:auto;box-sizing:border-box;width:min(360px,92vw);max-height:85dvh;overflow:auto;border:1px solid #b4a487;border-radius:12px;padding:18px;background:#fcf8ee;color:#342f27}
+.pp-daily-editor::backdrop{background:#17140e66}
+.pp-daily-editor h3{margin:0 0 12px}
+.pp-daily-editor label{display:grid;gap:4px;margin:10px 0;font-size:14px}
+.pp-daily-editor input,.pp-daily-editor textarea{box-sizing:border-box;width:100%;padding:8px;font:inherit;color:inherit;background:#fffdf8;border:1px solid #bdb1a1;border-radius:5px}
+.pp-daily-editor footer{display:flex;justify-content:flex-end;gap:8px}
+.pp-daily-editor button{padding:6px 16px;cursor:pointer}

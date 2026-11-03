@@ -1,5 +1,9 @@
 ## 1.1.8 待处理收支智能估算
 
+## 2026-11-03 跨 App 主动联系（本地）
+- Node 回归重点见 tests/outreach.test.js 和 tests/story-phone.test.js。覆盖五个有效正文、排除后台/用户消息、三档允许零人、同楼六渠道、同渠道25位、多人重复载入/回退/重生成、私信权限及完整姓名、实际 App 接受/拒绝与正常发消息。
+- tests/chat-apps-browser.mjs 在 390px、320px 模拟手机操作中验证频率切换和设置保存，WhatsApp 接受后显示普通对话输入框，X 公开提及通知、请求媒体遮挡及接受后显示。使用受控剧情和模型返回，不测试真实上游模型的行为概率。
+
 ## v1.1.11 首次地区推断（2026-11-02）
 - 财务及API针对测试101/101通过：`node --test tests/assets.test.js tests/api.test.js`，日志`../qa-results/residence111.log`。覆盖中日美环境推断、没有原文地名、最近十条AI正文而非user回复、旧楼地名不参与直接确认、空资料及错误币种拒绝；原财务与迁居回归通过。
 - `npm run build:preview`通过，日志`../qa-results/residence111-build.log`；diff检查通过。未改页面流程，本轮无浏览器复测，未调用真实用户模型。
