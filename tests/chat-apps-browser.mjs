@@ -39,8 +39,8 @@ try{
    await p.locator('[data-app="'+app+'"]').tap();assert.equal(await p.locator('.pp-'+app).count(),1);
    const before=await p.evaluate(()=>window.modelCalls);
    await p.locator('[data-chat-action="add"]').first().tap();await p.locator('[data-chat-field="name"]').fill('陈默');
-   await p.evaluate(()=>window.response={contacts:[{name:'陈默',source:'chat',user_has_number:true,can_use_phone:true,number:null,evidence:'陈默把电话号码给了小林。'}]});
-   await p.getByRole('button',{name:'搜索并添加',exact:true}).tap();await p.getByText('已添加 1 位好友。',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+1);
+   await p.evaluate(()=>window.response={accepted:true,name:'陈默'});
+   await p.getByRole('button',{name:'发送好友申请',exact:true}).tap();await p.getByText('已添加 1 位好友。',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+1);
    await p.locator('[data-action="back"]').tap();
    await p.evaluate(()=>window.response={contacts:[{name:'许清',source_name:'许清',relationship:'colleague',established:true,incidental:false,evidence_refs:['S1.P1'],number:null}]});
    await p.getByRole('button',{name:'一键添加好友',exact:true}).tap();await p.getByText('许清',{exact:true}).waitFor();assert.equal(await p.locator('.pp-chat-row').count(),2);

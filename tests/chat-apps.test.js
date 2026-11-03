@@ -21,14 +21,14 @@ function fixture(app,mode='host') {
     const make=id=>createChatApp({app:id,memory,phone,getContext:()=>ctx,getSettings:()=>settings});
     return {app,api:make(app),make,ctx,bus,settings,memory,phone,state:()=>phone.snapshot(),reply:r=>response=r,count:()=>count,prompt:()=>prompt,close(){phone.destroy();memory.destroy();}};
 }
-function contact(overrides={}){return {name:'Alex',source:'chat',user_has_number:true,can_use_phone:true,number:null,evidence:'Alex gives Sam his number.',...overrides};}
-async function add(f){f.reply({contacts:[contact()]});ok(await f.api.addByName('Alex'));return chatItems(f.state(),f.app,'account')[0].id;}
+async function add(f){f.reply({accepted:true,name:'Alex'});ok(await f.api.addByName('Alex'));return chatItems(f.state(),f.app,'account')[0].id;}
 for(const app of ['whatsapp','wechat']) {
-    test(app+': name search follows contact evidence, adds directly, rejects unrelated or invented results and preserves blocks',async()=>{
-        const f=fixture(app);try{await f.api.open();assert.equal(f.count(),0);assert.equal((await f.api.addByName(' ')).ok,false);assert.equal(f.count(),0);
-            for(const item of [contact({name:'Bea'}),contact({user_has_number:false}),contact({evidence:'invented evidence'}),contact({can_use_phone:false}),contact({number:'+1 555 9999'})]){f.reply({contacts:[item]});assert.equal((await f.api.addByName('Alex')).ok,false);}
+    test(app+': recipient decision needs no number or exchange evidence, preserves blocks',async()=>{
+        const f=fixture(app);try{f.ctx.chat=[{mes:'A quiet morning.'}];await f.api.open();assert.equal((await f.api.addByName(' ')).ok,false);assert.equal(f.count(),0);
+            f.reply({accepted:false});const declined=await f.api.addByName('Alex');ok(declined);assert.equal(declined.value.declined,true);assert.equal(chatItems(f.state(),app,'account').length,0);
+            f.reply({accepted:true,name:'Bea'});assert.equal((await f.api.addByName('Alex')).ok,false);
             const before=f.count(),id=await add(f);assert.equal(f.count(),before+1);assert.equal(f.state()[app][id].friend,'friends');assert.equal(Object.keys(f.state().contacts).length,0);assert.equal(Object.keys(f.state().snapchat).length,0);
-            ok(await f.api.block(id,true));await add(f);assert.equal(chatItems(f.state(),app,'account').length,1);assert.equal(f.state()[app][id].blocked,true);assert.equal((await f.api.send(id,'text','No')).ok,false);
+            ok(await f.api.block(id,true));assert.equal((await f.api.addByName('Alex')).ok,false);assert.equal(chatItems(f.state(),app,'account').length,1);assert.equal(f.state()[app][id].blocked,true);assert.equal((await f.api.send(id,'text','No')).ok,false);
         }finally{f.close();}
     });
     test(app+': one click adds initial named positive and negative relationships with exact address-book reference validation',async()=>{
@@ -71,11 +71,11 @@ for(const app of ['whatsapp','wechat']) {
         const state={[app]:{a:{id:'a',type:'account',name:'<Alex>',friend:'friends'},m:{id:'m',type:'message',accountId:'a',role:'assistant',kind:'text',text:'<script>unsafe</script>',createdAt:1}}};
         const panel=createChatPanel({app,adapter:{},getView:()=>state,redraw(){},notice(){}});assert.match(panel.html(),/一键添加好友/);assert.match(panel.html(),/添加好友/);assert.doesNotMatch(panel.html(),/选择添加|接受邀请/);
         await panel.action('thread','a');assert.match(panel.html(),/&lt;script&gt;/);await panel.action('cash');assert.equal(panel.back(),true);assert.match(panel.html(),/data-chat-form="message"/);await panel.action('edit','m');assert.equal(panel.back(),true);assert.equal(panel.back(),true);assert.equal(panel.back(),false);
-        await panel.action('add');assert.match(panel.html(),/搜索并添加/);panel.reset();assert.doesNotMatch(panel.html(),/data-chat-form="add"/);
+        await panel.action('add');assert.match(panel.html(),/发送好友申请/);panel.reset();assert.doesNotMatch(panel.html(),/data-chat-form="add"/);
     });
 }
 test('same people in both apps keep independent recognition, messages, history budgets and transfer reservations',async()=>{
-    const f=fixture('whatsapp');try{const id=await add(f),wc=f.make('wechat');f.reply({contacts:[contact()]});ok(await wc.addByName('Alex'));const wid=chatItems(f.state(),'wechat','account')[0].id;
+    const f=fixture('whatsapp');try{const id=await add(f),wc=f.make('wechat');f.reply({accepted:true,name:'Alex'});ok(await wc.addByName('Alex'));const wid=chatItems(f.state(),'wechat','account')[0].id;
         ok(await f.api.block(id,true));assert.equal(f.state().wechat[wid].blocked,false);ok(await f.api.block(id,false));
         const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:10000,included:[],startDay:0}}]);
         const waTransfer=await f.api.transfer(id,'60','USD','WA');ok(waTransfer);assert.equal(reservedCash(f.state()),6000);assert.equal((await wc.transfer(wid,'50','USD','WC')).ok,false);
@@ -99,4 +99,22 @@ for(const app of ['wechat','whatsapp'])test(app+' uses the wallet currency for t
   ok(await f.api.send(account,'text','还我三百日元'));const back=chatItems(f.state(),app,'transfer').find(t=>t.direction==='incoming');
   ok(await f.api.settle(back.id));assert.equal(cashBalance(f.state()),2800);
  }finally{f.close();}
+});
+
+test('manual request uses latest twenty saved summaries even without name matches',async()=>{
+    const f=fixture('whatsapp','independent'),previous=globalThis.qqj_v3_public_bridge_v1;
+    try{
+        f.ctx.chat=Array.from({length:27},()=>({mes:'故事继续'}));
+        globalThis.qqj_v3_public_bridge_v1={getSnapshot:()=>({status:'ready',identity:{hostChatId:f.ctx.chatId},
+            memory:{status:'ready',floors:f.ctx.chat.map((_,messageIndex)=>({messageIndex,summary:'MEM_'+messageIndex+'!'}))}})};
+        await add(f);assert.match(f.prompt(),/MEM_7!/);assert.match(f.prompt(),/MEM_26!/);assert.doesNotMatch(f.prompt(),/MEM_6!|user_has_number|can_use_phone/);
+        assert.equal((f.prompt().match(/MEM_\d+!/g)||[]).length,20);
+    }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
+});
+test('saved old default friend prompts migrate on load, custom dialogue prompts survive',()=>{
+    for(const [app,intro] of [['whatsapp','生成 WhatsApp 内的文字聊天。'],['wechat','生成微信内的文字聊天。']]){
+        const old=intro+'好友按通讯录规则由用户按姓名或一键添加，不需要好友邀请审核。私聊、语音和视频遵守角色知情边界与预设语言，不替 user 发言。';
+        assert.match(normalizeSettings({prompts:{[app]:old}}).prompts[app],/决定是否通过/);
+        assert.equal(normalizeSettings({prompts:{[app]:'自定义聊天规则'}}).prompts[app],'自定义聊天规则');
+    }
 });

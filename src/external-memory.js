@@ -47,7 +47,7 @@ export function readXMemory(context, settings, query, bridge = globalThis.qqj_v3
             .map(f=>({messageIndex:f.messageIndex, assistantSeq:f.assistantSeq, summary:f.summary}))
             .sort((a,b)=>a.messageIndex-b.messageIndex);
         const score = f => {const text=normalize(f.summary);return names.reduce((n,name)=>n+(text.includes(name)?10:0),0)+Math.min(9,terms.filter(t=>text.includes(t)).length);};
-        const related = floors.map(f=>({floor:f,score:score(f)})).filter(r=>r.score>0)
+        const related = query?.latestOnly ? floors.slice(-20).reverse() : floors.map(f=>({floor:f,score:score(f)})).filter(r=>r.score>0)
             .sort((a,b)=>b.score-a.score || b.floor.messageIndex-a.floor.messageIndex).slice(0,20).map(r=>r.floor);
         // Whole summaries only: cutting sentences can lose a privacy/negation clause.
         const selected = [], seen = new Set();let length=2;

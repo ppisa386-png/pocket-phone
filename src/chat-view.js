@@ -1,5 +1,5 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.8';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.12';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.14';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
 import { icon } from './icons.js?v=1.1.8';
 
@@ -68,7 +68,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         const a=account(),p=profile(),thread=!!a&&!page;
         const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?'通讯录':tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'WhatsApp');
         let body='';
-        if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名'),'搜索并添加')+button('bulk','一键添加好友','','',disabled())+'</div>';
+        if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
         else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
         else if(a&&page==='cash')body='<div class="pp-chat-settings">'+form('cash',field('amount','转账金额（'+(walletCurrency(getView())||'先建账')+'）','','number')+field('memo','附言'),'确认转账')+'</div>';
         else if(a)body=threadHTML(a);
@@ -117,7 +117,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         },
         async submit(element){
             const data=Object.fromEntries(new FormData(element)),name=element.dataset.chatForm,token=epoch,id=accountId,prefix=key('');
-            if(name==='add'){const result=await perform('addByName',[data.name]);if(token===epoch&&result?.ok){status=result.value.added?'已添加 '+result.value.added+' 位好友。':result.value.updated?'好友资料已更新。':'没有新增好友，请核对姓名和联系方式。';redraw();}return;}
+            if(name==='add'){const result=await perform('addByName',[data.name]);if(token===epoch&&result?.ok){status=result.value.added?'已添加 '+result.value.added+' 位好友。':result.value.already?'对方已经是好友。':'对方未通过好友申请。';redraw();}return;}
             if(name==='profile'){await perform('saveProfile',[{...profile(),alias:data.alias}],'已保存个人设置');return;}
             if(name==='edit'){const result=await perform('editMessage',[editingId,data.editText]);if(token===epoch&&result?.ok)editingId=null;redraw();return;}
             if(name==='message'){
