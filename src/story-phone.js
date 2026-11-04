@@ -1,6 +1,6 @@
-import {businessPrompt,importBusiness} from './x-business.js?v=1.1.13';
+import {businessPrompt,importBusiness} from './x-business.js?v=1.1.16';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.1.12';
-import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.15';
+import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.16';
 import { recentContactActivity } from './proactive-pacing.js?v=1.1.13';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.1.8';
 import { smsReplyClassification } from './sms-context.js?v=1.1.13';

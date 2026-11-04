@@ -735,3 +735,6 @@ h2, p { margin: 0; }
 .pp-daily-editor input,.pp-daily-editor textarea{box-sizing:border-box;width:100%;padding:8px;font:inherit;color:inherit;background:#fffdf8;border:1px solid #bdb1a1;border-radius:5px}
 .pp-daily-editor footer{display:flex;justify-content:flex-end;gap:8px}
 .pp-daily-editor button{padding:6px 16px;cursor:pointer}
+
+.pp-x .pp-x-refresh:disabled { opacity: .38; cursor: default; }
+.pp-x .pp-x-refresh + .pp-x-refresh { margin-left: 0; }

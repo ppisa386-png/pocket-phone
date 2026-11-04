@@ -11,7 +11,14 @@ const saved=JSON.parse(localStorage.getItem('x-test')||'null');window.calls=0;wi
 const handlers={};const ctx={chatId:'x-audience',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{},saveSettingsDebounced(){},
 chat:[{mes:'2026-10-18 00:05',is_user:false}],chatMetadata:saved||{},saveMetadata:async()=>localStorage.setItem('x-test',JSON.stringify(ctx.chatMetadata)),
 event_types:{APP_READY:'APP_READY'},eventSource:{on(n,f){if(n==='APP_READY')queueMicrotask(f);else(handlers[n]||=[]).push(f);},removeListener(){}},
-setExtensionPrompt(){},generateQuietPrompt:async o=>{window.calls++;window.lastPrompt=o.quietPrompt;return typeof window.result==='string'?window.result:'<think>Plan</think><content>'+JSON.stringify(window.result)+'</content>';}};
+setExtensionPrompt(){},generateQuietPrompt:async o=>{window.calls++;window.lastPrompt=o.quietPrompt;
+if(window.publicData){
+ const r=window.publicData;
+ if(o.quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[{name:'Walker',handle:'walker',text:'Park report',publicBasis:{access:'background',summary:'Public park',involvesCharacters:false}}]});
+ if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[{title:'Public project discussion',summary:'Local news',scope:'Local',postCount:100,sourcePostIds:[r.id]}],evaluations:[{postId:r.id,eligible:true,reason:'public interest'}]});
+ if(o.quietPrompt.includes('专项粉丝结算'))return JSON.stringify({effects:[{sourceId:'post:'+r.id,mode:'long',gained:25,lost:5,basis:'post circulation'}]});
+}
+return typeof window.result==='string'?window.result:'<think>Plan</think><content>'+JSON.stringify(window.result)+'</content>';}};
 window.SillyTavern={getContext:()=>ctx};</script><script type="module" src="/index.js"></script></body></html>`;
 const server=createServer(async(req,res)=>{try{
  const pathname=new URL(req.url,'http://localhost').pathname;if(pathname==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(process.env.CJK_QA_FONT?fixture.replace('</head>','<style>@font-face{font-family:"Microsoft YaHei";src:url(/qa-font);unicode-range:U+2E80-9FFF,U+F900-FAFF}</style></head>'):fixture);return;}
@@ -31,32 +38,27 @@ try{
  await p.locator('[data-x-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存',exact:true}).tap();
  await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.locator('[data-x-field="post"]').fill('My public project');await p.locator('[data-x-form="post"] button').tap();
  await p.getByText('My public project',{exact:true}).waitFor();const postId=await p.locator('[data-x-post]').getAttribute('data-x-post');assert.equal(await p.evaluate(()=>window.calls),1);
- await p.evaluate(id=>{window.result={posts:[{name:'School',handle:'school',text:'A campus concert.（校园音乐会。）'}],accounts:[{name:'School',handle:'school',has_account:true,bio:'Campus news'},{name:'Hermit',handle:'hermit',has_account:false}],audience:{growth:[{sourceId:'post:'+id,hot:true,totalGain:20,basis:'The public project spread'}]},engagementUpdates:[{postId:id,metrics:{likes:100,reposts:20,replies:0}}]};},postId);
+ await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'School',handle:'school',text:'A campus concert.（校园音乐会。）'}],accounts:[{name:'School',handle:'school',has_account:true,bio:'Campus news'},{name:'Hermit',handle:'hermit',has_account:false}],audience:{growth:[{sourceId:'post:'+id,hot:true,totalGain:20,basis:'The public project spread'}]},engagementUpdates:[{postId:id,metrics:{likes:100,reposts:20,replies:0}}]};},postId);
  await p.locator('[data-x-action="refresh"]').tap();await p.getByText('A campus concert.（校园音乐会。）',{exact:true}).waitFor();assert.equal(await p.getByText('Campus news',{exact:true}).count(),0);assert.equal(await p.getByText('Hermit',{exact:true}).count(),0);
  assert.equal(await p.locator('.pp-x-account').count(),0);assert.equal(await p.locator('[data-x-action="follow"]').count(),0);
  await mkdir(resolve(root,'../qa-results'),{recursive:true});
  for(const width of [390,320]){await p.setViewportSize({width,height:844});assert.ok(await p.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await p.locator('.pp-x-post').filter({hasText:'校园音乐会'}).scrollIntoViewIfNeeded();await p.screenshot({path:resolve(root,'../qa-results/x-post-home-'+width+'.png')});}
- await p.locator('.pp-x-post').filter({hasText:'校园音乐会'}).locator('.pp-x-post-avatar').tap();await p.getByText('Campus news',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),2);
- assert.equal(await p.locator('[data-x-action="follow"]').count(),1);await p.locator('[data-x-action="follow"]').tap();assert.equal(await p.evaluate(()=>window.calls),2);
+ await p.locator('.pp-x-post').filter({hasText:'校园音乐会'}).locator('.pp-x-post-avatar').tap();await p.getByText('Campus news',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),5);
+ assert.equal(await p.locator('[data-x-action="follow"]').count(),1);await p.locator('[data-x-action="follow"]').tap();assert.equal(await p.evaluate(()=>window.calls),5);
  await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'70');
- await p.locator('[data-x-action="reset-followers"]').tap();await p.getByText('已还原初始粉丝',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');assert.equal(await p.evaluate(()=>window.calls),2);
- await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.locator('[data-x-action="refresh"]').tap();await p.getByRole('button',{name:'赞 100',exact:true}).waitFor();
- await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');
- await p.setViewportSize({width:320,height:740});assert.ok(await p.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
- await mkdir(resolve(root,'../qa-results'),{recursive:true});await p.screenshot({path:resolve(root,'../qa-results/x-followers-320.png')});
- await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');assert.equal(await p.evaluate(()=>window.calls),0);
- await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.evaluate(()=>{window.result='<content>{"posts":';});await p.locator('[data-x-action="refresh"]').tap();
- await p.getByText(/X 数据返回格式不正确.*不完整/).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);await p.getByText('My public project',{exact:true}).waitFor();
- // Trends share the real search page and link back to the original post.
- await p.evaluate(id=>{window.result={topics:[{title:'Public project discussion',summary:'Local residents discuss the new project.',scope:'Local community',postCount:1200,sourcePostIds:[id]}],evaluations:[{postId:id,eligible:true,reason:'Public impact supports wider discussion'}]};},postId);
- await p.locator('[data-x-action="tab"][data-x-id="search"]').tap();assert.equal(await p.evaluate(()=>window.calls),1);
- await p.getByRole('button',{name:'刷新趋势',exact:true}).tap();await p.locator('[data-x-trend="0"]').waitFor();assert.equal(await p.evaluate(()=>window.calls),2);
- for(const width of [390,320]){await p.setViewportSize({width,height:844});assert.ok(await p.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await p.screenshot({path:resolve(root,'../qa-results/x-trends-'+width+'.png')});}
- await p.getByRole('button',{name:'查看你的推文',exact:true}).tap();await p.getByText('My public project',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),2);
- await p.getByRole('button',{name:'‹ 返回',exact:true}).tap();await p.locator('[data-x-trend="0"]').waitFor();
- await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="search"]').tap();await p.locator('[data-x-trend="0"]').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
- await p.evaluate(()=>{window.result={topics:[],evaluations:[]};});await p.getByRole('button',{name:'刷新趋势',exact:true}).tap();await p.getByText(/趋势返回格式或推文关联不正确/).waitFor();await p.locator('[data-x-trend="0"]').waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
- await p.evaluate(id=>{window.result={topics:[],evaluations:[{postId:id,eligible:false,reason:'Discussion has faded'}]};},postId);await p.getByRole('button',{name:'刷新趋势',exact:true}).tap();await p.getByText('当前暂无趋势话题',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-trend]').count(),0);assert.equal(await p.evaluate(()=>window.calls),2);
- console.log('PASS X trends: mobile 390/320px, original post links/back, one request, persistence, failure preserves list, no forced inclusion');
- assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log('PASS X audience mobile: wrapped home response, related accounts, opt-in follow, initial/growth/reset, dedup, persistence, 320px, detailed failure, no external requests');
+ await p.locator('[data-x-action="reset-followers"]').tap();await p.getByText('已还原初始粉丝',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');assert.equal(await p.evaluate(()=>window.calls),5);
+ await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();assert.ok(await p.locator('[data-x-action="refresh"]').isDisabled());
+ await p.getByRole('button',{name:'编辑当前页面'}).tap();
+ const postEditor=p.locator('textarea').filter({visible:true});
+ await postEditor.first().fill('Edited project');await p.getByRole('button',{name:'保存修改'}).tap();await p.getByText('Edited project',{exact:true}).waitFor();
+ for(const [tab,content,edited] of [['square','Park report','Updated park'],['search','Public project discussion','Updated trend']]){
+  await p.locator('[data-x-action="tab"][data-x-id="'+tab+'"]').tap();
+  await p.getByText(content,{exact:true}).waitFor();await p.getByRole('button',{name:'编辑当前页面'}).tap();
+  await p.locator('[data-x-form="edit-page"] textarea').first().fill(edited);
+  await p.getByRole('button',{name:'保存修改'}).tap();await p.getByText(edited,{exact:true}).waitFor();
+ }
+ await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();
+ assert.ok(await p.locator('[data-x-action="refresh"]').isDisabled());await p.getByText('Edited project',{exact:true}).waitFor();
+ assert.equal(await p.evaluate(()=>window.calls),0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+ console.log('PASS mobile public refresh, counts, floor lock, edits and reload');
 }finally{await browser.close();server.close();}

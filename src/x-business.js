@@ -1,3 +1,4 @@
+import {brandImpact} from './x-influence.js?v=1.1.16';
 // Projects and counters live in the rollback journal. Only the private draw
 // survives removal of its source floor, so a replay of the same plan cannot reroll it.
 import {socialContact} from './outreach.js?v=1.1.12';
@@ -46,7 +47,7 @@ export function businessPrompt(state,settings,chat,user){
     for(const p of plans.filter(p=>p.risk==='tracking')){
         const age=counter.turn+1-p.startTurn,w=windowFor(p.startDay);
         if(age<=0||age%10||!w||day===null||day>w.last)continue;
-        parts.push('隐藏商业风险（不可对读者披露机制）：'+JSON.stringify(publicPlan(p))+'，成立日 '+dayDate(p.startDay)+'，已过 '+(day-p.startDay)+' 天。只能在 '+dayDate(w.first)+' 至 '+dayDate(w.last)+' 内实际发生；不到日期不可提前，跳过期限不补写。可等待。事件须符合既有合作，不改写user行为。若实际发生，按争议严重度、推广深度、粉丝规模及曝光判断影响，同等条件下越近期声誉受损和掉粉通常越大，较久通常较轻；不凭索赔扣款。正文写明实际后果，附<!--durian-business:{"kind":"incident","id":"对应企划ID","loss":实际净掉粉整数,"evidence":"本楼已发生的争议及公众反应逐字原句"}-->。当前粉丝 '+followers);
+        parts.push('隐藏商业风险（不可对读者披露机制）：'+JSON.stringify(publicPlan(p))+'，成立日 '+dayDate(p.startDay)+'，已过 '+(day-p.startDay)+' 天。只能在 '+dayDate(w.first)+' 至 '+dayDate(w.last)+' 内实际发生；不到日期不可提前，跳过期限不补写。可等待。事件须符合既有合作，不改写user行为。若实际发生，按争议严重度、推广深度、粉丝规模及曝光判断影响，同等条件下越近期声誉受损和掉粉通常越大，较久通常较轻；不凭索赔扣款。正文写明实际后果，附<!--durian-business:{"kind":"incident","id":"对应企划ID","loss":首日实际净掉粉整数,"longTail":有明确持续传播时才填true,"evidence":"本楼已发生的争议及公众反应逐字原句"}-->。当前粉丝 '+followers);
     }
     return parts.join('\n');
 }
@@ -102,7 +103,8 @@ export function importBusiness(raw,revisions,chat,settings,annotations){
                 const w=windowFor(p.startDay);
                 if(p.risk!=='tracking'||!w||clock.day===null||clock.day<w.first||clock.day>w.last||counter.turn-p.startTurn<10||!Number.isSafeInteger(row.loss)||row.loss<0)continue;
                 const a=state.x.audience,loss=Math.min(a.followers,row.loss);
-                add([write(p.id,{...p,risk:'triggered',incidentDate:dayDate(clock.day),loss}),{collection:'x',key:'audience',value:{...a,followers:a.followers-loss}}]);
+                const impact=brandImpact(p.id,clock.day,loss,index,row.longTail===true);
+                add([{collection:'x',key:impact.id,value:impact},write(p.id,{...p,risk:'triggered',incidentDate:dayDate(clock.day),loss}),{collection:'x',key:'audience',value:{...a,followers:a.followers-loss}}]);
             }
         }
         journal=appendChange(journal,revisions.slice(0,index+1),changes,'business:'+revisions[index]);

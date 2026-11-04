@@ -32,7 +32,7 @@ test('user post reach includes published evidence and story time, supports wider
   f.context.chat.push({mes:'2026-10-30 22:00\nThe show is over.'});await f.memory.read();
   const update={postId:post.id,metrics:{likes:9800,reposts:770,replies:214},comments:[{name:'Fan',handle:'fan',text:'这个视角也太近了！'}]};
   f.reply({posts:[],engagementUpdates:[update]});ok(await f.x.refresh());
-  assert.match(f.prompt(),/不同受众/);assert.match(f.prompt(),/熟人的人数不能限制总互动/);assert.match(f.prompt(),/私人经过/);assert.match(f.prompt(),/"postedAtStory"/);assert.match(f.prompt(),/"publicText":"今晚。"/);
+  assert.match(f.prompt(),/粉丝数不是热度上限/);assert.match(f.prompt(),/不额外根据经过多少剧情时间调整数据/);assert.doesNotMatch(f.prompt(),/以及经过了多少剧情时间/);assert.match(f.prompt(),/私人经过/);assert.match(f.prompt(),/"postedAtStory"/);assert.match(f.prompt(),/"publicText":"今晚。"/);
   assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),update.metrics);assert.equal(xItems(f.state(),'comment').length,1);
   f.reply({posts:[],engagementUpdates:[{postId:post.id,metrics:{likes:10,reposts:1,replies:0}}]});ok(await f.x.refresh());assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),update.metrics);
  }finally{f.close();}
@@ -176,11 +176,11 @@ test('public mentions can earn followers once, but missing @ and private message
  }finally{f.close();}
 });
 
-test('comment response can update followers in its single existing call',async()=>{
+test('comment response defers follower changes to public refresh',async()=>{
  const f=setup();try{
   f.reply({posts:[{name:'Artist',handle:'artist',text:'My new work'}],audience:{initialFollowers:10}});ok(await f.x.refresh());const post=xItems(f.state(),'post')[0];
-  f.reply(o=>{const id=o.quietPrompt.match(/"sourceId":"(comment:[^"]+)"/)[1];return JSON.stringify({text:'Great point',audience:{growth:[{sourceId:id,hot:true,totalGain:8,basis:'Public comment brought attention'}]}});});
-  const calls=f.count();ok(await f.x.comment(post.id,'Interesting technique'));assert.equal(f.count(),calls+1);assert.equal(xAudience(f.state()).followers,18);
+  f.reply({text:'Great point',audience:{growth:[{sourceId:'comment',hot:true,totalGain:8,basis:'Public discussion'}]}});
+  const calls=f.count();ok(await f.x.comment(post.id,'Interesting technique'));assert.equal(f.count(),calls+1);assert.equal(xAudience(f.state()).followers,10);
  }finally{f.close();}
 });
 
@@ -500,5 +500,24 @@ test('anonymous brand request, negotiation and explicit X contract use distinct 
   assert.equal(f.state().business[p.id].status,'invited');assert.match(f.prompt(),/不等于合作/);
   f.reply({status:'reply',text:'成交。',deal:{kind:'accept',id:p.id,evidence:'我接受这项合作',terms:'500元品鉴推文'}});
   ok(await f.x.send(p.accountId,'我接受这项合作'));assert.equal(f.state().business[p.id].status,'active');assert.deepEqual(f.state().assets,{});
+ }finally{f.close();}
+});
+
+test('one public refresh commits all stages once per assistant floor, failed stages retry, regenerations roll back',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01';ok(await f.x.publish('Tea!'));const post=xItems(f.state(),'post')[0];
+  const responses=()=>[
+   {posts:[{name:'News',handle:'news',text:'Tea fair'}],engagementUpdates:[{postId:post.id,metrics:{likes:8,reposts:2,replies:1}}]},
+   {posts:[{name:'Neighbor',handle:'neighbor',text:'Crowded park',publicBasis:{access:'background',summary:'Local observation',involvesCharacters:false}}]},
+   {topics:[{title:'Park',summary:'Visitors arrive',scope:'local',postCount:40,sourcePostIds:[]}],evaluations:[{postId:post.id,eligible:false,reason:'local'}]},
+   {initialFollowers:100,effects:[{sourceId:'post:'+post.id,mode:'ordinary',gained:2,lost:0,basis:'two interested readers'}]}];
+  const before=structuredClone(f.state().x),bad=responses();bad[3]={};f.reply(()=>JSON.stringify(bad.shift()));
+  assert.equal((await f.x.refreshPublic()).ok,false);assert.deepEqual(f.state().x,before);
+  const good=responses();f.reply(()=>JSON.stringify(good.shift()));ok(await f.x.refreshPublic());
+  const s=f.state();assert.equal(s.x.audience.followers,102);assert.ok(s.x['square-edition']);assert.equal(s.x['trend-edition'].topics[0].title,'Park');assert.equal(s.x[post.id].metrics.likes,8);assert.deepEqual(xItems(s,'message'),[]);
+  const count=f.count();f.context.chat.push({is_user:true,mes:'Next'});await f.memory.read();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),count);
+  f.context.chat.push({mes:'Another scene, same date'});const next=responses();f.reply(()=>JSON.stringify(next.shift()));ok(await f.x.refreshPublic());assert.equal(f.state().x.audience.followers,102);
+  f.context.chat.at(-1).mes='Regenerated';await f.memory.read();assert.equal(f.state().x['public-refresh'].floor,0);
+  const again=responses();f.reply(()=>JSON.stringify(again.shift()));ok(await f.x.refreshPublic());assert.equal(f.state().x['public-refresh'].floor,2);
  }finally{f.close();}
 });

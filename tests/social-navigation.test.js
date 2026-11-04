@@ -69,7 +69,7 @@ test('late Snapchat failure and pending indicators stay in their original chat',
 
 test('X reset clears the retired pending indicator without unlocking a newer request',async()=>{
  const releases=[];
- const panel=createXPanel({...options(),adapter:{x:{refresh:()=>new Promise(r=>releases.push(r))}}});
+ const panel=createXPanel({...options(),adapter:{x:{refreshPublic:()=>new Promise(r=>releases.push(r))}}});
  const old=panel.action('refresh');panel.reset();assert.doesNotMatch(panel.html(),/正在处理/);
  const next=panel.action('refresh');assert.equal(releases.length,2);
  releases[0]({ok:true});await old;assert.match(panel.html(),/正在处理/,'the retired request cannot finish the current spinner');
@@ -110,5 +110,15 @@ test('X search trends open original user posts and return locally, with escaped 
  const panel=createXPanel({getView:()=>state,redraw(){},notice(){},adapter:{x:{refreshTrends:async()=>{calls++;return {ok:true};}}}});
  await panel.action('tab','search');assert.match(panel.html(),/趋势/);assert.match(panel.html(),/&lt;img/);assert.doesNotMatch(panel.html(),/<script>/);assert.equal(calls,0);
  await panel.action('comments','p');assert.match(panel.html(),/My original post/);assert.equal(panel.back(),true);assert.match(panel.html(),/data-x-trend="0"/);assert.equal(calls,0);
- await panel.action('trends-refresh');assert.equal(calls,1);panel.reset();assert.doesNotMatch(panel.html(),/data-x-trend="0"/);
+ await panel.action('edit-page');assert.match(panel.html(),/保存修改/);assert.equal(calls,0);panel.reset();assert.doesNotMatch(panel.html(),/data-x-trend="0"/);
+});
+
+test('X home lock persists on user turns; pencils on home, square, search and only a specific DM conversation',async()=>{
+ const chat=[{mes:'scene'},{is_user:true,mes:'wait'}];
+ const state={x:{'public-refresh':{floor:0},a:{id:'a',type:'account',name:'A',handle:'a'},m:{id:'m',type:'message',accountId:'a',role:'user',text:'private thread'}}};
+ const p=createXPanel({getView:()=>state,adapter:{storyChat:()=>chat},redraw(){},notice(){}});
+ assert.match(p.html(),/data-x-action="refresh"[^>]*disabled/);assert.match(p.html(),/data-x-action="edit-page"/);chat.push({mes:'new'});assert.doesNotMatch(p.html(),/data-x-action="refresh"[^>]*disabled/);
+ for(const tab of ['square','search']){await p.action('tab',tab);assert.match(p.html(),/data-x-action="edit-page"/);assert.doesNotMatch(p.html(),/data-x-action="(?:square-refresh|trends-refresh|refresh)"/);}
+ await p.action('tab','messages');assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);await p.action('thread','a');await p.action('edit-page');
+ assert.match(p.html(),/private thread<\/textarea>/);assert.match(p.html(),/保存修改/);p.back();assert.doesNotMatch(p.html(),/保存修改/);
 });

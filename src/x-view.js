@@ -1,11 +1,15 @@
+import {pageFields} from './x-edit.js?v=1.1.16';
+import {refreshFloor} from './x-influence.js?v=1.1.16';
 import { icon } from './icons.js?v=1.1.8';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.1.15';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.1.16';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
-import { xItems, xProfile, xCounts } from './x.js?v=1.1.15';
+import { xItems, xProfile, xCounts } from './x.js?v=1.1.16';
 import { xAudience } from './x-audience.js?v=1.1.8';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;
+    let editor=null;
+    const pencil=()=>'<button type="button" class="pp-snap-button pp-x-refresh" data-x-action="edit-page" aria-label="编辑当前页面" title="编辑当前页面"'+disabled()+'>'+icon('edit')+'</button>';
     const profile=()=>xProfile(getView(),adapter.userName?.()||'user');
     const key=name=>[tab,page,selected||'',name].join(':');
     const value=(name,fallback='')=>drafts[key(name)]??fallback;
@@ -14,7 +18,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-x-action="'+action+'" data-x-id="'+xEscape(id)+'" aria-label="'+xEscape(label)+'" title="'+xEscape(label)+'" '+extra+disabled()+'>'+(actionIcons[action]?icon(actionIcons[action])+(action==='profile'?'':'<span>'+xEscape(label.split(' ').at(-1))+'</span>'):xEscape(label))+'</button>';
     const field=(name,label,fallback='',long=false)=>'<label class="pp-field"><span>'+label+'</span>'+(long?'<textarea rows="3" maxlength="6000"':'<input type="text" maxlength="100"')+' name="'+name+'" data-x-field="'+name+'"'+(long?'>'+xEscape(value(name,fallback))+'</textarea>':' value="'+xEscape(value(name,fallback))+'">')+'</label>';
     const form=(name,body,label)=>'<form class="pp-snap-form" data-x-form="'+name+'">'+body+'<button type="submit" class="pp-snap-primary"'+disabled()+'>'+label+'</button></form>';
-    const refreshButton=(square=false)=>'<button type="button" class="pp-snap-button pp-x-refresh" data-x-action="'+(square?'square-refresh':'refresh')+'" aria-label="刷新'+(square?'广场':'动态')+'" title="刷新"'+disabled()+'><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg></button>';
+    const refreshButton=(locked)=>'<button type="button" class="pp-snap-button pp-x-refresh" data-x-action="refresh" aria-label="综合刷新" title="综合刷新"'+(locked?' disabled':disabled())+'><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg></button>';
     const empty=text=>'<p class="pp-snap-empty">'+text+'</p>';
     function person(a) {
         return '<div class="pp-snap-person"><span class="pp-snap-avatar">'+xEscape(a.name.slice(0,1))+'</span><div><strong>'+xEscape(a.name)+'</strong><small>@'+xEscape(a.handle)+'</small></div></div>';
@@ -49,7 +53,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     }
     function trendsHTML(state) {
         const edition=state.x?.['trend-edition'];
-        return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions"><h3>趋势</h3>'+button('trends-refresh','刷新趋势')+'</div>'+
+        return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions"><h3>趋势</h3>'+pencil()+'</div>'+
             (edition?'<small>上次刷新结果</small>':'')+
             (edition?.topics?.length?edition.topics.map((topic,i)=>'<article class="pp-x-trend" data-x-trend="'+i+'"><small>'+ (i+1)+' · '+xEscape(topic.scope)+'</small><h4>'+xEscape(topic.title)+'</h4><p class="pp-snap-copy">'+xEscape(topic.summary)+'</p>'+
                 (topic.postCount===null?'':'<small>'+xEscape(topic.postCount.toLocaleString('zh-CN'))+' 条讨论</small>')+
@@ -64,11 +68,12 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     }
     function threadHTML(state,a) {
         const messages=xItems(state,'message').filter(m=>m.accountId===a.id).sort((a,b)=>a.createdAt-b.createdAt);
-        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text)+'</p>'+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):['failed','pending'].includes(m.status)?button('retry','重试',m.id):m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
+        return button('inbox','‹ 消息')+pencil()+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text)+'</p>'+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):['failed','pending'].includes(m.status)?button('retry','重试',m.id):m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
             (a.blocked?empty('已拉黑'):a.inboundRequest==='pending'?button('accept-request','接受私信',a.id)+button('inbox','暂不处理')+button('decline-request','拒绝请求',a.id)+button('block','拉黑',a.id):a.inboundRequest==='declined'?empty('已拒绝'):a.dmPolicy==='closed'?empty('此账号暂不接收私信'):form('message',field('message','消息','',true),'发送'));
     }
     function html() {
         const state=getView();const p=profile();if(selected&&!state.x?.[selected]){selected=null;page='';}const a=state.x?.[selected];
+        const floor=refreshFloor(adapter.storyChat?.()||[]);
         let body;
         if(page.startsWith('post:')&&!state.x?.[page.slice(5)]){page='';replyTarget=null;}
         if(page==='profile')body=button('back','‹ 返回')+'<div class="pp-x-audience"><strong data-x-followers>'+xEscape(xAudience(state)?.followers?.toLocaleString('en-US')??'—')+'</strong><span> 粉丝</span> · <strong>'+xItems(state,'account').filter(a=>a.following&&!a.blocked).length+'</strong><span> 正在关注</span>'+button('reset-followers','还原初始粉丝')+'</div>'+form('profile',field('alias','名称',p.alias)+field('bio','简介',p.bio,true)+'<label>陌生私信请求<select name="requestsOpen"><option value="true">允许</option><option value="false"'+(p.requestsOpen===false?' selected':'')+'>关闭</option></select></label>','保存')+'<h3>帖子与转发</h3>'+postsHTML(state,xItems(state,'post').filter(p=>p.author==='user'||p.reposted).reverse());
@@ -80,8 +85,12 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             body=form('search',field('query','搜索用户'),'搜索')+(results===null?trendsHTML(state)+accounts:accounts+trendsHTML(state));
         }
         else if(tab==='messages')body=inbox(state);
-        else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3>'+refreshButton(true)+'</div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>p.feed==='square'&&(!state.x['square-edition']||p.publication?.editionId===state.x['square-edition'].editionId)).reverse());
-        else body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton()+'</div>'+form('post',field('post','有什么新鲜事？','',true),'发帖')+postsHTML(state,xItems(state,'post').filter(p=>p.feed!=='square'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+        else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3>'+pencil()+'</div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>p.feed==='square'&&(!state.x['square-edition']||p.publication?.editionId===state.x['square-edition'].editionId)).reverse());
+        else body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||state.x?.['public-refresh']?.floor===floor)+pencil()+'</div>'+form('post',field('post','有什么新鲜事？','',true),'发帖')+postsHTML(state,xItems(state,'post').filter(p=>p.feed!=='square'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+        if(editor){
+            const inputs=editor.fields.map((f,i)=>'<label class="pp-field"><span>'+xEscape(f.label)+'</span>'+(f.number?'<input type="number" min="0" max="1000000000"':'<textarea rows="2" maxlength="6000"')+' name="f'+i+'" data-x-field="f'+i+'"'+(f.number?' value="'+xEscape(editor.values[i])+'">':'>'+xEscape(editor.values[i])+'</textarea>')+'</label>').join('');
+            body=button('cancel-edit','取消编辑')+(inputs?form('edit-page',inputs,'保存修改'):empty('当前页面暂无可编辑内容'));
+        }
         return '<div class="pp-snap pp-x"><header class="pp-snap-top"><b aria-label="X">'+icon('x')+'</b>'+button('profile','个人主页')+'</header><div class="pp-x-body" data-x-page="'+xEscape([tab,page,selected||''].join(':'))+'" data-x-thread="'+(page==='thread')+'" data-x-count="'+(page==='thread'?xItems(state,'message').filter(m=>m.accountId===selected).length:0)+'"><p class="pp-snap-status" role="status">'+xEscape(working||state.busy?'正在处理…':state.errorKind==='x'&&state.error?state.error:status)+'</p>'+body+'</div><nav class="pp-snap-tabs pp-x-tabs" aria-label="X 页面">'+[['home','首页','home'],['square','广场','globe'],['search','搜索','search'],['messages','私信','mail']].map(([id,label,glyph])=>'<button type="button" data-x-action="tab" data-x-id="'+id+'" aria-pressed="'+(tab===id)+'">'+icon(glyph)+'<span>'+label+'</span></button>').join('')+'</nav></div>';
     }
     async function perform(method,args=[],message='') {
@@ -92,13 +101,14 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         finally{if(token===epoch)working=false;redraw();}
     }
     function back() {
+        if(editor){editor=null;redraw();return true;}
         if(!page)return false;
         replyTarget=null;page='';selected=null;redraw();return true;
     }
     return {
         html, back,
-        reset(){epoch++;working=false;replyTarget=null;tab='home';page='';selected=null;following=false;results=null;drafts=Object.create(null);status='';},
-        input(el){drafts[key(el.dataset.xField)]=el.value;},
+        reset(){editor=null;epoch++;working=false;replyTarget=null;tab='home';page='';selected=null;following=false;results=null;drafts=Object.create(null);status='';},
+        input(el){if(editor){editor.values[Number(el.name.slice(1))]=el.value;return;}drafts[key(el.dataset.xField)]=el.value;},
         async readVisible(){
             if(reading||working||getView().busy||!adapter.x)return;
             const postId=page.startsWith('post:')?page.slice(5):null;
@@ -109,9 +119,14 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         },
         async action(action,id) {
             if(['accept-request','decline-request'].includes(action)){await perform('decideRequest',[id,action==='accept-request']);return;}
-            if(action==='tab'){replyTarget=null;tab=id;page='';selected=null;status='';redraw();return;}
+            if(action==='edit-page'){
+                const scope={tab,accountId:selected,following,ids:results},fields=pageFields(getView(),scope);
+                editor={scope,fields,values:fields.map(f=>f.value)};redraw();return;
+            }
+            if(action==='cancel-edit'){editor=null;redraw();return;}
+            if(action==='tab'){editor=null;replyTarget=null;tab=id;page='';selected=null;status='';redraw();return;}
             if(action==='back'){back();return;}
-            if(action==='profile'){page='profile';selected=null;redraw();return;}
+            if(action==='profile'){editor=null;page='profile';selected=null;redraw();return;}
             if(action==='account'){selected=id;page='account';redraw();return;}
             if(action==='thread'){selected=id;page='thread';tab='messages';redraw();return;}
             if(action==='inbox'){selected=null;page='';tab='messages';redraw();return;}
@@ -120,11 +135,16 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             if(action==='comments'){replyTarget=null;selected=null;page=page==='post:'+id?'':'post:'+id;redraw();return;}
             if(action==='all'||action==='following'){following=action==='following';page='';redraw();return;}
             if(action==='reset-followers'){await perform('resetFollowers',[],'已还原初始粉丝');return;}
-            const map={'trends-refresh':['refreshTrends',[]],inject:['toggleInjection',[id]],'square-refresh':['refresh',['square']],refresh:['refresh',[following]],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]]};
+            const map={inject:['toggleInjection',[id]],refresh:['refreshPublic',[],'本楼公开内容已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]]};
             if(map[action])await perform(...map[action]);
         },
         async submit(el) {
             const data=Object.fromEntries(new FormData(el)),kind=el.dataset.xForm,base=key(''),token=epoch;let result;
+            if(kind==='edit-page'&&editor){
+                const editing=editor,edits=editing.fields.flatMap((f,i)=>data['f'+i]===f.value?[]:[{id:f.id,path:f.path,before:f.value,value:data['f'+i]}]);
+                result=await perform('editPage',[editing.scope,edits],'已保存修改');
+                if(token===epoch&&result?.ok&&editor===editing)editor=null;
+            }
             if(kind==='profile')result=await perform('saveProfile',[data],'已保存');
             if(kind==='search'){result=await perform('discover',[data.query]);if(token===epoch&&result?.ok)results=result.value.ids;}
             if(kind==='post'){result=await perform('publish',[data.post],'已发布');if(token===epoch&&result?.ok)delete drafts[base+'post'];}
