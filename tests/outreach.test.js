@@ -115,3 +115,29 @@ test('no decisions on background injections, empty reasoning or user messages',(
         assert.deepEqual(replayJournal(importStoryPhone(undefined,['1','2','3','4','5'],chat,ctx).journal),state);
     }
 });
+
+test('split outreach evidence recovers two WhatsApp messages in the existing friend thread after reloading an older journal',async()=>{
+    const sender='林娜·陈',first='你走到屋檐下，口袋里的手机震动了两下。',last='你看见林娜刚发来的 WhatsApp 消息，问你到家没有。';
+    const messages=['你到家了吗？','记得带上钥匙。'];
+    const tag=(text,evidence)=>'<!--durian-outreach:'+JSON.stringify({channel:'whatsapp',sender,recipient:'user',accountId:'name:'+sender,text,evidence})+'-->';
+    const chat=[...four,{mes:'<content>'+first+'你放下了手里的东西。'+last+tag(messages[0],first+'……'+last)+tag(messages[1],first+' ... '+last)+'</content>'}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    const friend={id:'card:friend.png',type:'account',name:sender,friend:'friends'};
+    const seed=appendChange(undefined,rev.slice(0,1),[{collection:'whatsapp',key:friend.id,value:friend}]);
+    const saved=await capture(chat,seed),state=replayJournal(saved);
+    assert.deepEqual(Object.values(state.whatsapp).filter(r=>r.accountId===friend.id).map(m=>m.text),messages);
+    assert.equal(Object.values(state.whatsapp).filter(r=>r.type==='account').length,1);
+    assert.deepEqual(await capture(chat,JSON.parse(JSON.stringify(saved))),saved);
+    assert.deepEqual(replayJournal(reconcileJournal(saved,rev.slice(0,-1)).journal).whatsapp,{[friend.id]:friend});
+});
+test('recovering an earlier split quote leaves legacy exact-match IDs intact; invented or reordered quotes stay out',async()=>{
+    const a='第一段明确写到手机正在振动。',b='第二段写到屏幕上出现了来信。';
+    const tag=(sender,evidence)=>'<!--durian-outreach:'+JSON.stringify({channel:'whatsapp',sender,recipient:'user',text:sender+'来信',evidence})+'-->';
+    const chat=[...four,{mes:a+'我拿起手机。'+b+tag('恢复',a+'……'+b)+tag('旧记录',b)+tag('乱序',b+'……'+a)+tag('捏造',a+'……这里有一句原文里没有的内容。')}];
+    const rev=await revisionsFor(messageSignatures(chat)),oldId='outreach:'+rev.at(-1)+':0';
+    const old={id:oldId,type:'message',accountId:'saved',role:'assistant',text:'旧记录来信'};
+    const seed=appendChange(undefined,rev,[{collection:'whatsapp',key:oldId,value:old}],oldId);
+    const state=replayJournal(await capture(chat,seed));
+    assert.deepEqual(state.whatsapp[oldId],old);
+    assert.deepEqual(Object.values(state.whatsapp).filter(r=>r.type==='message').map(r=>r.text).sort(),['恢复来信','旧记录来信'].sort());
+});

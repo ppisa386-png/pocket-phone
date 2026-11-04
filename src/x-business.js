@@ -1,7 +1,7 @@
 import {brandImpact} from './x-influence.js?v=1.1.18';
 // Projects and counters live in the rollback journal. Only the private draw
 // survives removal of its source floor, so a replay of the same plan cannot reroll it.
-import {socialContact} from './outreach.js?v=1.1.19';
+import {socialContact} from './outreach.js?v=1.1.22';
 import {effectiveReply} from './contact-policy.js?v=1.1.13';
 import {appendChange,replayJournal} from './journal.js?v=1.1.13';
 import {dateDay,dayDate,readStoryClock} from './story-clock.js?v=1.1.12';

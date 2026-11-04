@@ -1,6 +1,6 @@
-import {businessPrompt,importBusiness} from './x-business.js?v=1.1.19';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.1.19';
-import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.19';
+import {businessPrompt,importBusiness} from './x-business.js?v=1.1.22';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.1.22';
+import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.22';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.1.19';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.1.8';
 import { smsReplyClassification } from './sms-context.js?v=1.1.19';
@@ -22,8 +22,23 @@ export function storyAnnotations(message,tag){
     if(message?.is_user||(message?.is_system&&!isMemoryHidden(message)))return [];
     const text=String(message?.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(think|thinking|script|style)[^>]*>[\s\S]*?<\/\1>/gi,'');
     const prose=text.replace(/<!--[\s\S]*?-->/g,'');const result=[];
+    let exactIndex=0,tagIndex=0;
     for(const m of text.matchAll(new RegExp('<!--\\s*'+tag+'\\s*:\\s*([\\s\\S]*?)-->','g'))){
-        try{const row=JSON.parse(m[1]);if(typeof row.evidence==='string'&&row.evidence.trim().length>=4&&(prose.includes(row.evidence.trim())||(tag==='durian-money'&&financialEvidenceMatches(prose,row.evidence))||(tag==='durian-contact'&&evidenceText(row.evidence).length>=4&&evidenceText(prose).includes(evidenceText(row.evidence)))))result.push({...row,prose});}catch{/* Incomplete narrative metadata never creates an event. */}
+        const position=tagIndex++;
+        try{
+            const row=JSON.parse(m[1]),quote=row?.evidence;
+            if(typeof quote!=='string'||quote.trim().length<4)continue;
+            const exact=prose.includes(quote.trim());
+            if(tag==='durian-outreach'){
+                // Old journal IDs counted exact matches only. Keep that sequence
+                // intact when recovering a formerly skipped tag before a saved one.
+                if(exact||financialEvidenceMatches(prose,quote))
+                    result.push({...row,prose,outreachKey:exact?String(exactIndex++):'excerpt:'+position});
+            }else if(exact||(tag==='durian-money'&&financialEvidenceMatches(prose,quote))||
+                (tag==='durian-contact'&&evidenceText(quote).length>=4&&evidenceText(prose).includes(evidenceText(quote)))){
+                result.push({...row,prose});
+            }
+        }catch{/* Incomplete narrative metadata never creates an event. */}
     }
     return result;
 }
@@ -37,7 +52,7 @@ export function importStoryPhone(raw,revisions,chat,context){
         if(effectiveReply(chat[index]))turn++;
         const rows=storyAnnotations(chat[index],'durian-contact');
         for(const [n,row] of storyAnnotations(chat[index],'durian-outreach').entries()){
-            const id='outreach:'+revisions[index]+':'+n;
+            const id='outreach:'+revisions[index]+':'+row.outreachKey;
             if(journal?.events.some(e=>e.id===id))continue;
             const allowed=effectiveReply(chat[index])&&turn%5===0&&settings.proactiveEnabled&&availableChannels(settings,state,context.name1).includes(row.channel)
                 &&row.recipient==='user'&&typeof row.sender==='string'&&row.sender.trim()&&row.sender!==context.name1;

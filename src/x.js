@@ -1,13 +1,13 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.1.18';
 import {pageEdits} from './x-edit.js?v=1.1.16';
 import {refreshFloor,influenceSources,impactRecords,settleInfluence,INFLUENCE_RULES,INFLUENCE_OUTPUT} from './x-influence.js?v=1.1.18';
-import {dmDealTask,dealDecision} from './x-business.js?v=1.1.19';
+import {dmDealTask,dealDecision} from './x-business.js?v=1.1.22';
 import {JOURNAL_KEY} from './journal.js?v=1.1.13';
 import {readStoryClock} from './story-clock.js?v=1.1.12';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.8';
 import { publicationScenePrompt } from './social-context.js?v=1.1.17';
 import { xCommentKey, xComments } from './x-comments.js?v=1.1.8';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.19';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.22';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
 import { parseModelObject } from './model-json.js?v=1.1.8';
 import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.8';
