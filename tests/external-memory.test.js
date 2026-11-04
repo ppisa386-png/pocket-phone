@@ -167,3 +167,23 @@ test('task routing separates no-memory, chronological, and participant-specific 
   assert.equal(before,snapshots);assert.equal(oldReads,0);
  }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
 });
+
+test('X post lookup uses event and entity IDs, scopes pronouns and ambiguous aliases, and bounds a large snapshot',async()=>{
+ const {postMemoryPrompt}=await import('../src/external-memory.js');
+ const c=context(),identity=prepared().identity,items=[
+  {entityId:'m',displayName:'梅森·布莱克',aliases:['Mason','前锋']},
+  {entityId:'j',displayName:'朱莉',aliases:['Jules','前锋']}];
+ c.chat=Array.from({length:400},(_,i)=>({mes:i===399?'梅森·布莱克在营地唱歌。':'其他剧情。'}));
+ const queries=[],floors=c.chat.map((_,i)=>({messageIndex:i,summary:i%4?'完全无关的旧记录':'营地唱歌 '+i}));
+ const bridge={getSnapshot:()=>savedSnapshot(floors),getPeopleSnapshot:()=>({status:'ready',identity,people:{status:'ready',items}}),
+  readContext:async opt=>{queries.push(opt);return {status:'ready',identity,actors:items.map(p=>({entityId:p.entityId,memoryText:'private-'+p.entityId}))};}};
+ for(const [text,ids] of [['梅森·布莱克唱歌',['m']],['Mason唱歌',['m']],['梅森唱歌',['m']],['他在营地唱歌',['m']],['Mason 与 Jules 在营地唱歌',['m','j']],['前锋唱歌',[]]]){
+  queries.length=0;const prompt=await postMemoryPrompt(c,settings(),[{id:'post',text,sourceIndex:399}],()=>true,bridge);
+  assert.deepEqual(queries.flatMap(q=>q.entityIds),ids);if(ids.length)assert.ok(queries[0].query.includes(text));
+  assert.doesNotMatch(prompt,/完全无关|engagementUpdates/);
+  if(prompt){const [group]=JSON.parse(prompt.split('\n').at(-1));assert.ok(group.actors.length+group.summaries.length<=20);assert.deepEqual(group.actors.map(a=>a.entityId),ids);}
+ }
+ c.chat[399].mes='梅森和朱莉在营地唱歌。';queries.length=0;
+ await postMemoryPrompt(c,settings(),[{id:'q',text:'他在唱歌',sourceIndex:399}],()=>true,bridge);assert.equal(queries.length,0);
+ assert.equal(await postMemoryPrompt(c,settings(),[{id:'q',text:'Mason'}],()=>true,{}),'');
+});

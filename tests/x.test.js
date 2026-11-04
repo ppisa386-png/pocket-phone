@@ -6,7 +6,7 @@ import {createPhoneService} from '../src/phone.js';
 import {createX,xItems,xUnread,xCounts} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
-import {xAudience, audienceChanges, audienceSources} from '../src/x-audience.js';
+import {xAudience, audienceChanges} from '../src/x-audience.js';
 
 function setup(getGenerationState,independent=false){
  const bus=new EventEmitter();let response={},count=0,lastPrompt='';
@@ -91,7 +91,7 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   f.reply({posts:[],replies:[{postId:post.id,accountId:a.id,text:'We already talked about the journey.'}]});ok(await f.x.refresh());
   f.reply({posts:[]});const before=f.count();ok(await f.x.refresh());
   assert.equal(f.count(),before+1);assert.equal(reads,f.count(),'one synchronous snapshot per existing model request');
-  assert.match(f.prompt(),/Alex saw the gift/);assert.match(f.prompt(),/This was private/);
+  assert.doesNotMatch(f.prompt(),/Alex saw the gift|This was private/,'an unrelated public update does not retrieve a commenter’s private memories');
   assert.match(f.prompt(),/We already talked about the journey/);
   assert.match(f.prompt(),/"identityKnown":true/);assert.match(f.prompt(),/私下已知可以影响措辞/);
   assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/Alex saw the gift/,'do not persist copies of external memory');
@@ -134,45 +134,10 @@ test('opening followers derive once from persona, reset is local and saves do no
  const f=setup();try{
   await f.x.open();assert.equal(xAudience(f.state()),null);assert.equal(f.count(),0);
   f.reply({initialFollowers:125});ok(await f.x.resetFollowers());assert.equal(xAudience(f.state()).followers,125);assert.equal(f.count(),1);
-  assert.match(f.prompt(),/初始人设.*匿名小号/);
+  assert.match(f.prompt(),/初始粉丝.*匿名账号/);
   ok(await f.x.saveProfile({alias:'Moon',bio:'Music'}));assert.equal(xAudience(f.state()).followers,125);
   f.reply({initialFollowers:9999});ok(await f.x.resetFollowers());assert.equal(f.count(),1);assert.equal(xAudience(f.state()).followers,125);
   f.reply({posts:[],audience:{initialFollowers:9999}});ok(await f.x.refresh());assert.equal(xAudience(f.state()).initialFollowers,125);
- }finally{f.close();}
-});
-
-test('hot post follower totals deduplicate, grow by difference, and reset retains consumed exposure',async()=>{
- const f=setup();try{
-  ok(await f.x.publish('Public project'));const post=xItems(f.state(),'post')[0];
-  const response=total=>({posts:[],audience:{initialFollowers:100,growth:[{sourceId:'post:'+post.id,hot:true,totalGain:total,basis:'Public discussion of this project'}]},engagementUpdates:[{postId:post.id,metrics:{likes:300,reposts:40,replies:0}}]});
-  f.reply(response(20));ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,120);assert.equal(xCounts(f.state(),f.state().x[post.id]).likes,300);
-  ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,120);
-  f.reply(response(25));ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,125);
-  const calls=f.count();ok(await f.x.resetFollowers());assert.equal(f.count(),calls);assert.equal(xAudience(f.state()).followers,100);
-  ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,100);
-  f.reply(response(30));ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,105);
- }finally{f.close();}
-});
-
-test('ordinary activity, unknown sources and non-hot results do not award followers',async()=>{
- const f=setup();try{
-  f.reply({initialFollowers:10});ok(await f.x.resetFollowers());ok(await f.x.publish('Lunch'));const post=xItems(f.state(),'post')[0],calls=f.count();
-  ok(await f.x.react(post.id,'liked'));ok(await f.x.react(post.id,'reposted'));assert.equal(f.count(),calls);assert.equal(xAudience(f.state()).followers,10);
-  f.reply({posts:[],audience:{growth:[{sourceId:'post:'+post.id,hot:false,totalGain:99,basis:'ordinary'},{sourceId:'unknown',hot:true,totalGain:999,basis:'fake'}]}});
-  ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,10);
- }finally{f.close();}
-});
-
-test('public mentions can earn followers once, but missing @ and private messages cannot',async()=>{
- const f=setup();try{
-  ok(await f.x.saveProfile({alias:'Moon',bio:''}));
-  const reply={posts:[{name:'Singer',handle:'singer',text:'Listen to @Moon tonight',mentionsUser:true,followers:200000}],audience:{initialFollowers:100,growth:[{sourceId:'mention:new:0',hot:true,totalGain:80,basis:'Public recommendation'}]}};
-  f.reply(reply);ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,180);
-  ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,180);
-  f.reply({...reply,posts:[{name:'Singer',handle:'singer',text:'Private knowledge of someone',mentionsUser:true}]});
-  ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,180);
-  f.reply({status:'reply',text:'Hello',audience:{growth:[{sourceId:'mention:new:0',hot:true,totalGain:999,basis:'Private'}]}});
-  ok(await f.x.send(xItems(f.state(),'account')[0].id,'Hi'));assert.equal(xAudience(f.state()).followers,180);
  }finally{f.close();}
 });
 
@@ -181,27 +146,6 @@ test('comment response defers follower changes to public refresh',async()=>{
   f.reply({posts:[{name:'Artist',handle:'artist',text:'My new work'}],audience:{initialFollowers:10}});ok(await f.x.refresh());const post=xItems(f.state(),'post')[0];
   f.reply({text:'Great point',audience:{growth:[{sourceId:'comment',hot:true,totalGain:8,basis:'Public discussion'}]}});
   const calls=f.count();ok(await f.x.comment(post.id,'Interesting technique'));assert.equal(f.count(),calls+1);assert.equal(xAudience(f.state()).followers,10);
- }finally{f.close();}
-});
-
-test('repost exposure has its own stable key and repeated toggles do not award the same followers again',async()=>{
- const f=setup();try{
-  f.reply({posts:[{name:'Artist',handle:'artist',text:'New project'}],audience:{initialFollowers:10}});ok(await f.x.refresh());const post=xItems(f.state(),'post')[0];
-  ok(await f.x.react(post.id,'reposted'));
-  f.reply({posts:[],audience:{growth:[{sourceId:'repost:'+post.id,hot:true,totalGain:5,basis:'User repost became a discussion'}]}});ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,15);
-  ok(await f.x.react(post.id,'reposted'));ok(await f.x.react(post.id,'reposted'));ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,15);
- }finally{f.close();}
-});
-
-test('follower gains roll back with story deletion and late initialization cannot leak to another chat',async()=>{
- const f=setup();try{
-  f.reply({initialFollowers:10});ok(await f.x.resetFollowers());
-  f.context.chat.push({mes:'Later'});await f.memory.read();ok(await f.x.publish('News'));const post=xItems(f.state(),'post')[0];
-  f.reply({posts:[],audience:{growth:[{sourceId:'post:'+post.id,hot:true,totalGain:20,basis:'Public news'}]}});ok(await f.x.refresh());assert.equal(xAudience(f.state()).followers,30);
-  f.context.chat.pop();await f.memory.read();assert.equal(xAudience(f.state()).followers,10);
-  f.context.chatId='second';f.context.chatMetadata={};await f.memory.read();let finish,start;const begun=new Promise(r=>start=r);
-  f.reply(()=>{start();return new Promise(r=>finish=r);});const pending=f.x.resetFollowers();await begun;
-  f.context.chatId='third';f.context.chatMetadata={};await f.memory.read();finish('{"initialFollowers":100}');assert.equal((await pending).ok,false);assert.equal(xAudience(f.state()),null);
  }finally{f.close();}
 });
 
@@ -215,21 +159,6 @@ test('invalid follower counts fail atomically and unknown followers are not disp
   assert.match(panel.html(),/还原初始粉丝/);
   assert.throws(()=>audienceChanges(f.state(),[]));
  }finally{f.close();}
-});
-
-test('invalid growth never partly saves a generated feed or corrupts the previous follower balance',async()=>{
- const f=setup();try{
-  f.reply({initialFollowers:50});ok(await f.x.resetFollowers());ok(await f.x.publish('Public work'));
-  const post=xItems(f.state(),'post')[0],before=structuredClone(f.state().x);
-  f.reply({posts:[{name:'New account',handle:'new',text:'New post'}],audience:{growth:[{sourceId:'post:'+post.id,hot:true,totalGain:-10,basis:'Invalid total'}]}});
-  assert.equal((await f.x.refresh()).ok,false);assert.deepEqual(f.state().x,before);
- }finally{f.close();}
-});
-
-test('new public posts are not displaced by old comments in the bounded audience context',()=>{
- const state={x:{root:{id:'root',type:'post',author:'user',text:'Old',createdAt:1},latest:{id:'latest',type:'post',author:'user',text:'New',createdAt:100}}};
- for(let n=0;n<50;n++)state.x['c'+n]={id:'c'+n,type:'comment',author:'user',postId:'root',text:'Old comment',createdAt:n+2};
- assert.equal(audienceSources(state).slice(-40).at(-1).sourceId,'post:latest');
 });
 
 test('X opens locally; account search deduplicates and never imports phone or Snapchat contacts',async()=>{
@@ -497,22 +426,25 @@ test('anonymous brand request, negotiation and explicit X contract use distinct 
  }finally{f.close();}
 });
 
-test('one public refresh commits all stages once per assistant floor, failed stages retry, regenerations roll back',async()=>{
+test('atomic refresh saves the five numbers without review, never asks for other posts’ metrics and rolls back on regeneration',async()=>{
  const f=setup();try{
-  f.context.chat[0].mes='2026-06-01';ok(await f.x.publish('Tea!'));const post=xItems(f.state(),'post')[0];
-  const responses=()=>[
-   {posts:[{name:'News',handle:'news',text:'Tea fair'}],engagementUpdates:[{postId:post.id,metrics:{likes:8,reposts:2,replies:1}}]},
-   {posts:[{name:'Neighbor',handle:'neighbor',text:'Crowded park',publicBasis:{access:'background',summary:'Local observation',involvesCharacters:false}}]},
-   {topics:[{title:'Park',summary:'Visitors arrive',scope:'local',postCount:40,sourcePostIds:[]}],evaluations:[{postId:post.id,eligible:false,reason:'local'}]},
-   {initialFollowers:100,effects:[{sourceId:'post:'+post.id,mode:'ordinary',gained:2,lost:0,basis:'two interested readers'}]}];
-  const before=structuredClone(f.state().x),bad=responses();bad[3]={};f.reply(()=>JSON.stringify(bad.shift()));
-  assert.equal((await f.x.refreshPublic()).ok,false);assert.deepEqual(f.state().x,before);
-  const good=responses();f.reply(()=>JSON.stringify(good.shift()));ok(await f.x.refreshPublic());
-  const s=f.state();assert.equal(s.x.audience.followers,102);assert.ok(s.x['square-edition']);assert.equal(s.x['trend-edition'].topics[0].title,'Park');assert.equal(s.x[post.id].metrics.likes,8);assert.deepEqual(xItems(s,'message'),[]);
-  const count=f.count();f.context.chat.push({is_user:true,mes:'Next'});await f.memory.read();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),count);
-  f.context.chat.push({mes:'Another scene, same date'});const next=responses();f.reply(()=>JSON.stringify(next.shift()));ok(await f.x.refreshPublic());assert.equal(f.state().x.audience.followers,102);
-  f.context.chat.at(-1).mes='Regenerated';await f.memory.read();assert.equal(f.state().x['public-refresh'].floor,0);
-  const again=responses();f.reply(()=>JSON.stringify(again.shift()));ok(await f.x.refreshPublic());assert.equal(f.state().x['public-refresh'].floor,2);
+  f.context.chat[0].mes='2026-06-01';ok(await f.x.publish('A player singing.'));
+  const p=xItems(f.state(),'post')[0],stat={postId:p.id,likes:850,reposts:96,replies:43,gained:58,lost:3};
+  const trends={topics:[],evaluations:[{postId:p.id,eligible:false,reason:'Local'}]};
+  const replies=stats=>[{posts:[]},{posts:[]},{initialFollowers:5,stats},trends];
+  let seq=replies([{...stat,likes:-5}]);f.reply(()=>JSON.stringify(seq.shift()));assert.equal((await f.x.refreshPublic()).ok,false);
+  assert.equal(f.state().x['public-refresh'],undefined);
+  seq=replies([stat]);f.reply(()=>JSON.stringify(seq.shift()));ok(await f.x.refreshPublic());
+  assert.equal(f.state().x.audience.followers,60);assert.deepEqual(f.state().x[p.id].metrics,{likes:850,reposts:96,replies:43});
+  const calls=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),calls);
+  f.context.chat.push({mes:'same day'});ok(await f.x.publish('Second post'));const q=xItems(f.state(),'post').at(-1);
+  seq=[{posts:[]},{posts:[]},{stats:[{...stat,postId:q.id,likes:1,gained:0,lost:1}]},{topics:[],evaluations:[...trends.evaluations,{postId:q.id,eligible:false,reason:'daily'}]}];
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('逐条独立估计')){assert.doesNotMatch(quietPrompt,/A player singing|"likes":850|传播理由|trendEvaluations/);assert.ok(quietPrompt.includes(q.id));}
+   return JSON.stringify(seq.shift());
+  });
+  ok(await f.x.refreshPublic());assert.equal(f.state().x.audience.followers,59);
+  f.context.chat.pop();await f.memory.read();assert.equal(f.state().x.audience.followers,60);assert.equal(f.state().x['public-refresh'].floor,0);
  }finally{f.close();}
 });
 
@@ -548,33 +480,27 @@ test('reactions leave the inactivity anchor alone and publishing resets it after
  }finally{f.close();}
 });
 
-test('combined refresh re-evaluates conflicting follower estimates without losing engagement or double counting',async()=>{
- for(const outcome of ['long','ordinary','still inconsistent','unavailable']){
-  const f=setup();try{
-   f.context.chat[0].mes='2026-06-01';ok(await f.x.publish('A campus performer in a cropped clip.'));
-   ok(await f.x.publish('An everyday update.'));
-   const [clip,daily]=xItems(f.state(),'post'),clipId='post:'+clip.id,dailyId='post:'+daily.id;
-   const effect=(sourceId,mode,gained)=>({sourceId,mode,gained,lost:0,basis:'Local viewers share the clip'});
-   const calls=[],responses=[
-    {posts:[],engagementUpdates:[{postId:clip.id,metrics:{likes:320,reposts:45,replies:13}}]},
-    {posts:[]},{topics:[],evaluations:[clip,daily].map(p=>({postId:p.id,eligible:false,reason:'local audience'}))},
-    {initialFollowers:100,effects:[effect(clipId,'ordinary',26),effect(dailyId,'ordinary',1)]},
-    {initialFollowers:3000,effects:[effect(clipId,outcome==='long'?'long':'ordinary',outcome==='ordinary'?2:26),effect(dailyId,'long',700)]}
-   ];
-   f.reply(o=>{
-    calls.push(o.quietPrompt);
-    if(calls.length===5&&outcome==='unavailable')throw Error('service offline');
-    return JSON.stringify(responses.shift());
-   });
-   const result=await f.x.refreshPublic();ok(result);assert.equal(calls.length,5);
-   for(const i of [0,3,4])assert.match(calls[i],/世界书.*剪辑/);
-   assert.match(calls[3],/local audience/);assert.match(calls[4],/只重评以下来源/);
-   const s=f.state().x,valid=outcome==='long'||outcome==='ordinary';
-   assert.equal(result.value.deferred,valid?0:1);
-   assert.deepEqual(s[clip.id].metrics,{likes:320,reposts:45,replies:13});
-   assert.equal(s.audience.followers,101+(outcome==='long'?26:outcome==='ordinary'?2:0));
-   assert.equal(s['impact:'+clipId]?.mode,valid?outcome:undefined);assert.equal(s['impact:'+dailyId].mode,'ordinary');
-   assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(calls.length,5);
-  }finally{f.close();}
- }
+
+test('new post stats receive the recalled subject from the publication floor in the original request',async()=>{
+ const f=setup(),previous=globalThis.qqj_v3_public_bridge_v1,lookups=[];
+ try{
+  const identity={hostChatId:'x-test'};
+  f.context.chat[0].mes='2026-06-01。柯林在舞台唱歌。艾达在营地做饭。';
+  globalThis.qqj_v3_public_bridge_v1={
+   getPeopleSnapshot:()=>({status:'ready',identity,people:{status:'ready',items:[{entityId:'c',displayName:'柯林'},{entityId:'a',displayName:'艾达'}]}}),
+   readContext:async o=>{lookups.push(o);return {status:'ready',identity,actors:[{entityId:'c',memoryText:'KNOWN_PERFORMER'},{entityId:'a',memoryText:'UNRELATED_CHEF'}]};}
+  };
+  ok(await f.x.publish('他在舞台唱歌。'));const post=xItems(f.state(),'post')[0];
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('逐条独立估计')){
+    assert.match(quietPrompt,/KNOWN_PERFORMER/);assert.doesNotMatch(quietPrompt,/UNRELATED_CHEF/);
+    return JSON.stringify({initialFollowers:4,stats:[{postId:post.id,likes:5000,reposts:43,replies:9,gained:41,lost:2}]});
+   }
+   if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[],evaluations:[{postId:post.id,eligible:false,reason:'local'}]});
+   return JSON.stringify({posts:[],replies:[]});
+  });
+  ok(await f.x.refreshPublic());assert.equal(f.count(),4);assert.equal(f.state().x.audience.followers,43);
+  assert.ok(lookups.length);assert.ok(lookups.every(o=>o.entityIds.join()==='c'&&!o.query.includes('stats')));
+  const reads=lookups.length;assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),4);assert.equal(lookups.length,reads);
+ }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
 });

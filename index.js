@@ -1,25 +1,25 @@
-import { createDaily } from './src/daily.js?v=1.1.22';
-import { createDailyBridge } from './src/daily-story.js?v=1.1.22';
-import { createAssets } from './src/assets.js?v=1.1.17';
-import { createAssetBridge } from './src/assets-story.js?v=1.1.22';
-import { createOpinionBridge } from './src/x-opinion.js?v=1.1.22';
+import { createDaily } from './src/daily.js?v=1.1.25';
+import { createDailyBridge } from './src/daily-story.js?v=1.1.25';
+import { createAssets } from './src/assets.js?v=1.1.25';
+import { createAssetBridge } from './src/assets-story.js?v=1.1.25';
+import { createOpinionBridge } from './src/x-opinion.js?v=1.1.25';
 import { createAmazon } from './src/amazon.js?v=1.1.17';
 import { createDeliveryBridge } from './src/delivery.js?v=1.1.13';
 import { createGenerationReader } from './src/host-state.js?v=1.1.8';
 import { createDiagnostics } from './src/diagnostics.js?v=1.1.8';
-import { createX } from './src/x.js?v=1.1.24';
+import { createX } from './src/x.js?v=1.1.25';
 import { createChatApp } from './src/chat-apps.js?v=1.1.21';
-import { latestMemory } from './src/external-memory.js?v=1.1.17';
+import { latestMemory } from './src/external-memory.js?v=1.1.25';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.1.15';
 import { captureHostRequest } from './src/api-context.js?v=1.1.8';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.1.24';
-import { mountPhone } from './src/ui.js?v=1.1.24';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.1.22';
-import { createPhoneService } from './src/phone.js?v=1.1.19';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.1.25';
+import { mountPhone } from './src/ui.js?v=1.1.25';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.1.25';
+import { createPhoneService } from './src/phone.js?v=1.1.25';
 import { createContinuityBridge } from './src/continuity.js?v=1.1.19';
-import { normalizeSettings } from './src/config.js?v=1.1.24';
+import { normalizeSettings } from './src/config.js?v=1.1.25';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.1.22';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.1.25';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});

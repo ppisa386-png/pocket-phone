@@ -6,7 +6,7 @@ import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from
 import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.12';
 import { parseModelObject } from './model-json.js?v=1.1.8';
 import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.12';
-import { latestMemory } from './external-memory.js?v=1.1.17';
+import { latestMemory } from './external-memory.js?v=1.1.25';
 import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.17';
 import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.17';
 import { isMemoryHidden } from './journal.js?v=1.1.13';

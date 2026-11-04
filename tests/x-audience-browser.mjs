@@ -16,7 +16,7 @@ if(window.publicData){
  const r=window.publicData;
  if(o.quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[{name:'Walker',handle:'walker',text:'Park report',publicBasis:{access:'background',summary:'Public park',involvesCharacters:false}}]});
  if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[{title:'Public project discussion',summary:'Local news',scope:'Local',postCount:100,sourcePostIds:[r.id]}],evaluations:[{postId:r.id,eligible:true,reason:'public interest'}]});
- if(o.quietPrompt.includes('专项粉丝结算'))return JSON.stringify({effects:[{sourceId:'post:'+r.id,mode:'long',gained:25,lost:5,basis:'post circulation'}]});
+ if(o.quietPrompt.includes('逐条独立估计'))return JSON.stringify({stats:[{postId:r.id,likes:100,reposts:20,replies:0,gained:25,lost:5}]});
 }
 return typeof window.result==='string'?window.result:'<think>Plan</think><content>'+JSON.stringify(window.result)+'</content>';}};
 window.SillyTavern={getContext:()=>ctx};</script><script type="module" src="/index.js"></script></body></html>`;
@@ -38,7 +38,7 @@ try{
  await p.locator('[data-x-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存',exact:true}).tap();
  await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.locator('[data-x-field="post"]').fill('My public project');await p.locator('[data-x-form="post"] button').tap();
  await p.getByText('My public project',{exact:true}).waitFor();const postId=await p.locator('[data-x-post]').getAttribute('data-x-post');assert.equal(await p.evaluate(()=>window.calls),1);
- await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'School',handle:'school',text:'A campus concert.（校园音乐会。）'}],accounts:[{name:'School',handle:'school',has_account:true,bio:'Campus news'},{name:'Hermit',handle:'hermit',has_account:false}],audience:{growth:[{sourceId:'post:'+id,hot:true,totalGain:20,basis:'The public project spread'}]},engagementUpdates:[{postId:id,metrics:{likes:100,reposts:20,replies:0}}]};},postId);
+ await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'School',handle:'school',text:'A campus concert.（校园音乐会。）'}],accounts:[{name:'School',handle:'school',has_account:true,bio:'Campus news'},{name:'Hermit',handle:'hermit',has_account:false}]};},postId);
  await p.locator('[data-x-action="refresh"]').tap();await p.getByText('A campus concert.（校园音乐会。）',{exact:true}).waitFor();assert.equal(await p.getByText('Campus news',{exact:true}).count(),0);assert.equal(await p.getByText('Hermit',{exact:true}).count(),0);
  assert.equal(await p.locator('.pp-x-account').count(),0);assert.equal(await p.locator('[data-x-action="follow"]').count(),0);
  await mkdir(resolve(root,'../qa-results'),{recursive:true});

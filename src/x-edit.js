@@ -38,7 +38,7 @@ export function pageEdits(state,scope,edits){
         const f=available.get(JSON.stringify([edit.id,edit.path]));
         if(!f||f.value!==edit.before)throw Error('页面内容已变化，请重新打开编辑。');
         let value=String(edit.value).trim();
-        if(f.number){if(!/^\d+$/.test(value)||Number(value)>1e9)throw Error('互动数量须为 0 至 10 亿的整数。');value=Number(value);}
+        if(f.number){if(!/^\d+$/.test(value)||!Number.isSafeInteger(Number(value)))throw Error('互动数量须为非负安全整数。');value=Number(value);}
         else if((!value&&f.path.at(-1)!=='bio')||value.length>6000)throw Error('请填写有效的页面内容。');
         const row=records.get(f.id)||structuredClone(state.x[f.id]);
         let obj=row;for(const k of f.path.slice(0,-1)){obj[k]??={};obj=obj[k];}

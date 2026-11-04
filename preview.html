@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 1.1.24</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Modern legal tender by territory, from Unicode CLDR supplemental currencyData
+</style></head><body><main><small>POCKET PHONE · 1.1.25</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Modern legal tender by territory, from Unicode CLDR supplemental currencyData
 // (2026-11-01). Several territories have more than one local currency.
 const territories = {
     AED: 'AE',
@@ -373,7 +373,7 @@ const PREVIOUS_DAILY_PROMPTS = {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '1.1.24';
+const VERSION = '1.1.25';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -1505,7 +1505,7 @@ function createChatPanel({app,adapter,getView,redraw,notice}) {
     }
     function listHTML() {
         const q=value('filter').trim().toLocaleLowerCase();
-        let friends=records('account').filter(a=>(a.friend==='friends'||tab==='chats'&&a.friend==='incoming')&&(!q||[a.name,...(a.aliases||[]),a.number].some(n=>String(n||'').toLocaleLowerCase().includes(q))));
+        let friends=records('account').filter(a=>(a.friend==='friends'||tab==='chats'&&['incoming','unsaved'].includes(a.friend))&&(!q||[a.name,...(a.aliases||[]),a.number].some(n=>String(n||'').toLocaleLowerCase().includes(q))));
         friends.sort(tab==='contacts'?(a,b)=>a.name.localeCompare(b.name,'zh'):(a,b)=>(threadItems(b.id).at(-1)?.createdAt||0)-(threadItems(a.id).at(-1)?.createdAt||0));
         const search='<label class="pp-chat-search">'+icon('search')+'<input data-chat-field="filter" aria-label="搜索好友" placeholder="搜索" value="'+chatEsc(value('filter'))+'"></label>';
         const actions='<div class="pp-chat-add-actions">'+button('add','添加好友','','plus')+button('bulk','一键添加好友','','people',disabled())+'<span>添加好友 · 一键添加</span></div>';
@@ -1544,12 +1544,13 @@ function createChatPanel({app,adapter,getView,redraw,notice}) {
             const own=i.role==='user';
             const tools=own?'':'<div class="pp-chat-message-tools">'+button('edit','修改消息',i.id,'edit',disabled())+button('reroll','重新生成消息',i.id,'retry',disabled())+'</div>';
             const editing=editingId===i.id?form('edit',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消修改'):'';
-            const stateText={queued:'未发送',pending:'等待回复',failed:'发送失败',no_reply:'对方暂未回复'}[i.status]||'';
+            const stateText={sent:wc?'':'已发送',queued:'未发送',pending:'等待回复',failed:'发送失败',no_reply:'对方暂未回复'}[i.status]||'';
             return '<article class="pp-chat-message '+(own?'is-user':'')+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatEsc(i.text)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+tools+editing+(wc&&['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
         }).join('')||'<p class="pp-chat-thread-start">'+chatEsc(a.name)+'</p>';
     }
     function composerHTML(a) {
         if(a.blocked)return '<div class="pp-chat-composer"><p>已拉黑，不能发送消息或通话。</p>'+button('unblock','解除拉黑',a.id,'',disabled())+'</div>';
+        if(a.friend==='unsaved')return button('add','添加联系人');
         if(a.friend==='incoming')return button('accept-request','接受联系人',a.id)+button('later-request','暂不处理',a.id)+button('decline-request','拒绝',a.id)+button('block','拉黑',a.id);
         const call=threadItems(a.id).find(i=>i.type==='call'&&i.status==='connected');
         if(call)return '<div class="pp-chat-composer">'+form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',call.id,'',disabled())+'</div>';
@@ -1650,60 +1651,16 @@ function xComments(state) {
     return comments;
 }
 
-// Followers are story-local. Keep the opening baseline separate from earned
-// reach; cumulative per-source high water marks survive a manual reset.
 const xAudience = state => state.x?.audience || null;
-const rows = state => Object.values(state.x || {});
-function audienceSources(state) {
-    const result = [], comments = xComments(state);
-    for (const p of rows(state).filter(p => p.type === 'post')) {
-        if (p.author !== 'user' && state.x[p.author]?.blocked) continue;
-        const base = { postId: p.id, text: p.text, createdAt: p.createdAt, metrics: p.metrics || {},
-            comments: comments.filter(c => c.postId === p.id && !state.x[c.author]?.blocked)
-                .slice(-12).map(c => ({ text: c.text, author: c.author, name: state.x[c.author]?.name, followers: state.x[c.author]?.followers })) };
-        if (p.author === 'user') result.push({ ...base, sourceId: 'post:' + p.id, kind: 'post' });
-        if (p.reposted && p.author !== 'user') result.push({ ...base, sourceId: 'repost:' + p.id, kind: 'repost' });
-        if (p.mentionsUser && p.feed !== 'square') result.push({ ...base, sourceId: 'mention:' + p.id, kind: 'mention', author: state.x[p.author]?.name });
-    }
-    for (const c of comments.filter(c => c.author === 'user')) {
-        const p = state.x[c.postId];
-        if (p?.type !== 'post' || state.x[p.author]?.blocked) continue;
-        result.push({ sourceId: 'comment:' + c.id, kind: 'comment', text: c.text, createdAt:c.createdAt, postId: p.id, postText: p.text,
-            replies: comments.filter(r => r.replyTo === c.id && !state.x[r.author]?.blocked).map(r => ({text:r.text, author:state.x[r.author]?.name})) });
-    }
-    return result.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+const AUDIENCE_RULES='初始粉丝结合账号所在地、已公开身份和知名度估算；匿名账号不能自动继承真人的名气。';
+function audienceChanges(state,data){
+    if(data==null)return [];
+    if(typeof data!=='object'||Array.isArray(data))throw Error('X 粉丝数据需要对象。');
+    if(xAudience(state)||data.initialFollowers==null)return [];
+    const n=data.initialFollowers;
+    if(!Number.isSafeInteger(n)||n<0)throw Error('初始粉丝数无效。');
+    return [{collection:'x',key:'audience',value:{id:'audience',type:'audience',initialFollowers:n,followers:n}}];
 }
-function count(value, field) {
-    if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '' || !Number.isSafeInteger(Number(value)) || Number(value) < 0 || Number(value) > 1000000000)
-        throw Error('X 粉丝数据无效：' + field + ' 必须为 0 至 1000000000 的整数。');
-    return Number(value);
-}
-function audienceChanges(state, data) {
-    if (data == null) return [];
-    if (typeof data !== 'object' || Array.isArray(data)) throw Error('X 粉丝数据需要 audience 对象。');
-    let next = xAudience(state) ? structuredClone(xAudience(state)) : null;
-    if (!next && data.initialFollowers != null) {
-        const initialFollowers = count(data.initialFollowers, 'initialFollowers');
-        next = {id:'audience',type:'audience',initialFollowers,followers:initialFollowers,credited:{}};
-    }
-    if (!next) return [];
-    const growth = data.growth ?? [];
-    if (!Array.isArray(growth) || growth.length > 50) throw Error('X 粉丝增长 growth 应为最多 50 条的数组。');
-    const sources = new Map(audienceSources(state).map(s => [s.sourceId, s]));
-    const seen = new Set();
-    for (const row of growth) {
-        if (!row || !sources.has(row.sourceId) || row.hot !== true || !String(row.basis || '').trim() || seen.has(row.sourceId)) continue;
-        seen.add(row.sourceId);
-        const total = count(row.totalGain, 'growth.totalGain'), previous = next.credited[row.sourceId] || 0;
-        if (total <= previous) continue;
-        next.followers = Math.min(1000000000, next.followers + total - previous);
-        next.credited[row.sourceId] = total;
-    }
-    return [{collection:'x',key:'audience',value:next}];
-}
-const AUDIENCE_RULES = '粉丝是当前故事里的账号数据。首次 initialFollowers 按 user 初始人设、学校/职业、公开知名度、账号是否公开真实身份估算，普通人可为0或少量，公众人物合理更多；匿名小号不能继承真人全部名气。初始值一旦存在不得改写。'
-    + 'growth 只评估给出的 sourceId：user 发帖、转帖、公开评论或被明确@的曝光。只有这些行为本身形成热帖/明显传播才 hot:true，不是点一下就涨粉，也不能因原作者帖子热就认定 user 的转帖也热。'
-    + '结合来源对应的发帖时剧情、发言实际含义、受众、传播范围和已发生的公开互动判断新增粉丝，名人评论不保证走红。totalGain 是此来源截至当前累计实际吸引的新粉丝，不是本轮增量或互动次数。相同来源重复评估不能重新计数；多个来源属于同一批传播时只计一次，排除现有粉丝。没有新曝光返回空growth，不为刷新强造热帖。';
 
 // Count narrative replies for the shared outreach opportunity.
 function effectiveReply(message) {
@@ -1762,7 +1719,7 @@ function pageEdits(state,scope,edits){
         const f=available.get(JSON.stringify([edit.id,edit.path]));
         if(!f||f.value!==edit.before)throw Error('页面内容已变化，请重新打开编辑。');
         let value=String(edit.value).trim();
-        if(f.number){if(!/^\d+$/.test(value)||Number(value)>1e9)throw Error('互动数量须为 0 至 10 亿的整数。');value=Number(value);}
+        if(f.number){if(!/^\d+$/.test(value)||!Number.isSafeInteger(Number(value)))throw Error('互动数量须为非负安全整数。');value=Number(value);}
         else if((!value&&f.path.at(-1)!=='bio')||value.length>6000)throw Error('请填写有效的页面内容。');
         const row=records.get(f.id)||structuredClone(state.x[f.id]);
         let obj=row;for(const k of f.path.slice(0,-1)){obj[k]??={};obj=obj[k];}
@@ -1775,7 +1732,7 @@ function pageEdits(state,scope,edits){
 const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
 const xUnread = state => xItems(state,'post').filter(p=>p.outreachMention&&!p.read&&!state.x[p.author]?.blocked).length + xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + xItems(state,'comment').filter(c=>c.author!=='user'&&!c.read&&!c.ambient).length;
-const metric = n => Number.isFinite(Number(n)) ? Math.min(1000000000,Math.max(0,Math.floor(Number(n)))) : 0;
+const metric = n => Number.isFinite(Number(n)) ? Math.min(Number.MAX_SAFE_INTEGER,Math.max(0,Math.floor(Number(n)))) : 0;
 function xCounts(state,post) {
     const comments=xItems(state,'comment').filter(c=>c.postId===post.id);
     const direct = comments.filter(c=>!c.ambient).length, ambient = comments.length-direct;
@@ -1885,7 +1842,6 @@ function createXPanel({adapter,getView,redraw,notice}) {
         if(!adapter.x){notice('请在酒馆内使用 X。');return null;}if(working||getView().busy)return null;
         working=true;const token=epoch;redraw();
         try{const result=await adapter.x[method](...args);if(token!==epoch)return null;status=result?.ok?message:result?.error||'请稍后重试。';
-            if(result?.ok&&method==='refreshPublic'&&result.value?.deferred)status+='；'+result.value.deferred+' 项粉丝影响暂未入账。';
             return result;}
         catch(error){if(token===epoch)status=error.message;return null;}
         finally{if(token===epoch)working=false;redraw();}

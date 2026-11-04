@@ -6,12 +6,12 @@ import {pageEdits,pageFields} from '../src/x-edit.js';
 const first=dateDay('2026-06-01');
 const story=day=>[{mes:'2026-06-'+String(day).padStart(2,'0')+'\nSam won a public award.'}];
 const initial=()=>({x:{profile:{alias:'Moon'},p:{id:'p',type:'post',author:'user',text:'Story',postedAtStory:{day:first}}}});
-const effect=(gained,lost,mode='long')=>({sourceId:'post:p',mode,gained,lost,basis:'曝光和受众反应'});
-const apply=(s,chat,effects)=>{for(const row of settleInfluence(s,chat,'Sam',{initialFollowers:1000,effects}))s.x[row.key]=row.value;return s.x.audience.followers;};
+const effect=(gained,lost)=>({postId:'p',gained,lost,likes:230,reposts:15,replies:12});
+const apply=(s,chat,effects)=>{for(const row of settleInfluence(s,chat,effects,1000))s.x[row.key]=row.value;return s.x.audience.followers;};
 test('ordinary positive, zero or negative impact is assessed once',()=>{
- for(const n of [-2,-1,0,1,2]){
-  const s=initial(),e=effect(Math.max(n,0),Math.max(-n,0),'ordinary');assert.equal(apply(s,story(1),[e]),1000+n);
-  assert.equal(apply(s,story(2),[e]),1000+n);
+ for(const n of [-30,-1,0,1,180]){
+  const s=initial(),e=effect(Math.max(n,0),Math.max(-n,0));assert.equal(apply(s,story(1),[e]),1000+n);
+  assert.equal(apply(s,story(1),[e]),1000+n);
  }
 });
 test('seven-day decay has stable signed daily deltas, catch-up is bounded even across a time jump',()=>{
@@ -25,23 +25,18 @@ test('seven-day decay has stable signed daily deltas, catch-up is bounded even a
   }
   assert.equal(s.x['impact:post:p'].settled,7);assert.equal(s.x['impact:post:p'].expired,true);
   const jump=initial();apply(jump,story(1),[e]);assert.equal(apply(jump,story(14),[]),prev);
-  const late=initial();assert.equal(apply(late,story(8),[e]),990);
+  const later=apply(jump,story(14),[e]);assert.equal(later,prev);
  }
 });
-test('unknown story time, anonymous real-world fame, prior credits and brand incident do not duplicate growth',()=>{
- const s=initial(),e={...effect(20,1),sourceId:'story:0',evidence:'Sam won a public award.',public:true};
- assert.equal(apply(s,story(1),[e]),1000);s.x.audience.credited={'post:p':30};
- assert.equal(apply(s,story(1),[effect(99,0)]),1000);
- const chat=[{mes:'2026-06-01\nThe press publicly identified Moon as Sam.'},...story(2)];
- assert.equal(apply(s,chat,[{...e,sourceId:'story:1',identityFloor:0,identityEvidence:'publicly identified Moon as Sam'}]),1019);
- const after=apply(s,[{mes:'No calendar here.'}],[]);assert.equal(after,1019);
- const b=brandImpact('p',first,25,0,true);s.x[b.id]=b;s.x.profile.alias='Sam';
- assert.equal(apply(s,story(1),[e]),1019);assert.equal(s.x['impact:story:0'],undefined);
+test('unidentified private and unknown post IDs cannot alter the audience; brand loss is settled only once',()=>{
+ const s=initial();assert.throws(()=>apply(s,story(1),[{...effect(200,0),postId:'invented'}]));
+ const brand=brandImpact('deal',first,20,0,true);s.x[brand.id]=brand;
+ assert.equal(apply(s,story(1),[]),1000);assert.ok(apply(s,story(2),[])<1000);
 });
 test('independent new public progress can reverse daily net direction; total cannot go below zero',()=>{
  const s=initial();apply(s,story(1),[effect(0,70)]);
  s.x.q={id:'q',type:'post',author:'user',text:'Public response',postedAtStory:{day:first+1}};
- assert.ok(apply(s,story(2),[{...effect(500,50),sourceId:'post:q'}])>1000);
+ assert.ok(apply(s,story(2),[{...effect(500,50),postId:'q'}])>1000);
  assert.ok(s.x['impact:post:q']);const low=initial();assert.equal(apply(low,story(1),[effect(0,99999)]),0);
 });
 test('editor only saves fields from the selected page, keeps hidden media and other threads private',()=>{
@@ -58,4 +53,17 @@ test('inactivity rounds separately per seven complete story days, never before a
  assert.equal(apply(jump,story(22),[]),9703);
  const none=initial();delete none.x.p;assert.equal(apply(none,story(22),[]),1000);
  const tiny=initial();tiny.x.audience={initialFollowers:49,followers:49};assert.equal(apply(tiny,story(22),[]),49);
+});
+
+test('two new posts about the same person retain their own high or low data at any follower count',()=>{
+ for(const followers of [3,5000000]){
+  const s=initial();
+  s.x.audience={id:'audience',type:'audience',initialFollowers:followers,followers};
+  s.x.q={...s.x.p,id:'q'};
+  const hot={postId:'p',likes:1500000000,reposts:23000,replies:900,gained:12000,lost:6};
+  const quiet={postId:'q',likes:1,reposts:0,replies:0,gained:1,lost:0};
+  assert.equal(apply(s,story(1),[hot,quiet]),followers+11995);
+  assert.equal(s.x.p.metrics.likes,hot.likes);assert.equal(s.x.q.metrics.likes,1);
+  assert.equal(apply(s,story(1),[quiet,hot]),followers+11995);
+ }
 });

@@ -6,7 +6,7 @@ import { CHINESE_NAME_RULE } from './names.js?v=1.1.8';
 import { phoneQuietOptions } from './api-context.js?v=1.1.8';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.17';
 export { validateContacts } from './contacts.js?v=1.1.17';
-import { latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.17';
+import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.25';
 import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.1.13';
 import { narrativeTurn } from './contact-policy.js?v=1.1.13';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.1.8';
@@ -84,7 +84,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const social = ['x','snapchat','whatsapp','wechat'].includes(app);
         const conversation=social||['phone','messages','incoming'].includes(app);
         if(!options.establishedImport&&app!=='daily'){
-            if(conversation){
+            if(app==='x'&&options.postQueries?.length){
+                prompt+=await postMemoryPrompt(context,getSettings(),options.postQueries,isCurrent,undefined,Object.values(state.x||{}).filter(a=>a.type==='account'&&!a.crowd));
+            }else if(conversation){
                 const actors=contact&&contact.contactKind!=='location'?[contact]:[];
                 const query=options.memoryQuery||{actors,names:contact?[contact.name,...(contact.aliases||[])]:[],topic:options.memoryTopic||''};
                 prompt+=xMemoryPrompt(readXMemory(context,getSettings(),query),app);

@@ -32,7 +32,7 @@ export function outreachPrompt(settings,state,user,due) {
         '从近期剧情中的相关人物出发，逐个人物结合近期正文、人设、当下具体动机、熟悉程度、最近交流、是否回应和表达习惯决定内容与渠道，不按关系类型分配平台，可无人联系，也可多人各自联系，无人数配额，不轮流点名。无需证明取得号码、交换账号、共同好友或在通讯录，不编造这些过程。第一次用这个App不等于刚认识；开局旧识与剧情新识按各自真实关系讲话。不得替user回应、接受、接听。被拉黑、拒绝或请求仍待处理的账号不得再发私信。公开@只写适合公开的内容，使用@加user完整账号名。'+
         '每次主动联系写一条<!--durian-outreach:{"channel":"渠道代号","sender":"角色真实姓名","recipient":"user","accountId":"只复制本渠道列出的准确ID，未知则省略，不自行拼name:","text":"实际消息或公开帖全文","motive":"此人当下的具体联系动机","media":"text/image/video","evidence":"本楼实际收到通信的连续逐字原句，优先选一句完整原文"}-->。主动来电仅记录响铃。不要为同一件事再写durian-contact。其他自然短信电话沿用原记录格式。关闭陌生私信请求时只可给已接受的X会话发私信。渠道独立，账号状态：'+JSON.stringify({accounts,xRequestsOpen:state.x?.profile?.requestsOpen!==false})+'。近期各渠道来往（仅用于把握节奏，各人只知自己参与的通信）：'+JSON.stringify(activity);
 }
-export function socialContact(state,row,id,clock,now,user) {
+export function socialContact(state,row,id,clock,now,user,role=null) {
     const app=row.channel.startsWith('x_')?'x':row.channel;
     const records=state[app]||{};
     const matches=Object.values(records).filter(a=>a.type==='account'&&sameNamedPerson(a,{name:row.sender,aliases:row.aliases}));
@@ -52,7 +52,9 @@ export function socialContact(state,row,id,clock,now,user) {
         return [write(account),write({id,type:'post',author:account.id,feed:'home',text:row.text,mentionsUser:true,outreachMention:true,createdAt:now,storyTime:clock,read:false})];
     }
     const normal=app==='x'?account.dmAccepted:account.friend==='friends';
-    if(!normal&&(account.inboundRequest||account.friend==='declined'||(app==='x'&&records.profile?.requestsOpen===false)))return [];
+    if(account.friend==='declined'||account.inboundRequest==='declined')return [];
+    if(role==='user')return [write(old||{...account,friend:'unsaved'}),write({id,type:'message',accountId:account.id,role,kind:row.media,text:row.text,status:'sent',read:true,createdAt:now,storyTime:clock})];
+    if(!normal&&((account.inboundRequest&&role!=='assistant')||(app==='x'&&records.profile?.requestsOpen===false)))return [];
     const kind=['image','video'].includes(row.media)?row.media:'text';
     return [write(normal?account:{...account,inboundRequest:'pending',friend:'incoming'}),write({id,type:'message',accountId:account.id,role:'assistant',kind,text:row.text,status:'received',read:false,createdAt:now,storyTime:clock})];
 }

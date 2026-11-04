@@ -217,3 +217,37 @@ test('pacing metadata is bounded, contact-specific, and excludes expired text an
  const text=JSON.stringify(result);assert.ok(!/PRIVATE|SECRET|createdAt|order|queued|failed/.test(text));
  assert.equal(recentContactActivity(state,now).recent.at(-1).medium,'call');
 });
+
+test('WhatsApp narration imports a completed exchange in order without outreach or a model and follows its revision',async()=>{
+ const f=setup();
+ const make=(sender,text,evidence)=>({platform:'whatsapp',sender,recipient:sender==='user'?'Alex':'user',action:sender==='user'?'sent':'received',kind:'text',text,evidence});
+ const floor=rows=>({mes:rows.map(r=>r.evidence).join('\n')+rows.map(r=>'<!--durian-message:'+JSON.stringify(r)+'-->').join('')});
+ const rows=()=>Object.values(f.phone.snapshot().whatsapp).filter(r=>r.type==='message');
+ try{
+  f.context.extensionSettings={personal_pocket_phone:{proactiveEnabled:false}};
+  const a=make('user','Ready?','Sam sent Alex “Ready?” on WhatsApp.'),b=make('Alex','Yes.','Alex replied on WhatsApp: Yes.'),c=make('Alex','See you.','Alex sent a second WhatsApp: See you.');
+  f.context.chat.push(floor([a,b,c]));await f.memory.read();
+  assert.deepEqual(rows().map(r=>[r.text,r.role,r.status,r.read]),[['Ready?','user','sent',true],['Yes.','assistant','received',false],['See you.','assistant','received',false]]);
+  assert.equal(new Set(rows().map(r=>r.accountId)).size,1);
+  await f.memory.read();assert.equal(rows().length,3);
+  f.context.chat.push(floor([make('user','Ready?','Sam remembered sending “Ready?” yesterday.'),make('user','Hi','Sam was about to send “Hi”.'),make('user','invented','Sam set the phone down.')]));
+  await f.memory.read();assert.equal(rows().length,3);
+  f.context.chat.push(floor([make('user','Ready?','Sam sent “Ready?” again on WhatsApp.')]));await f.memory.read();assert.equal(rows().length,4);
+  f.context.chat[f.context.chat.length-1]=floor([make('user','Later!','Sam sent “Later!” on WhatsApp.')]);await f.memory.read();assert.deepEqual(rows().map(r=>r.text),['Ready?','Yes.','See you.','Later!']);
+  f.context.chat.length=1;await f.memory.read();assert.deepEqual(rows(),[]);assert.equal(f.requests(),0);
+ }finally{f.close();}
+});
+
+test('a WhatsApp outreach and ordinary marker for the same delivery import once after save and reload',async()=>{
+ const f=setup();try{
+  const evidence='Alex sent Sam a WhatsApp message: Good morning.';
+  const common={sender:'Alex',recipient:'user',text:'Good morning.',evidence};
+  const regular='<!--durian-message:'+JSON.stringify({...common,platform:'whatsapp',kind:'text',action:'received'})+'-->';
+  const outreach='<!--durian-outreach:'+JSON.stringify({...common,channel:'whatsapp',media:'text',motive:'greeting'})+'-->';
+  f.context.chat.push(...Array.from({length:3},()=>({mes:'Another scene.'})),{mes:evidence+regular+outreach});
+  await f.memory.read();const before=f.phone.snapshot();
+  assert.equal(Object.values(before.whatsapp).filter(r=>r.type==='message').length,1);
+  f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));await f.memory.read();
+  assert.deepEqual(f.phone.snapshot().whatsapp,before.whatsapp);assert.equal(f.requests(),0);
+ }finally{f.close();}
+});

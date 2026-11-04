@@ -2,7 +2,7 @@ import {privilegePrompt} from './x-privilege.js?v=1.1.18';
 import {readStoryClock} from './story-clock.js?v=1.1.12';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.13';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.1.8';
-import { buildSquarePrompt } from './square-core.js?v=1.1.22';
+import { buildSquarePrompt } from './square-core.js?v=1.1.25';
 export const OPINION_KEY='durian_phone_public_opinion';
 // Keep legacy imports compatible; old automatic opinions and narrative square
 // tags no longer create or inject records. Existing journal data is preserved.
