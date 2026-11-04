@@ -251,3 +251,62 @@ test('a WhatsApp outreach and ordinary marker for the same delivery import once 
   assert.deepEqual(f.phone.snapshot().whatsapp,before.whatsapp);assert.equal(f.requests(),0);
  }finally{f.close();}
 });
+
+const xFloor=(prose,...rows)=>({mes:prose+'\n'+rows.map(r=>'<!--durian-x:'+JSON.stringify(r)+'-->').join('\n')});
+test('narrative X publishes an image and original text under the alias, threads evidenced replies and rolls back without requests',async()=>{
+ const f=setup();
+ try{
+  const apps=Object.fromEntries(Object.keys(f.settings.apps).map(k=>[k,k==='x']));
+  f.context.extensionSettings={personal_pocket_phone:{apps,proactiveEnabled:false}};
+  Object.assign(f.settings,{apps,proactiveEnabled:false});
+  await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[{collection:'x',key:'profile',value:{id:'profile',type:'profile',alias:'Moon'}}]);
+  await f.bridge.prepare();assert.match(f.prompts[STORY_PHONE_KEY].value,/<!--durian-x:/);
+  const evidence='19:23 Sam posted on X: “Evening!”',imageDescription='a moon over the lake';
+  const reply={name:'Alex',text:'So quiet.',evidence:'Alex replied: “So quiet.”'};
+  const row={action:'published',author:'user',text:'Evening!',time:'19:23',evidence,imageDescription,replies:[reply,reply,{...reply,text:'Never written'}]};
+  f.context.chat.push(xFloor(['2026-09-02 19:30',evidence,imageDescription,reply.evidence].join('\n'),row,row));
+  const readX=async()=>(await f.memory.read()).state.x;
+  let x=await readX();
+  const records=(x,type)=>Object.values(x).filter(r=>r.type===type);
+  const [post]=records(x,'post'),[comment]=records(x,'comment');
+  assert.equal(records(x,'post').length,1);assert.equal(records(x,'comment').length,1);
+  assert.deepEqual([post.author,post.alias,post.text,post.imageDescription,post.sourceIndex],['user','Moon','Evening!',imageDescription,1]);
+  assert.deepEqual(post.storyTime,{date:'2026-09-02',time:'19:23',precision:'scene'});assert.ok(Number.isInteger(post.postedAtStory.day));
+  assert.deepEqual([comment.postId,x[comment.author].name,comment.text],[post.id,'Alex','So quiet.']);
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>({x}),redraw(){},notice(){}});
+  await panel.action('profile');assert.match(panel.html(),/Evening!/);assert.match(panel.html(),/配图.*a moon over the lake/);assert.match(panel.html(),/2026-09-02 19:23/);
+  await panel.action('comments',post.id);assert.match(panel.html(),/Alex：<\/strong>So quiet\./);
+  f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));assert.deepEqual(await readX(),x);
+  const later={action:'reply',postId:post.id,name:'Alex',text:'Back again.',evidence:'Alex replied: Back again.'};
+  f.context.chat.push(xFloor(later.evidence,later,{...later,postId:'missing'}));x=await readX();
+  assert.deepEqual(records(x,'comment').map(c=>[c.postId,c.author,c.text]),[[post.id,comment.author,'So quiet.'],[post.id,comment.author,'Back again.']]);
+  f.context.chat.pop();assert.equal(records(await readX(),'comment').length,1);
+  const imageOnly={action:'published',author:'user',evidence:'Sam published a photograph.',imageDescription};
+  f.context.chat[1]=xFloor(imageOnly.evidence+' '+imageDescription,imageOnly);x=await readX();
+  assert.equal(records(x,'post').length,1);assert.equal(records(x,'post')[0].text,'');assert.equal(records(x,'comment').length,0);
+  assert.equal(x[post.id],undefined);f.context.chat.pop();assert.equal(records(await readX(),'post').length,0);
+  assert.equal(f.requests(),0);
+ }finally{f.close();}
+});
+
+test('X imports only evidenced user posts from completed narrative and respects the app switch',async()=>{
+ const f=setup();
+ try{
+  const row={author:'user',action:'published',text:'Hello!',evidence:'Sam published on X: Hello!'};
+  const floor=xFloor(row.evidence,row);
+  const draft={...row,evidence:'Sam was about to post: Hello!'};
+  f.context.chat.push({...floor,is_user:true},{...floor,is_system:true},xFloor(draft.evidence,draft),
+   xFloor(row.evidence,{...row,author:'Alex'},{...row,text:'invented'},{...row,imageDescription:'unwritten'}),
+   xFloor('No public action.',row));
+  assert.deepEqual((await f.memory.read()).state.x,{});
+  f.context.extensionSettings={personal_pocket_phone:{apps:{x:false}}};
+  f.context.chat.push(floor);await f.memory.read();
+  f.context.extensionSettings.personal_pocket_phone.apps.x=true;
+  assert.deepEqual((await f.memory.read()).state.x,{});
+  f.bus.emit('GENERATION_STARTED','normal');f.context.chat.push(floor);await f.memory.read();
+  assert.equal(f.context.chatMetadata[JOURNAL_KEY].events.some(e=>e.source.index===f.context.chat.length-1),false);
+  f.bus.emit('GENERATION_ENDED');assert.equal(Object.values((await f.memory.read()).state.x).filter(r=>r.type==='post').length,1);
+ }finally{f.close();}
+});
