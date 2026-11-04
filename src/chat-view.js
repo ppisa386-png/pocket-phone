@@ -88,7 +88,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         let body='';
         if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名')+(wc?'':'<small>添加多个好友可以用、间隔名字</small>'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
         else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!wc&&!a.blocked&&a.friend==='friends'?button('cash','转账',a.id,'',disabled()):'')+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
-        else if(a&&page==='cash')body='<div class="pp-chat-settings">'+form('cash',field('amount','转账金额（'+(walletCurrency(getView())||'先建账')+'）','','number')+field('memo','附言'),'确认转账')+'</div>';
+        else if(a&&page==='cash')body='<div class="pp-chat-settings">'+form('cash',field('amount',wc?'转账金额（'+(walletCurrency(getView())||'先建账')+'）':'转账金额','','number')+field('memo','附言'),'确认转账')+'</div>';
         else if(a)body=threadHTML(a);
         else if(tab==='me')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(p.alias)+'<h2>'+chatEsc(p.alias)+'</h2><span>'+label+'</span></div>'+form('profile',field('alias','昵称',p.alias),'保存个人设置')+'</div>';
         else body=tab==='calls'?callsHTML():listHTML();
@@ -148,7 +148,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
                 await perform('flushMessages',[id]);redraw();return;
             }
             if(name==='call'){const call=threadItems(id).find(i=>i.type==='call'&&i.status==='connected');if(call){const result=await perform('call',[id,call.mode,data.call,call.id]);if(token===epoch&&result?.ok)delete drafts[prefix+'call'];}redraw();return;}
-            if(name==='cash'){const result=await perform('transfer',[id,data.amount,walletCurrency(getView()),data.memo]);if(token===epoch&&result?.ok){delete drafts[prefix+'amount'];delete drafts[prefix+'memo'];page='';await perform('settle',[result.value,true]);}redraw();}
+            if(name==='cash'){const result=await perform('transfer',[id,data.amount,wc?walletCurrency(getView()):null,data.memo]);if(token===epoch&&result?.ok){delete drafts[prefix+'amount'];delete drafts[prefix+'memo'];page='';await perform('settle',[result.value,true]);}redraw();}
         },
     };
 }
