@@ -92,6 +92,10 @@ for(const app of ['wechat','whatsapp'])test(app+' uses the wallet currency for t
   await f.memory.commit(await f.memory.begin(),[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',currency:'JPY',region:'JP',openingMinor:3000,included:[],startDay:0}}]);
   assert.equal((await f.api.transfer(account,'12.34','JPY','')).ok,false);
   assert.equal((await f.api.transfer(account,'500','USD','')).ok,false);
+  const automatic=await f.api.transfer(account,'200',null,'使用账本币种');ok(automatic);
+  assert.equal(f.state()[app][automatic.value].currency,'JPY');
+  assert.equal(f.state()[app][automatic.value].amountMinor,200);
+  ok(await f.api.settle(automatic.value,false));
   const pending=await f.api.transfer(account,'500','JPY','车费');ok(pending);assert.equal(reservedCash(f.state()),500);
   f.reply({status:'accepted'});ok(await f.api.settle(pending.value));assert.equal(cashBalance(f.state()),2500);assert.equal(reservedCash(f.state()),0);
   assert.match(f.prompt(),/"amount":500,"currency":"JPY"/);
