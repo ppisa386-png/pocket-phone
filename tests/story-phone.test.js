@@ -41,6 +41,13 @@ test('reading a narrative SMS remains read when the next story floor repeats its
     assert.equal(messages.length,1);
     assert.equal(messages[0].id,original.id);
     assert.equal(messages[0].read,true);
+    // Historical references many floors later must still resolve to the
+    // first imported message rather than a fresh notification.
+    for(let i=0;i<8;i++)f.context.chat.push({is_user:false,mes:'The story advances without any new communication.'});
+    f.context.chat.push(annotation(row,'Sam recalled Alex’s earlier SMS again several scenes later.'));
+    await f.memory.read();
+    assert.equal(Object.values(f.phone.snapshot().messages).length,1);
+    assert.equal(f.phone.snapshot().messages[original.id].read,true);
     await f.memory.read();
     assert.equal(Object.values(f.phone.snapshot().messages).length,1);
     // A different newly received SMS must still be imported and unread.
