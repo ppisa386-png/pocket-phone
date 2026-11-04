@@ -155,7 +155,7 @@ const territories = {
     ZMW: 'ZM',
     ZWG: 'ZW',
 };
-export const RESIDENCE_RULE = '根据调取的 user 人设及最近不超过十轮正文里 user 长期居住、定居、工作学习和日常生活的环境，确定常住地区和当地通货。首次地区判断只使用persona与residenceContext（最近至多十条AI正文，按时间顺序）；不要使用其他财务资料中的更早正文判断常住地。明确的当前生活环境优先于过时设定。没有准确的国家或城市名称时，允许结合人物姓名、生活方式、学校与工作制度、社会文化及日常环境智能推断。例如人物普遍使用中国名字，整体生活环境也明显符合中国，即使没有写出中国或具体中国城市名，也可判断为中国；其他国家和地区同理。不能仅因为正文使用中文就判断为中国；明确的国外生活背景优先于姓名线索。旅游、出差或他人所在地不等于user常住地。返回residence:{region:两位地区代码,currency:当地三位货币代码,place:判断出的国家或地区或城市,inferred:是否基于环境推断,reason:简述判断依据,evidence:可选的原文片段数组}。place允许填写推断出的真实地区，不要求该地名逐字出现在原文；可以只确定国家或地区，不必编造具体城市。推断时inferred:true、reason说明所用环境线索，evidence可省略，不把推断结论伪装为原文引文。直接引用明确地点时inferred:false，evidence填写原文片段，可来自人设或近期多轮正文；不要求原文出现国家全名或“常住”二字。综合资料仍无法合理判断时返回residence:null，不按正文语言默认币种。';
+export const RESIDENCE_RULE = '根据 user 人设及当前酒馆上下文里 user 长期居住、定居、工作学习和日常生活的环境，确定常住地区和当地通货。首次地区判断依据人设、可见剧情与近期正式摘要。明确的当前生活环境优先于过时设定。没有准确的国家或城市名称时，允许结合人物姓名、生活方式、学校与工作制度、社会文化及日常环境智能推断。例如人物普遍使用中国名字，整体生活环境也明显符合中国，即使没有写出中国或具体中国城市名，也可判断为中国；其他国家和地区同理。不能仅因为正文使用中文就判断为中国；明确的国外生活背景优先于姓名线索。旅游、出差或他人所在地不等于user常住地。返回residence:{region:两位地区代码,currency:当地三位货币代码,place:判断出的国家或地区或城市,inferred:是否基于环境推断,reason:简述判断依据,evidence:可选的原文片段数组}。place允许填写推断出的真实地区，不要求该地名逐字出现在原文；可以只确定国家或地区，不必编造具体城市。推断时inferred:true、reason说明所用环境线索，evidence可省略，不把推断结论伪装为原文引文。直接引用明确地点时inferred:false，evidence填写原文片段，可来自人设或近期多轮正文；不要求原文出现国家全名或“常住”二字。综合资料仍无法合理判断时返回residence:null，不按正文语言默认币种。';
 // Compare quoted facts, tolerating display markup/spacing but never paraphrase.
 function residenceText(value) {
     return String(value||'').normalize('NFKC').replace(/<[^>]*>/g,' ')

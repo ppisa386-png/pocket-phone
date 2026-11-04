@@ -268,7 +268,7 @@ function phoneFixture(onError = () => {}) {
     return {context,settings,phone,memory,bus,signal:()=>signal,reply:fn=>responder=fn,close(){client.cancel();phone.destroy();memory.destroy();}};
 }
 
-test('actual independent social payload retains unsummarized latest prose when host history was trimmed',async()=>{
+test('actual independent social payload does not restore prose excluded by host history',async()=>{
     const f=phoneFixture(),original=globalThis.qqj_v3_public_bridge_v1;let calls=0;
     try{
         f.context.chat.push({mes:'Alex JUST_FINISHED_THE_TRIP with Sam. This was private.'});
@@ -276,8 +276,8 @@ test('actual independent social payload retains unsummarized latest prose when h
         f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
         f.reply(options=>{calls++;const payload=JSON.parse(options.body);
             assert.ok(payload.messages.every(m=>m.role==='system'),'fixture stripped ordinary story messages');
-            assert.match(JSON.stringify(payload.messages),/JUST_FINISHED_THE_TRIP/);
-            assert.match(JSON.stringify(payload.messages),/This was private/);
+            assert.doesNotMatch(JSON.stringify(payload.messages),/JUST_FINISHED_THE_TRIP/);
+            assert.doesNotMatch(JSON.stringify(payload.messages),/This was private/);
             assert.match(payload.messages.at(-1).content,/本次为X刷新/);
             assert.equal(payload.temperature,0.83);return '{"posts":[]}';
         });
@@ -393,7 +393,7 @@ test('independent trends preserve original publication scene and use trend schem
   f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
   f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);
    assert.equal(last.role,'system');assert.match(last.content,/本次刷新趋势仅输出/);assert.match(last.content,/sourcePostIds/);assert.doesNotMatch(last.content,/本次为X刷新/);
-   assert.match(JSON.stringify(body.messages),/PUBLIC_BRIDGE_FAILURE/);assert.match(JSON.stringify(body.messages),/local resident/);assert.equal(body.temperature,0.83);
+   assert.doesNotMatch(JSON.stringify(body.messages),/PUBLIC_BRIDGE_FAILURE/);assert.match(JSON.stringify(body.messages),/local resident/);assert.equal(body.temperature,0.83);
    return JSON.stringify({topics:[{title:'Bridge closed',summary:'Commuters discuss the closure',scope:'Local',postCount:3200,sourcePostIds:[post.id]}],evaluations:[{postId:post.id,eligible:true,reason:'The public event affects commuters'}]});
   });
   const result=await x.refreshTrends();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(f.phone.snapshot().x['trend-edition'].topics.length,1);
@@ -406,7 +406,7 @@ test('independent assessment puts pending IDs and mandatory estimation after hos
  try{
   f.context.chat=[{mes:'日期：2026-01-01\nSam生活在美国。'}];f.reply(()=>JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:80,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
   const fact='Sam支付了公交车费。';f.context.chat.push({mes:'日期：2026-01-02\n'+fact+'<!--durian-money:'+JSON.stringify({kind:'expense',name:'车费',amount:null,evidence:fact})+'-->'});await f.memory.read();
-  f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);assert.match(last.content,/不要求正文后来补数字/);assert.match(last.content,/P1/);assert.match(last.content,/车费/);assert.doesNotMatch(last.content,/金额未知用null/);assert.match(last.content,/常住地已经确认并保存为 US/);assert.match(last.content,/expenseFloorSummaries/);assert.doesNotMatch(last.content,/无法确定就返回 residence:null/);
+  f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);assert.match(last.content,/不要求正文后来补数字/);assert.match(last.content,/P1/);assert.match(last.content,/车费/);assert.doesNotMatch(last.content,/金额未知用null/);assert.match(last.content,/常住地已经确认并保存为 US/);assert.match(last.content,/expenseSummaryIndices/);assert.doesNotMatch(last.content,/无法确定就返回 residence:null/);
    return JSON.stringify({events:[{ref:'P1',amount:3}],living:{total:3,bookedIds:['P1']},business:[]});});
   const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(cashBalance(f.phone.snapshot()),7700);
  }finally{f.close();}

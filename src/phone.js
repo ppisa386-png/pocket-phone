@@ -4,14 +4,13 @@ import { exactStoryTime } from './story-clock.js?v=1.1.12';
 import { isMemoryHidden } from './journal.js?v=1.1.13';
 import { CHINESE_NAME_RULE } from './names.js?v=1.1.8';
 import { phoneQuietOptions } from './api-context.js?v=1.1.8';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.12';
-export { validateContacts } from './contacts.js?v=1.1.12';
-import { readPreparedMemory, preparedMemoryPrompt, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.14';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.17';
+export { validateContacts } from './contacts.js?v=1.1.17';
+import { latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.17';
 import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.1.13';
 import { narrativeTurn } from './contact-policy.js?v=1.1.13';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.1.8';
 
-import { recentSocialStory, socialStoryPrompt } from './social-context.js?v=1.1.8';
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
 export function parseJSON(text) {
@@ -82,15 +81,17 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             if (characterId < 0) throw new Error('通信角色已不可用。');
             contact = { ...contact, characterId };
         }
-        // Capture before host quiet generation clears the plugin's prepared slot.
         const social = ['x','snapchat','whatsapp','wechat'].includes(app);
-        if (!social) prompt += preparedMemoryPrompt(readPreparedMemory(context, getSettings()));
-        if (social && !options.establishedImport) {
-            const story = recentSocialStory(context);
-            const query = { ...options.memoryQuery, topic: String(options.memoryQuery?.topic || '').slice(-4000) + '\n' + story.rows.map(row => row.text).join('\n').slice(-4000) };
-            prompt += xMemoryPrompt(readXMemory(context, getSettings(), query), {x:'X',snapchat:'Snapchat',whatsapp:'WhatsApp',wechat:'微信'}[app]);
-            prompt += actorMemoryPrompt(await readActorMemory(context, getSettings(), query, isCurrent));
-            prompt += socialStoryPrompt(story);
+        const conversation=social||['phone','messages','incoming'].includes(app);
+        if(!options.establishedImport&&app!=='daily'){
+            if(conversation){
+                const actors=contact&&contact.contactKind!=='location'?[contact]:[];
+                const query=options.memoryQuery||{actors,names:contact?[contact.name,...(contact.aliases||[])]:[],topic:options.memoryTopic||''};
+                prompt+=xMemoryPrompt(readXMemory(context,getSettings(),query),app);
+                prompt+=actorMemoryPrompt(await readActorMemory(context,getSettings(),query,isCurrent));
+            }else{
+                prompt+=xMemoryPrompt(options.summarySnapshot||latestMemory(context,getSettings()),app);
+            }
         }
         const smsPlan = contact?.id && ['phone','messages','incoming'].includes(app) && !options.skipSMSClassification
             ? smsClassificationPlan(state,contact.id,exactStoryTime(context.chat)) : null;
@@ -207,7 +208,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             const result = { ...data, ...validateCall(data) };
             if (first === 'incoming' && result.status !== 'answered') throw new Error('接听回复格式不正确，请重试。');
             return result;
-        }, current, contact);
+        }, current, contact,{memoryTopic:call.turns.map(t=>t.text).join('\n')+'\n'+(call.acquisition?.reason||'')});
         if (!current()) return;
         const updated = clone(call);
         updated.status = reply.status === 'answered' ? 'connected' : reply.status;
@@ -234,7 +235,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             '\n需要回应的短信：' + JSON.stringify(batch.map(m=>m.text)) + '\n这是本次连续发送的一组短信，请一起理解和回应。' +
             '\n只输出 JSON：{"status":"reply 或 no_reply","text":"短信正文"}。如果当前剧情下对方暂时不回复，用 no_reply 且 text 为空字符串。';
         try {
-            const reply = await request(prompt + eventReplyPrompt(), data => ({ ...data, ...validateSMS(data) }), current, contact);
+            const reply = await request(prompt + eventReplyPrompt(), data => ({ ...data, ...validateSMS(data) }), current, contact,{memoryTopic:batchText});
             if (!current()) return;
             const changes = [...batch.map(m=>set('messages',m.id,{...m,replyStatus:reply.status==='reply'?'received':'no_reply'})), ...replyEventChanges(reply,contact,batchText,batch.map(m=>m.id))];
             if (reply.status === 'reply') changes.push(set('messages', 'reply:' + message.id, {
@@ -352,7 +353,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                         retryable: false, diagnostic: '候选人数：' + data.contacts.length + '；通过人数：0\n' + rejected.join('\n'),
                     });
                     return found;
-                }, valid, null, { retries: 0 }, current.job);
+                }, valid, null, { retries: 0, establishedImport:true }, current.job);
                 if (!valid()) return;
                 const additions = contacts.filter(contact => !view.state.contacts[contact.id]);
                 const renamed = contacts.filter(contact => view.state.contacts[contact.id] && view.state.contacts[contact.id].name !== contact.name);
@@ -505,7 +506,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if(smsExpired(view.state.smsContext?.[m.id],exactStoryTime(getContext().chat)))throw new Error('这条历史短信已不能用于重新生成，可以手动编辑。');
                 const ticket=await memory.begin(),thread=smsForAI(view.state,m.contactId,exactStoryTime(getContext().chat));
                 const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.messages+'\n当前渠道：短信。仅重写选中的一条 char 短信，保持其他消息不变，不产生新的主动联系事件。对方真实姓名：'+JSON.stringify(contact.name)+'；此前短信：'+JSON.stringify(thread.slice(0,thread.findIndex(x=>x.id===m.id)).map(({role,text})=>({role,text})))+'；选中的短信：'+JSON.stringify(m.text)+'\n仅基于此前交流重写，不预知后续。只输出 {"text":"这一条短信的新内容"}。';
-                const result=await request(prompt,d=>{if(typeof d.text!=='string'||!d.text.trim()||d.text.length>6000)throw new Error('短信格式不正确。');return {text:d.text.trim()};},current,contact,{skipSMSClassification:true});
+                const result=await request(prompt,d=>{if(typeof d.text!=='string'||!d.text.trim()||d.text.length>6000)throw new Error('短信格式不正确。');return {text:d.text.trim()};},current,contact,{skipSMSClassification:true,memoryTopic:m.text});
                 if(current())await memory.commit(ticket,[set('messages',m.id,{...m,text:result.text})]);
             },'messages');
         },

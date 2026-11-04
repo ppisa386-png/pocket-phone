@@ -46,7 +46,7 @@ export function createApiPanel({ adapter, getSettings, persist, redraw }) {
                 const report = adapter.memoryStatus?.({ ...getSettings(), api: draft });
                 body = '<div class="pp-card pp-form"><label class="pp-field"><span>记忆来源</span><select data-api-field="memorySource"' + disabled + '><option value="qqj"' + (source === 'qqj' ? ' selected' : '') + '>千千结</option><option value="none"' + (source === 'none' ? ' selected' : '') + '>关闭</option></select></label></div>' +
                     '<p class="pp-footnote" data-memory-status>' + apiEscape(report?.message || '请在酒馆内查看接口状态。') + '</p><button type="button" class="pp-text-button" data-api-action="memory-refresh">刷新状态</button>' +
-                    '<p class="pp-footnote">读取当前聊天已准备的召回与前情，不额外调用模型。没有材料时使用正文与手机记录；先完成一次正文召回后可再读。隐藏楼层不等于删除。删改楼层后不用旧材料，待千千结重新准备。</p>';
+                    '<p class="pp-footnote">从当前聊天的正式楼层摘要中按任务选择最近或相关的最多20条；社交任务可补充对应人物记忆。日报与开局名单导入不读取摘要。</p>';
             } else {
                 body = '<div class="pp-card pp-info"><p>两种模式均使用酒馆的完整生成流程；独立 API 只更换接收请求的接口和模型。独立模式需要酒馆使用「聊天补全」连接类型。</p><p>内容语言跟随已启用的预设文本。测试连接仅发送简短测试消息，不携带角色或剧情，会消耗少量 token；获取模型失败时仍可手填模型 ID。</p><p>短信、电话及后续 App 的使用记录继续随聊天保存与删楼回退。API 配置不随删楼改变；聊天变化后旧请求结果不会写入记录。</p><p>允许主动联系时，正文完成和拒接等操作可能调用模型；可在「主动联系」页暂停。</p></div>';
             }

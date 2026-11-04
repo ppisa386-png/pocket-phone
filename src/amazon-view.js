@@ -1,4 +1,4 @@
-import { shopItems, shopMoney } from './amazon.js?v=1.1.12';
+import { shopItems, shopMoney } from './amazon.js?v=1.1.17';
 import { dayDate, readStoryClock } from './story-clock.js?v=1.1.12';
 import { deliveryStatus } from './delivery.js?v=1.1.13';
 import { icon } from './icons.js?v=1.1.8';

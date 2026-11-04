@@ -72,11 +72,11 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   const identity={hostChatId:'x-test'};
   globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'}),getSnapshot:()=>({status:'not-ready'}),getPeopleSnapshot:()=>({status:'ready',identity,people:{status:'ready',items:[{displayName:'Alex',entityId:'a'}]}}),readContext:async options=>{calls++;topic=options.query;assert.deepEqual(options.entityIds,['a']);return {status:'ready',identity,actors:[{entityId:'a',memoryText:'ALREADY_KNOWN, private; plan not completed'},{entityId:'b',memoryText:'OTHER_SECRET'}],routerText:'ROUTER_SECRET'};}};
   f.reply({text:'I remember.'});const before=f.count();ok(await f.x.comment(post.id,'CURRENT_COMMENT_TOPIC'));
-  assert.equal(f.count(),before+1);assert.equal(calls,1);assert.match(topic,/CURRENT_COMMENT_TOPIC/);assert.match(topic,/JUST_OPENED_THE_GIFT/);
-  assert.match(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.match(f.prompt(),/ALREADY_KNOWN/);assert.doesNotMatch(f.prompt(),/OTHER_SECRET|ROUTER_SECRET/);
+  assert.equal(f.count(),before+1);assert.equal(calls,1);assert.match(topic,/CURRENT_COMMENT_TOPIC/);assert.doesNotMatch(topic,/JUST_OPENED_THE_GIFT/);
+  assert.doesNotMatch(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.match(f.prompt(),/ALREADY_KNOWN/);assert.doesNotMatch(f.prompt(),/OTHER_SECRET|ROUTER_SECRET/);
   assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/JUST_OPENED_THE_GIFT|ALREADY_KNOWN/);
   f.reply({posts:[]});ok(await f.x.refresh('square'));assert.equal(calls,1,'crowd-only square never requests actors private state');
-  f.settings.api.memorySource='none';f.reply({text:''});ok(await f.x.comment(post.id,'Another comment'));assert.match(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.doesNotMatch(f.prompt(),/ALREADY_KNOWN/);
+  f.settings.api.memorySource='none';f.reply({text:''});ok(await f.x.comment(post.id,'Another comment'));assert.doesNotMatch(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.doesNotMatch(f.prompt(),/ALREADY_KNOWN/);
  }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
 });
 
@@ -387,8 +387,6 @@ test('X feed requests preset dialogue translation and keeps original and transla
 
 for (const independent of [false,true]) test('X binds short captions to their own earlier events in feed and thread, '+(independent?'independent':'host'),async()=>{
  const f=setup(undefined,independent);
- const scenes=()=>JSON.parse(f.prompt().split('partial 表示材料不全。\n')[1].split('\n')[0]);
- const textFor=(scene,id)=>scene.links.find(row=>row.id===id).floors.map(index=>scene.rows.find(row=>row.messageIndex===index).text).join(' ');
  try {
   const id=await account(f);
   f.context.chat.push({mes:'校队在决赛最后一秒反超，拿下首个冠军。'});await f.memory.read();
@@ -398,10 +396,9 @@ for (const independent of [false,true]) test('X binds short captions to their ow
   ok(await f.x.publish('终于。'));const second=xItems(f.state(),'post')[1];
   for(let i=0;i<8;i++)f.context.chat.push({mes:'几天后 '+i});await f.memory.read();
   f.reply({posts:[],replies:[{postId:first.id,accountId:id,text:'我还记得最后一秒。'}]});ok(await f.x.refresh());
-  const scene=scenes();assert.match(textFor(scene,first.id),/首个冠军/);assert.doesNotMatch(textFor(scene,first.id),/私下和解|几天后/);
-  assert.match(textFor(scene,second.id),/私下和解/);assert.doesNotMatch(textFor(scene,second.id),/首个冠军|几天后/);
+  assert.ok(f.prompt().includes(first.id)&&f.prompt().includes(second.id));assert.doesNotMatch(f.prompt(),/首个冠军|私下和解/);
   f.reply({text:''});const comment=xItems(f.state(),'comment')[0];ok(await f.x.comment(first.id,'是啊。',comment.id));
-  assert.deepEqual(scenes().links.map(row=>row.id),[first.id]);assert.match(textFor(scenes(),first.id),/首个冠军/);
+  assert.ok(f.prompt().includes(first.id));assert.doesNotMatch(f.prompt(),/首个冠军/);
   assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/校队在决赛|两位室友/);
  } finally {f.close();}
 });
@@ -420,10 +417,7 @@ for(const independent of [false,true])test('X trends '+(independent?'independent
   for(let i=0;i<8;i++)f.context.chat.push({mes:'Unrelated later event '+i});await f.memory.read();
   const before=structuredClone(f.state().x),response=trendResult([victory]);response.evaluations.push({postId:personal.id,eligible:false,reason:'匿名短句未公开私人和解，不能把私人经过当作话题'});
   f.reply(response);ok(await f.x.refreshTrends());assert.equal(f.count(),1);
-  const prompt=f.prompt(),raw=prompt.split('partial 表示材料不全。\n')[1].split('\n')[0],scene=JSON.parse(raw);
-  assert.ok(scene.rows.some(r=>r.text.includes('WON_THE_PUBLIC_CHAMPIONSHIP')));
-  assert.ok(scene.links.find(l=>l.id===victory.id).floors.every(i=>i<=victory.sourceIndex));
-  assert.ok(scene.links.find(l=>l.id===personal.id).floors.includes(personal.sourceIndex));
+  const prompt=f.prompt();assert.doesNotMatch(prompt,/WON_THE_PUBLIC_CHAMPIONSHIP|PRIVATELY_RECONCILED/);assert.ok(prompt.includes(victory.id)&&prompt.includes(personal.id));
   assert.match(prompt,/well-known athlete/);assert.match(prompt,/"audience":null/);assert.match(prompt,/"counts":\{"likes":0/);
   assert.match(prompt,/匿名账号不能直接继承真人名气/);assert.match(prompt,/零计数不构成不上榜的硬门槛/);assert.match(prompt,/知名人物的平常帖子也可以不上榜/);
   assert.match(prompt,/"sourcePostIds"/);assert.equal(f.state().x['trend-edition'].topics[0].sourcePostIds[0],victory.id);

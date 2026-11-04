@@ -57,7 +57,7 @@ test('economic rights: one-time payment without retained rights creates only cas
 test('economic rights: existing contract and new commercial performance reach each assessment',async()=>{
  const f=await opened(true);try{
  for(const [date,prose,income,value] of [['2026-02-01','项目销售强劲，月底合同结算条件已满足。',2000,50000],['2026-03-01','项目热度下降，本期合同结算条件已满足但收益显著减少。',100,5000]]){
-  await f.append(prose,date);f.reply({...evaluation(date),valuations:[{id:holdingId,value}],business:[{id:holdingId,netIncome:income,bookedIds:[]}]});ok(await f.assets.update());assert.ok(f.prompt().includes(prose));assert.ok(f.prompt().includes(terms));
+  await f.append(prose,date);f.reply({...evaluation(date),valuations:[{id:holdingId,value}],business:[{id:holdingId,netIncome:income,bookedIds:[]}]});ok(await f.assets.update());assert.ok(!f.prompt().includes(prose));assert.ok(f.prompt().includes(terms));
  }
  assert.equal(cashBalance(f.state()),310000);assert.equal(f.state().assets[holdingId].valueMinor,500000);assert.match(f.prompt(),/每次检查已有 investment/);assert.match(f.prompt(),/遇冷不自动产生现金亏损/);
  }finally{f.close();}

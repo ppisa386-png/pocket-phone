@@ -258,9 +258,9 @@ try {
         check(await p.locator('[data-api-status]').getAttribute('data-kind') === 'success', 'successful save has green success state');
         check(await p.locator('[data-api-status]').evaluate(el => {const box=el.getBoundingClientRect();const parent=el.closest('.pp-content').getBoundingClientRect();return box.top>=parent.top && box.bottom<=parent.bottom;}), 'save feedback stays visible in the phone viewport');
         await p.locator('[data-api-action="tab:memory"]').tap();
-        await p.evaluate(()=>{const c=window.SillyTavern.getContext();window.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},recall:{text:'Prepared memory for phone test'},prequel:{text:'Earlier scene'}})};});
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();window.qqj_v3_public_bridge_v1={getSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},memory:{status:'ready',floors:[{messageIndex:c.chat.findIndex(m=>!m.is_user&&!m.is_system),summary:'Alex saved memory for phone test'}]}})};});
         await p.locator('[data-api-action="memory-refresh"]').tap();
-        await p.getByText('已连接千千结，当前召回与前情可读取。',{exact:true}).waitFor();
+        await p.getByText('当前聊天可读取 1 条近期正式摘要。',{exact:true}).waitFor();
 
         await p.reload(); await p.locator('.pp-launcher').tap(); await p.locator('[data-app="settings"]').tap();
         await p.locator('[data-section="api"]').tap();
@@ -271,7 +271,7 @@ try {
         await p.locator('[data-api-field="baseUrl"]').fill('https://fixture.example/v1');
         check(await p.locator('[data-api-field="key"]').inputValue() === 'test-browser-key', 'returning to the saved provider restores only its key');
         check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1), 'API settings fit mobile width');
-        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.onlineStatus='no_connection';window.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},recall:{text:'Prepared memory for phone test'}})};});
+        await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.onlineStatus='no_connection';window.qqj_v3_public_bridge_v1={getSnapshot:()=>({status:'ready',identity:{hostChatId:c.chatId},memory:{status:'ready',floors:[{messageIndex:c.chat.findIndex(m=>!m.is_user&&!m.is_system),summary:'Alex saved memory for phone test'}]}})};});
         await p.getByRole('button',{name:'回到桌面',exact:true}).tap(); await p.locator('[data-app="phone"]').tap();
         await p.locator('[data-phone-tab="contacts"]').tap(); await addPhoneContact(p,'Alex'); await p.locator('[data-phone-dial]').tap();
         await p.getByText('Independent hello.',{exact:true}).waitFor(); await p.locator('[data-phone-hangup]').tap();
@@ -279,7 +279,7 @@ try {
         await p.locator('[data-sms-new]').tap(); await p.locator('[data-sms-contact]').tap();
         await p.locator('[data-sms-draft]').fill('API test'); await p.getByRole('button',{name:'发送短信',exact:true}).tap();
         await p.getByText('Independent SMS received.',{exact:true}).waitFor();
-        check(independentRequests.at(-1).messages.some(m=>m.content.includes('Prepared memory for phone test')), 'independent SMS includes current prepared memory');
+        check(independentRequests.at(-1).messages.some(m=>m.content.includes('Alex saved memory for phone test')), 'independent SMS includes current prepared memory');
         check(await p.evaluate(()=>window.modelCalls) === 0, 'independent phone and SMS do not use the host model');
         check(await p.evaluate(()=>window.hostPreparations) >= 3,'independent apps run real host preparation');
         check(independentRequests.at(-1).messages[0].content==='Host preset and character with dynamic plugin memory' && independentRequests.at(-1).max_tokens===4321,'independent request retains host prepared content and response length');

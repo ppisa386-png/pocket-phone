@@ -151,7 +151,7 @@ test('unknown data schema does not overwrite the stored journal or block normal 
     f.close();
 });
 
-test('each relevant channel keeps at most ten records; ordinary and anonymous dialogue remain while other people and private assets stay out',()=>{
+test('each relevant channel keeps at most three records; ordinary and anonymous dialogue remain while other people and private assets stay out',()=>{
  const state={contacts:{alex:{id:'card:alex.png',name:'Alex'}},messages:{},calls:{},snapchat:{profile:{alias:'Moon'},a:{id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}},x:{profile:{alias:'Moon'},a:{id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}},orders:{secret:'ORDER_SECRET'},assets:{secret:'ASSET_SECRET'}};
  for(let i=0;i<15;i++){
   state.messages['m'+i]={contactId:'card:alex.png',role:'user',text:'SMS '+i,createdAt:i};
@@ -161,7 +161,7 @@ test('each relevant channel keeps at most ten records; ordinary and anonymous di
  }
  state.messages.other={contactId:'card:bea.png',role:'user',text:'BEA_PRIVATE',createdAt:50};
  const prompt=buildContinuityPrompt(state,{avatar:'alex.png',name:'Alex',nameIsUnique:true},{instruction:'Remember',userName:'Sam',budget:50000}),records=JSON.parse(prompt.split('\n').at(-2)).records;
- for(const channel of ['短信','电话','Snapchat','X 私信'])assert.equal(records.filter(r=>r.channel===channel).length,10);
+ for(const channel of ['短信','电话','Snapchat','X 私信'])assert.equal(records.filter(r=>r.channel===channel).length,3);
  assert.match(prompt,/X casual 14/);assert.doesNotMatch(prompt,/X casual 0"|ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/);
  const anon=records.find(r=>r.channel==='X 私信');assert.equal(anon.identityKnown,false);assert.equal(anon.speaker,'Moon');
 });
@@ -189,13 +189,13 @@ test('final outgoing request and earlier memory snapshot include exact history o
   await f.bus.emit('CHAT_CHANGED');const switched={type:'normal',messages:[]};await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',switched);assert.equal(switched.messages.length,0);
  }finally{f.close();}
 });
-test('ten per conversation counts both sides and ordinary NPC messages do not need a matching current card',()=>{
+test('three per conversation counts both sides and ordinary NPC messages do not need a matching current card',()=>{
  const state={contacts:{'name:a':{id:'name:a',name:'阿甲'},'name:b':{id:'name:b',name:'阿乙'}},messages:{},calls:{}};
  for(const id of ['a','b'])for(let n=0;n<14;n++)state.messages[id+n]={contactId:'name:'+id,role:n%2?'user':'assistant',text:id+n,createdAt:n};
  const text=buildContinuityPrompt(state,{name:'另一角色',nameIsUnique:true},{instruction:'记忆',allParticipants:true,budget:50000});
  const records=JSON.parse(text.split('\n').at(-2)).records;
- assert.equal(records.length,20);assert.equal(records.filter(r=>r.counterpart==='阿甲').length,10);
- assert.equal(records.filter(r=>r.speaker==='user').length,10);assert.ok(!records.some(r=>r.text==='a0'));
+ assert.equal(records.length,6);assert.equal(records.filter(r=>r.counterpart==='阿甲').length,3);
+ assert.equal(records.filter(r=>r.speaker==='user').length,4);assert.ok(!records.some(r=>r.text==='a0'));
  assert.match(text,/不得编造 user 曾发过的消息/);assert.match(text,/剩余时间、已过时间与总时长/);
 });
 

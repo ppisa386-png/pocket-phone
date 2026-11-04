@@ -36,7 +36,7 @@ test('open/read/select are local, one click one request; empty selections create
  const f=setup();try{await f.daily.open();assert.equal(f.calls(),0);await f.bridge.prepare();assert.equal(f.c.extensionPrompts[DAILY_KEY].value,'');
   ok(await f.daily.update());assert.equal(f.calls(),1);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
   const a=first(f);ok(await f.daily.toggle(a.id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);ok(await f.daily.toggle(a.id));assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.equal(f.calls(),1);
-  assert.match(f.prompt(),/最近二十条/);assert.match(f.prompt(),/普通 user 不强行上报/);assert.match(f.prompt(),/小歌手/);assert.match(f.prompt(),/不预知未来/);
+  assert.doesNotMatch(f.prompt(),/最近二十条/);assert.match(f.prompt(),/普通 user 不强行上报/);assert.match(f.prompt(),/小歌手/);assert.match(f.prompt(),/不预知未来/);
  }finally{f.close();}
 });
 test('story midnight expires the whole edition without needing an hour or wall clock',async()=>{
@@ -63,13 +63,13 @@ test('headlines, feature and short mention preserve editorial hierarchy; private
   const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});assert.match(panel.html(),/pp-daily-lead/);assert.match(panel.html(),/pp-daily-brief/);assert.doesNotMatch(panel.html(),/私事/);await panel.action('read',first(f).id);assert.match(panel.html(),/主办方公布/);assert.equal(f.calls(),1);
  }finally{f.close();}
 });
-test('daily source quotations are restricted to the latest twenty replies, including memory-hidden originals',async()=>{
+test('daily source quotations are verified locally without attaching original floors',async()=>{
  const f=setup();try{
   for(let i=1;i<=25;i++)f.c.chat.push({mes:'公开活动 '+i+' 已举行。',is_user:false});
   f.c.chat[25].is_system=true;f.c.chat[25].extra={qianqianjieAutoHide:{schemaVersion:1,chatId:'qq'}};
-  f.reply({articles:[{...article('旧消息'),subject:'character',publicBasis:{access:'public',summary:'Old event',sourceIndex:0,evidence:'音乐节公开开幕。'}}]});assert.equal((await f.daily.update()).ok,false);
+  f.reply({articles:[{...article('旧消息'),subject:'character',publicBasis:{access:'public',summary:'Old event',sourceIndex:0,evidence:'编造的旧消息。'}}]});assert.equal((await f.daily.update()).ok,false);
   f.reply({articles:[{...article('最新消息'),subject:'character',publicBasis:{access:'public',summary:'Public event',sourceIndex:25,evidence:'公开活动 25 已举行。'}}]});ok(await f.daily.update());assert.equal(first(f).publicBasis.sourceIndex,25);
-  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.recentProse.filter(p=>p.role==='assistant').length,20);assert.equal(payload.recentProse[0].index,6);
+  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.recentProse,undefined);assert.doesNotMatch(f.prompt(),/公开活动 25 已举行/);
  }finally{f.close();}
 });
 test('adoption only follows selection and requires real narrative evidence, delete and regenerate restore it',async()=>{

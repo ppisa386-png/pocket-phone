@@ -1,3 +1,4 @@
+import {recentPerConversation} from './proactive-pacing.js?v=1.1.17';
 import { sameNamedPerson } from './names.js?v=1.1.8';
 // One narrative decision per fifth assistant reply. Social records use the
 // destination app's account, message and post formats and the host journal.
@@ -24,7 +25,7 @@ export function outreachPrompt(settings,state,user,due) {
     const activity={};
     for(const app of ['whatsapp','wechat','x'].filter(app=>app==='x'?channels.some(ch=>ch.startsWith('x_')):channels.includes(app)))accounts[app]=Object.values(state[app]||{}).filter(a=>a.type==='account').map(({id,name,friend,blocked,dmAccepted,inboundRequest})=>({id,name,friend,blocked,dmAccepted,inboundRequest}));
     for(const app of ['whatsapp','wechat','x'].filter(app=>app==='x'?channels.some(ch=>ch.startsWith('x_')):channels.includes(app))){
-        activity[app]=Object.values(state[app]||{}).filter(m=>m.type==='message'&&m.status!=='queued')
+        activity[app]=recentPerConversation(Object.values(state[app]||{}).filter(m=>m.type==='message'&&m.status!=='queued').sort((a,b)=>a.createdAt-b.createdAt),m=>m.accountId)
             .slice(-20).map(({accountId,role,storyTime})=>({accountId,role,storyTime}));
     }
     return '本轮是每五条有效角色正文一次的主动联系判定。只选当前开启且符合身份要求的渠道：'+channels.join('、')+'。'+frequencyRules[settings.proactiveFrequency||'low']+

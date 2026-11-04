@@ -1,4 +1,4 @@
-import { walletCurrency, currencyDigits, unitScale, validCurrency } from './currency.js?v=1.1.8';
+import { walletCurrency, currencyDigits, unitScale, validCurrency } from './currency.js?v=1.1.17';
 import { dateDay, dayDate } from './story-clock.js?v=1.1.12';
 
 export const assetRows = (state, type) => Object.values(state.assets || {}).filter(x => x.type === type);

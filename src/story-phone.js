@@ -1,7 +1,7 @@
-import {businessPrompt,importBusiness} from './x-business.js?v=1.1.16';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.1.12';
-import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.16';
-import { recentContactActivity } from './proactive-pacing.js?v=1.1.13';
+import {businessPrompt,importBusiness} from './x-business.js?v=1.1.17';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.1.17';
+import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.17';
+import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.1.17';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.1.8';
 import { smsReplyClassification } from './sms-context.js?v=1.1.13';
 import { storyTime } from './story-clock.js?v=1.1.12';
@@ -119,7 +119,7 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const blocked=Object.entries(state.profiles).filter(([id,p])=>id.startsWith('blocked:')&&(p.phone||p.messages)).map(([id,p])=>({id:id.slice(8),phone:!!p.phone,messages:!!p.messages}));
     const group=context.groups?.find(g=>String(g.id)===String(context.groupId));
     const actors=(context.characters||[]).filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
-    const calls=Object.values(state.calls).filter(c=>['ringing','connected'].includes(c.status)).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
+    const calls=recentPerConversation(Object.values(state.calls).filter(c=>['ringing','connected'].includes(c.status)).sort((a,b)=>a.createdAt-b.createdAt),c=>c.contactId).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
     return (business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due)+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
         '\n这是 user 个人的手机。只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。收到的短信可只在 text 放全文，但正文必须有确实到达 user 手机的事实；user 发出的短信必须在正文已经逐字写出并实际发送，不能借记录补写 user 发言。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,calls})+

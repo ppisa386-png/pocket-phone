@@ -1,7 +1,7 @@
-import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.8';
-import { publicationScenePrompt } from './social-context.js?v=1.1.8';
+import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.17';
+import { publicationScenePrompt } from './social-context.js?v=1.1.17';
 import { parseModelObject } from './model-json.js?v=1.1.8';
-import { requireCash, moneyMinor } from './assets-core.js?v=1.1.12';
+import { requireCash, moneyMinor } from './assets-core.js?v=1.1.17';
 import { readStoryClock } from './story-clock.js?v=1.1.12';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
@@ -97,8 +97,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             const p=profile(state);await commit([setSnap({...p,alias:required(values.alias,'网名',60),currency:walletCurrency(state),location:text(values.location,200),sharing:values.sharing===true})]);
         });},
         discover(query=''){return run(async(state,current,request,commit)=>{
-            const visible=(getContext().chat||[]).filter(m=>!m.is_system&&!m.hidden&&!m.is_hidden).slice(-80).map(m=>m.mes);
-            const data=await ask(state,null,request,current,'当前任务：'+appName+' 新增联系人。搜索 '+JSON.stringify(text(query,100))+'。可见剧情：'+JSON.stringify(visible)+
+            const data=await ask(state,null,request,current,'当前任务：'+appName+' 新增联系人。搜索 '+JSON.stringify(text(query,100))+ '。'+
                 '\n根据当前设定判断哪些人物确实有 '+appName+' 账号，不能因为是亲友或已有电话号码就自动添加；不合适用空数组。char 默认用真名、各只有一个账户。仅发现账号，不自动成为好友。可返回合理的待接受邀请。输出 {"accounts":[{"name":"姓名","handle":"唯一账号名","has_account":true,"invitation":"none 或 incoming"}]}，最多 10 个。',d=>{if(!Array.isArray(d.accounts)||d.accounts.length>10)throw new Error('账号搜索结果格式不正确。');return d.accounts;});
             const changes=[],used=new Set(),handles=new Set();
             for(const item of data){if(item.has_account!==true)continue;const identity=localizedPerson(item,getContext(),snapItems(state,'account')),name=identity.name,handle=text(item.handle,60).replace(/^@/,'');if(!name||!handle||/[\s<>]/.test(handle))continue;

@@ -44,7 +44,7 @@ for(const app of ['whatsapp','wechat']) {
             ok(await f.api.saveProfile({alias:'Moon',currency:'USD'}));const id=await add(f),before=f.count();
             f.ctx.chat.push({mes:'Alex privately WATCHED_THE_SHOW with Sam.'});await f.memory.read();
             ok(await f.api.queueMessage(id,'text','First thought'));ok(await f.api.queueMessage(id,'image','Second thought'));assert.equal(f.count(),before);assert.doesNotMatch(history(f.state()),/First thought/);
-            f.reply({status:'reply',messages:[{kind:'text',text:'Hello!（你好！）'},{kind:'voice',text:'A reply.'}]});ok(await f.api.flushMessages(id));assert.equal(f.count(),before+1);assert.match(f.prompt(),/WATCHED_THE_SHOW/);assert.match(f.prompt(),/First thought/);assert.match(f.prompt(),/Second thought/);assert.match(f.prompt(),/不知道这个账号是谁/);assert.match(f.prompt(),/预设的对白语言/);
+            f.reply({status:'reply',messages:[{kind:'text',text:'Hello!（你好！）'},{kind:'voice',text:'A reply.'}]});ok(await f.api.flushMessages(id));assert.equal(f.count(),before+1);assert.doesNotMatch(f.prompt(),/WATCHED_THE_SHOW/);assert.match(f.prompt(),/First thought/);assert.match(f.prompt(),/Second thought/);assert.match(f.prompt(),/不知道这个账号是谁/);assert.match(f.prompt(),/预设的对白语言/);
             const replies=chatItems(f.state(),app,'message').filter(m=>m.role==='assistant');assert.equal(chatUnread(f.state(),app),2);assert.ok(replies[0].storyTime);assert.match(history(f.state()),/Hello!（你好！）/);assert.match(history(f.state()),/"identityKnown":false/);
             ok(await f.api.editMessage(replies[0].id,'Edited'));f.reply({text:'Again'});ok(await f.api.rerollMessage(replies[0].id));assert.equal(f.state()[app][replies[1].id].text,'A reply.');assert.doesNotMatch(f.prompt(),/A reply\./);
             ok(await f.api.markRead(id));assert.equal(chatUnread(f.state(),app),0);ok(await f.api.reveal(id));ok(await f.api.saveProfile({alias:'New name',currency:'USD'}));assert.equal(f.state()[app][id].identityKnown,true);
@@ -101,12 +101,12 @@ for(const app of ['wechat','whatsapp'])test(app+' uses the wallet currency for t
  }finally{f.close();}
 });
 
-test('manual request uses latest twenty saved summaries even without name matches',async()=>{
+test('manual request uses twenty matching saved summaries, preferring recent ties',async()=>{
     const f=fixture('whatsapp','independent'),previous=globalThis.qqj_v3_public_bridge_v1;
     try{
         f.ctx.chat=Array.from({length:27},()=>({mes:'故事继续'}));
         globalThis.qqj_v3_public_bridge_v1={getSnapshot:()=>({status:'ready',identity:{hostChatId:f.ctx.chatId},
-            memory:{status:'ready',floors:f.ctx.chat.map((_,messageIndex)=>({messageIndex,summary:'MEM_'+messageIndex+'!'}))}})};
+            memory:{status:'ready',floors:f.ctx.chat.map((_,messageIndex)=>({messageIndex,summary:'Alex MEM_'+messageIndex+'!'}))}})};
         await add(f);assert.match(f.prompt(),/MEM_7!/);assert.match(f.prompt(),/MEM_26!/);assert.doesNotMatch(f.prompt(),/MEM_6!|user_has_number|can_use_phone/);
         assert.equal((f.prompt().match(/MEM_\d+!/g)||[]).length,20);
     }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}

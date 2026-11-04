@@ -5,7 +5,7 @@ import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
 import {createX,xItems} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
-import {recentSquareProse,squareBasis,squareClock,squareExpiry,squareStatus,buildSquarePrompt} from '../src/square-core.js';
+import {storyEvidenceRows,squareBasis,squareClock,squareExpiry,squareStatus,buildSquarePrompt} from '../src/square-core.js';
 import {createXPanel} from '../src/x-view.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 const background={access:'background',summary:'Ordinary local life',involvesCharacters:false};
@@ -28,8 +28,8 @@ test('recent source window counts twenty character replies, includes hidden memo
  chat[11]={is_system:true,extra:{qianqianjieAutoHide:{schemaVersion:1,chatId:'qq'}},mes:'reply 5'};
  chat.push({is_system:true,mes:'SYSTEM_SECRET'},{is_user:true,mes:'next request'});
  chat[9].mes+='<!--PRIVATE_MARKER--><think>PRIVATE_THOUGHT</think>```PRIVATE_CODE```';
- const p=recentSquareProse(chat);assert.equal(p.filter(x=>x.role==='assistant').length,20);assert.equal(p[0].text,'user 4');
- assert.ok(p.some(x=>x.text==='reply 5'));assert.equal(p.at(-1).text,'next request');assert.doesNotMatch(JSON.stringify(p),/PRIVATE_|SYSTEM_SECRET|reply 3/);
+ const p=storyEvidenceRows(chat);assert.equal(p.filter(x=>x.role==='assistant').length,24);assert.equal(p[0].text,'user 0');
+ assert.ok(p.some(x=>x.text==='reply 5'));assert.equal(p.at(-1).text,'next request');assert.doesNotMatch(JSON.stringify(p),/PRIVATE_|SYSTEM_SECRET/);
 });
 test('private, missing, out-of-window and speculative limited sighting evidence is rejected',()=>{
  const prose=[{index:4,role:'assistant',text:'The terrace is visible. A passerby saw two silhouettes.'}];
@@ -55,7 +55,7 @@ test('manual refresh has one attempt, opening and selecting cost zero; failed re
   ok(await f.x.toggleInjection(p.id));assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.equal(f.calls(),1);
   const edition=f.state().x['square-edition'];f.reply(()=>{throw Error('offline');});assert.equal((await f.x.refresh('square')).ok,false);assert.equal(f.calls(),2);assert.deepEqual(f.state().x['square-edition'],edition);
   f.reply({posts:[{...row(),publicBasis:{...background,access:'private'}}]});assert.equal((await f.x.refresh('square')).ok,false);assert.equal(f.calls(),3);assert.deepEqual(f.state().x['square-edition'],edition);
-  assert.match(f.prompt(),/recentProse/);assert.match(f.prompt(),/私密场所/);
+  assert.doesNotMatch(f.prompt(),/recentProse/);assert.match(f.prompt(),/私密场所/);
  }finally{f.close();}
 });
 test('adoption requires a later real narrative evidence marker; deleting adoption restores selected item',async()=>{

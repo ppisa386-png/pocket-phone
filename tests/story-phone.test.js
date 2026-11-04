@@ -213,7 +213,7 @@ test('pacing metadata is bounded, contact-specific, and excludes expired text an
  state.messages.failed={id:'failed',contactId:'a',role:'user',replyStatus:'failed',createdAt:50};
  state.messages.old={id:'old',contactId:'a',role:'assistant',text:'EXPIRED SECRET',createdAt:60};state.smsContext.old={category:'A',anchor:{date:'2026-10-20',time:'10:00'}};
  state.calls.call={id:'call',contactId:'b',name:'B',turns:[{text:'CALL SECRET'}],direction:'incoming',status:'missed',createdAt:70};
- const result=recentContactActivity(state,now,'a');assert.equal(result.recent.length,8);assert.ok(result.recent.every(m=>m.contactId==='a'));
+ const result=recentContactActivity(state,now,'a');assert.equal(result.recent.length,3);assert.ok(result.recent.every(m=>m.contactId==='a'));
  const text=JSON.stringify(result);assert.ok(!/PRIVATE|SECRET|createdAt|order|queued|failed/.test(text));
  assert.equal(recentContactActivity(state,now).recent.at(-1).medium,'call');
 });

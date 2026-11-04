@@ -1,5 +1,5 @@
-import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.8';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.15';
+import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.17';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.17';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
 import { icon } from './icons.js?v=1.1.8';
 

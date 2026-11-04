@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { readPreparedMemory, preparedMemoryPrompt, readXMemory, xMemoryPrompt } from '../src/external-memory.js';
+import { latestMemory, readXMemory, xMemoryPrompt } from '../src/external-memory.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, appendChange, reconcileJournal, replayJournal } from '../src/journal.js';
 
 const settings=()=>normalizeSettings({retries:0,proactiveEnabled:false});
-const context=()=>({chatId:'test-chat',chatMetadata:{qianqianjie:{chatId:'qqj-chat'}}});
+const context=()=>({chat:[{mes:'Story'}],chatId:'test-chat',chatMetadata:{qianqianjie:{chatId:'qqj-chat'}}});
 const prepared=()=>({status:'ready',identity:{hostChatId:'test-chat',qqjChatId:'qqj-chat'},recall:{text:'Sam and Alex agreed to meet at the station.'},prequel:{text:'Earlier they met in London.'}});
 
 const savedSnapshot=floors=>({status:'ready',identity:prepared().identity,memory:{status:'ready',floors}});
@@ -56,32 +56,20 @@ test('X Chinese topic can retrieve a saved floor outside the recent window witho
     assert.match(result.text,/朋友已经参观画展/);
 });
 
-test('QQJ integration reads only prepared prompt text and preserves private boundaries as supplied',()=>{
-    let reads=0;
-    const forbidden=()=>{throw Error('must not read private storage or run a model');};
-    const bridge={getPromptSnapshot(){reads++;return prepared();},getSnapshot:forbidden,readMemory:forbidden};
-    const result=readPreparedMemory(context(),settings(),bridge);
-    assert.equal(reads,1);assert.equal(result.status,'ready');assert.match(result.text,/station/);assert.match(result.text,/London/);
-    assert.match(preparedMemoryPrompt(result),/知情边界/);
+test('A takes all available up to twenty whole summaries in chronological order, never calls prepared recall',()=>{
+ for(const n of [0,5,15,25]){
+  const c={...context(),chat:Array.from({length:n},(_,i)=>({mes:'floor '+i}))};
+  const rows=c.chat.map((_,i)=>({messageIndex:i,summary:'summary '+i+' '+('x'.repeat(2000))})).reverse();
+  const bridge={getPromptSnapshot:()=>assert.fail('old route'),getSnapshot:()=>savedSnapshot(rows)};
+  const result=latestMemory(c,settings(),bridge);assert.equal(result.count,Math.min(n,20));
+  assert.deepEqual(JSON.parse(result.text||'[]').map(f=>f.messageIndex),c.chat.map((_,i)=>i).slice(-20));
+ }
 });
-
-test('disabled, missing, unloaded, stale and wrong-chat sources never reuse another memory',()=>{
-    assert.equal(readPreparedMemory(context(),{api:{memorySource:'none'}},{getPromptSnapshot(){throw Error('should not read');}}).text,'');
-    assert.equal(readPreparedMemory(context(),settings(),null).status,'missing');
-    for(const value of [{status:'empty'},{status:'disabled'},{...prepared(),identity:{hostChatId:'another',qqjChatId:'qqj-chat'}},{...prepared(),identity:{hostChatId:'test-chat',qqjChatId:'another'}}]) {
-        assert.equal(readPreparedMemory(context(),settings(),{getPromptSnapshot:()=>value}).text,'');
-    }
-    const bridge={getPromptSnapshot:()=>prepared()};assert.equal(readPreparedMemory(context(),settings(),bridge).status,'ready');
-    bridge.getPromptSnapshot=()=>({status:'empty'});
-    assert.equal(readPreparedMemory(context(),settings(),bridge).text,'','no cached fallback after source invalidation');
-    assert.equal(readPreparedMemory(context(),settings(),{getPromptSnapshot(){throw Error('secret');}}).message.includes('secret'),false);
+test('unchanged summary is quarantined after editing its floor until the provider replaces it',()=>{
+ const c={...context(),chat:[{mes:'before'}]},floor={messageIndex:0,summary:'old'},b={getSnapshot:()=>savedSnapshot([floor])};
+ assert.equal(latestMemory(c,settings(),b).count,1);c.chat[0].mes='after';
+ assert.equal(latestMemory(c,settings(),b).count,0);floor.summary='corrected';assert.equal(latestMemory(c,settings(),b).count,1);
 });
-
-test('oversize memory is explicitly skipped instead of silently dropping privacy labels',()=>{
-    const result=readPreparedMemory(context(),settings(),{getPromptSnapshot:()=>({...prepared(),recall:{text:'x'.repeat(80001)}})});
-    assert.equal(result.status,'oversize');assert.equal(result.text,'');
-});
-
 function fixture() {
     const bus=new EventEmitter();
     const c={...context(),name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'Alex gives Sam his number: +1 212 555 0123.',name:'Alex',is_user:false},{mes:'Later that evening.',name:'Alex',is_user:false}],onlineStatus:'connected',saveMetadata:async()=>{},eventSource:bus,event_types:Object.fromEntries(['MESSAGE_DELETED','MESSAGE_EDITED','CHAT_CHANGED','GENERATION_STARTED','GENERATION_ENDED'].map(n=>[n,n]))};
@@ -92,12 +80,12 @@ function fixture() {
 }
 
 test('host-mode phone tasks receive prepared memory and do not persist its text in the journal',async()=>{
-    const f=fixture();globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>prepared()};
+    const f=fixture();globalThis.qqj_v3_public_bridge_v1={getSnapshot:()=>savedSnapshot([{messageIndex:0,summary:'Alex agreed to meet at the station'}])};
     try {
         await f.phone.scan();await f.phone.sendMessage('card:alex.png','Where are we meeting?');
         assert.equal(f.prompts.length,2);for(const prompt of f.prompts)assert.match(prompt,/agreed to meet at the station/);
         assert.ok(!JSON.stringify(f.c.chatMetadata[JOURNAL_KEY]).includes('Earlier they met in London'));
-        globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'})};
+        globalThis.qqj_v3_public_bridge_v1={getSnapshot:()=>({status:'empty'})};
         await f.phone.sendMessage('card:alex.png','Are you there?');assert.ok(!f.prompts.at(-1).includes('Earlier they met in London'));
     } finally {delete globalThis.qqj_v3_public_bridge_v1;f.close();}
 });
@@ -127,13 +115,13 @@ test('v0.9 hidden-floor journals migrate only when the full legacy narrative sti
 });
 
 test('prepared memory follows the active host chat ID and only falls back when it is empty',()=>{
-    const bridge={getPromptSnapshot:()=>prepared()};
-    assert.equal(readPreparedMemory({...context(),chatId:'',getCurrentChatId:()=> 'test-chat'},settings(),bridge).status,'ready');
-    assert.equal(readPreparedMemory({...context(),getCurrentChatId:()=> 'active-other-chat'},settings(),bridge).status,'stale');
-    assert.equal(readPreparedMemory({...context(),getCurrentChatId:()=> ''},settings(),bridge).status,'ready');
+    const bridge={getSnapshot:()=>savedSnapshot([{messageIndex:0,summary:'Alex agreed to meet at the station'}])};
+    assert.equal(latestMemory({...context(),chatId:'',getCurrentChatId:()=> 'test-chat'},settings(),bridge).status,'ready');
+    assert.equal(latestMemory({...context(),getCurrentChatId:()=> 'active-other-chat'},settings(),bridge).status,'stale');
+    assert.equal(latestMemory({...context(),getCurrentChatId:()=> ''},settings(),bridge).status,'ready');
 });
 
-for(const app of ['x','snapchat','whatsapp','wechat'])test(app+' generation skips prepared recall and unrelated recent summaries but sends five full hidden AI floors',async()=>{
+for(const app of ['x','snapchat','whatsapp','wechat'])test(app+' generation skips prepared recall and unrelated recent summaries and never resends hidden AI floors',async()=>{
  const f=fixture(),old=globalThis.qqj_v3_public_bridge_v1;let preparedReads=0;
  try{
   f.c.chat=[];
@@ -141,7 +129,7 @@ for(const app of ['x','snapchat','whatsapp','wechat'])test(app+' generation skip
   globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot(){preparedReads++;return prepared();},getSnapshot:()=>savedSnapshot([{messageIndex:0,summary:'Alex knows TOPIC_MATCH.'},{messageIndex:1,summary:'UNRELATED_RECENT_SUMMARY'}])};
   const result=await f.phone.appTask(async(view,current,request)=>request('TOPIC_MATCH',d=>d,current,null,{memoryQuery:{names:['Alex'],topic:'TOPIC_MATCH'},retries:0}),app);
   assert.equal(result.ok,true,result.error);assert.equal(preparedReads,0);const prompt=f.prompts.at(-1);
-  assert.match(prompt,/TOPIC_MATCH/);assert.match(prompt,/AI_2/);assert.match(prompt,/AI_6/);assert.match(prompt,/END_FULL_TEXT/);
+  assert.match(prompt,/TOPIC_MATCH/);assert.doesNotMatch(prompt,/AI_2|AI_6|END_FULL_TEXT/);
   assert.doesNotMatch(prompt,/USER_EXCLUDED|AI_0|AI_1|UNRELATED_RECENT_SUMMARY|agreed to meet at the station|Earlier they met in London/);
  }finally{globalThis.qqj_v3_public_bridge_v1=old;f.close();}
 });
@@ -151,4 +139,31 @@ test('related summaries have a strict twenty-floor cap and no recent fallback',(
  const b={getSnapshot:()=>savedSnapshot(floors)};
  assert.equal(readXMemory(c,settings(),{names:['Alex']},b).count,20);
  assert.equal(readXMemory(c,settings(),{topic:'no_match_zzzz'},b).count,0);
+});
+
+test('task routing separates no-memory, chronological, and participant-specific reads',async()=>{
+ const f=fixture(),original=globalThis.qqj_v3_public_bridge_v1;
+ const names=['daily','contacts','assets','amazon','phone','messages','whatsapp','wechat','x'];
+ let snapshots=0,actors=0,oldReads=0;
+ globalThis.qqj_v3_public_bridge_v1={
+   getPromptSnapshot(){oldReads++;throw Error('obsolete route');},
+   getSnapshot(){snapshots++;return savedSnapshot([{messageIndex:0,summary:'Alex RECENT_RELEVANT'},{messageIndex:1,summary:'RECENT_UNRELATED'}]);},
+   getPeopleSnapshot:()=>({status:'ready',identity:prepared().identity,people:{status:'ready',items:[{entityId:'alex',displayName:'Alex'}]}}),
+   readContext:async()=>{actors++;return {status:'ready',identity:prepared().identity,actors:[{entityId:'alex',memoryText:'PERSON_ONLY'}]};}
+ };
+ try{
+  for(const app of names){
+   const social=['phone','messages','whatsapp','wechat','x'].includes(app),before=snapshots,actorBefore=actors;
+   const result=await f.phone.appTask(async(_view,current,request)=>request('task',d=>d,current,social?{id:'name:alex',name:'Alex'}:null),app);
+   assert.equal(result.ok,true,result.error);const prompt=f.prompts.at(-1);
+   assert.equal(snapshots-before,app==='daily'?0:1,app);assert.equal(actors-actorBefore,social?1:0,app);
+   assert.equal(prompt.includes('RECENT_RELEVANT'),app!=='daily');assert.equal(prompt.includes('RECENT_UNRELATED'),!social&&app!=='daily');
+   assert.equal(prompt.includes('PERSON_ONLY'),social);assert.doesNotMatch(prompt,/Later that evening/);
+  }
+  const before=snapshots;for(const app of ['contacts','whatsapp','wechat']){
+   const result=await f.phone.appTask(async(_view,current,request)=>request('opening',d=>d,current,null,{establishedImport:true}),app);
+   assert.equal(result.ok,true,result.error);
+  }
+  assert.equal(before,snapshots);assert.equal(oldReads,0);
+ }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
 });

@@ -154,7 +154,7 @@ export function validateContacts(data, chat, context, sources = contactSources(c
 }
 
 export function contactPrompt(instruction, context, sources, existing) {
-    const data = JSON.stringify({ search: sources.query || null, user: context.name1, persona: sources.persona, visible_chat: sources.chat.map(({ index, name, text }) => ({ index, name, text })), status_material:sources.status||[] });
+    const data = JSON.stringify({ search: sources.query || null, user: context.name1, persona: sources.persona, status_material:sources.status||[] });
     if (data.length > 240000) throw new Error('可读取资料过长，请减少正文或记忆范围后重试。');
     return instruction + '\n当前任务：user 点击了「新增联系人」。识别可新增的电话联系人；不复核或移除已保存联系人。' +
         '\n搜索要求：'+(sources.query?'仅查找姓名或别名匹配「'+sources.query+'」的目标；别名/中英文译名写 aliases，不能返回无关亲友。若同名不能分辨，不猜测。':'识别资料中的联系人。')+
