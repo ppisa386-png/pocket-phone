@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from './daily-prompts.js?v=1.1.8';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.1.18';
+export const VERSION = '1.1.19';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -26,7 +26,7 @@ export const PROMPTS = {
     contactEvent: { name: '联系事件与后续反应', text: '依据角色设定、当前剧情与 user 的实际反应，决定联系、等待或结束。普通闲聊不升级成需要不断跟进的事件；未回复本身不是新的联系理由。已有事项无新进展时优先等待或自然结束，不反复提醒旧约定或追问同一问题。具体约定到时、新信息或确实需要反应的事可按人物动机继续，不凭性格标签或分手情节必然纠缠。每步最多一次来电或一条短信，也可不联系；不能绕过拉黑，不替 user 发言，不预生成一串后续。' },
     incomingMessages: { name: '主动短信', text: '日常主动短信默认少打扰。亲密、关心或爱聊天只是背景，不是每轮发送的理由；依据剧情经过时间、最近一次交流和本次具体动机决定。刚聊过、话题已说完、没有新情况时优先不联系；普通问候未获回复时优先等待，不换人轮流刷通知。仍允许适时分享、兑现约定、正在进行的对话或确有进展的事情，不要求只能紧急事件才能联系。不替 user 发言、不绕过拉黑，遵循预设对白语言。' },
     incoming: { name: '主动来电', text: '依据角色性格、双方关系、剧情时间和已有通信决定是否来电。日常来电保持低频，刚交流过或没有适合此刻通话的新动机时优先不打扰。想念、关心和分享可以成为适时联络的理由，但亲友关系本身不是持续来电的理由；普通问候未回应时优先等待，不换短信继续催。需要即时对话且场合适合才来电，不必只等危机。角色必须有已知 user 号码或可用获取途径的依据，可核对正文、人设、当前角色卡及当前聊天的有效记忆。设定中已建立正常电话联络的亲友无需重新交换号码；仅单向知晓、暗恋、匿名关系或知名度不等于已知号码，失联、秘密身份、无法通信等当前设定优先。共友需有依据且确实能提供号码；公开渠道需可访问。不打断面对面交流，不重复正文已发生的联系。' },
-    continuity: { name: '通信与正文衔接', text: '以下是 user 手机中已经发生的通信，作为有效剧情事实供后续正文参考。各人物只知道本人参与或有正当途径获知的内容，不能自动知道 user 与其他人的私聊；匿名社交仍须保留身份边界。忠实保留原话、双方身份及顺序，不得篡改或编造 user 既往发言。承接最新通信后的剧情与时间，不重演旧消息、不强制提起。叙事语言仍遵循酒馆预设。' },
+    continuity: { name: '通信与正文衔接', text: '手机通信是已经发生的背景事实，正文可以连续多楼完全不提。只在当前情节、人物行为或对话自然相关时参考。遵守人物知情范围和匿名身份，保留通信原话与先后顺序。已经写过的得知、惊讶或处理不重复作为首次反应；后来可自然回忆、讨论，或因新进展产生不同反应。提及历史通信时，按原始剧情日期和当前剧情日期调整时间称呼。叙事语言遵循酒馆预设。' },
     contacts: { name: '联系方式识别', text: '点击新增联系人时，先结合当前剧情、角色设定及可用记忆判断电话是否仍可使用。亲友不能仅凭关系自动加入，已死亡或丧尸化且失去通信能力等应排除；普通暂时未接电话不等于永久不可联系。识别已实际交付的私人号码及地点座机、临时电话和分机，数字仅被叙述而未列出时用 null。地点电话按有依据的区域或机构命名，不冒充目标人物的私人号码，不编造区域名。引用原文验证获取资格，不从社媒或摘要凭空授予号码。' },
     general: { name: '通用', text: '这是 user 的个人手机，所有互动均为文字扮演。继承酒馆当前角色卡、相关世界书、有效剧情与预设中的内容语言要求。界面标签使用中文。不得替 user 编造消息或决定。仅使用对应角色有依据获知的信息；未获知的私人内容不得跨角色、跨平台传播。' },
     phone: { name: '电话', text: '通过文字表现电话交流，只描写对白、可听见的语气、停顿和背景声音。不得描写通话另一端不可见的表情、动作、服装或内心活动。电话对应真实身份。user 仅能拨打已保存的电话联系人，包括正文获得号码或人设中既有亲友。允许角色首次主动来电，按本次实际通话回应。' },
@@ -42,6 +42,7 @@ export const PROMPTS = {
     amazon: { name: 'Amazon', text: '生成故事世界中的虚拟商品及订单内容，使用已确定的剧情背景、商品和货币信息。所有订单均为故事内模拟，不进行真实购买。订单和地址是私人信息，未获知的角色不得自动知晓。' },
 };
 
+const PREVIOUS_CONTINUITY_PROMPT = '以下是 user 手机中已经发生的通信，作为有效剧情事实供后续正文参考。各人物只知道本人参与或有正当途径获知的内容，不能自动知道 user 与其他人的私聊；匿名社交仍须保留身份边界。忠实保留原话、双方身份及顺序，不得篡改或编造 user 既往发言。承接最新通信后的剧情与时间，不重演旧消息、不强制提起。叙事语言仍遵循酒馆预设。';
 const PREVIOUS_FRIEND_PROMPTS = Object.fromEntries(['whatsapp','wechat'].map(id=>[id,PROMPTS[id].text.replace('按姓名发送好友申请，由对方结合设定与最多二十条相关摘要决定是否通过。一键添加单独导入开局已有关系。','好友按通讯录规则由用户按姓名或一键添加，不需要好友邀请审核。')]));
 const PREVIOUS_BRIDGE_PROMPTS = {"xSquare":"生成符合当前世界观、地区和文化的随机网友帖子，不使用已有 char、user 或正文已有具名人物作为发帖者。紧密联系近期剧情涉及的地点、事件、作品和社会环境，体现公共生活与舆论变化，但不围绕 user 转、不复述正文。网友只能谈论有合理渠道知道的事情，不泄露私聊、秘密、内心或未公开关系。公园约会可以对应游客见闻和合理偶遇，目击者未必认识当事人；发行唱片可以对应听众和乐评人的作品评价。热度符合事件公开程度和影响范围，小事不强行变热搜；观点自然有差异，不强行争议或统一吹捧贬低。内容语言遵循酒馆预设。","xOpinion":"区分普通讨论与可能影响后续剧情的公共议题。几条零散游客感想、普通夸赞或吐槽不形成舆情。已有传播、可信报道、集中争议、圈内明显评价转向、公开回应或组织行动等，且有具体受影响对象/事项，才记录实质舆情。影响可以只是本地或小圈子，不以固定点赞门槛强造热搜，不把高赞本身等同危机。只能从已公开信息或有根据的传闻发展，明确不确定性，不泄露私聊、未公开关系或人物内心。记录已经形成的讨论事实及可能影响，后续由正文依人物知情途径和合适时机选择回应，不强制下一回合立即触发，不重复制造已经写过的事件。","continuity": "以下是当前角色已经亲自参与的手机通信，作为有效剧情记忆供后续正文参考。继续当前剧情，不重演整段通信，不把记录原样贴回正文，不强行让角色提起。保持通信中的约定、已交换的信息和人物关系；措辞、叙事与语言仍遵循酒馆预设和角色设定。短信和电话绑定真实身份；其他角色没有自动获知这些私人交流。不要把电话中未见的画面补成已知事实。", "storyContact": "正文决定实际发生的通信，小手机只保存记录。结合人设、关系、世界观、当前场景和已经发生的手机交流判断联系动机与获取号码的合理途径，不限恋人或既有好友，不要求专门的交换号码情节。日常问候、追求、打听消息、分享或事务都可以，也可以不联系。接听或拒接依正文的扮演规则与当前剧情决定，不凭空替 user 作决定。只记录本次确实发生的来电与收到的短信，不重演旧记录、不以记录指令代替正文。"};
 
@@ -86,7 +87,7 @@ export function normalizeSettings(value) {
         proactiveEnabled: typeof raw.proactiveEnabled === 'boolean' ? raw.proactiveEnabled : true,
         retries: Math.round(numeric(raw.retries, 0, 15, 2)),
         apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
-        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && !(id==='phone' && oldPrompts[id]===PROMPTS.phone.text.replace('允许角色首次主动来电，按本次实际通话回应。','char 发起来电必须有获取 user 号码的有效途径和依据。')) && !(['whatsapp','wechat'].includes(id)&&oldPrompts[id]===prompt.text.replace('最多二十条相关摘要','最近最多二十条摘要')) && oldPrompts[id] !== PREVIOUS_FRIEND_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
+        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && !(id==='continuity' && oldPrompts[id]===PREVIOUS_CONTINUITY_PROMPT) && !(id==='phone' && oldPrompts[id]===PROMPTS.phone.text.replace('允许角色首次主动来电，按本次实际通话回应。','char 发起来电必须有获取 user 号码的有效途径和依据。')) && !(['whatsapp','wechat'].includes(id)&&oldPrompts[id]===prompt.text.replace('最多二十条相关摘要','最近最多二十条摘要')) && oldPrompts[id] !== PREVIOUS_FRIEND_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
     };
 }
 

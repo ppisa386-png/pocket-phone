@@ -1,5 +1,5 @@
 import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.1.8';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.1.13';
+import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.1.19';
 import { exactStoryTime } from './story-clock.js?v=1.1.12';
 import { isMemoryHidden } from './journal.js?v=1.1.13';
 import { CHINESE_NAME_RULE } from './names.js?v=1.1.8';

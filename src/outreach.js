@@ -1,4 +1,4 @@
-import {recentPerConversation} from './proactive-pacing.js?v=1.1.17';
+import {recentPerConversation} from './proactive-pacing.js?v=1.1.19';
 import { sameNamedPerson } from './names.js?v=1.1.8';
 // One narrative decision per fifth assistant reply. Social records use the
 // destination app's account, message and post formats and the host journal.

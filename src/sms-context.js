@@ -36,9 +36,11 @@ export function smsAIRecords(state, contactId, now) {
 // All updates are revision-bound, so actual story rollback restores the state.
 export function syncSMSContext(journal, revisions, chat) {
     if (!revisions.length) return { journal, changed: false };
-    const state = replayJournal(journal), first = new Map(), clocks = new Map();
+    const state = replayJournal(journal), first = new Map(), clocks = new Map(), queued=new Set();
     for (const event of journal.events) for (const change of event.changes) {
-        if (change.collection === 'messages' && change.value && change.value.replyStatus !== 'queued' && !first.has(change.key)) first.set(change.key, event.source.index);
+        if(change.collection!=='messages'||!change.value||first.has(change.key))continue;
+        if(change.value.replyStatus==='queued')queued.add(change.key);
+        else first.set(change.key,event.source.index);
     }
     const now = exactStoryTime(chat), changes = [];
     for (const message of Object.values(state.messages)) {
@@ -50,12 +52,13 @@ export function syncSMSContext(journal, revisions, chat) {
         meta.contactId = message.contactId;
         meta.category = smsCategory(meta.category);
         meta.classification = meta.category ? 'classified' : 'pending';
-        if (!meta.anchor) {
+        if(queued.has(message.id))meta.sentAfterQueue=true;
+        if (!meta.anchor || (dateDay(meta.anchor.date)===null && meta.anchorSource!=='source-floor')) {
             const index = first.get(message.id);
-            if (!clocks.has(index)) clocks.set(index, exactStoryTime(chat.slice(0, index + 1)));
+            if (Number.isInteger(index)&&!clocks.has(index)) clocks.set(index, exactStoryTime(chat.slice(0, index + 1)));
             // Use only the message's creation floor, never today's story clock
-            // or createdAt/send_date. Store unknown explicitly and keep it so.
-            meta.anchor = clocks.get(index);
+            // or createdAt/send_date. If that floor is undated, keep it unknown.
+            meta.anchor = clocks.get(index) || meta.anchor || {date:'',time:'',precision:'exact'};
             meta.anchorSource = 'source-floor';
         }
         if (smsExpired(meta, now) && !meta.expired) {

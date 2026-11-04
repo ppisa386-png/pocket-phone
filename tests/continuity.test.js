@@ -240,3 +240,52 @@ test('actual narrative payload expires SMS by story time before persistence and 
   assert.equal(state.messages.a.text,'A_PRIVATE_MEETING');assert.equal(state.messages.b.text,'B_PRIVATE_PLAN');
  }finally{f.close();}
 });
+
+test('one SMS stays optional before and after a narrative reaction, and its age advances with the story calendar',async()=>{
+ const f=await fixture();try{
+  const c=f.context;c.chat=[{mes:'2026-10-30 21:15\n短信送达。'}];
+  const rev=await revisionsFor(messageSignatures(c.chat));
+  const record={id:'s',contactId:'card:alex.png',role:'assistant',text:'昨晚那件事，我知道了。',createdAt:1};
+  c.chatMetadata[JOURNAL_KEY]=appendChange(undefined,rev,[set('contacts',record.contactId,{id:record.contactId,name:'Alex'}),set('messages','s',record)]);
+  const saved=JSON.stringify(c.chatMetadata);
+  for(const [mes,days] of [['2026-10-31 09:00\n两人照常去上课。',1],['他们讨论了作业。',1],['Sam 这才说起短信，Alex 已经听明白了。',1],['2026-11-01 08:00\n他们又谈起这件事。',2]]){
+   c.chat.push({mes});await f.generate();
+   const prompt=f.prompts[CONTINUITY_KEY].value;
+   assert.match(prompt,/连续多楼完全不提/);assert.match(prompt,/不能让人物再次首次得知/);assert.match(prompt,/后来可以回忆、讨论/);
+   const [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
+   assert.equal(sms.recordId,'s');assert.equal(sms.text,record.text);
+   assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyTime.time,'21:15');assert.equal(sms.storyDaysAgo,days);
+   assert.equal(JSON.stringify(c.chatMetadata),saved);
+  }
+ }finally{f.close();}
+});
+
+test('missing dates never use wall time; valid stored SMS dates and sidecar dates are preserved',()=>{
+ const message={id:'s',contactId:'name:A',role:'assistant',text:'hello',createdAt:Date.now()};
+ const state={messages:{s:message},smsContext:{},contacts:{'name:A':{id:'name:A',name:'A'}},calls:{}};
+ const get=now=>JSON.parse(buildContinuityPrompt(state,{name:'A',nameIsUnique:true},{instruction:'参考',currentStoryTime:now}).split('\n').at(-2)).records[0];
+ assert.equal(get({date:'2026-11-01'}).storyTime,null);assert.equal(get({date:'2026-11-01'}).storyDaysAgo,undefined);
+ state.smsContext.s={anchor:{date:'2026-10-30',time:''}};
+ assert.equal(get(null).storyTime.date,'2026-10-30');assert.equal(get(null).storyDaysAgo,undefined);
+ message.storyTime={date:'2026-10-29',time:'20:10'};
+ assert.equal(get({date:'2026-11-01'}).storyDaysAgo,3);
+});
+
+test('queued draft anchors to the floor it was actually sent, not the draft or later edits',async()=>{
+ const f=await fixture();try{
+  const c=f.context;c.chat=['2026-10-29 10:00','2026-10-30 21:00','2026-10-31 08:00'].map(mes=>({mes}));
+  const rev=await revisionsFor(messageSignatures(c.chat));
+  const m={id:'s',contactId:'card:alex.png',role:'user',text:'你好。',storyTime:{date:'2026-10-29',time:'10:00'}};
+  let j=appendChange(undefined,rev.slice(0,1),[set('contacts',m.contactId,{id:m.contactId,name:'Alex'}),set('messages','s',{...m,replyStatus:'queued'})]);
+  j=appendChange(j,rev.slice(0,2),[set('messages','s',{...m,replyStatus:'sent'})]);
+  c.chatMetadata[JOURNAL_KEY]=appendChange(j,rev,[set('messages','s',{...m,read:true,replyStatus:'sent'})]);
+  await f.generate();const [sms]=JSON.parse(f.prompts[CONTINUITY_KEY].value.split('\n').at(-2)).records;
+  assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyDaysAgo,1);
+ }finally{f.close();}
+});
+
+test('old built-in continuity text migrates while custom and blank instructions are preserved',()=>{
+ const old='以下是 user 手机中已经发生的通信，作为有效剧情事实供后续正文参考。各人物只知道本人参与或有正当途径获知的内容，不能自动知道 user 与其他人的私聊；匿名社交仍须保留身份边界。忠实保留原话、双方身份及顺序，不得篡改或编造 user 既往发言。承接最新通信后的剧情与时间，不重演旧消息、不强制提起。叙事语言仍遵循酒馆预设。';
+ assert.match(normalizeSettings({prompts:{continuity:old}}).prompts.continuity,/只在当前情节/);
+ for(const text of ['我的衔接规则',''])assert.equal(normalizeSettings({prompts:{continuity:text}}).prompts.continuity,text);
+});
