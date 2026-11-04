@@ -20,6 +20,38 @@ test('narrative SMS imports locally once, grants reply access, survives reload a
  const f=setup();try{const row={recipient:'user',name:'Alex',kind:'sms',text:'How was your day?'};f.context.chat.push(annotation(row,'Sam received a text from Alex: How was your day?'));await f.memory.read();assert.equal(f.requests(),0);let state=f.phone.snapshot();assert.equal(Object.keys(state.messages).length,1);assert.ok(state.contacts['card:alex.png']);await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,1);await f.phone.sendMessage('card:alex.png','Fine.');assert.equal(f.requests(),1);assert.equal(Object.keys(f.phone.snapshot().messages).length,3);
  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().messages).length,0);assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);}finally{f.close();}
 });
+test('reading a narrative SMS remains read when the next story floor repeats its notification',async()=>{
+  const f=setup();
+  try {
+    const contactId='card:alex.png',content='Please meet me at six in the studio.';
+    const row={sender:'Alex',recipient:'user',name:'Alex',kind:'sms',text:content,read:false};
+    f.context.chat.push(annotation(row,'Alex sent Sam a new SMS about the studio.'));
+    await f.memory.read();
+    const [original]=Object.values(f.phone.snapshot().messages);
+    assert.ok(original);
+    assert.equal(original.read,false);
+    await f.phone.markMessagesRead(contactId);
+    assert.equal(f.phone.snapshot().messages[original.id].read,true);
+    // This is a retelling, not another transmission. It used to create
+    // a second floor-derived ID and turn the badge unread again.
+    f.context.chat.push({is_user:true,mes:'Sam continues the conversation.'});
+    f.context.chat.push(annotation(row,'Sam thought again about the SMS Alex had already sent.'));
+    await f.memory.read();
+    let messages=Object.values(f.phone.snapshot().messages);
+    assert.equal(messages.length,1);
+    assert.equal(messages[0].id,original.id);
+    assert.equal(messages[0].read,true);
+    await f.memory.read();
+    assert.equal(Object.values(f.phone.snapshot().messages).length,1);
+    // A different newly received SMS must still be imported and unread.
+    f.context.chat.push(annotation({...row,text:'The meeting place has changed.'},'Alex sent a new SMS changing the meeting place.'));
+    await f.memory.read();
+    messages=Object.values(f.phone.snapshot().messages);
+    assert.equal(messages.length,2);
+    assert.equal(messages.find(m=>m.text==='The meeting place has changed.').read,false);
+  } finally {f.close();}
+});
+
 test('actual call outcomes stay in history and a narrative update changes the same call; deleting update restores it',async()=>{
  const f=setup();try{f.context.chat.push(annotation({recipient:'user',name:'Alex',kind:'call',status:'ringing'},'Alex called; the phone rang.'));await f.memory.read();const id=Object.keys(f.phone.snapshot().calls)[0];f.context.chat.push(annotation({recipient:'user',name:'Alex',kind:'call',status:'declined',call_id:id},'Sam declined Alex’s call.'));await f.memory.read();assert.equal(Object.keys(f.phone.snapshot().calls).length,1);assert.equal(f.phone.snapshot().calls[id].status,'declined');assert.equal(f.requests(),0);f.context.chat.pop();await f.memory.read();assert.equal(f.phone.snapshot().calls[id].status,'ringing');}finally{f.close();}
 });
