@@ -823,3 +823,64 @@ h2, p { margin: 0; }
     background:#f2f4f0;color:#65766d!important;
 }
 .pp-whatsapp .pp-chat-composer{padding-bottom:10px;}
+/* WhatsApp composer: one focus ring around the entire input group. */
+.pp-whatsapp .pp-chat-composer{
+    padding:9px 10px 10px;
+}
+.pp-whatsapp .pp-chat-composer .pp-chat-form{
+    align-items:center;
+    gap:8px;
+}
+.pp-whatsapp .pp-chat-compose-input{
+    min-height:46px;
+    border:1px solid #e2e8e4;
+    border-radius:24px;
+    padding:0 6px 0 8px;
+    transition:border-color .14s,box-shadow .14s;
+}
+.pp-whatsapp .pp-chat-compose-input:focus-within{
+    border-color:#82c7aa;
+    box-shadow:0 0 0 1px #47a77b33;
+}
+.pp-whatsapp .pp-chat-compose-input select{
+    width:55px;
+    min-height:42px;
+    padding:0 3px;
+    font-size:12px;
+    color:#5d7466;
+}
+.pp-whatsapp .pp-chat-compose-input textarea{
+    flex:1;
+    min-width:0;
+    width:100%;
+    height:44px;
+    min-height:44px;
+    max-height:110px;
+    padding:10px 8px;
+    line-height:22px;
+    border:0;
+    border-radius:0;
+    resize:none;
+    background:transparent;
+    box-shadow:none;
+    overflow-y:auto;
+}
+@supports (field-sizing:content){
+    .pp-whatsapp .pp-chat-compose-input textarea{
+        height:auto;
+        field-sizing:content;
+    }
+}
+.pp-whatsapp .pp-chat-compose-input :is(select,textarea):focus-visible{
+    outline:none;
+    outline-offset:0;
+}
+.pp-whatsapp .pp-chat-composer .pp-chat-primary{
+    display:grid;
+    place-items:center;
+    min-width:50px;
+    min-height:44px;
+    border-radius:24px;
+    padding:0 12px;
+    line-height:1.2;
+}

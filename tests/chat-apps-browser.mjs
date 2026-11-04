@@ -51,6 +51,24 @@ try{
    await p.getByRole('button',{name:'发送',exact:true}).tap();await p.getByText('把地址发给我吧 ☕',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+3);assert.equal(await p.locator('.pp-chat-message').count(),4);
    assert.ok(await p.locator('.pp-chat-composer').evaluate(el=>{const p=el.closest('.pp-chat-app').getBoundingClientRect(),r=el.getBoundingClientRect();return r.bottom<=p.bottom+1&&r.top>=p.top;}));
    assert.ok(await p.locator('.pp-chat-app').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+   if(app==='whatsapp'){
+      await p.locator('[data-chat-field="message"]').focus();
+      const initial=await p.locator('.pp-chat-composer').evaluate(el=>{
+         const shell=el.querySelector('.pp-chat-compose-input'),text=el.querySelector('textarea[data-chat-field="message"]'),button=el.querySelector('button[type="submit"]');
+         const a=shell.getBoundingClientRect(),b=button.getBoundingClientRect();
+         return {outline:getComputedStyle(text).outlineStyle,shellHeight:a.height,textHeight:text.getBoundingClientRect().height,
+            centerGap:Math.abs(a.top+a.height/2-b.top-b.height/2),overflows:el.scrollWidth>el.clientWidth+1};
+      });
+      assert.equal(initial.outline,'none','WhatsApp text area must not show a clipped inner focus outline');
+      assert.ok(initial.centerGap<=2,'WhatsApp send button must align with the input capsule');
+      assert.equal(initial.overflows,false,'WhatsApp composer must not overflow on mobile');
+      await p.locator('[data-chat-field="message"]').fill('第一行\n第二行\n第三行');
+      if(await p.evaluate(()=>CSS.supports('field-sizing','content'))){
+         const expanded=await p.locator('.pp-chat-compose-input').evaluate(el=>el.getBoundingClientRect().height);
+         assert.ok(expanded>initial.shellHeight,'WhatsApp textarea must expand for multiline messages');
+      }
+      await p.locator('[data-chat-field="message"]').fill('');
+   }
    await p.locator('.pp-phone').screenshot({path:resolve(screenshots,app+'-chat-'+width+'.png')});
    await p.getByRole('button',{name:'修改消息',exact:true}).first().tap();await p.locator('[data-chat-field="editText"]').fill('周六下午两点见。');await p.locator('[data-chat-form="edit"] button[type="submit"]').tap();await p.getByText('周六下午两点见。',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+3);
    await p.evaluate(()=>window.response={text:'周六两点，店门口见。'});await p.getByRole('button',{name:'重新生成消息',exact:true}).first().tap();await p.getByText('周六两点，店门口见。',{exact:true}).waitFor();
