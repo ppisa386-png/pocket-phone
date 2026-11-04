@@ -98,6 +98,17 @@ test('X privacy, exact alias and regenerate are enforced by the importer',async(
     }
 });
 
+test('same-floor outreach echoes are imported once per sender and channel',async()=>{
+    const chat=[...four,tags([['whatsapp','A'],['whatsapp','A'],['wechat','B'],['wechat','B'],['x_dm','C'],['x_dm','C'],['x_mention','D'],['x_mention','D'],['sms','E'],['sms','E']])];
+    const journal=await capture(chat),state=replayJournal(journal);
+    assert.equal(Object.values(state.whatsapp).filter(r=>r.type==='message').length,1);
+    assert.equal(Object.values(state.wechat).filter(r=>r.type==='message').length,1);
+    assert.equal(Object.values(state.x).filter(r=>r.type==='message').length,1);
+    assert.equal(Object.values(state.x).filter(r=>r.type==='post'&&r.mentionsUser).length,1);
+    assert.equal(Object.values(state.messages).length,1);
+    assert.deepEqual(await capture(chat,journal),journal);
+});
+
 test('one opportunity accepts many first-time contacts via the same enabled app, without needing phone numbers',async()=>{
     const pairs=Array.from({length:25},(_,i)=>['whatsapp','人物'+i]);
     const state=replayJournal(await capture([...four,tags(pairs)]));
