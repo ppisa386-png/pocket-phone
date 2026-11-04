@@ -18,6 +18,34 @@ const safe=value=>JSON.stringify(value).replace(/\{\{/g,'\\u007b\\u007b');
 const evidenceText = value => String(value || '').normalize('NFKC')
     .replace(/&(?:quot|#34);/g,'"').replace(/&(?:apos|#39);/g,"'").replace(/&amp;/g,'&').replace(/&(?:nbsp|#160);/g,' ')
     .replace(/<[^>]*>/g,'').replace(/[\s*_`“”‘’"']/g,'');
+// Repeating a notification in adjacent story replies is not a new delivery.
+// Match original content and sender, not the floor-derived event ID: reading
+// a message changes its read flag but must never produce another unread copy.
+function repeatedNotification(state, journal, chat, index, channel, sender, body) {
+    const collection = channel === 'sms' ? 'messages' : channel.startsWith('x_') ? 'x' : channel;
+    const normalized = String(body ?? '').normalize('NFKC').replace(/\s+/gu, ' ').trim();
+    if (!normalized || !['messages', 'whatsapp', 'wechat', 'x'].includes(collection)) return false;
+    for (const [key, record] of Object.entries(state[collection] || {})) {
+        const mention = channel === 'x_mention';
+        const kindMatches = collection === 'messages' ? record?.role === 'assistant' :
+            mention ? record?.type === 'post' && record.mentionsUser === true :
+            record?.type === 'message' && record.role === 'assistant';
+        if (!kindMatches || String(record.text ?? '').normalize('NFKC').replace(/\s+/gu, ' ').trim() !== normalized) continue;
+        const person = collection === 'messages'
+            ? state.contacts?.[record.contactId] || record.participant || {name:record.name}
+            : state[collection]?.[mention ? record.author : record.accountId];
+        if (!person?.name || !sameNamedPerson(person, {name:sender})) continue;
+        // Find the original creation floor; later read acknowledgments are not deliveries.
+        const source = journal?.events.find(event => event.changes.some(change =>
+            change.collection === collection && change.key === key && change.value !== null))?.source.index;
+        if (!Number.isInteger(source) || source > index) continue;
+        // Restrict the guard to adjacent narrative turns so a truly new,
+        // identical message at a later point in the story can still arrive.
+        if (chat.slice(source + 1, index + 1).filter(effectiveReply).length <= 2) return true;
+    }
+    return false;
+}
+
 export function storyAnnotations(message,tag){
     if(message?.is_user||(message?.is_system&&!isMemoryHidden(message)))return [];
     const text=String(message?.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(think|thinking|script|style)[^>]*>[\s\S]*?<\/\1>/gi,'');
@@ -46,7 +74,11 @@ export function importStoryPhone(raw,revisions,chat,context){
                 rows.push({...row,kind:row.channel,name:row.sender,status:'ringing',outreachId:id});
                 continue;
             }
-            if(allowed&&typeof row.text==='string'&&row.text.trim())changes=socialContact(state,row,id,storyTime(chat.slice(0,index+1)),(Date.parse(chat[index].send_date)||Date.now())+n,context.name1);
+            if(allowed&&typeof row.text==='string'&&row.text.trim()){
+                changes=repeatedNotification(state,journal,chat,index,row.channel,row.sender,row.text)
+                    ? [set('profiles','ignored:'+id,{ignored:true,reason:'duplicate notification'})]
+                    : socialContact(state,row,id,storyTime(chat.slice(0,index+1)),(Date.parse(chat[index].send_date)||Date.now())+n,context.name1);
+            }
             if(!changes.length)changes=[set('profiles','ignored:'+id,{ignored:true})];
             journal=appendChange(journal,revisions.slice(0,index+1),changes,id);state=replayJournal(journal);changed=true;
         }
@@ -87,6 +119,11 @@ export function importStoryPhone(raw,revisions,chat,context){
             const number=typeof row.number==='string'&&row.prose.replace(/\D/g,'').includes(row.number.replace(/\D/g,''))&&/\d{5}/.test(row.number.replace(/\D/g,''))?row.number.trim():known?.number||null;
             const acquisition={route:outgoing?'sent_contact':'received_contact',reason:outgoing?'正文中实际发出通信':'正文中实际收到通信',evidence:row.evidence,sourceIndex:index};
             const changes=[];
+            if(row.kind==='sms'&&incoming&&repeatedNotification(state,journal,chat,index,'sms',row.sender||row.name,row.text)){
+                journal=appendChange(journal,revisions.slice(0,index+1),
+                    [set('profiles','ignored:'+eventId,{ignored:true,reason:'duplicate notification'})],eventId);
+                state=replayJournal(journal);changed=true;continue;
+            }
             if(row.kind==='sms'){
                 // The narrative can show the sender/notification without quoting
                 // the complete message twice. The valid contact tag carries it.
@@ -123,6 +160,7 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     return (business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due)+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
         '\n这是 user 个人的手机。只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。收到的短信可只在 text 放全文，但正文必须有确实到达 user 手机的事实；user 发出的短信必须在正文已经逐字写出并实际发送，不能借记录补写 user 发言。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,calls})+
+        '\n已有手机消息只是背景参考，不是下一楼必须回应或继续处理的剧情任务。只在本轮正文确实出现全新短信发送或到达时输出 durian-contact；回忆、查看、已读、复述旧消息或描写其既有后果，都不得再次生成新通信标签或未读通知。主动联系必须是实际发生的新联系，不能因为此前一条消息尚在记忆中就重发相同内容。'+
         '\n按本轮实际通信发生顺序，每条短信及通话状态在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms 或 call","evidence":"本次正文中确实发送或收到该通信且能识别双方的连续逐字原句","text":"仅 sms：实际发送或收到的完整短信原文，不得改写；收到时正文可只描写通知，发出时必须已在正文逐字写明","read":false,"status":"仅 call：ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"replyable":true}-->。短信附 sms_category（A=日常问候/闲聊/生活分享/即时状态，B=待办/约定/持续请求/情感纠纷；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断）。短信一条一注释，不抄回旧记录。隐藏号码不可回拨时 replyable:false。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。'+COMMUNICATION_LANGUAGE_RULE;
 }
 export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
