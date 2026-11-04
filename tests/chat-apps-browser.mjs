@@ -62,7 +62,7 @@ try{
       assert.equal(initial.outline,'none','WhatsApp text area must not show a clipped inner focus outline');
       assert.ok(initial.centerGap<=2,'WhatsApp send button must align with the input capsule');
       assert.equal(initial.overflows,false,'WhatsApp composer must not overflow on mobile');
-      await p.locator('[data-chat-field="message"]').fill('第一行\\n第二行\\n第三行');
+      await p.locator('[data-chat-field="message"]').fill('第一行\n第二行\n第三行');
       if(await p.evaluate(()=>CSS.supports('field-sizing','content'))){
          const expanded=await p.locator('.pp-chat-compose-input').evaluate(el=>el.getBoundingClientRect().height);
          assert.ok(expanded>initial.shellHeight,'WhatsApp textarea must expand for multiline messages');
