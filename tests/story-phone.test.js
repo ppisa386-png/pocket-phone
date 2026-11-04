@@ -56,6 +56,15 @@ test('reading a narrative SMS remains read when the next story floor repeats its
     messages=Object.values(f.phone.snapshot().messages);
     assert.equal(messages.length,2);
     assert.equal(messages.find(m=>m.text==='The meeting place has changed.').read,false);
+    // A truly separate new delivery can reuse identical wording only when
+    // the new narrative floor explicitly describes another transmission.
+    f.context.chat.push(annotation({...row,newDelivery:true},
+      'Alex sent Sam the same message again as a separate new SMS.'));
+    await f.memory.read();
+    messages=Object.values(f.phone.snapshot().messages);
+    assert.equal(messages.length,3);
+    assert.equal(messages.filter(m=>m.text===content).length,2);
+    assert.equal(messages.find(m=>m.id===original.id).read,true);
   } finally {f.close();}
 });
 
