@@ -1,5 +1,5 @@
 import { isBlocked } from './contact-events.js?v=1.1.13';
-import { icon } from './icons.js?v=1.1.8';
+import { icon } from './icons.js?v=1.1.20';
 const blockEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export function renderBlockButton(state, id, channel) {
     const blocked = isBlocked(state, id, channel);
