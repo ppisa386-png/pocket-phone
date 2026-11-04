@@ -41,7 +41,8 @@ test('WhatsApp transfer is selectable from message type and uses the existing tr
     panel.input({dataset:{chatField:'kind'},value:'transfer'});
     assert.ok(redraws>0);
     assert.match(panel.html(), /data-chat-form="cash"/);
-    assert.match(panel.html(), /转账金额/);
+    assert.match(panel.html(), /<span>转账金额<\/span>/);
+    assert.doesNotMatch(panel.html(), /转账金额（|转账金额\(USD\)/);
     assert.equal(panel.back(),true);
     assert.match(panel.html(), /<option value="text" selected>文字<\/option>/);
     state.whatsapp.p.status='accepted';
