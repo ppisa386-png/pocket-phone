@@ -738,3 +738,88 @@ h2, p { margin: 0; }
 
 .pp-x .pp-x-refresh:disabled { opacity: .38; cursor: default; }
 .pp-x .pp-x-refresh + .pp-x-refresh { margin-left: 0; }
+
+/* Phone/SMS: consistent icon-only block actions with accessible hit areas. */
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-block-button{
+    display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;
+    min-width:40px;min-height:40px;margin:0;padding:0;
+    border-radius:50%;background:transparent;color:#7e8491;
+}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-block-button:hover{
+    background:#a1a7ad1c;color:#af4857;
+}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-block-button[data-block-value="false"]{color:#358e77;}
+.pp-phone:is([data-active-app="phone"],[data-active-app="messages"]) .pp-block-button svg{width:21px;height:21px;}
+.pp-phone[data-active-app="phone"] .pp-call-heading .pp-block-button{margin:12px auto 0;}
+.pp-phone[data-active-app="messages"] .pp-sms-heading>.pp-block-button{margin-left:auto;}
+
+/* WhatsApp Pay-inspired transfer bubble. The separate WeChat card is unchanged. */
+.pp-whatsapp .pp-wa-payment{
+    position:relative;width:min(295px,90%);max-width:calc(100% - 12px);
+    margin:10px 0 13px;padding:4px;border-radius:12px 12px 12px 3px;
+    background:#fff;box-shadow:0 1px 2px #233a3028;color:#1b3027;
+    overflow:hidden;overflow-wrap:anywhere;
+}
+.pp-whatsapp .pp-wa-payment.is-user{
+    margin-left:auto;border-radius:12px 12px 3px 12px;background:#d9fdd3;
+}
+.pp-whatsapp .pp-wa-payment-card{border-radius:9px;overflow:hidden;background:#f7f9f7;}
+.pp-whatsapp .pp-wa-payment.is-user .pp-wa-payment-card{background:#eafce5;}
+.pp-whatsapp .pp-wa-payment-face{
+    padding:13px 14px 11px;
+    background:radial-gradient(ellipse at 100% 0%,#fff9 0%,transparent 58%),
+        repeating-radial-gradient(circle at 70% 0%,#08734b0c 0 1px,transparent 2px 17px),
+        linear-gradient(135deg,#e4f8e0,#c7efc0);
+}
+.pp-whatsapp .pp-wa-payment.is-incoming .pp-wa-payment-face{
+    background:radial-gradient(ellipse at 95% 0%,#fff 0%,transparent 60%),
+        repeating-radial-gradient(circle at 75% 0%,#647d6a0a 0 1px,transparent 2px 17px),
+        linear-gradient(135deg,#f2f4f2,#e4eae5);
+}
+.pp-whatsapp .pp-wa-payment-face>small{
+    display:block;color:#476b57;font-size:11px;margin-bottom:5px;
+}
+.pp-whatsapp .pp-wa-payment-face>strong{
+    display:block;font-size:26px;line-height:1.3;letter-spacing:-.4px;
+    font-weight:650;color:#0b694c;font-variant-numeric:tabular-nums;
+}
+.pp-whatsapp .pp-wa-payment.is-incoming .pp-wa-payment-face>strong{color:#223b2d;}
+.pp-whatsapp .pp-wa-payment-summary{
+    display:flex;align-items:center;gap:9px;margin-top:13px;
+    padding:9px 10px;background:#ffffff76;border-radius:8px;min-width:0;
+}
+.pp-whatsapp .pp-wa-payment-icon{
+    display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;
+    background:#0b926b;color:white;border-radius:50%;
+}
+.pp-whatsapp .pp-wa-payment-icon svg{width:18px;height:18px;}
+.pp-whatsapp .pp-wa-payment-summary>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.pp-whatsapp .pp-wa-payment-summary b{font-size:13px;font-weight:650;}
+.pp-whatsapp .pp-wa-payment-summary small{font-size:11px;color:#607869;}
+.pp-whatsapp .pp-wa-payment-memo{margin:0;padding:10px 12px 3px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;}
+.pp-whatsapp .pp-wa-payment-footer{
+    display:flex;align-items:center;justify-content:space-between;gap:9px;
+    padding:9px 11px;color:#567368;font-size:11px;
+}
+.pp-whatsapp .pp-wa-payment-footer>span{display:inline-flex;align-items:center;gap:5px;min-width:0;font-weight:600;}
+.pp-whatsapp .pp-wa-payment-footer svg{width:15px;height:15px;}
+.pp-whatsapp .pp-wa-payment-footer time{flex-shrink:0;color:#7a9086;font-size:10px;font-variant-numeric:tabular-nums;}
+.pp-whatsapp .pp-wa-payment.is-pending .pp-wa-payment-footer>span{color:#99741f;}
+.pp-whatsapp .pp-wa-payment.is-accepted .pp-wa-payment-footer>span{color:#087b53;}
+.pp-whatsapp .pp-wa-payment.is-declined .pp-wa-payment-face{
+    background:linear-gradient(135deg,#f4f3ef,#e8e9e5);
+}
+.pp-whatsapp .pp-wa-payment.is-declined .pp-wa-payment-face>strong{color:#607269;}
+.pp-whatsapp .pp-wa-payment.is-declined .pp-wa-payment-footer>span{color:#9a5e52;}
+.pp-whatsapp .pp-wa-payment-actions{
+    display:flex;gap:7px;padding:0 7px 8px;flex-wrap:wrap;
+}
+.pp-whatsapp .pp-wa-payment-actions .pp-chat-button{
+    flex:1;padding:8px 10px;min-height:34px;
+    border-radius:8px;background:#e0f3e8;color:#087653!important;
+    font-size:12px;font-weight:600;white-space:nowrap;
+}
+.pp-whatsapp .pp-wa-payment-actions .pp-chat-button:last-child:not(:first-child){
+    background:#f2f4f0;color:#65766d!important;
+}
+.pp-whatsapp .pp-chat-composer{padding-bottom:10px;}

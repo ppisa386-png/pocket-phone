@@ -1,7 +1,7 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.17';
 import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.18';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
-import { icon } from './icons.js?v=1.1.8';
+import { icon } from './icons.js?v=1.1.20';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const chatKinds={text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -42,7 +42,25 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         return '<div class="pp-chat-add-actions">'+button('contacts','发起通话','','phone')+'<span>选择好友，语音或视频通话</span></div>'+(calls.length?calls.map(c=>{const a=getView()[app]?.[c.accountId];return a?'<button type="button" class="pp-chat-row" data-chat-action="thread" data-chat-id="'+chatEsc(a.id)+'">'+avatar(a.name)+'<span class="pp-chat-row-copy"><strong>'+chatEsc(a.name)+'</strong><span>'+chatKinds[c.mode]+' · '+chatCallLabels[c.status]+'</span></span>'+icon(c.mode==='video'?'video':'phone')+'</button>':'';}).join(''):empty('暂无通话','打开好友聊天，点击顶部的电话或视频图标。'));
     }
     function transferHTML(t,blocked) {
-        return '<article class="pp-chat-transfer '+(t.direction==='outgoing'?'is-user':'')+'">'+icon('cash')+'<strong>'+chatEsc(t.currency)+' '+majorAmount(t.amountMinor,t.currency)+'</strong><p>'+chatEsc(t.memo||'转账')+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已退还／取消'})[t.status]+'</small>'+(t.status==='pending'?'<div>'+(!blocked?button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id,'',disabled()):'')+button('cancel','退还／取消',t.id,'',disabled())+'</div>':'')+'</article>';
+        if(wc)return '<article class="pp-chat-transfer '+(t.direction==='outgoing'?'is-user':'')+'">'+icon('cash')+'<strong>'+chatEsc(t.currency)+' '+majorAmount(t.amountMinor,t.currency)+'</strong><p>'+chatEsc(t.memo||'转账')+'</p><small>'+({pending:'待收款',accepted:'已收款',declined:'已退还／取消'})[t.status]+'</small>'+(t.status==='pending'?'<div>'+(!blocked?button('settle',t.direction==='incoming'?'收款':'查看收款回应',t.id,'',disabled()):'')+button('cancel','退还／取消',t.id,'',disabled())+'</div>':'')+'</article>';
+        const outgoing=t.direction==='outgoing';
+        const states={
+            pending:{label:'待领取',detail:outgoing?'等待对方领取':'等待你领取',glyph:'history'},
+            accepted:{label:'已领取',detail:'转账已完成',glyph:'unblock'},
+            declined:{label:'已退还',detail:'款项已退回',glyph:'retry'}
+        };
+        const stage=states[t.status]||{label:'交易状态未知',detail:'请查看转账记录',glyph:'cash'};
+        const amount=chatEsc(t.currency)+' '+chatEsc(majorAmount(t.amountMinor,t.currency));
+        const actions=t.status==='pending'
+            ? '<div class="pp-wa-payment-actions">'+(!blocked?button('settle',outgoing?'查看收款回应':'领取转账',t.id,'',disabled()):'')
+                +button('cancel',outgoing?'取消转账':'退还转账',t.id,'',disabled())+'</div>' : '';
+        return '<article class="pp-chat-transfer pp-wa-payment '+(outgoing?'is-user':'is-incoming')+' is-'+chatEsc(t.status)+'" aria-label="WhatsApp 转账：'+stage.label+'">'+
+            '<div class="pp-wa-payment-card"><div class="pp-wa-payment-face">'+
+                '<small>'+(outgoing?'你转给对方':'对方转给你')+'</small><strong>'+amount+'</strong>'+
+                '<div class="pp-wa-payment-summary"><span class="pp-wa-payment-icon">'+icon('cash')+'</span><span><b>'+stage.label+'</b><small>'+stage.detail+'</small></span></div>'+
+            '</div>'+(t.memo?'<p class="pp-wa-payment-memo">'+chatEsc(t.memo)+'</p>':'')+
+            '<div class="pp-wa-payment-footer"><span>'+icon(stage.glyph)+stage.label+'</span><time>'+chatEsc(displayStoryTime(t))+'</time></div></div>'+
+            actions+'</article>';
     }
     function threadHTML(a) {
         const items=threadItems(a.id);
@@ -53,7 +71,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
             const tools=own?'':'<div class="pp-chat-message-tools">'+button('edit','修改消息',i.id,'edit',disabled())+button('reroll','重新生成消息',i.id,'retry',disabled())+'</div>';
             const editing=editingId===i.id?form('edit',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消修改'):'';
             const stateText={queued:'未发送',pending:'等待回复',failed:'发送失败',no_reply:'对方暂未回复'}[i.status]||'';
-            return '<article class="pp-chat-message '+(own?'is-user':'')+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatEsc(i.text)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+tools+editing+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
+            return '<article class="pp-chat-message '+(own?'is-user':'')+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatEsc(i.text)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+tools+editing+(wc&&['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
         }).join('')||'<p class="pp-chat-thread-start">'+chatEsc(a.name)+'</p>';
     }
     function composerHTML(a) {
@@ -61,7 +79,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         if(a.friend==='incoming')return button('accept-request','接受联系人',a.id)+button('later-request','暂不处理',a.id)+button('decline-request','拒绝',a.id)+button('block','拉黑',a.id);
         const call=threadItems(a.id).find(i=>i.type==='call'&&i.status==='connected');
         if(call)return '<div class="pp-chat-composer">'+form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',call.id,'',disabled())+'</div>';
-        return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(chatKinds).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,wc?'cash':'',disabled())+'<small>换行暂存 · 点击发送</small></div></div>';
+        return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(wc?chatKinds:{...chatKinds,transfer:'转账'}).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+(wc?'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,'cash',disabled())+'<small>换行暂存 · 点击发送</small></div>':'')+'</div>';
     }
     function html() {
         if(accountId&&!account()){accountId=null;page='';editingId=null;}
@@ -88,6 +106,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     }
     async function queueCurrent(){
         const token=epoch,id=accountId,draftKey=key('message'),text=value('message');
+        if(!wc&&value('kind','text')==='transfer'){drafts[key('kind')]='text';page='cash';redraw();return;}
         if(!text.trim())return;
         const result=await perform('queueMessage',[id,value('kind','text'),text]);
         if(token===epoch&&result?.ok&&drafts[draftKey]===text)delete drafts[draftKey];redraw();return result;
@@ -101,7 +120,9 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     async function bulk(){const token=epoch,result=await perform('addEstablished');if(token===epoch&&result?.ok){status='已添加 '+result.value.added+' 位好友'+(result.value.updated?'，更新 '+result.value.updated+' 位':'')+'。';redraw();}}
     return {html,back,queueCurrent,
         reset(){epoch++;posting=false;reading=false;tab='chats';accountId=null;page='';editingId=null;status='';drafts=Object.create(null);},
-        input(target){const name=target.dataset.chatField;if(name){const changed=value(name)!==target.value;drafts[key(name)]=target.value;if(name==='filter'&&changed)redraw();}},
+        input(target){const name=target.dataset.chatField;if(name){const changed=value(name)!==target.value;drafts[key(name)]=target.value;
+            if(name==='kind'&&!wc&&target.value==='transfer'&&accountId){drafts[key(name)]='text';page='cash';editingId=null;redraw();return;}
+            if(name==='filter'&&changed)redraw();}},
         async readVisible(){if(reading||posting||getView().busy||page||!accountId||!adapter[app]||!records('message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;const token=epoch;reading=true;try{await adapter[app].markRead(accountId);}finally{if(token===epoch)reading=false;}},
         async action(action,id){
             if(action==='back'){back();return;}
@@ -121,6 +142,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
             if(name==='profile'){await perform('saveProfile',[{...profile(),alias:data.alias}],'已保存个人设置');return;}
             if(name==='edit'){const result=await perform('editMessage',[editingId,data.editText]);if(token===epoch&&result?.ok)editingId=null;redraw();return;}
             if(name==='message'){
+                if(!wc&&value('kind','text')==='transfer'){drafts[key('kind')]='text';page='cash';redraw();return;}
                 const text=value('message');
                 if(text.trim()){const queued=await perform('queueMessage',[id,value('kind','text'),text]);if(token!==epoch||!queued?.ok)return;if(drafts[prefix+'message']===text)delete drafts[prefix+'message'];}
                 await perform('flushMessages',[id]);redraw();return;

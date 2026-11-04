@@ -1,9 +1,11 @@
 import { isBlocked } from './contact-events.js?v=1.1.13';
+import { icon } from './icons.js?v=1.1.20';
 const blockEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export function renderBlockButton(state, id, channel) {
     const blocked = isBlocked(state, id, channel);
-    return '<button type="button" class="pp-text-button pp-block-button" data-block-id="' + blockEscape(id) + '" data-block-channel="' + channel + '" data-block-value="' + !blocked + '">' +
-        (blocked ? '取消拉黑' : '拉黑' + (channel === 'phone' ? '电话' : '短信')) + '</button>';
+    const title = (blocked ? '取消拉黑' : '拉黑') + (channel === 'phone' ? '电话' : '短信');
+    return '<button type="button" class="pp-icon-button pp-block-button" data-block-id="' + blockEscape(id) + '" data-block-channel="' + channel + '" data-block-value="' + !blocked + '" aria-label="' + title + '" title="' + title + '">' +
+        icon(blocked ? 'unblock' : 'block') + '</button>';
 }
 export function renderBlockedList(state, channel) {
     const entries = Object.entries(state.profiles ?? {}).filter(([key, value]) => key.startsWith('blocked:') && value[channel]);

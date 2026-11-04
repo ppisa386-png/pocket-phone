@@ -39,6 +39,8 @@ const paths = {
     apps: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
     prompts: '<path d="M5 3h14v18H5V3Zm3 5h8M8 12h8M8 16h5"/>',
     retry: '<path d="M4 9a8 8 0 1 1 1 9M4 3v6h6"/>',
+    block: '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
+    unblock: '<circle cx="12" cy="12" r="9"/><path d="m7.7 12.2 2.8 2.8 5.8-6"/>',
 };
 
 export function icon(name) {

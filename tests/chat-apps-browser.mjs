@@ -54,7 +54,12 @@ try{
    await p.locator('.pp-phone').screenshot({path:resolve(screenshots,app+'-chat-'+width+'.png')});
    await p.getByRole('button',{name:'修改消息',exact:true}).first().tap();await p.locator('[data-chat-field="editText"]').fill('周六下午两点见。');await p.locator('[data-chat-form="edit"] button[type="submit"]').tap();await p.getByText('周六下午两点见。',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+3);
    await p.evaluate(()=>window.response={text:'周六两点，店门口见。'});await p.getByRole('button',{name:'重新生成消息',exact:true}).first().tap();await p.getByText('周六两点，店门口见。',{exact:true}).waitFor();
-   await p.getByRole('button',{name:'转账',exact:true}).tap();await p.locator('[data-action="back"]').tap();assert.equal(await p.locator('[data-chat-form="message"]').count(),1);
+   if(app==='whatsapp'){
+      assert.equal(await p.locator('.pp-chat-compose-extra').count(),0);
+      await p.locator('[data-chat-field="kind"]').selectOption('transfer');
+      await p.locator('[data-chat-form="cash"]').waitFor();
+   }else await p.getByRole('button',{name:'转账',exact:true}).tap();
+   await p.locator('[data-action="back"]').tap();assert.equal(await p.locator('[data-chat-form="message"]').count(),1);
    await p.getByRole('button',{name:'聊天信息',exact:true}).tap();await p.getByRole('button',{name:'加入黑名单',exact:true}).tap();await p.locator('[data-action="back"]').tap();await p.getByText('已拉黑，不能发送消息或通话。',{exact:true}).waitFor();await p.getByRole('button',{name:'解除拉黑',exact:true}).tap();
    await p.locator('[data-chat-field="message"]').fill('晚点聊');await p.evaluate(()=>{window.delay=true;window.response={status:'reply',messages:[{text:'好的，晚点见。'}]};});await p.getByRole('button',{name:'发送',exact:true}).tap();await p.waitForFunction(()=>!!window.finish);await p.locator('[data-action="close"]').tap();await p.evaluate(()=>{window.delay=false;window.finish();window.finish=null;});
    await p.waitForFunction(()=>JSON.stringify(window.SillyTavern.getContext().chatMetadata).includes('好的，晚点见。'));await p.locator('.pp-launcher').tap();await p.locator('[data-app="'+app+'"]').tap();if(await p.locator('.pp-chat-row').count())await p.locator('.pp-chat-row').filter({hasText:'陈默'}).tap();await p.getByText('好的，晚点见。',{exact:true}).waitFor();
