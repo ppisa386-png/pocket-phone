@@ -1,3 +1,4 @@
+import {paperDraft} from '../src/daily-core.js';
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -255,12 +256,25 @@ test('manual editing preserves article identity and selection, updates injection
  const f=setup();try{
   ok(await f.daily.update());const article=first(f);ok(await f.daily.toggle(article.id));
   const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
-  assert.equal((panel.html().match(/data-daily-action="edit"/g)||[]).length,dailyArticles(f.state()).length);
+  assert.equal((panel.html().match(/data-daily-action="edit"/g)||[]).length,1);
   const fields={headline:'修改后的标题',summary:'修改后的导语',body:'修改后的正文 <script>。'};
   ok(await f.daily.edit(article.id,fields));await f.memory.read();
   assert.deepEqual(first(f),{...article,...fields,selected:true,selectedIndex:f.c.chat.length-1});
   assert.match(buildDailyPrompt(f.state(),f.c.chat),/修改后的标题/);
   assert.equal((await f.daily.edit(article.id,{...fields,body:' '})).ok,false);
   assert.equal(first(f).body,fields.body);assert.equal(f.calls(),1);
+ }finally{f.close();}
+});
+
+test('whole-paper edit saves the masthead, print date, region and all articles together for current and archived editions',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());const id=f.state().daily.edition.editionId;
+  const before=paperDraft(f.state(),id),draft=structuredClone(before);draft.publication='新报';draft.location='本地';draft.date='2028-12-31';
+  draft.articles.forEach((a,i)=>{a.section='栏目';a.headline='新标题'+i;});ok(await f.daily.editEdition(id,before,draft));
+  assert.deepEqual(paperDraft(f.state(),id),draft);assert.equal((await f.daily.editEdition(id,before,before)).ok,false);
+  f.c.chat.push({mes:'2030-01-09'});await f.memory.read();ok(await f.daily.update());
+  const archived=paperDraft(f.state(),id);assert.deepEqual(archived,draft);
+  const updated={...archived,publication:'历史报头'};ok(await f.daily.editEdition(id,archived,updated));assert.deepEqual(paperDraft(f.state(),id),updated);
+  assert.equal(f.calls(),2);
  }finally{f.close();}
 });

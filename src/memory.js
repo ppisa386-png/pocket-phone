@@ -1,10 +1,12 @@
+import {timedAudienceChanges} from './x-influence.js?v=1.1.18';
+import {privilegeRows} from './x-privilege.js?v=1.1.18';
 import { reservedCash } from './assets-core.js?v=1.1.17';
 import { migrateDailyArchives } from './daily-archive.js?v=1.1.13';
 import { syncSMSContext } from './sms-context.js?v=1.1.13';
-import { storyTime } from './story-clock.js?v=1.1.12';
-import { importStoryAssets } from './assets-story.js?v=1.1.17';
-import { importStorySquare } from './x-opinion.js?v=1.1.17';
-import { importStoryPhone } from './story-phone.js?v=1.1.17';
+import { storyTime,readStoryClock } from './story-clock.js?v=1.1.12';
+import { importStoryAssets } from './assets-story.js?v=1.1.18';
+import { importStorySquare } from './x-opinion.js?v=1.1.18';
+import { importStoryPhone } from './story-phone.js?v=1.1.18';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.1.13';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
@@ -112,8 +114,13 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
         const archive=migrateDailyArchives(finances.journal,snapshot.revisions);
         const sms=syncSMSContext(archive.journal,snapshot.revisions,current.chat);
-        const journal=sms.journal;
-        if (reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed || archive.changed || sms.changed) await save(snapshot, journal);
+        let journal=sms.journal;
+        const state=replayJournal(journal),day=readStoryClock(current.chat).day;
+        const timed=timedAudienceChanges(state,current.chat,day);
+        for(const r of privilegeRows(state))if(r.status==='active'&&day!==null&&day>r.end)
+            timed.push({collection:'x',key:r.id,value:{...r,status:'expired'}});
+        if(timed.length)journal=appendChange(journal,snapshot.revisions,timed);
+        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed || archive.changed || sms.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';

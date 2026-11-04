@@ -19,13 +19,13 @@ test('seven-day decay has stable signed daily deltas, catch-up is bounded even a
   const s=initial(),e=effect(sign===1?96:16,sign===1?16:96);
   let prev=1000,last=Infinity;
   for(let day=1;day<=8;day++){
-   const total=apply(s,story(day),[e]),delta=Math.abs(total-prev);
-   assert.ok(delta<=last);assert.equal(day===8?delta:Math.sign(total-prev),day===8?0:sign);
+   const priorImpact=s.x['impact:post:p']?.total||0,total=apply(s,story(day),[e]),step=s.x['impact:post:p'].total-priorImpact,delta=Math.abs(step);
+   assert.ok(delta<=last);assert.equal(day===8?delta:Math.sign(step),day===8?0:sign);
    assert.equal(apply(s,story(day),[e]),total);last=delta;prev=total;
   }
   assert.equal(s.x['impact:post:p'].settled,7);assert.equal(s.x['impact:post:p'].expired,true);
   const jump=initial();apply(jump,story(1),[e]);assert.equal(apply(jump,story(14),[]),prev);
-  const late=initial();assert.equal(apply(late,story(8),[e]),1000);
+  const late=initial();assert.equal(apply(late,story(8),[e]),990);
  }
 });
 test('unknown story time, anonymous real-world fame, prior credits and brand incident do not duplicate growth',()=>{
@@ -49,4 +49,13 @@ test('editor only saves fields from the selected page, keeps hidden media and ot
  const scope={tab:'messages',accountId:'a'},fields=pageFields(s,scope);assert.deepEqual(fields.map(f=>f.id),['m']);
  const edit={...fields[0],before:'hello',value:'hi'};
  assert.equal(pageEdits(s,scope,[edit])[0].value.text,'hi');assert.throws(()=>pageEdits(s,scope,[{...edit,id:'n'}]));assert.throws(()=>pageEdits(s,scope,[{...edit,before:'stale'}]));
+});
+
+test('inactivity rounds separately per seven complete story days, never before a first post or without a known date',()=>{
+ const s=initial();s.x.audience={id:'audience',type:'audience',initialFollowers:10000,followers:10000};
+ for(const [d,total] of [[7,10000],[8,9900],[15,9801],[22,9703],[22,9703]])assert.equal(apply(s,story(d),[]),total);
+ const jump=initial();jump.x.audience={id:'audience',type:'audience',initialFollowers:10000,followers:10000};
+ assert.equal(apply(jump,story(22),[]),9703);
+ const none=initial();delete none.x.p;assert.equal(apply(none,story(22),[]),1000);
+ const tiny=initial();tiny.x.audience={initialFollowers:49,followers:49};assert.equal(apply(tiny,story(22),[]),49);
 });

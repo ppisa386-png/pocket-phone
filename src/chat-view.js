@@ -1,5 +1,5 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.17';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.17';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.18';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
 import { icon } from './icons.js?v=1.1.8';
 
@@ -19,7 +19,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     const disabled=()=>getView().busy||posting?' disabled':'';
     const avatar=name=>'<span class="pp-chat-avatar" aria-hidden="true">'+chatEsc(Array.from(name||'?')[0])+'</span>';
     const button=(action,title,id='',glyph='',extra='')=>'<button type="button" class="pp-chat-button '+(glyph?'is-icon':'')+'" data-chat-action="'+action+'" data-chat-id="'+chatEsc(id)+'" aria-label="'+chatEsc(title)+'" title="'+chatEsc(title)+'"'+extra+'>'+ (glyph?icon(glyph):chatEsc(title))+'</button>';
-    const field=(name,title,fallback='',type='text')=>'<label class="pp-chat-field"><span>'+title+'</span><input data-chat-field="'+name+'" name="'+name+'" type="'+type+'" value="'+chatEsc(value(name,fallback))+'" maxlength="100"'+(type==='number'?' min="0" step="'+(1/unitScale(walletCurrency(getView())||'USD'))+'"':'')+'></label>';
+    const field=(name,title,fallback='',type='text')=>'<label class="pp-chat-field"><span>'+title+'</span><input data-chat-field="'+name+'" name="'+name+'" type="'+type+'" value="'+chatEsc(value(name,fallback))+'" maxlength="'+(name==='name'&&!wc?6000:100)+'"'+(type==='number'?' min="0" step="'+(1/unitScale(walletCurrency(getView())||'USD'))+'"':'')+'></label>';
     const textarea=(name,title)=>'<textarea name="'+name+'" data-chat-field="'+name+'" aria-label="'+title+'" placeholder="'+title+'" rows="2" maxlength="6000" enterkeyhint="enter">'+chatEsc(value(name))+'</textarea>';
     const form=(name,body,title)=>'<form class="pp-chat-form" data-chat-form="'+name+'">'+body+'<button class="pp-chat-primary" type="submit"'+disabled()+'>'+title+'</button></form>';
     const empty=(title,copy)=>'<div class="pp-chat-empty">'+icon('messages')+'<strong>'+title+'</strong><p>'+copy+'</p></div>';
@@ -61,15 +61,15 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         if(a.friend==='incoming')return button('accept-request','接受联系人',a.id)+button('later-request','暂不处理',a.id)+button('decline-request','拒绝',a.id)+button('block','拉黑',a.id);
         const call=threadItems(a.id).find(i=>i.type==='call'&&i.status==='connected');
         if(call)return '<div class="pp-chat-composer">'+form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',call.id,'',disabled())+'</div>';
-        return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(chatKinds).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,'cash',disabled())+'<small>换行暂存 · 点击发送</small></div></div>';
+        return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(chatKinds).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,wc?'cash':'',disabled())+'<small>换行暂存 · 点击发送</small></div></div>';
     }
     function html() {
         if(accountId&&!account()){accountId=null;page='';editingId=null;}
         const a=account(),p=profile(),thread=!!a&&!page;
         const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?'通讯录':tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'WhatsApp');
         let body='';
-        if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
-        else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
+        if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名')+(wc?'':'<small>添加多个好友可以用、间隔名字</small>'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
+        else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!wc&&!a.blocked&&a.friend==='friends'?button('cash','转账',a.id,'',disabled()):'')+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
         else if(a&&page==='cash')body='<div class="pp-chat-settings">'+form('cash',field('amount','转账金额（'+(walletCurrency(getView())||'先建账')+'）','','number')+field('memo','附言'),'确认转账')+'</div>';
         else if(a)body=threadHTML(a);
         else if(tab==='me')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(p.alias)+'<h2>'+chatEsc(p.alias)+'</h2><span>'+label+'</span></div>'+form('profile',field('alias','昵称',p.alias),'保存个人设置')+'</div>';
@@ -117,7 +117,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         },
         async submit(element){
             const data=Object.fromEntries(new FormData(element)),name=element.dataset.chatForm,token=epoch,id=accountId,prefix=key('');
-            if(name==='add'){const result=await perform('addByName',[data.name]);if(token===epoch&&result?.ok){status=result.value.added?'已添加 '+result.value.added+' 位好友。':result.value.already?'对方已经是好友。':'对方未通过好友申请。';redraw();}return;}
+            if(name==='add'){const result=await perform('addByName',[data.name]);if(token===epoch&&result?.ok){status=result.value.details?result.value.details.map(r=>r.name+'：'+r.status).join('；'):result.value.added?'已添加 '+result.value.added+' 位好友。':result.value.already?'对方已经是好友。':'对方未通过好友申请。';redraw();}return;}
             if(name==='profile'){await perform('saveProfile',[{...profile(),alias:data.alias}],'已保存个人设置');return;}
             if(name==='edit'){const result=await perform('editMessage',[editingId,data.editText]);if(token===epoch&&result?.ok)editingId=null;redraw();return;}
             if(name==='message'){

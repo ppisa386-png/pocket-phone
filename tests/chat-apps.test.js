@@ -136,3 +136,12 @@ test('Chinese given name identifies the current character; two same-name group m
         ok(await f.api.addByName('清妍'));assert.equal(chatItems(f.state(),'wechat','account')[0].id,'card:lin.png');
     }finally{f.close();}
 });
+
+test('WhatsApp accepts delimited names in one submit and isolates refusals and duplicates',async()=>{
+ const f=fixture('whatsapp');try{
+  f.reply(()=>f.prompt().includes('"输入":"Alex"')?JSON.stringify({accepted:true,name:'Alex'}):JSON.stringify({accepted:false}));
+  const r=await f.api.addByName(' Alex、 Bea 、Alex、');ok(r);
+  assert.equal(r.value.added,1);assert.deepEqual(r.value.details.map(x=>x.status),['已添加','未通过']);
+  assert.equal(f.count(),2);assert.equal(chatItems(f.state(),'whatsapp','account').length,1);
+ }finally{f.close();}
+});

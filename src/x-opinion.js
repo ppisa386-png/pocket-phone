@@ -1,12 +1,14 @@
+import {privilegePrompt} from './x-privilege.js?v=1.1.18';
+import {readStoryClock} from './story-clock.js?v=1.1.12';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.13';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.1.8';
-import { buildSquarePrompt } from './square-core.js?v=1.1.17';
+import { buildSquarePrompt } from './square-core.js?v=1.1.18';
 export const OPINION_KEY='durian_phone_public_opinion';
 // Keep legacy imports compatible; old automatic opinions and narrative square
 // tags no longer create or inject records. Existing journal data is preserved.
 export const opinionFromPost = () => null;
 export const importStorySquare = raw => ({journal:raw,changed:false});
-export const buildOpinionPrompt = buildSquarePrompt;
+export const buildOpinionPrompt=(state,chat,instruction)=>buildSquarePrompt(state,chat,instruction)+privilegePrompt(state,readStoryClock(chat).day);
 export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
     const c=getContext(),bus=c?.eventSource,types=c?.event_types??c?.eventTypes??{},hooks=[];let token=0,disposed=false;
     const output=createNarrativePrompt({getContext,key:OPINION_KEY,depth:1});
@@ -22,7 +24,7 @@ export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
             const rev=await revisionsFor(signatures),legacy=chat.some(isMemoryHidden)?await revisionsFor(messageSignatures(chat,true)):null;
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],rev,legacy).journal);
             if(!current())return;
-            const prompt=buildSquarePrompt(state,chat,getSettings().prompts.xOpinion);
+            const prompt=buildOpinionPrompt(state,chat,getSettings().prompts.xOpinion);
             output.set(prompt,current);
         }catch(e){onError(e);}
     }

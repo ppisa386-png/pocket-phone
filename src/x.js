@@ -1,12 +1,13 @@
+import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.1.18';
 import {pageEdits} from './x-edit.js?v=1.1.16';
-import {refreshFloor,influenceSources,impactRecords,settleInfluence,INFLUENCE_RULES,INFLUENCE_OUTPUT} from './x-influence.js?v=1.1.17';
-import {dmDealTask,dealDecision} from './x-business.js?v=1.1.17';
+import {refreshFloor,influenceSources,impactRecords,settleInfluence,INFLUENCE_RULES,INFLUENCE_OUTPUT} from './x-influence.js?v=1.1.18';
+import {dmDealTask,dealDecision} from './x-business.js?v=1.1.18';
 import {JOURNAL_KEY} from './journal.js?v=1.1.13';
 import {readStoryClock} from './story-clock.js?v=1.1.12';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.8';
 import { publicationScenePrompt } from './social-context.js?v=1.1.17';
 import { xCommentKey, xComments } from './x-comments.js?v=1.1.8';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.17';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.18';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
 import { parseModelObject } from './model-json.js?v=1.1.8';
 import { xAudience, audienceSources, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.8';
@@ -262,7 +263,17 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         follow(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);await commit([xSet({...known(state,a),following:value===true})]);});},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
-        publish(value){return run(async(state,_c,_r,commit)=>{await commit([xSet(xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),includedDirectReplies:0,postedAtStory:squareClock(getContext().chat),sourceIndex:getContext().chat.length-1,liked:false,reposted:false}))]);});},
+        publish(value){return run(async(state,current,request,commit)=>{
+            const chat=getContext().chat,post=xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),
+                followersAtPublication:xAudience(state)?.followers??null,includedDirectReplies:0,postedAtStory:squareClock(chat),sourceIndex:chat.length-1,liked:false,reposted:false});
+            const changes=[xSet(post)];
+            if(privilegeLevel(post.followersAtPublication)){
+                const targets=new Map(privilegeRows(state).map(r=>[r.targetId,{targetId:r.targetId,target:r.target,identity:r.identity}]));
+                const task=privilegeContract+'\n本次推文：'+JSON.stringify(post.text)+'\n此前已识别的对象：'+JSON.stringify([...targets.values()])+'。同一目标沿用targetId，同名不同对象要区分。';
+                changes.push(...await ask(state,null,request,current,task,r=>privilegeChanges(state,post,r),{finalOutputContract:privilegeContract,memoryTopic:post.text}));
+            }
+            await commit(changes);
+        });},
         toggleInjection(id){return run(async(state,_c,_r,commit)=>{
             const p=state.x[id],chat=getContext().chat;
             if(p?.type!=='post'||p.feed!=='square'||squareStatus(p,state,chat)!=='active')throw Error('这条内容已采用、过期或时间不明确，无法注入。');

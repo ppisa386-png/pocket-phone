@@ -515,3 +515,35 @@ test('one public refresh commits all stages once per assistant floor, failed sta
   const again=responses();f.reply(()=>JSON.stringify(again.shift()));ok(await f.x.refreshPublic());assert.equal(f.state().x['public-refresh'].floor,2);
  }finally{f.close();}
 });
+
+test('privilege is classified when publishing, levels are frozen, opposite stances replace and expire with the source timeline',async()=>{
+ const {privilegeLevel,privilegePrompt}=await import('../src/x-privilege.js');
+ assert.deepEqual([99999,100000,499999,500000,1000000,1000001].map(privilegeLevel),[null,'low','low','medium','medium','high']);
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01';ok(await f.x.saveProfile({alias:'Moon'}));
+  const audience=n=>({collection:'x',key:'audience',value:{type:'audience',id:'audience',initialFollowers:n,followers:n}});
+  await f.memory.commit(await f.memory.begin(),[audience(100000)]);f.reply({stance:'praise',target:'云茶',identity:'本地茶店'});
+  ok(await f.x.publish('推荐云茶！'));const first=xItems(f.state(),'privilege')[0];assert.equal(first.level,'low');assert.equal(first.followers,100000);
+  assert.match(privilegePrompt(f.state(),first.start),/大众推崇/);assert.match(privilegePrompt(f.state(),first.start),/Moon/);
+  f.context.chat.push({mes:'2026-06-02'});await f.memory.read();await f.memory.commit(await f.memory.begin(),[audience(1000001)]);
+  f.reply({stance:'attack',target:'云茶店',identity:'同一茶店',targetId:first.targetId});ok(await f.x.publish('反对云茶的做法'));
+  const [old,second]=xItems(f.state(),'privilege');assert.equal(old.status,'superseded');assert.equal(old.level,'low');assert.equal(second.level,'high');assert.equal(second.followers,1000001);
+  assert.match(privilegePrompt(f.state(),second.start+6),/大众孤立攻击/);assert.doesNotMatch(privilegePrompt(f.state(),second.start+6),/大众推崇/);
+  f.reply({stance:'none'});ok(await f.x.publish('云茶几点开门？'));assert.equal(xItems(f.state(),'privilege').length,2);
+  f.context.chat.push({mes:'2026-06-09'});await f.memory.read();assert.equal(xItems(f.state(),'privilege')[1].status,'expired');assert.equal(f.state().x.audience.followers,990001);
+  const count=f.count();await f.memory.read();assert.equal(f.count(),count);assert.equal(f.state().x.audience.followers,990001);
+  f.context.chat.pop();await f.memory.read();assert.equal(f.state().x.audience.followers,1000001);assert.equal(xItems(f.state(),'privilege')[1].status,'active');
+  f.context.chat.pop();await f.memory.read();assert.equal(xItems(f.state(),'privilege').length,1);assert.equal(f.state().x[first.id].status,'active');
+ }finally{f.close();}
+});
+
+test('reactions leave the inactivity anchor alone and publishing resets it after charging due cycles',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01';await f.memory.commit(await f.memory.begin(),audienceChanges(f.state(),{initialFollowers:10000}));
+  ok(await f.x.publish('first'));const p=xItems(f.state(),'post')[0];
+  f.context.chat.push({mes:'2026-06-06'});ok(await f.x.react(p.id,'liked'));ok(await f.x.react(p.id,'reposted'));ok(await f.x.comment(p.id,'comment'));
+  f.context.chat.push({mes:'2026-06-15'});ok(await f.x.publish('second'));assert.equal(f.state().x.audience.followers,9801);
+  f.context.chat.push({mes:'2026-06-21'});await f.memory.read();assert.equal(f.state().x.audience.followers,9801);
+  f.context.chat.push({mes:'2026-06-22'});await f.memory.read();assert.equal(f.state().x.audience.followers,9703);assert.equal(f.count(),0);
+ }finally{f.close();}
+});

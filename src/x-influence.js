@@ -18,6 +18,19 @@ export function influenceSources(state,chat){
     }
     return sources;
 }
+// The timer is anchored to the last authored post, never to activity or a refresh.
+function inactivityPeriod(state,chat,day){
+    const post=Object.values(state.x||{}).findLast(p=>p.type==='post'&&p.author==='user');
+    if(!post||day===null)return null;
+    const start=post.postedAtStory?.day??dateDay(post.storyTime?.date)??(Number.isInteger(post.sourceIndex)?readStoryClock(chat.slice(0,post.sourceIndex+1)).day:null);
+    if(start===null)return null;
+    const saved=state.x['inactivity:'+post.id],paid=saved?.cycles||0,cycles=Math.floor((day-start)/7);
+    return cycles>paid?{post,start,saved,paid,cycles}:null;
+}
+export function timedAudienceChanges(state,chat,day){
+    if(!xAudience(state)||!inactivityPeriod(state,chat,day))return [];
+    return settleInfluence(state,chat,'',{effects:[]});
+}
 export const INFLUENCE_RULES='专项粉丝结算。综合曝光、公开形象、既有受众、人设及新受众，分开估算关注和取关。挨骂也可净涨粉，获赞也可净掉粉。普通推文首次可净增减1至2或零；长线来源给出第一天的关注和取关人数，由插件衰减，不能重算已登记来源。回复、热搜、转发若只是同一波传播，沿用原sourceId，不另报一份影响；若用派生来源说明同一件事，originId填原事件来源。同一品牌事故引用已入账的brand:来源。新的公开进展须有独立来源。匿名时私人经历和少数人知情不构成身份公开；剧情来源须有公众可见且明确关联该账号的逐字依据，public:true。个人知情或私下揭露不算。若相关报道只用真名，另给 identityFloor 和 identityEvidence，引用先前公开确认此账号归属的正文原句。品牌翻车已入账，不重复计入相关报道或评论。';
 export const INFLUENCE_OUTPUT='返回 {"initialFollowers":初始非负整数（已有可省略）,"effects":[{"sourceId":"所给来源ID，或story:楼层索引（索引未知填story，按引文唯一定位）","mode":"ordinary或long","gained":首日新增关注数,"lost":首日取关数,"basis":"新增传播事实与受众依据","public":剧情来源已公开传播才为true,"evidence":"剧情来源须逐字引用公众可见事实","identityFloor":匿名账号此前公开关联真人的楼层（如需）,"identityEvidence":"该楼逐字公开关联依据（如需）"}]}。未发生新变化返回空effects。';
 export function impactRecords(state){return Object.values(state.x).filter(x=>x.type==='influence');}
@@ -76,6 +89,14 @@ export function settleInfluence(state,chat,user,data){
         }
         e.settled=elapsed;e.expired=e.mode==='ordinary'||elapsed===7;changes.push(set(e));
     }
-    for(const [,delta] of [...daily].sort((a,b)=>a[0]-b[0]))audience.followers=Math.max(0,Math.min(1e9,audience.followers+delta));
+    const period=inactivityPeriod(state,chat,day),due=new Set();
+    if(period)for(let i=period.paid+1;i<=period.cycles;i++)due.add(period.start+7*i);
+    let loss=0;
+    for(const d of [...new Set([...daily.keys(),...due])].sort((a,b)=>a-b)){
+        audience.followers=Math.max(0,Math.min(1e9,audience.followers+(daily.get(d)||0)));
+        if(due.has(d)){const n=Math.round(audience.followers/100);loss+=n;audience.followers-=n;}
+    }
+    if(period)changes.push(set({id:'inactivity:'+period.post.id,type:'inactivity',postId:period.post.id,start:period.start,
+        cycles:period.cycles,lastDay:period.start+period.cycles*7,totalLost:(period.saved?.totalLost||0)+loss}));
     return [...changes,set(audience)];
 }

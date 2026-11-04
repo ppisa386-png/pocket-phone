@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 1.1.17</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Modern legal tender by territory, from Unicode CLDR supplemental currencyData
+</style></head><body><main><small>POCKET PHONE · 1.1.18</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>// Modern legal tender by territory, from Unicode CLDR supplemental currencyData
 // (2026-11-01). Several territories have more than one local currency.
 const territories = {
     AED: 'AE',
@@ -373,7 +373,7 @@ const PREVIOUS_DAILY_PROMPTS = {
 
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '1.1.17';
+const VERSION = '1.1.18';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -1489,7 +1489,7 @@ function createChatPanel({app,adapter,getView,redraw,notice}) {
     const disabled=()=>getView().busy||posting?' disabled':'';
     const avatar=name=>'<span class="pp-chat-avatar" aria-hidden="true">'+chatEsc(Array.from(name||'?')[0])+'</span>';
     const button=(action,title,id='',glyph='',extra='')=>'<button type="button" class="pp-chat-button '+(glyph?'is-icon':'')+'" data-chat-action="'+action+'" data-chat-id="'+chatEsc(id)+'" aria-label="'+chatEsc(title)+'" title="'+chatEsc(title)+'"'+extra+'>'+ (glyph?icon(glyph):chatEsc(title))+'</button>';
-    const field=(name,title,fallback='',type='text')=>'<label class="pp-chat-field"><span>'+title+'</span><input data-chat-field="'+name+'" name="'+name+'" type="'+type+'" value="'+chatEsc(value(name,fallback))+'" maxlength="100"'+(type==='number'?' min="0" step="'+(1/unitScale(walletCurrency(getView())||'USD'))+'"':'')+'></label>';
+    const field=(name,title,fallback='',type='text')=>'<label class="pp-chat-field"><span>'+title+'</span><input data-chat-field="'+name+'" name="'+name+'" type="'+type+'" value="'+chatEsc(value(name,fallback))+'" maxlength="'+(name==='name'&&!wc?6000:100)+'"'+(type==='number'?' min="0" step="'+(1/unitScale(walletCurrency(getView())||'USD'))+'"':'')+'></label>';
     const textarea=(name,title)=>'<textarea name="'+name+'" data-chat-field="'+name+'" aria-label="'+title+'" placeholder="'+title+'" rows="2" maxlength="6000" enterkeyhint="enter">'+chatEsc(value(name))+'</textarea>';
     const form=(name,body,title)=>'<form class="pp-chat-form" data-chat-form="'+name+'">'+body+'<button class="pp-chat-primary" type="submit"'+disabled()+'>'+title+'</button></form>';
     const empty=(title,copy)=>'<div class="pp-chat-empty">'+icon('messages')+'<strong>'+title+'</strong><p>'+copy+'</p></div>';
@@ -1531,15 +1531,15 @@ function createChatPanel({app,adapter,getView,redraw,notice}) {
         if(a.friend==='incoming')return button('accept-request','接受联系人',a.id)+button('later-request','暂不处理',a.id)+button('decline-request','拒绝',a.id)+button('block','拉黑',a.id);
         const call=threadItems(a.id).find(i=>i.type==='call'&&i.status==='connected');
         if(call)return '<div class="pp-chat-composer">'+form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',call.id,'',disabled())+'</div>';
-        return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(chatKinds).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,'cash',disabled())+'<small>换行暂存 · 点击发送</small></div></div>';
+        return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(chatKinds).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,wc?'cash':'',disabled())+'<small>换行暂存 · 点击发送</small></div></div>';
     }
     function html() {
         if(accountId&&!account()){accountId=null;page='';editingId=null;}
         const a=account(),p=profile(),thread=!!a&&!page;
         const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?'通讯录':tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'WhatsApp');
         let body='';
-        if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
-        else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
+        if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名')+(wc?'':'<small>添加多个好友可以用、间隔名字</small>'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
+        else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!wc&&!a.blocked&&a.friend==='friends'?button('cash','转账',a.id,'',disabled()):'')+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
         else if(a&&page==='cash')body='<div class="pp-chat-settings">'+form('cash',field('amount','转账金额（'+(walletCurrency(getView())||'先建账')+'）','','number')+field('memo','附言'),'确认转账')+'</div>';
         else if(a)body=threadHTML(a);
         else if(tab==='me')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(p.alias)+'<h2>'+chatEsc(p.alias)+'</h2><span>'+label+'</span></div>'+form('profile',field('alias','昵称',p.alias),'保存个人设置')+'</div>';
@@ -1587,7 +1587,7 @@ function createChatPanel({app,adapter,getView,redraw,notice}) {
         },
         async submit(element){
             const data=Object.fromEntries(new FormData(element)),name=element.dataset.chatForm,token=epoch,id=accountId,prefix=key('');
-            if(name==='add'){const result=await perform('addByName',[data.name]);if(token===epoch&&result?.ok){status=result.value.added?'已添加 '+result.value.added+' 位好友。':result.value.already?'对方已经是好友。':'对方未通过好友申请。';redraw();}return;}
+            if(name==='add'){const result=await perform('addByName',[data.name]);if(token===epoch&&result?.ok){status=result.value.details?result.value.details.map(r=>r.name+'：'+r.status).join('；'):result.value.added?'已添加 '+result.value.added+' 位好友。':result.value.already?'对方已经是好友。':'对方未通过好友申请。';redraw();}return;}
             if(name==='profile'){await perform('saveProfile',[{...profile(),alias:data.alias}],'已保存个人设置');return;}
             if(name==='edit'){const result=await perform('editMessage',[editingId,data.editText]);if(token===epoch&&result?.ok)editingId=null;redraw();return;}
             if(name==='message'){
@@ -2239,12 +2239,19 @@ function dailyArchives(state, chat) {
         .sort((a,b) => b.day-a.day || (b.sourceIndex ?? 0)-(a.sourceIndex ?? 0))
         .filter(e => { if (seen.has(e.day)) return false; seen.add(e.day); return true; }).slice(0,3);
 }
+function paperDraft(state,id){
+    const edition=state.daily?.edition?.editionId===id?state.daily.edition:state.daily?.['archive:'+id];
+    if(!edition)return null;
+    const articles=edition.articles||dailyArticles(state);
+    return {publication:edition.publication||'',location:edition.location||'',date:edition.printDate||dayDate(edition.day),
+        articles:articles.map(({id,section,headline,summary,body})=>({id,section:section||'',headline,summary,body}))};
+}
 function dailyEditorialHistory(state, chat) {
     const expired = dailyArchives(state, chat);
     const current = state.daily?.edition;
     const editions = current && !expired.some(e => e.editionId === current.editionId)
         ? [{ ...current, articles:dailyArticles(state) }, ...expired] : expired;
-    return editions.map(e => ({ editionId:e.editionId, date:dayDate(e.day)||null, publication:e.publication,
+    return editions.map(e => ({ editionId:e.editionId, date:e.printDate||dayDate(e.day)||null, publication:e.publication,
         articles:e.articles.map(a => ({ id:a.id, headline:a.headline, summary:a.summary, body:a.body,
             adoption:dailyUsed(a,chat)?'adopted':a.selected===true?(Number.isInteger(a.selectedIndex)?'selected_pending':'unknown'):a.selected===false?'unselected':'unknown',
             publicBasis:a.publicBasis })) }));
@@ -2345,19 +2352,20 @@ function createDailyPanel({adapter,getView,redraw,notice}) {
         const state=getView(),chat=adapter.storyChat?.()||[],archives=dailyArchives(state,chat),busy=working||state.busy;
         const archived=folder&&archiveId?archives.find(e=>e.editionId===archiveId):null;
         if(folder&&!archived) return '<section class="pp-daily pp-daily-folder"><header class="pp-daily-masthead"><small>THE PRESS · 历史收藏</small><h2>过往报纸夹</h2></header><div class="pp-daily-toolbar"><button type="button" data-daily-action="archive-back">‹ 返回本期</button><span>最近三份过期报纸</span></div>'+
-            (archives.length?'<div class="pp-daily-archive-list">'+archives.map(e=>'<button type="button" data-daily-action="archive-edition" data-daily-id="'+dailyEscape(e.editionId)+'"><small>'+dailyEscape(dayDate(e.day))+' · 已过期</small><strong>'+dailyEscape(e.publication||e.articles[0]?.outlet||'往期报刊')+'</strong><span>'+e.articles.length+' 篇报道 · 阅读全文</span></button>').join('')+'</div>':'<div class="pp-daily-empty"><p>暂无过期报纸</p></div>')+'</section>';
+            (archives.length?'<div class="pp-daily-archive-list">'+archives.map(e=>'<button type="button" data-daily-action="archive-edition" data-daily-id="'+dailyEscape(e.editionId)+'"><small>'+dailyEscape(e.printDate||dayDate(e.day))+' · 已过期</small><strong>'+dailyEscape(e.publication||e.articles[0]?.outlet||'往期报刊')+'</strong><span>'+e.articles.length+' 篇报道 · 阅读全文</span></button>').join('')+'</div>':'<div class="pp-daily-empty"><p>暂无过期报纸</p></div>')+'</section>';
         const edition=archived||state.daily?.edition,expiry=dailyExpiry(edition,chat);
         const articles=archived?[...archived.articles]:dailyArticles(state),order=new Map((edition?.articleIds||[]).map((id,i)=>[id,i]));articles.sort((a,b)=>order.get(a.id)-order.get(b.id));
         const publication=edition?.publication||articles[0]?.outlet||'今日报刊';
-        const date=!edition?'每日选编':edition.day==null?'日期待明确':dayDate(edition.day).replaceAll('-',' / ');
+        const date=!edition?'每日选编':(edition.printDate||dayDate(edition.day)||'日期待明确').replaceAll('-',' / ');
         return '<section class="pp-daily"><header class="pp-daily-masthead"><small>THE PRESS · 今日选读</small><h2>'+dailyEscape(publication)+'</h2><div><span>'+dailyEscape(date)+'</span><span>'+dailyEscape(edition?.location||'今日选读')+'</span></div></header>'
             +(archived?'<div class="pp-daily-toolbar"><button type="button" data-daily-action="archive-back">‹ 返回报纸夹</button><b class="pp-daily-expired">已过期 · 仅供回看</b></div>':'<div class="pp-daily-toolbar"><button type="button" class="pp-daily-folder-button" data-daily-action="archive" aria-label="过往报纸夹" title="过往报纸夹"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h7l2 3h9v11H3zM3 6V4h7l2 2h8v3"/></svg></button><span>'+(edition?(expiry==='expired'?'<b class="pp-daily-expired">已过期</b>':expiry==='unknown'?'剧情日期不明确':'本日刊'):'还没有本日报纸')+'</span><button type="button" class="pp-daily-refresh" data-daily-action="update"'+(busy?' disabled':'')+'>看看新闻</button></div>')
             +'<p class="pp-daily-status" role="status">'+dailyEscape(working?'正在取阅…':status)+'</p>'
+            +(edition?'<button type="button" class="pp-daily-inject" data-daily-action="edit" data-daily-id="'+dailyEscape(edition.editionId)+'" aria-label="编辑整张报纸" title="编辑整张报纸"'+(busy?' disabled':'')+'><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 20 4-1 12-12-3-3L5 16zM14 7l3 3"/></svg></button>':'')
             +(!articles.length?'<div class="pp-daily-empty"><span>☷</span><p>'+(edition?'本期暂无可刊登的报道':'今天的世界，有什么新鲜事？')+'</p></div>':'<div class="pp-daily-grid">'+articles.map(a=>{
                 const used=archived?'expired':dailyStatus(a,state,chat),label=used==='used'?'已采用':used==='expired'?'已过期':used==='unknown'?'日期不明确':used==='old'?'旧报道':a.selected?'已选 · 取消注入':'注入正文';
                 return '<article class="pp-daily-article pp-daily-'+a.placement+(a.placement==='lead'||a.body.length>500?' pp-daily-wide':'')+(expanded.has(a.id)?' pp-daily-expanded':'')+'" data-daily-article="'+dailyEscape(a.id)+'"><div class="pp-daily-byline"><span>'+dailyEscape(a.section||(a.placement==='lead'?'头条':a.placement==='brief'?'短讯':'报道'))+'</span><span>'+dailyEscape(a.outlet)+'</span></div><h3>'+dailyEscape(a.headline)+'</h3><p class="pp-daily-deck">'+dailyEscape(a.summary)+'</p>'
                     +(expanded.has(a.id)?'<div class="pp-daily-body">'+dailyEscape(a.body)+'</div>':'')
-                    +'<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+expanded.has(a.id)+'">'+(expanded.has(a.id)?'收起全文':'阅读全文')+'</button>'+(archived?'':'<button type="button" data-daily-action="edit" data-daily-id="'+dailyEscape(a.id)+'" class="pp-daily-inject" aria-label="编辑报道" title="编辑报道"'+(busy?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 20 4-1 12-12-3-3L5 16zM14 7l3 3"/></svg></button>')+'<button type="button" data-daily-action="inject" data-daily-id="'+dailyEscape(a.id)+'" class="pp-daily-inject" aria-label="'+label+'" title="'+label+'" aria-pressed="'+(used==='active'&&a.selected)+'"'+(busy||used!=='active'?' disabled':'')+'><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H5v18h14V8M14 3v5h5M8 13h8m-4-3 3 3-3 3"/></svg></button></footer></article>';
+                    +'<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+expanded.has(a.id)+'">'+(expanded.has(a.id)?'收起全文':'阅读全文')+'</button><button type="button" data-daily-action="inject" data-daily-id="'+dailyEscape(a.id)+'" class="pp-daily-inject" aria-label="'+label+'" title="'+label+'" aria-pressed="'+(used==='active'&&a.selected)+'"'+(busy||used!=='active'?' disabled':'')+'><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H5v18h14V8M14 3v5h5M8 13h8m-4-3 3 3-3 3"/></svg></button></footer></article>';
             }).join('')+'</div>')+'<div class="pp-daily-end">'+dailyEscape(publication)+' · '+dailyEscape(edition?.location||'今日选读')+'</div></section>';
     }
     return {html,back,reset(){epoch++;working=false;status='';folder=false;archiveId=null;expanded.clear();},async action(action,id){
@@ -2499,15 +2507,24 @@ function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice});
-    function editDailyArticle(id) {
-        const article = phoneView.daily?.[id];
-        if (!article || !adapter.daily?.edit || shadow.querySelector('.pp-daily-editor')) return;
-        const dialog = document.createElement('dialog');
-        dialog.className = 'pp-daily-editor';
-        dialog.setAttribute('aria-label', '编辑报道');
-        dialog.innerHTML = '<form><h3>编辑报道</h3><label>标题<input name="headline" required maxlength="500"></label><label>导语<textarea name="summary" required maxlength="2000" rows="3"></textarea></label><label>正文<textarea name="body" required maxlength="20000" rows="8"></textarea></label><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存</button></footer></form>';
-        const form = dialog.querySelector('form');
-        for (const key of ['headline','summary','body']) form.elements[key].value = article[key];
+    function editDailyEdition(id) {
+        const before=paperDraft(phoneView,id);
+        if(!before||!adapter.daily?.editEdition||shadow.querySelector('.pp-daily-editor'))return;
+        const dialog=document.createElement('dialog');
+        dialog.className='pp-daily-editor';dialog.setAttribute('aria-label','编辑整张报纸');
+        dialog.innerHTML='<form><h3>编辑整张报纸</h3><div></div><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存整张报纸</button></footer></form>';
+        const form=dialog.querySelector('form'),fields=form.querySelector('div'),draft=structuredClone(before);
+        const field=(parent,row,key,title,max,type='text')=>{
+            const label=document.createElement('label'),input=document.createElement(type==='textarea'?'textarea':'input');
+            label.textContent=title;if(type!=='textarea')input.type=type;else input.rows=key==='body'?6:3;
+            input.maxLength=max;input.value=row[key];input.required=!['section','location','date'].includes(key);
+            input.oninput=()=>{row[key]=input.value;};label.append(input);parent.append(label);
+        };
+        field(fields,draft,'publication','报头',100);field(fields,draft,'date','刊登日期',10,'date');field(fields,draft,'location','地区',80);
+        for(const [i,article] of draft.articles.entries()){
+            const group=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent='报道 '+(i+1);group.append(legend);fields.append(group);
+            field(group,article,'section','栏目',80);field(group,article,'headline','标题',500);field(group,article,'summary','导语',2000,'textarea');field(group,article,'body','正文',20000,'textarea');
+        }
         dialog.addEventListener('close', () => dialog.remove(), {once:true});
         dialog.addEventListener('keydown', event => { if (event.key === 'Escape') event.stopPropagation(); });
         form.querySelector('[type="button"]').onclick = () => dialog.close();
@@ -2518,7 +2535,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
             if (save.disabled) return;
             save.disabled = true;
             try {
-                const result = await adapter.daily.edit(id, Object.fromEntries(new FormData(form)));
+                const result = await adapter.daily.editEdition(id,before,draft);
                 if (!result?.ok) throw Error(result?.error || '请稍后再保存。');
                 if (dialog.open) dialog.close();
             } catch (error) {
@@ -2816,7 +2833,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
-        if(target.dataset.dailyAction==='edit'){editDailyArticle(target.dataset.dailyId);return;}
+        if(target.dataset.dailyAction==='edit'){editDailyEdition(target.dataset.dailyId);return;}
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
         if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}

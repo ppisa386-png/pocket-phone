@@ -1,7 +1,7 @@
 import { DAILY_NARRATIVE_PROMPT } from './daily-prompts.js?v=1.1.8';
 import { readStoryClock, dayDate } from './story-clock.js?v=1.1.12';
-import { squareBasis } from './square-core.js?v=1.1.17';
-import { storyAnnotations } from './story-phone.js?v=1.1.17';
+import { squareBasis } from './square-core.js?v=1.1.18';
+import { storyAnnotations } from './story-phone.js?v=1.1.18';
 
 export const dailyArticles = state => Object.values(state.daily || {}).filter(a => a.type === 'article' && a.editionId === state.daily?.edition?.editionId);
 // Current expired edition is visible immediately, without a write or API call.
@@ -17,12 +17,19 @@ export function dailyArchives(state, chat) {
         .sort((a,b) => b.day-a.day || (b.sourceIndex ?? 0)-(a.sourceIndex ?? 0))
         .filter(e => { if (seen.has(e.day)) return false; seen.add(e.day); return true; }).slice(0,3);
 }
+export function paperDraft(state,id){
+    const edition=state.daily?.edition?.editionId===id?state.daily.edition:state.daily?.['archive:'+id];
+    if(!edition)return null;
+    const articles=edition.articles||dailyArticles(state);
+    return {publication:edition.publication||'',location:edition.location||'',date:edition.printDate||dayDate(edition.day),
+        articles:articles.map(({id,section,headline,summary,body})=>({id,section:section||'',headline,summary,body}))};
+}
 export function dailyEditorialHistory(state, chat) {
     const expired = dailyArchives(state, chat);
     const current = state.daily?.edition;
     const editions = current && !expired.some(e => e.editionId === current.editionId)
         ? [{ ...current, articles:dailyArticles(state) }, ...expired] : expired;
-    return editions.map(e => ({ editionId:e.editionId, date:dayDate(e.day)||null, publication:e.publication,
+    return editions.map(e => ({ editionId:e.editionId, date:e.printDate||dayDate(e.day)||null, publication:e.publication,
         articles:e.articles.map(a => ({ id:a.id, headline:a.headline, summary:a.summary, body:a.body,
             adoption:dailyUsed(a,chat)?'adopted':a.selected===true?(Number.isInteger(a.selectedIndex)?'selected_pending':'unknown'):a.selected===false?'unselected':'unknown',
             publicBasis:a.publicBasis })) }));

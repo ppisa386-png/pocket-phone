@@ -36,8 +36,7 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
     const label=CHAT_APPS[app];
     if(!label)throw new Error('未知聊天应用。');
     const engine=createSnapchat({app,memory,phone,getContext,getSettings});
-    const addByName=query=>phone.appTask(async(view,current,request)=>{
-        const name=String(query||'').trim().slice(0,100);
+    const requestFriend=async(name,view,current,request)=>{
         if(!name)throw new Error('请输入要添加的姓名。');
         const context=getContext(),settings=getSettings(),existing=chatItems(view.state,app,'account');
         const target=friendTarget(context,existing,name);
@@ -69,6 +68,25 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
             ...(old?.inboundRequest?{inboundRequest:'accepted'}:{})};
         await memory.commit(ticket,[{collection:app,key:id,value}]);
         return {added:1};
+    };
+    const addByName=query=>phone.appTask(async(view,current,request)=>{
+        const input=String(query||'').trim(),names=[...new Set((app==='whatsapp'?input.split('、'):[input]).map(n=>n.trim()).filter(Boolean))];
+        if(!names.length||names.some(n=>n.length>100))throw Error('请输入有效的好友姓名。');
+        if(names.length===1)return requestFriend(names[0],view,current,request);
+        const details=[];
+        for(const name of names){
+            if(!current())throw Error('聊天或应用已变化，本次批量申请已停止。');
+            const fresh=await memory.read();
+            if(!current()||fresh.scope!==view.scope||fresh.revision!==view.revision)throw Error('聊天已变化，本次批量申请已停止。');
+            try{
+                const r=await requestFriend(name,fresh,current,request);
+                details.push({name,status:r.added?'已添加':r.already?'已是好友':'未通过'});
+            }catch(error){
+                if(!current())throw error;
+                details.push({name,status:error.message});
+            }
+        }
+        return {added:details.filter(r=>r.status==='已添加').length,details};
     },app);
     const addEstablished=()=>phone.appTask(async(view,current,request)=>{
         const context=getContext(),chat=context.chat,sources=establishedSources(context),signature=JSON.stringify(sources);

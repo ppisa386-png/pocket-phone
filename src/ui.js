@@ -1,17 +1,18 @@
+import {paperDraft} from './daily-core.js?v=1.1.18';
 import { bindInputViewport } from './input-viewport.js?v=1.1.8';
-import { createDailyPanel } from './daily-view.js?v=1.1.17';
+import { createDailyPanel } from './daily-view.js?v=1.1.18';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.1.12';
 import { createAssetPanel } from './assets-view.js?v=1.1.17';
 import { createAmazonPanel } from './amazon-view.js?v=1.1.17';
 import { bindComposerKeys } from './composer.js?v=1.1.8';
-import { createXPanel } from './x-view.js?v=1.1.17';
-import { xUnread } from './x.js?v=1.1.17';
-import { createChatPanel } from './chat-view.js?v=1.1.17';
-import { chatUnread } from './chat-apps.js?v=1.1.17';
+import { createXPanel } from './x-view.js?v=1.1.18';
+import { xUnread } from './x.js?v=1.1.18';
+import { createChatPanel } from './chat-view.js?v=1.1.18';
+import { chatUnread } from './chat-apps.js?v=1.1.18';
 import { createSnapPanel } from './snapchat-view.js?v=1.1.17';
 import { snapUnread } from './snapchat.js?v=1.1.17';
 import { createApiPanel } from './api-view.js?v=1.1.17';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.17';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.18';
 import { icon } from './icons.js?v=1.1.8';
 import { renderMessagesScreen } from './messages-view.js?v=1.1.13';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.1.8';
@@ -141,15 +142,24 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice});
-    function editDailyArticle(id) {
-        const article = phoneView.daily?.[id];
-        if (!article || !adapter.daily?.edit || shadow.querySelector('.pp-daily-editor')) return;
-        const dialog = document.createElement('dialog');
-        dialog.className = 'pp-daily-editor';
-        dialog.setAttribute('aria-label', '编辑报道');
-        dialog.innerHTML = '<form><h3>编辑报道</h3><label>标题<input name="headline" required maxlength="500"></label><label>导语<textarea name="summary" required maxlength="2000" rows="3"></textarea></label><label>正文<textarea name="body" required maxlength="20000" rows="8"></textarea></label><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存</button></footer></form>';
-        const form = dialog.querySelector('form');
-        for (const key of ['headline','summary','body']) form.elements[key].value = article[key];
+    function editDailyEdition(id) {
+        const before=paperDraft(phoneView,id);
+        if(!before||!adapter.daily?.editEdition||shadow.querySelector('.pp-daily-editor'))return;
+        const dialog=document.createElement('dialog');
+        dialog.className='pp-daily-editor';dialog.setAttribute('aria-label','编辑整张报纸');
+        dialog.innerHTML='<form><h3>编辑整张报纸</h3><div></div><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存整张报纸</button></footer></form>';
+        const form=dialog.querySelector('form'),fields=form.querySelector('div'),draft=structuredClone(before);
+        const field=(parent,row,key,title,max,type='text')=>{
+            const label=document.createElement('label'),input=document.createElement(type==='textarea'?'textarea':'input');
+            label.textContent=title;if(type!=='textarea')input.type=type;else input.rows=key==='body'?6:3;
+            input.maxLength=max;input.value=row[key];input.required=!['section','location','date'].includes(key);
+            input.oninput=()=>{row[key]=input.value;};label.append(input);parent.append(label);
+        };
+        field(fields,draft,'publication','报头',100);field(fields,draft,'date','刊登日期',10,'date');field(fields,draft,'location','地区',80);
+        for(const [i,article] of draft.articles.entries()){
+            const group=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent='报道 '+(i+1);group.append(legend);fields.append(group);
+            field(group,article,'section','栏目',80);field(group,article,'headline','标题',500);field(group,article,'summary','导语',2000,'textarea');field(group,article,'body','正文',20000,'textarea');
+        }
         dialog.addEventListener('close', () => dialog.remove(), {once:true});
         dialog.addEventListener('keydown', event => { if (event.key === 'Escape') event.stopPropagation(); });
         form.querySelector('[type="button"]').onclick = () => dialog.close();
@@ -160,7 +170,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             if (save.disabled) return;
             save.disabled = true;
             try {
-                const result = await adapter.daily.edit(id, Object.fromEntries(new FormData(form)));
+                const result = await adapter.daily.editEdition(id,before,draft);
                 if (!result?.ok) throw Error(result?.error || '请稍后再保存。');
                 if (dialog.open) dialog.close();
             } catch (error) {
@@ -458,7 +468,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
-        if(target.dataset.dailyAction==='edit'){editDailyArticle(target.dataset.dailyId);return;}
+        if(target.dataset.dailyAction==='edit'){editDailyEdition(target.dataset.dailyId);return;}
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
         if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}

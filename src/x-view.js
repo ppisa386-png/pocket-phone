@@ -1,9 +1,9 @@
 import {pageFields} from './x-edit.js?v=1.1.16';
-import {refreshFloor} from './x-influence.js?v=1.1.17';
+import {refreshFloor} from './x-influence.js?v=1.1.18';
 import { icon } from './icons.js?v=1.1.8';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.1.17';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.1.18';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
-import { xItems, xProfile, xCounts } from './x.js?v=1.1.17';
+import { xItems, xProfile, xCounts } from './x.js?v=1.1.18';
 import { xAudience } from './x-audience.js?v=1.1.8';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
