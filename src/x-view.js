@@ -3,7 +3,7 @@ import {refreshFloor} from './x-influence.js?v=1.1.18';
 import { icon } from './icons.js?v=1.1.8';
 import { squareStatus, squareExpiry } from './square-core.js?v=1.1.22';
 import { displayStoryTime } from './story-clock.js?v=1.1.12';
-import { xItems, xProfile, xCounts } from './x.js?v=1.1.22';
+import { xItems, xProfile, xCounts } from './x.js?v=1.1.24';
 import { xAudience } from './x-audience.js?v=1.1.8';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
@@ -96,7 +96,9 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     async function perform(method,args=[],message='') {
         if(!adapter.x){notice('请在酒馆内使用 X。');return null;}if(working||getView().busy)return null;
         working=true;const token=epoch;redraw();
-        try{const result=await adapter.x[method](...args);if(token!==epoch)return null;status=result?.ok?message:result?.error||'请稍后重试。';return result;}
+        try{const result=await adapter.x[method](...args);if(token!==epoch)return null;status=result?.ok?message:result?.error||'请稍后重试。';
+            if(result?.ok&&method==='refreshPublic'&&result.value?.deferred)status+='；'+result.value.deferred+' 项粉丝影响暂未入账。';
+            return result;}
         catch(error){if(token===epoch)status=error.message;return null;}
         finally{if(token===epoch)working=false;redraw();}
     }

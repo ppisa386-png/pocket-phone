@@ -547,3 +547,34 @@ test('reactions leave the inactivity anchor alone and publishing resets it after
   f.context.chat.push({mes:'2026-06-22'});await f.memory.read();assert.equal(f.state().x.audience.followers,9703);assert.equal(f.count(),0);
  }finally{f.close();}
 });
+
+test('combined refresh re-evaluates conflicting follower estimates without losing engagement or double counting',async()=>{
+ for(const outcome of ['long','ordinary','still inconsistent','unavailable']){
+  const f=setup();try{
+   f.context.chat[0].mes='2026-06-01';ok(await f.x.publish('A campus performer in a cropped clip.'));
+   ok(await f.x.publish('An everyday update.'));
+   const [clip,daily]=xItems(f.state(),'post'),clipId='post:'+clip.id,dailyId='post:'+daily.id;
+   const effect=(sourceId,mode,gained)=>({sourceId,mode,gained,lost:0,basis:'Local viewers share the clip'});
+   const calls=[],responses=[
+    {posts:[],engagementUpdates:[{postId:clip.id,metrics:{likes:320,reposts:45,replies:13}}]},
+    {posts:[]},{topics:[],evaluations:[clip,daily].map(p=>({postId:p.id,eligible:false,reason:'local audience'}))},
+    {initialFollowers:100,effects:[effect(clipId,'ordinary',26),effect(dailyId,'ordinary',1)]},
+    {initialFollowers:3000,effects:[effect(clipId,outcome==='long'?'long':'ordinary',outcome==='ordinary'?2:26),effect(dailyId,'long',700)]}
+   ];
+   f.reply(o=>{
+    calls.push(o.quietPrompt);
+    if(calls.length===5&&outcome==='unavailable')throw Error('service offline');
+    return JSON.stringify(responses.shift());
+   });
+   const result=await f.x.refreshPublic();ok(result);assert.equal(calls.length,5);
+   for(const i of [0,3,4])assert.match(calls[i],/世界书.*剪辑/);
+   assert.match(calls[3],/local audience/);assert.match(calls[4],/只重评以下来源/);
+   const s=f.state().x,valid=outcome==='long'||outcome==='ordinary';
+   assert.equal(result.value.deferred,valid?0:1);
+   assert.deepEqual(s[clip.id].metrics,{likes:320,reposts:45,replies:13});
+   assert.equal(s.audience.followers,101+(outcome==='long'?26:outcome==='ordinary'?2:0));
+   assert.equal(s['impact:'+clipId]?.mode,valid?outcome:undefined);assert.equal(s['impact:'+dailyId].mode,'ordinary');
+   assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(calls.length,5);
+  }finally{f.close();}
+ }
+});

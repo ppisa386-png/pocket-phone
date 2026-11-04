@@ -1,6 +1,6 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.1.18';
 import {pageEdits} from './x-edit.js?v=1.1.16';
-import {refreshFloor,influenceSources,impactRecords,settleInfluence,INFLUENCE_RULES,INFLUENCE_OUTPUT} from './x-influence.js?v=1.1.18';
+import {refreshFloor,influenceSources,impactRecords,settleInfluence,REACH_CONTEXT,INFLUENCE_RULES,INFLUENCE_OUTPUT} from './x-influence.js?v=1.1.24';
 import {dmDealTask,dealDecision} from './x-business.js?v=1.1.22';
 import {JOURNAL_KEY} from './journal.js?v=1.1.13';
 import {readStoryClock} from './story-clock.js?v=1.1.12';
@@ -185,7 +185,7 @@ export function createX({memory,phone,getContext,getSettings}) {
                 '可附 accounts:[{name:"名称",handle:"账号",bio:"简介",has_account:true,followers:合理粉丝数}] 推荐最多8个账号。帖子新作者也须先做账号适用性筛选，并附has_account。')+(combined?'粉丝交给本次专门结算，不输出growth。':audienceTask(state));
         const userPosts=square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15);
         const reachPosts=userPosts.map(p=>({postId:p.id,publicText:p.text,postedAtStory:p.postedAtStory||null,sourceIndex:p.sourceIndex??null,counts:xCounts(state,p)}));
-        const reachTask=reachPosts.length ? publicationScenePrompt(getContext(),userPosts)+
+        const reachTask=reachPosts.length ? REACH_CONTEXT+publicationScenePrompt(getContext(),userPosts)+
             `
 根据 user 每条推文实际公开的内容，估算累计点赞、转发和回复数量。
 
@@ -202,8 +202,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
 输出每条推文的累计点赞、转发、回复数量，保持三项数据与具体内容及粉丝规模相符。不使用固定互动比例，不额外根据经过多少剧情时间调整数据；持续传播和七天影响由独立机制处理。没有新的公开内容或互动变化时，不因重复刷新而机械累加数据。结果填入 "engagementUpdates"，其中 "metrics" 为累计数，包含已经展示的评论。
 `+JSON.stringify({followers:xAudience(state)?.followers??null,posts:reachPosts}) : '';
         const refreshOutput=X_JSON_OUTPUT+'\n'+(combined?X_FEED_OUTPUT.split('可选audience')[0]:X_FEED_OUTPUT)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须满足任务的逐字依据规则。':'');
+        const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
         const results=await ask(state,null,request,current,task+reachTask+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；本次新提及的growth来源可用 mention:new:0（posts从0计数），已有提及继续用给出的来源ID。')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:p.text})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state))+
-            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,evidence:"酒馆当前上下文中对应角色正文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&!square&&Array.isArray(d.accounts)?[]:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',8):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput,finalOutputContract:refreshOutput,combined,memoryActors:square?[]:xItems(state,'account').filter(a=>!a.blocked)});
+            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。posts 与 replies 各最多 5 条；可以为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,evidence:"酒馆当前上下文中对应角色正文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&!square&&Array.isArray(d.accounts)?[]:list(d,'posts',5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',8):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,memoryActors:square?[]:xItems(state,'account').filter(a=>!a.blocked)});
         state=structuredClone(state);state.x||={};const changes=[],newMentions=new Map();let added=0,repeatedSquare=false;
         if(!square&&!following){
             for(const old of xItems(state,'account').filter(a=>a.recommended)){const next={...old,recommended:false};state.x[next.id]=next;changes.push(xSet(next));}
@@ -297,13 +298,37 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const info={now:clock,profile:profile(staged),anonymous:profile(staged).alias!==context.name1,
                 persona,followers:xAudience(staged)?.followers,initial:xAudience(staged)?.initialFollowers,
                 sources:influenceSources(staged,chat),trends:staged.x['trend-edition']?.topics,
+                trendEvaluations:staged.x['trend-edition']?.evaluations,
                 processed:impactRecords(staged).map(e=>({sourceId:e.sourceId,basis:e.basis,end:e.end,total:e.total,remaining:e.expired?0:clock.day===null?null:Math.max(0,e.end-clock.day)})),
                 brandIncidents:Object.values(staged.business||{}).filter(p=>p.risk==='triggered').map(p=>({brand:p.brand,project:p.project,date:p.incidentDate,loss:p.loss}))};
-            const impact=await ask(staged,null,request,valid,INFLUENCE_RULES+'\n资料：'+JSON.stringify(info)+'\n'+INFLUENCE_OUTPUT,
-                data=>settleInfluence(staged,chat,context.name1,data),{combined:true,finalOutputContract:INFLUENCE_OUTPUT});
+            const task=REACH_CONTEXT+'\n'+INFLUENCE_RULES+'\n资料：'+JSON.stringify(info)+'\n'+INFLUENCE_OUTPUT;
+            const options={combined:true,finalOutputContract:INFLUENCE_OUTPUT};
+            const conflicts=[];
+            const first=await ask(staged,null,request,valid,task,data=>({
+                data,changes:settleInfluence(staged,chat,context.name1,data,conflicts)
+            }),options);
+            let impact=first.changes,deferred=0;
+            if(conflicts.length){
+                const ids=new Set(conflicts.map(c=>c.sourceId));
+                const invalid=new Set(conflicts.map(c=>c.row));
+                const accepted=first.data.effects.filter(row=>!invalid.has(row));
+                const correction='\n只重评以下来源，使用列出的 sourceId。上次 ordinary 与净粉丝数冲突，请按传播依据重新判断类别和人数，不要为了通过校验改成 long：'+JSON.stringify(conflicts.map(({row,sourceId})=>({...row,sourceId})));
+                try{
+                    impact=await ask(staged,null,request,valid,task+correction,data=>{
+                        if(!Array.isArray(data.effects))throw Error('重评缺少粉丝记录。');
+                        const repaired=data.effects.filter(row=>ids.has(row?.sourceId));
+                        return settleInfluence(staged,chat,context.name1,{...first.data,effects:[...accepted,...repaired]});
+                    },options);
+                }catch(error){
+                    if(!valid()||error.retryable===false)throw error;
+                    // The first assessment already validated all unaffected records.
+                }
+                deferred=[...ids].filter(id=>!impact.some(change=>change.key==='impact:'+id)).length;
+            }
             if(!valid())throw Error('聊天或人设已改变。');
             collect(impact);collect([xSet({id:'public-refresh',type:'refresh',floor})]);
             await commit(changes);
+            return {deferred};
         });},
         react(id,kind){return run(async(state,_c,_r,commit)=>{const p=state.x[id];if(p?.type!=='post'||!['liked','reposted'].includes(kind))throw Error('帖子不可用。');if(p.author!=='user')xAccount(state,p.author);await commit([xSet({...p,[kind]:!p[kind],[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})})]);});},
         comment(id,value,replyTo=null){return run(async(state,current,request,commit)=>{

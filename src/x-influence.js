@@ -11,7 +11,7 @@ export function influenceSources(state,chat){
     const sources=audienceSources(state).filter(s=>s.kind!=='post'||ids.has(s.postId)).slice(-40).map(s=>{
         const record=state.x[s.kind==='comment'?s.sourceId.slice(8):s.postId];
         const day=s.kind==='repost'?record.repostedDay:record.postedAtStory?.day??dateDay(record.storyTime?.date)??(Number.isInteger(record.sourceIndex)?readStoryClock(chat.slice(0,record.sourceIndex+1)).day:null);
-        return {...s,day:day??null};
+        return {...s,sourceIndex:record.sourceIndex??null,day:day??null};
     });
     for(const c of all.filter(c=>c.type==='comment'&&c.author!=='user'&&ids.has(c.postId)&&!state.x[c.author]?.blocked).slice(-25)){
         sources.push({sourceId:'reply:'+c.id,kind:'reply',text:c.text,postId:c.postId,day:c.postedAtStory?.day??dateDay(c.storyTime?.date)});
@@ -31,14 +31,15 @@ export function timedAudienceChanges(state,chat,day){
     if(!xAudience(state)||!inactivityPeriod(state,chat,day))return [];
     return settleInfluence(state,chat,'',{effects:[]});
 }
-export const INFLUENCE_RULES='专项粉丝结算。综合曝光、公开形象、既有受众、人设及新受众，分开估算关注和取关。挨骂也可净涨粉，获赞也可净掉粉。普通推文首次可净增减1至2或零；长线来源给出第一天的关注和取关人数，由插件衰减，不能重算已登记来源。回复、热搜、转发若只是同一波传播，沿用原sourceId，不另报一份影响；若用派生来源说明同一件事，originId填原事件来源。同一品牌事故引用已入账的brand:来源。新的公开进展须有独立来源。匿名时私人经历和少数人知情不构成身份公开；剧情来源须有公众可见且明确关联该账号的逐字依据，public:true。个人知情或私下揭露不算。若相关报道只用真名，另给 identityFloor 和 identityEvidence，引用先前公开确认此账号归属的正文原句。品牌翻车已入账，不重复计入相关报道或评论。';
+export const REACH_CONTEXT='结合酒馆当前已提供的世界书、人设和发帖时的有效正文，判断公开画面里能认出谁、此人在什么圈层受关注，以及这次举动或剪辑为何值得讨论。被拍者在学校、行业或当地的名气也能带动传播。区分到场目击者与只看帖的读者，视频截断后的言行不能写成网友看过的镜头。';
+export const INFLUENCE_RULES='专项粉丝结算。综合曝光、公开形象、既有受众、人设及新受众，分开估算关注和取关。挨骂也可净涨粉，获赞也可净掉粉。先按公开内容及其在相关圈层的传播潜力选择模式，再估算人数。参考本轮互动、趋势评估及理由，未上热搜仍可在圈内持续扩散。ordinary 适用于缺乏进一步传播依据的日常来源，gained 减 lost 必须在 -2 到 2 之间。long 适用于有具体受众和持续讨论、转发理由的来源，basis 说明这些依据。互动次数与净涨粉分别估算，不能仅凭人数倒推模式。长线来源给出第一天的关注和取关人数，由插件衰减，不能重算已登记来源。回复、热搜、转发若只是同一波传播，沿用原sourceId，不另报一份影响；若用派生来源说明同一件事，originId填原事件来源。同一品牌事故引用已入账的brand:来源。新的公开进展须有独立来源。匿名时私人经历和少数人知情不构成身份公开；剧情来源须有公众可见且明确关联该账号的逐字依据，public:true。个人知情或私下揭露不算。若相关报道只用真名，另给 identityFloor 和 identityEvidence，引用先前公开确认此账号归属的正文原句。品牌翻车已入账，不重复计入相关报道或评论。';
 export const INFLUENCE_OUTPUT='返回 {"initialFollowers":初始非负整数（已有可省略）,"effects":[{"sourceId":"所给来源ID，或story:楼层索引（索引未知填story，按引文唯一定位）","mode":"ordinary或long","gained":首日新增关注数,"lost":首日取关数,"basis":"新增传播事实与受众依据","public":剧情来源已公开传播才为true,"evidence":"剧情来源须逐字引用公众可见事实","identityFloor":匿名账号此前公开关联真人的楼层（如需）,"identityEvidence":"该楼逐字公开关联依据（如需）"}]}。未发生新变化返回空effects。';
 export function impactRecords(state){return Object.values(state.x).filter(x=>x.type==='influence');}
 export function brandImpact(id,day,loss,index,long=false){
     return {id:'impact:brand:'+id,type:'influence',sourceId:'brand:'+id,sourceIndex:index,start:day,end:long?day+6:day,
         mode:'brand',gained:0,lost:loss,total:-loss,settled:1,expired:!long};
 }
-export function settleInfluence(state,chat,user,data){
+export function settleInfluence(state,chat,user,data,conflicts=[]){
     if(!Array.isArray(data?.effects))throw Error('粉丝评估缺少 effects 数组。');
     const day=readStoryClock(chat).day,old=xAudience(state),initial=old?.initialFollowers??data.initialFollowers;
     const count=n=>Number.isSafeInteger(n)&&n>=0&&n<=1e9;
@@ -69,11 +70,13 @@ export function settleInfluence(state,chat,user,data){
             source={day:readStoryClock(chat.slice(0,index+1)).day,kind:'story'};
         }
         if(!source)continue;
-        const net=row.gained-row.lost;
-        if(row.mode==='ordinary'&&Math.abs(net)>2)throw Error('普通推文的净变化必须在 -2 到 2 之间。');
         const start=source.day;
         if(start!=null&&day!=null&&(day<start||day>start+6))continue;
         if(row.mode==='long'&&(start==null||day==null))continue;
+        if(row.mode==='ordinary'&&Math.abs(row.gained-row.lost)>2){
+            conflicts.push({row,sourceId:id});
+            continue;
+        }
         const e={id:'impact:'+id,type:'influence',sourceId:id,mode:row.mode,start,end:start==null?null:start+(row.mode==='long'?6:0),
             basis:row.basis,evidence:row.evidence||null,gained:row.gained,lost:row.lost,total:0,settled:0,expired:false};
         records.set(id,e);
