@@ -8,14 +8,14 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const {chromium}=createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/')('playwright');
 const fixture=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="extensions_settings"></div><script>
 const saved=JSON.parse(localStorage.getItem('x-test')||'null');window.calls=0;window.result={initialFollowers:50};
-const handlers={};const ctx={chatId:'x-audience',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{},saveSettingsDebounced(){},
+const handlers={};const ctx={chatId:'x-audience',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:Array.from({length:9},(_,i)=>'Local '+i+' is a band member.').join(' ')}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{},saveSettingsDebounced(){},
 chat:[{mes:'2026-10-18 00:05',is_user:false}],chatMetadata:saved||{},saveMetadata:async()=>localStorage.setItem('x-test',JSON.stringify(ctx.chatMetadata)),
 event_types:{APP_READY:'APP_READY'},eventSource:{on(n,f){if(n==='APP_READY')queueMicrotask(f);else(handlers[n]||=[]).push(f);},removeListener(){}},
 setExtensionPrompt(){},generateQuietPrompt:async o=>{window.calls++;window.lastPrompt=o.quietPrompt;
 if(window.publicData){
  const r=window.publicData;
  if(o.quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[{name:'Walker',handle:'walker',text:'Park report',publicBasis:{access:'background',summary:'Public park',involvesCharacters:false}}]});
- if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[{title:'Public project discussion',summary:'Local news',scope:'Local',postCount:100,sourcePostIds:[r.id]}],evaluations:[{postId:r.id,eligible:true,reason:'public interest'}]});
+ if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[{title:'Public project discussion',summary:'Local news',scope:'Local',sourcePostIds:[r.id]},...Array.from({length:7},(_,i)=>({title:'World topic '+i,summary:'Public life',scope:'Local',sourcePostIds:[]}))],evaluations:[{postId:r.id,eligible:true,reason:'public interest'}]});
  if(o.quietPrompt.includes('逐条独立估计'))return JSON.stringify({stats:[{postId:r.id,likes:100,reposts:20,replies:0,gained:25,lost:5}]});
 }
 return typeof window.result==='string'?window.result:'<think>Plan</think><content>'+JSON.stringify(window.result)+'</content>';}};
@@ -38,12 +38,13 @@ try{
  await p.locator('[data-x-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存',exact:true}).tap();
  await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.locator('[data-x-field="post"]').fill('My public project');await p.locator('[data-x-form="post"] button').tap();
  await p.getByText('My public project',{exact:true}).waitFor();const postId=await p.locator('[data-x-post]').getAttribute('data-x-post');assert.equal(await p.evaluate(()=>window.calls),1);
- await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'School',handle:'school',text:'A campus concert.（校园音乐会。）'}],accounts:[{name:'School',handle:'school',has_account:true,bio:'Campus news'},{name:'Hermit',handle:'hermit',has_account:false}]};},postId);
- await p.locator('[data-x-action="refresh"]').tap();await p.getByText('A campus concert.（校园音乐会。）',{exact:true}).waitFor();assert.equal(await p.getByText('Campus news',{exact:true}).count(),0);assert.equal(await p.getByText('Hermit',{exact:true}).count(),0);
+ await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'Alex',handle:'alex',text:'A campus concert.（校园音乐会。）'},...Array.from({length:9},(_,i)=>({name:'Local '+i,handle:'local_'+i,text:'Local public update '+i,has_account:true,authorKind:'npc',npcEvidence:'Local '+i+' is a band member.'}))],accounts:[{name:'Alex',handle:'alex',has_account:true,bio:'Band biography'},{name:'Hermit',handle:'hermit',has_account:false}]};},postId);
+ await p.locator('[data-x-action="refresh"]').tap();await p.getByText('A campus concert.（校园音乐会。）',{exact:true}).waitFor();assert.equal(await p.getByText('Band biography',{exact:true}).count(),0);assert.equal(await p.getByText('Hermit',{exact:true}).count(),0);
+ assert.equal(await p.locator('[data-x-post]').count(),11);
  assert.equal(await p.locator('.pp-x-account').count(),0);assert.equal(await p.locator('[data-x-action="follow"]').count(),0);
  await mkdir(resolve(root,'../qa-results'),{recursive:true});
  for(const width of [390,320]){await p.setViewportSize({width,height:844});assert.ok(await p.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await p.locator('.pp-x-post').filter({hasText:'校园音乐会'}).scrollIntoViewIfNeeded();await p.screenshot({path:resolve(root,'../qa-results/x-post-home-'+width+'.png')});}
- await p.locator('.pp-x-post').filter({hasText:'校园音乐会'}).locator('.pp-x-post-avatar').tap();await p.getByText('Campus news',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),5);
+ await p.locator('.pp-x-post').filter({hasText:'校园音乐会'}).locator('.pp-x-post-avatar').tap();await p.getByText('Band biography',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),5);
  assert.equal(await p.locator('[data-x-action="follow"]').count(),1);await p.locator('[data-x-action="follow"]').tap();assert.equal(await p.evaluate(()=>window.calls),5);
  await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'70');
  await p.locator('[data-x-action="reset-followers"]').tap();await p.getByText('已还原初始粉丝',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');assert.equal(await p.evaluate(()=>window.calls),5);
@@ -60,5 +61,34 @@ try{
  await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();
  assert.ok(await p.locator('[data-x-action="refresh"]').isDisabled());await p.getByText('Edited project',{exact:true}).waitFor();
  assert.equal(await p.evaluate(()=>window.calls),0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
- console.log('PASS mobile public refresh, counts, floor lock, edits and reload');
+ // Saved IDs, including same-name accounts and a deleted author, drive touch navigation.
+ await p.evaluate(async id=>{
+  const {JOURNAL_KEY,appendChange,messageSignatures,revisionsFor}=await import('/src/journal.js');
+  const ctx=window.SillyTavern.getContext(),revisions=await revisionsFor(messageSignatures(ctx.chat));
+  const records=[
+   {id:'touch-a',type:'account',name:'同名网友',handle:'first_touch',bio:'First biography',dmPolicy:'open'},
+   {id:'touch-b',type:'account',name:'同名网友',handle:'second_touch',bio:'Second biography',dmPolicy:'open'},
+   {id:'touch-post',type:'post',author:'touch-b',text:'Second author public post'},
+   ...[['touch-a','NPC one'],['touch-b','NPC two'],['user','User reply'],['deleted','Deleted reply']].map(([author,text],i)=>({id:'touch-comment-'+i,type:'comment',author,text,postId:id,replyTo:null,read:true}))
+  ];
+  ctx.chatMetadata[JOURNAL_KEY]=appendChange(ctx.chatMetadata[JOURNAL_KEY],revisions,records.map(value=>({collection:'x',key:value.id,value})));
+  await ctx.saveMetadata();
+ },postId);
+ await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();
+ await p.locator('[data-x-post="'+postId+'"] [data-x-action="comments"]').tap();
+ for(const width of [320,390]){
+  await p.setViewportSize({width,height:844});
+  const author=p.locator('[data-x-comment="touch-comment-1"] .pp-x-comment-author');
+  assert.ok((await author.boundingBox()).height>=44);await author.tap();
+  await p.getByText('Second biography',{exact:true}).waitFor();assert.equal(await p.getByText('First biography',{exact:true}).count(),0);
+  await p.getByText('Second author public post',{exact:true}).waitFor();
+  await p.locator('[data-x-action="back"]').tap();await p.locator('[data-x-comment="touch-comment-1"]').waitFor();
+  await p.locator('[data-x-comment="touch-comment-0"] .pp-x-comment-author').tap();
+  await p.getByText('First biography',{exact:true}).waitFor();await p.locator('[data-x-action="back"]').tap();
+  await p.locator('[data-x-comment="touch-comment-2"] .pp-x-comment-author').tap();
+  await p.locator('[data-x-form="profile"]').waitFor();await p.locator('[data-x-action="back"]').tap();
+  assert.equal(await p.locator('[data-x-comment="touch-comment-3"] .pp-x-comment-author').count(),0);
+ }
+ assert.equal(await p.evaluate(()=>window.calls),0);assert.deepEqual(errors,[]);
+ console.log('PASS mobile feed quantity, public trends, comment profile taps, return, missing accounts and reload');
 }finally{await browser.close();server.close();}

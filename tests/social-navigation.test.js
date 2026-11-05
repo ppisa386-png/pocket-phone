@@ -122,3 +122,60 @@ test('X home lock persists on user turns; pencils on home, square, search and on
  await p.action('tab','messages');assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);await p.action('thread','a');await p.action('edit-page');
  assert.match(p.html(),/private thread<\/textarea>/);assert.match(p.html(),/保存修改/);p.back();assert.doesNotMatch(p.html(),/保存修改/);
 });
+
+for(const feed of ['home','square'])for(const author of ['user','npc'])test('comment profiles use IDs and return to '+author+' post in '+feed,async()=>{
+ const view={x:{
+  profile:{id:'profile',type:'profile',alias:'Moon',bio:'User bio'},
+  a:{id:'a',type:'account',name:'同名',handle:'first',bio:'First account',dmPolicy:'open'},
+  b:{id:'b',type:'account',name:'同名',handle:'second',bio:'Second account',dmPolicy:'open'},
+  npc:{id:'npc',type:'account',name:'发帖人',handle:'writer'},
+  p:{id:'p',type:'post',author,text:'Original thread',feed},
+  other:{id:'other',type:'post',author:'b',text:'Second author post'},
+  ca:{id:'ca',type:'comment',postId:'p',author:'a',text:'First reply'},
+  cb:{id:'cb',type:'comment',postId:'p',author:'b',text:'Second reply'},
+  cu:{id:'cu',type:'comment',postId:'p',author:'user',text:'My reply'},
+  missing:{id:'missing',type:'comment',postId:'p',author:'gone',text:'Old reply'}
+ }};
+ const before=JSON.stringify(view);let calls=0;
+ const panel=createXPanel({getView:()=>view,redraw(){},notice(){},adapter:{x:{discover(){calls++;}}}});
+ await panel.action('tab',feed==='square'?'square':'home');await panel.action('comments','p');
+ panel.input({dataset:{xField:'comment'},value:'Unsent reply'});
+ await panel.action('reply-comment','cb');
+ const html=panel.html();
+ assert.match(html,/type="button" class="pp-x-comment-author" data-x-action="comment-author" data-x-id="b"/);
+ assert.match(html,/同名 @second/);assert.doesNotMatch(html,/data-x-action="comment-author" data-x-id="gone"/);
+ await panel.action('comment-author','b');assert.match(panel.html(),/Second account/);assert.doesNotMatch(panel.html(),/First account/);
+ assert.match(panel.html(),/Second author post/);assert.match(panel.html(),/data-x-action="follow"/);assert.match(panel.html(),/data-x-action="thread"/);
+ assert.equal(panel.back(),true);assert.match(panel.html(),/data-x-comment="cb"/);assert.match(panel.html(),/Unsent reply/);assert.match(panel.html(),/回复 @同名/);
+ await panel.action('comment-author','user');assert.match(panel.html(),/data-x-form="profile"/);assert.match(panel.html(),/User bio/);
+ await panel.action('back');assert.match(panel.html(),/data-x-comment="cu"/);
+ const same=panel.html();await panel.action('comment-author','gone');assert.equal(panel.html(),same);
+ await panel.action('comment-author','a');delete view.x.a;assert.doesNotThrow(()=>panel.html());panel.back();assert.match(panel.html(),/Original thread/);
+ view.x.a=JSON.parse(before).x.a;assert.deepEqual(view,JSON.parse(before));assert.equal(calls,0);
+ panel.reset();assert.equal(panel.back(),false);
+});
+
+test('legacy trend counts disappear from display and editor, original post links remain',async()=>{
+ const view={x:{p:{id:'p',type:'post',author:'user',text:'Original'},'trend-edition':{type:'trends',id:'trend-edition',topics:[
+  {title:'Old trend',summary:'Public life',scope:'Town',postCount:420,sourcePostIds:['p']},
+  {title:'New trend',summary:'World topic',sourcePostIds:[]}
+ ]}}};
+ const panel=createXPanel({adapter:{},getView:()=>view,redraw(){},notice(){}});
+ await panel.action('tab','search');assert.match(panel.html(),/Old trend/);assert.match(panel.html(),/New trend/);assert.doesNotMatch(panel.html(),/条讨论|420|undefined/);
+ await panel.action('comments','p');assert.match(panel.html(),/Original/);panel.back();
+ await panel.action('edit-page');assert.doesNotMatch(panel.html(),/讨论数|420/);
+});
+
+test('recognized legacy institution posts move between lists without publication metadata, unknown accounts and all original records survive',async()=>{
+ const view={x:{org:{id:'org',type:'account',name:'环球度假区快讯',handle:'park',following:true},
+  old:{id:'old',type:'post',author:'org',feed:'home',text:'Legacy notice',metrics:{likes:40,reposts:5,replies:1}},
+  c:{id:'c',type:'comment',postId:'old',author:'user',text:'Old comment'},
+  a:{id:'a',type:'account',name:'Unclassified',handle:'u'},p:{id:'p',type:'post',author:'a',feed:'home',text:'Ambiguous old post'},
+  'square-edition':{id:'square-edition',editionId:'current',clock:{day:null,hour:null}}}};
+ const before=structuredClone(view);
+ const panel=createXPanel({adapter:{},getView:()=>view,redraw(){},notice(){}});
+ assert.doesNotMatch(panel.html(),/Legacy notice/);assert.match(panel.html(),/Ambiguous old post/);
+ await panel.action('tab','square');assert.match(panel.html(),/Legacy notice/);assert.doesNotMatch(panel.html(),/data-x-action="inject"/);
+ await panel.action('comments','old');assert.match(panel.html(),/Old comment/);assert.match(panel.html(),/赞 40/);
+ assert.deepEqual(view,before);
+});

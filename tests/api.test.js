@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {feedResult,worldTopics,fixtureCast} from './x-fixtures.js';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createApiClient, createKeyStore, normalizeApiUrl, extractApiText } from '../src/api.js';
@@ -17,13 +18,13 @@ const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.examp
 test('all X refresh routes append feed schema, preserve old posts on syntax failure and make one request',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
  try{
-  f.reply(()=>'{"posts":[{"name":"Alex","handle":"alex","text":"Old post"}]}');assert.equal((await x.refresh()).ok,true);
+  f.reply(()=>JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',has_account:true,text:'Old post'}]})));assert.equal((await x.refresh()).ok,true);
   const a=xItems(f.phone.snapshot(),'account')[0];await x.follow(a.id,true);
   const before=structuredClone(f.phone.snapshot().x);
   f.reply(options=>{calls++;const last=JSON.parse(options.body).messages.at(-1);assert.equal(last.role,'system');assert.match(last.content,/本次为X刷新/);assert.match(last.content,/字符串内部/);return '{"posts":[{"text":"PRIVATE\nsecret"}]}';});
   for(const mode of [false,true,'square']){const result=await x.refresh(mode);assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_SYNTAX');assert.match(result.error,/未转义换行/);assert.doesNotMatch(result.error,/PRIVATE|secret/);assert.deepEqual(f.phone.snapshot().x,before);}
   assert.equal(calls,3);
-  f.reply(()=>'{"posts":[],"replies":[]}');assert.equal((await x.refresh()).ok,true);
+  f.reply(()=>JSON.stringify(feedResult()));assert.equal((await x.refresh()).ok,true);
  }finally{f.close();}
 });
 
@@ -259,7 +260,7 @@ test('API config or key changes invalidate generation while context is prepared'
 const quote='Alex gives you his number: +1 212 555 0123.';
 function phoneFixture(onError = () => {}) {
     const bus=new HostEvents(); const event_types=Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]));
-    const context={chatId:'A',powerUserSettings:{persona_description:'Sam 常住美国。'},characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
+    const context={chatId:'A',powerUserSettings:{persona_description:'Sam 常住美国。'},characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:fixtureCast}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
     installHostGeneration(context);
     const settings=normalizeSettings({api:apiConfig(),retries:0}); let responder=()=>JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:quote}]}); let signal;
     const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,fetchImpl:async(_url,options)=>{signal=options.signal;const result=await responder(options);return typeof result==='string'?response(result):result;}});
@@ -279,7 +280,7 @@ test('actual independent social payload does not restore prose excluded by host 
             assert.doesNotMatch(JSON.stringify(payload.messages),/JUST_FINISHED_THE_TRIP/);
             assert.doesNotMatch(JSON.stringify(payload.messages),/This was private/);
             assert.match(payload.messages.at(-1).content,/本次为X刷新/);
-            assert.equal(payload.temperature,0.83);return '{"posts":[]}';
+            assert.equal(payload.temperature,0.83);return JSON.stringify(feedResult());
         });
         const x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
         const result=await x.refresh();assert.equal(result.ok,true,result.error);assert.equal(calls,1);
@@ -392,11 +393,11 @@ test('independent trends preserve original publication scene and use trend schem
   const post=xItems(f.phone.snapshot(),'post')[0];for(let i=0;i<8;i++)f.context.chat.push({mes:'Later '+i});await f.memory.read();
   f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
   f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);
-   assert.equal(last.role,'system');assert.match(last.content,/本次刷新趋势仅输出/);assert.match(last.content,/sourcePostIds/);assert.doesNotMatch(last.content,/本次为X刷新/);
+   assert.equal(last.role,'system');assert.match(last.content,/topics 必须8～10条/);assert.match(last.content,/sourcePostIds/);assert.doesNotMatch(last.content,/本次为X刷新/);
    assert.doesNotMatch(JSON.stringify(body.messages),/PUBLIC_BRIDGE_FAILURE/);assert.match(JSON.stringify(body.messages),/local resident/);assert.equal(body.temperature,0.83);
-   return JSON.stringify({topics:[{title:'Bridge closed',summary:'Commuters discuss the closure',scope:'Local',postCount:3200,sourcePostIds:[post.id]}],evaluations:[{postId:post.id,eligible:true,reason:'The public event affects commuters'}]});
+   return JSON.stringify({topics:worldTopics([{title:'Bridge closed',summary:'Commuters discuss the closure',scope:'Local',sourcePostIds:[post.id]}]),evaluations:[{postId:post.id,eligible:true,reason:'The public event affects commuters'}]});
   });
-  const result=await x.refreshTrends();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(f.phone.snapshot().x['trend-edition'].topics.length,1);
+  const result=await x.refreshTrends();assert.equal(result.ok,true,result.error);assert.equal(calls,1);assert.equal(f.phone.snapshot().x['trend-edition'].topics.length,8);
   assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/PUBLIC_BRIDGE_FAILURE/);
  }finally{f.close();}
 });
@@ -437,7 +438,7 @@ test('assets waits on its own transport while another app finishes or receives a
                     return JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},initial:{balance:80,holdings:[],jobs:[]}});
                 }
                 if(rejectSecond)return {ok:false,status:429,json:async()=>({error:{message:'rate limit'}})};
-                return '{"posts":[],"replies":[]}';
+                return JSON.stringify(feedResult());
             });
             const args={memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings};
             const assets=createAssets(args),pending=assets.update();

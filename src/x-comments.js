@@ -20,3 +20,18 @@ export function xComments(state) {
     }
     return comments;
 }
+
+export const X_COMMENT_LIMIT=15;
+export function visibleXComments(comments) {
+    if(comments.length<=X_COMMENT_LIMIT)return comments;
+    const byId=new Map(comments.map(c=>[c.id,c])),selected=new Set();
+    // Keep recent direct conversations visible together with their parents.
+    const recent=[...comments].reverse();
+    for(const comment of [...recent.filter(c=>!c.ambient),...recent.filter(c=>c.ambient)]){
+        if(selected.size===X_COMMENT_LIMIT)break;
+        const chain=new Set();
+        for(let c=comment;c&&!selected.has(c.id)&&!chain.has(c.id);c=byId.get(c.replyTo))chain.add(c.id);
+        if(selected.size+chain.size<=X_COMMENT_LIMIT)for(const id of chain)selected.add(id);
+    }
+    return comments.filter(c=>selected.has(c.id));
+}

@@ -277,7 +277,7 @@ test('narrative X publishes an image and original text under the alias, threads 
   const {createXPanel}=await import('../src/x-view.js');
   const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>({x}),redraw(){},notice(){}});
   await panel.action('profile');assert.match(panel.html(),/Evening!/);assert.match(panel.html(),/配图.*a moon over the lake/);assert.match(panel.html(),/2026-09-02 19:23/);
-  await panel.action('comments',post.id);assert.match(panel.html(),/Alex：<\/strong>So quiet\./);
+  await panel.action('comments',post.id);assert.match(panel.html(),/data-x-action="comment-author"[^>]*>Alex<\/button>：So quiet\./);
   f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));assert.deepEqual(await readX(),x);
   const later={action:'reply',postId:post.id,name:'Alex',text:'Back again.',evidence:'Alex replied: Back again.'};
   f.context.chat.push(xFloor(later.evidence,later,{...later,postId:'missing'}));x=await readX();
@@ -308,5 +308,51 @@ test('X imports only evidenced user posts from completed narrative and respects 
   f.bus.emit('GENERATION_STARTED','normal');f.context.chat.push(floor);await f.memory.read();
   assert.equal(f.context.chatMetadata[JOURNAL_KEY].events.some(e=>e.source.index===f.context.chat.length-1),false);
   f.bus.emit('GENERATION_ENDED');assert.equal(Object.values((await f.memory.read()).state.x).filter(r=>r.type==='post').length,1);
+ }finally{f.close();}
+});
+
+test('narrative X metrics target exact user or NPC posts, merge only evidenced fields and replay with source revisions',async()=>{
+ const f=setup();
+ try{
+  await f.memory.read();
+  const post=(id,author,text)=>({id,type:'post',author,text,metrics:{likes:12,reposts:3,replies:30}});
+  const saved=[post('u1','user','昨天的演出'),post('u2','user','今天的早餐'),post('n1','npc','学校公告'),post('n2','npc','运动会')];
+  await f.memory.commit(await f.memory.begin(),saved.map(value=>({collection:'x',key:value.id,value})));
+  const marker=(postId,postText,key,value,evidence)=>({action:'metrics',postId,postText,evidence,metrics:{[key]:{value,evidence}}});
+  const evidence='她打开 X，发现昨天那条演出推文的评论突破四千。';
+  const row=marker('u1','昨天的演出','replies',4000,evidence);
+  f.context.chat.push(xFloor(evidence,row));let state=(await f.memory.read()).state;
+  assert.deepEqual(state.x.u1.metrics,{likes:12,reposts:3,replies:4000});
+  assert.deepEqual(state.x.u2.metrics,saved[1].metrics);
+  assert.equal(Object.values(state.x).filter(r=>r.type==='comment').length,0);
+  const journal=JSON.stringify(f.context.chatMetadata[JOURNAL_KEY]);await f.memory.read();assert.equal(JSON.stringify(f.context.chatMetadata[JOURNAL_KEY]),journal);
+  const like='那条演出推文点赞破两万。',repost='学校公告的转发达到850次。';
+  f.context.chat.push(xFloor(like+' '+repost,marker('u1','昨天的演出','likes',20000,like),marker('n1','学校公告','reposts',850,repost)));
+  state=(await f.memory.read()).state;assert.deepEqual(state.x.u1.metrics,{likes:20000,reposts:3,replies:4000});assert.equal(state.x.n1.metrics.reposts,850);
+  assert.deepEqual(state.x.n2.metrics,saved[3].metrics);
+  const latest='演出推文评论已经达到4236条。';
+  f.context.chat.push(xFloor(latest,marker('u1','昨天的演出','replies',4236,latest),marker('u1','昨天的演出','replies',4000,latest),
+   marker('u2','昨天的演出','replies',9999,latest),marker('missing','昨天的演出','replies',9999,latest)));
+  state=(await f.memory.read()).state;assert.equal(state.x.u1.metrics.replies,4236);assert.equal(state.x.u2.metrics.replies,30);
+  f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));assert.equal((await f.memory.read()).state.x.u1.metrics.replies,4236);
+  const revised='演出推文评论四千多条。';
+  f.context.chat[f.context.chat.length-1]=xFloor(revised,marker('u1','昨天的演出','replies',4000,revised));
+  assert.equal((await f.memory.read()).state.x.u1.metrics.replies,4000);
+  f.context.chat.length=2;state=(await f.memory.read()).state;assert.equal(state.x.u1.metrics.likes,12);assert.equal(state.x.n1.metrics.reposts,3);assert.equal(state.x.u1.metrics.replies,4000);
+  f.context.chat.pop();state=(await f.memory.read()).state;assert.deepEqual(state.x.u1.metrics,saved[0].metrics);
+  const invalid={...row,metrics:{likes:{value:-1,evidence},replies:{value:9000,evidence:'正文没有这句话'},reposts:{value:2.5,evidence}}};
+  f.context.chat.push(xFloor(evidence,invalid));assert.deepEqual((await f.memory.read()).state.x.u1.metrics,saved[0].metrics);
+  assert.equal(f.requests(),0);
+ }finally{f.close();}
+});
+
+test('newly published narrative posts retain their own metrics without creating synthetic comment objects',async()=>{
+ const f=setup();
+ try{
+  const evidence='Sam posted on X: A photo. The photo received 20000 likes.';
+  f.context.chat.push(xFloor(evidence,{action:'published',author:'user',text:'A photo.',evidence,
+   metrics:{likes:{value:20000,evidence:'The photo received 20000 likes.'}}}));
+  const state=(await f.memory.read()).state,posts=Object.values(state.x).filter(p=>p.type==='post');
+  assert.equal(posts.length,1);assert.equal(posts[0].metrics.likes,20000);assert.equal(Object.values(state.x).filter(p=>p.type==='comment').length,0);assert.equal(f.requests(),0);
  }finally{f.close();}
 });

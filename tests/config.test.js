@@ -52,3 +52,10 @@ test('previous proactive defaults migrate without changing custom text or empty 
  const custom=normalizeSettings({prompts:{incomingMessages:"我的自定义双语规则",incoming:"",storyContact:"我的正文规则"}});
  assert.equal(custom.prompts.incomingMessages,"我的自定义双语规则");assert.equal(custom.prompts.incoming,"");assert.equal(custom.prompts.storyContact,"我的正文规则");
 });
+
+test('X square migrates the previous built-in prompt while preserving user customizations',()=>{
+ const previous='生成符合当前世界观、地域和年代的普通网友日常帖子，无需关注，不使用 user、char 或正文已有具名人物作为发帖者。联系近期地点和公开生活，不围绕 user 转；公共场所也不必有目击，私密场所更不应自动被看见，禁止传播私聊、秘密、内心或未公开关系。没有合理公开素材时写普通背景或留空，不制造热搜、舆论任务。帖子长短与语气自然有差异，语言遵循酒馆预设。';
+ assert.match(normalizeSettings({prompts:{xSquare:previous}}).prompts.xSquare,/校园资讯、新闻媒体、机构公告/);
+ const custom=previous+'只写本地话题。';
+ assert.equal(normalizeSettings({prompts:{xSquare:custom}}).prompts.xSquare,custom);
+});

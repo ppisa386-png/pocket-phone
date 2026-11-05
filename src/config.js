@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from './daily-prompts.js?v=1.1.8';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.1.27';
+export const VERSION = '1.1.28';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -35,13 +35,14 @@ export const PROMPTS = {
     wechat: { name: '微信', text: '生成微信内的文字聊天。按姓名发送好友申请，由对方结合设定与最多二十条相关摘要决定是否通过。一键添加单独导入开局已有关系。私聊、语音和视频遵守角色知情边界与预设语言，不替 user 发言。' },
     snapchat: { name: 'Snapchat', text: '生成 Snapchat 内的文字互动，区分好友邀请、私聊、Snap 与 Stories。遵守好友及内容可见范围。知道账号不代表知道真实身份；不得因为后台存在对应关系而认出匿名 user。已在有效剧情中确认的身份不会因改名而遗忘。' },
     x: { name: 'X', text: '生成 X 的帖子、回复或私信，遵循角色设定和酒馆预设的内容语言。char 默认使用真名账号。公开帖子可以被发现并互动，发现账号不等于知道账号背后的真实身份。私信遵守联系与可见范围。禁止把私人谈话直接当作公众已知信息。' },
-    xSquare: { name: 'X 广场', text: '生成符合当前世界观、地域和年代的普通网友日常帖子，无需关注，不使用 user、char 或正文已有具名人物作为发帖者。联系近期地点和公开生活，不围绕 user 转；公共场所也不必有目击，私密场所更不应自动被看见，禁止传播私聊、秘密、内心或未公开关系。没有合理公开素材时写普通背景或留空，不制造热搜、舆论任务。帖子长短与语气自然有差异，语言遵循酒馆预设。' },
+    xSquare: { name: 'X 广场', text: '广场混合普通网友的日常、吐槽、见闻和校园资讯、新闻媒体、机构公告、品牌活动、兴趣或赛事报道，遵循世界观、地域、年代和语言预设。不同账号各有口吻；不编造重大剧情事件，不泄露私事，不使用 user 或既有剧情 NPC 作为公众账号作者。涉及具体剧情人物时遵循公开依据；没有合适内容可留空。' },
     xInteractions: { name: 'X 评论与热度', text: '热度结合作者知名度、影响范围、社交关系、事件公开程度及帖子内容判断。名人也有冷帖，普通人的帖子也可能受到关注。评论可来自有依据的亲友、同行或符合世界观的陌生网友，评论者可以互相讨论，但不能编造公众已知的私事或识破匿名 user。作者是否回复、回复谁完全根据人设与当前剧情，可以一条都不回复，不设最低回复数量。观点和语气自然多样，不强行制造争议，不替 user 发言。' },
     amazonShopping: { name: 'Amazon · 商品推荐', text: '依据当前世界观、年代、地区及货币生成购物推荐；不能在旧时代出现尚未问世的商品或品牌。先满足 user 本次输入的分类、用途、预算和具体偏好，再参考人设、有效剧情及已有资产所体现的消费水平。普通收入者默认推荐负担得起的日常商品，富裕人物默认推荐符合生活水准的品质或奢侈商品；不要给普通打工者默认推荐梵克雅宝，也不要给大小姐默认推荐二十元基础 T 恤。但 user 明确找平价、折扣或昂贵商品时尊重其选择。财富不明时提供合理价格梯度，不能擅自认定其有钱或贫穷。奢侈品必须写出时代正确的品牌名、具体系列或款式，说明材质与特色，不能只写高级项链或名牌包。架空世界优先使用世界设定中的品牌；未设定时可生成贴合世界的品牌。推荐同类中有差异的具体商品，价格与货币统一合理，买家评论简短有差异，不全是夸赞；评论与商品说明遵循酒馆预设语言。商品只能推荐，不能替 user 下单、付款或确认收货。' },
     amazonDelivery: { name: 'Amazon · 送货到正文', text: '订单按剧情日期在下单两天后的白天配送，工作时间为 09:00—18:00。到期后结合当下场景，把快递抵达、门铃或投递通知等实际到货事件自然写入正文。日期已跳过配送日则在后续合适的白天送达。礼物送到指定收件人处，不能变成送给 user；人物只能获知其有合理渠道知道的内容。不提前送货，不在半夜配送，不重复已送达的订单，不强迫 user 签收、拆包或作出反应，不接管物品栏。' },
     amazon: { name: 'Amazon', text: '生成故事世界中的虚拟商品及订单内容，使用已确定的剧情背景、商品和货币信息。所有订单均为故事内模拟，不进行真实购买。订单和地址是私人信息，未获知的角色不得自动知晓。' },
 };
 
+const PREVIOUS_SQUARE_PROMPT = '生成符合当前世界观、地域和年代的普通网友日常帖子，无需关注，不使用 user、char 或正文已有具名人物作为发帖者。联系近期地点和公开生活，不围绕 user 转；公共场所也不必有目击，私密场所更不应自动被看见，禁止传播私聊、秘密、内心或未公开关系。没有合理公开素材时写普通背景或留空，不制造热搜、舆论任务。帖子长短与语气自然有差异，语言遵循酒馆预设。';
 const PREVIOUS_CONTINUITY_PROMPT = '以下是 user 手机中已经发生的通信，作为有效剧情事实供后续正文参考。各人物只知道本人参与或有正当途径获知的内容，不能自动知道 user 与其他人的私聊；匿名社交仍须保留身份边界。忠实保留原话、双方身份及顺序，不得篡改或编造 user 既往发言。承接最新通信后的剧情与时间，不重演旧消息、不强制提起。叙事语言仍遵循酒馆预设。';
 const PREVIOUS_FRIEND_PROMPTS = Object.fromEntries(['whatsapp','wechat'].map(id=>[id,PROMPTS[id].text.replace('按姓名发送好友申请，由对方结合设定与最多二十条相关摘要决定是否通过。一键添加单独导入开局已有关系。','好友按通讯录规则由用户按姓名或一键添加，不需要好友邀请审核。')]));
 const PREVIOUS_BRIDGE_PROMPTS = {"xSquare":"生成符合当前世界观、地区和文化的随机网友帖子，不使用已有 char、user 或正文已有具名人物作为发帖者。紧密联系近期剧情涉及的地点、事件、作品和社会环境，体现公共生活与舆论变化，但不围绕 user 转、不复述正文。网友只能谈论有合理渠道知道的事情，不泄露私聊、秘密、内心或未公开关系。公园约会可以对应游客见闻和合理偶遇，目击者未必认识当事人；发行唱片可以对应听众和乐评人的作品评价。热度符合事件公开程度和影响范围，小事不强行变热搜；观点自然有差异，不强行争议或统一吹捧贬低。内容语言遵循酒馆预设。","xOpinion":"区分普通讨论与可能影响后续剧情的公共议题。几条零散游客感想、普通夸赞或吐槽不形成舆情。已有传播、可信报道、集中争议、圈内明显评价转向、公开回应或组织行动等，且有具体受影响对象/事项，才记录实质舆情。影响可以只是本地或小圈子，不以固定点赞门槛强造热搜，不把高赞本身等同危机。只能从已公开信息或有根据的传闻发展，明确不确定性，不泄露私聊、未公开关系或人物内心。记录已经形成的讨论事实及可能影响，后续由正文依人物知情途径和合适时机选择回应，不强制下一回合立即触发，不重复制造已经写过的事件。","continuity": "以下是当前角色已经亲自参与的手机通信，作为有效剧情记忆供后续正文参考。继续当前剧情，不重演整段通信，不把记录原样贴回正文，不强行让角色提起。保持通信中的约定、已交换的信息和人物关系；措辞、叙事与语言仍遵循酒馆预设和角色设定。短信和电话绑定真实身份；其他角色没有自动获知这些私人交流。不要把电话中未见的画面补成已知事实。", "storyContact": "正文决定实际发生的通信，小手机只保存记录。结合人设、关系、世界观、当前场景和已经发生的手机交流判断联系动机与获取号码的合理途径，不限恋人或既有好友，不要求专门的交换号码情节。日常问候、追求、打听消息、分享或事务都可以，也可以不联系。接听或拒接依正文的扮演规则与当前剧情决定，不凭空替 user 作决定。只记录本次确实发生的来电与收到的短信，不重演旧记录、不以记录指令代替正文。"};
@@ -87,7 +88,7 @@ export function normalizeSettings(value) {
         proactiveEnabled: typeof raw.proactiveEnabled === 'boolean' ? raw.proactiveEnabled : true,
         retries: Math.round(numeric(raw.retries, 0, 15, 2)),
         apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
-        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && !(id==='continuity' && oldPrompts[id]===PREVIOUS_CONTINUITY_PROMPT) && !(id==='phone' && oldPrompts[id]===PROMPTS.phone.text.replace('允许角色首次主动来电，按本次实际通话回应。','char 发起来电必须有获取 user 号码的有效途径和依据。')) && !(['whatsapp','wechat'].includes(id)&&oldPrompts[id]===prompt.text.replace('最多二十条相关摘要','最近最多二十条摘要')) && oldPrompts[id] !== PREVIOUS_FRIEND_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
+        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && !(id==='continuity' && oldPrompts[id]===PREVIOUS_CONTINUITY_PROMPT) && !(id==='phone' && oldPrompts[id]===PROMPTS.phone.text.replace('允许角色首次主动来电，按本次实际通话回应。','char 发起来电必须有获取 user 号码的有效途径和依据。')) && !(['whatsapp','wechat'].includes(id)&&oldPrompts[id]===prompt.text.replace('最多二十条相关摘要','最近最多二十条摘要')) && oldPrompts[id] !== PREVIOUS_FRIEND_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='xSquare'&&oldPrompts[id]===PREVIOUS_SQUARE_PROMPT) && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
     };
 }
 

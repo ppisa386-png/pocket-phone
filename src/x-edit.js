@@ -1,3 +1,4 @@
+import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.1.28';
 // A page exposes only editable display fields. IDs, private state and ownership
 // stay in the journal. Each field retains its original value for stale-edit checks.
 export function pageFields(state,scope){
@@ -16,15 +17,15 @@ export function pageFields(state,scope){
     }else if(scope.tab==='search'){
         const edition=state.x['trend-edition'];
         for(const [i] of (edition?.topics||[]).entries()){
-            for(const [k,label] of [['title','话题'],['scope','范围'],['summary','摘要'],['postCount','讨论数']])
-                add(edition,['topics',i,k],'趋势 '+(i+1)+' · '+label,k==='postCount');
+            for(const [k,label] of [['title','话题'],['scope','范围'],['summary','摘要']])
+                add(edition,['topics',i,k],'趋势 '+(i+1)+' · '+label);
         }
         for(const a of rows.filter(r=>r.type==='account'&&(!scope.ids||scope.ids.includes(r.id)))){
             for(const [k,label] of [['name','名称'],['handle','账号'],['bio','简介']])add(a,[k],a.name+' · '+label);
         }
     }else if(['home','square'].includes(scope.tab)){
-        const square=scope.tab==='square',edition=state.x['square-edition'];
-        for(const p of rows.filter(r=>r.type==='post'&&!state.x[r.author]?.blocked&&(square?r.feed==='square'&&(!edition||r.publication?.editionId===edition.editionId):r.feed!=='square'&&(!scope.following||r.author==='user'||state.x[r.author]?.following)))){
+        const square=scope.tab==='square';
+        for(const p of rows.filter(r=>r.type==='post'&&!state.x[r.author]?.blocked&&(square?squareFeedPost(state,r):xFeedArea(state,r)==='home'&&(!scope.following||r.author==='user'||state.x[r.author]?.following)))){
             const author=name(p.author);add(p,['text'],author+' · 推文');
             for(const [k,label] of [['likes','点赞'],['reposts','转发'],['replies','回复']])add(p,['metrics',k],author+' · '+label,true);
             for(const c of rows.filter(r=>r.type==='comment'&&r.postId===p.id))add(c,['text'],name(c.author)+' · 回复');

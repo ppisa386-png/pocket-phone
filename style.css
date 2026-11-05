@@ -253,6 +253,8 @@ h2, p { margin: 0; }
 .pp-message-tools,.pp-compose-actions{display:flex;align-items:center;gap:8px}.pp-message-tools .pp-icon-button{width:30px;height:30px;padding:6px}.pp-compose-actions>.pp-icon-button{width:42px;height:42px}.pp-sms-edit-form{width:100%}.pp-sms-edit-form textarea{box-sizing:border-box;width:100%;min-height:90px;padding:10px;background:var(--pp-input);color:var(--pp-text);border:1px solid var(--pp-line);border-radius:8px;font:inherit}.pp-sms-edit-form button{margin:6px;padding:6px 12px;color:var(--pp-accent);background:var(--pp-card);border:0;border-radius:8px}
 
 .pp-x-comment { padding:10px 0; border-bottom:1px solid var(--pp-line); }
+.pp-x-comment-author { display:inline-flex; align-items:center; min-height:44px; max-width:100%; padding:4px 6px; border:0; border-radius:6px; background:transparent; color:#087cbd; font:inherit; font-weight:600; text-align:left; text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; cursor:pointer; touch-action:manipulation; }
+.pp-x-comment-author:hover, .pp-x-comment-author:focus-visible { background:#e8f5fd; outline:2px solid #087cbd; outline-offset:1px; }
 .pp-x-comment > small { display:block; color:var(--pp-muted); }
 .pp-x .pp-x-refresh { margin-left:auto; display:inline-flex; align-items:center; justify-content:center; }
 

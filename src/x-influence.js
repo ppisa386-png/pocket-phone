@@ -39,7 +39,7 @@ export function settleInfluence(state,chat,stats,initialFollowers){
         if(records.has(id))continue;
         if(!['likes','reposts','replies','gained','lost'].every(k=>count(row[k])))throw Error('推文数据必须是非负安全整数。');
         const start=post.postedAtStory?.day??dateDay(post.storyTime?.date);
-        const metrics={likes:row.likes,reposts:row.reposts,replies:row.replies};
+        const metrics=Object.fromEntries(['likes','reposts','replies'].map(key=>[key,Math.max(post.metrics?.[key]||0,row[key])]));
         const includedDirectReplies=xComments(state).filter(c=>c.postId===post.id&&!c.ambient).length;
         changes.push(set({...post,metrics,includedDirectReplies}));
         records.set(id,{id:'impact:'+id,type:'influence',sourceId:id,start,end:start===null?null:start+6,
