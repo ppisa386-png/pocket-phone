@@ -8,6 +8,12 @@ import { displayStoryTime } from './story-clock.js?v=1.1.12';
 import { xItems, xProfile, xCounts } from './x.js?v=1.1.28';
 import { xAudience } from './x-audience.js?v=1.1.25';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+export function feedSummary({added,candidates,skipped={}}) {
+    const labels={unavailable:'账号不可用',identity:'身份不符',fields:'缺少字段',duplicate:'帖子重复',author:'作者重复',evidence:'缺少身份依据'};
+    const details=Object.entries(skipped).map(([key,n])=>(labels[key]||key)+' '+n);
+    if(candidates===0)details.push('模型未返回候选');
+    return '首页新增 '+added+' 条 NPC 推文'+(details.length?'（'+details.join('，')+'）':'');
+}
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;
     let editor=null;
@@ -106,7 +112,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     async function perform(method,args=[],message='') {
         if(!adapter.x){notice('请在酒馆内使用 X。');return null;}if(working||getView().busy)return null;
         working=true;const token=epoch;redraw();
-        try{const result=await adapter.x[method](...args);if(token!==epoch)return null;status=result?.ok?(method==='refreshPublic'&&Number.isInteger(result.value?.added)?'首页新增 '+result.value.added+' 条 NPC 推文':message):result?.error||'请稍后重试。';
+        try{const result=await adapter.x[method](...args);if(token!==epoch)return null;status=result?.ok?(method==='refreshPublic'&&Number.isInteger(result.value?.added)?feedSummary(result.value):message):result?.error||'请稍后重试。';
             return result;}
         catch(error){if(token===epoch)status=error.message;return null;}
         finally{if(token===epoch)working=false;redraw();}

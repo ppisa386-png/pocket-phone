@@ -8,8 +8,8 @@ import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v
 import { publicationScenePrompt } from './social-context.js?v=1.1.17';
 import { xCommentKey, xComments, X_COMMENT_LIMIT } from './x-comments.js?v=1.1.28';
 import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.28';
-import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.1.28';
-import {establishedSources} from './contacts.js?v=1.1.17';
+import {xAccountKind,institutionName,xFeedArea,namedInSource,npcSourceMatch} from './x-feed.js?v=1.1.28';
+import {establishedSources,establishedReferences} from './contacts.js?v=1.1.17';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.1.8';
 import { parseModelObject } from './model-json.js?v=1.1.8';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.25';
@@ -57,7 +57,7 @@ const X_SEARCH_OUTPUT = '本次任务是搜索/添加 X 角色账号，不续写
 export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
     const known=(state,a)=>({...a,identityKnown:a.identityKnown===true||profile(state).alias===getContext().name1});
-    const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd});
+    const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd,authorKind:xAccountKind(a)});
     function publicConversation(state) {
         const all=xItems(state,'post');
         const posts=new Set([...all.slice(-20),...all.filter(p=>p.author==='user').slice(-15)].map(p=>p.id));
@@ -165,36 +165,45 @@ export function createX({memory,phone,getContext,getSettings}) {
         if(count<target)throw Error('有效评论不足，已有 '+saved.length+' 条，本次需要补齐到 '+target+' 条。请重试。');
         await commit(changes);
     }
-    function resolvePostAuthor(state,item,changes,following,square,sources) {
-        if(noAccount(item))return null;
+    function resolvePostAuthor(state,item,changes,following,square,sources,tally={}) {
+        const reject=reason=>{tally[reason]=(tally[reason]||0)+1;return null;};
+        if(!item||noAccount(item))return reject('unavailable');
+        const accounts=xItems(state,'account');
         let a=item.accountId?state.x[item.accountId]:null;
-        if(item.accountId&&a?.type!=='account')return null;
-        if(!a)a=xItems(state,'account').find(old=>item.handle&&old.handle?.toLowerCase()===xText(item.handle).replace(/^@/,'').toLowerCase());
-        if(a?.blocked||(following&&!a?.following))return null;
+        if(item.accountId&&a?.type!=='account')return reject('unavailable');
+        if(!a&&item.handle)a=accounts.find(old=>old.handle?.toLowerCase()===xText(item.handle).replace(/^@/,'').toLowerCase());
+        if(a&&item.name&&!sameNamedPerson(a,item))return reject('identity');
+        if(!a&&!square&&item.name){
+            const matches=accounts.filter(old=>sameNamedPerson(old,item));
+            if(matches.length>1)return reject('identity');
+            if(matches.length===1)a=matches[0];
+        }
+        if(a?.blocked||(following&&!a?.following))return reject('unavailable');
         const identity=a||item,names=nameAliases(identity),context=getContext();
-        if(!names.length||sameNamedPerson(identity,{name:context.name1}))return null;
-        const cards=context.characters||[];
+        if(!names.length||(!a&&(!xText(item.handle)||/[\s<>]/.test(item.handle))))return reject('fields');
+        if(sameNamedPerson(identity,{name:context.name1}))return reject('identity');
         const group=context.groups?.find(g=>String(g.id)===String(context.groupId));
-        const cast=cards.filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
-        const actor=cast.some(c=>sameNamedPerson(c,identity));
+        const actor=(context.characters||[]).some((c,i)=>sameNamedPerson(c,identity)&&
+            (group?group.members?.includes(c.avatar):context.characterId!=null&&context.characterId!==''&&i===Number(context.characterId)));
         const previous=xAccountKind(a),declared=item.authorKind;
         let kind;
         if(square){
             kind=declared||previous||(institutionName(identity.name)?'organization':'public');
-            if(!['public','organization'].includes(kind)||previous==='npc')return null;
-            if(actor&&!(kind==='organization'&&institutionName(identity.name)))return null;
-            if(kind==='public'&&sources.some(s=>names.some(n=>s.includes(n))))return null;
+            if(!['public','organization'].includes(kind)||previous==='npc')return reject('identity');
+            if(actor&&!(kind==='organization'&&institutionName(identity.name)))return reject('identity');
+            if(kind==='public'&&sources.some(s=>names.some(n=>namedInSource(n,s.text))))return reject('identity');
         }else{
-            if(declared&&declared!=='npc'||['organization','public'].includes(previous)||institutionName(identity.name))return null;
-            const evidence=item.npcEvidence;
-            const grounded=typeof evidence==='string'&&evidence.trim().length>=4&&names.some(n=>evidence.includes(n))&&sources.some(s=>s.includes(evidence));
-            if(!a&&item.has_account!==true)return null;
-            if(a&&Object.values(state.business||{}).some(deal=>deal?.accountId===a.id))return null;
-            if(previous!=='npc'&&!actor&&!(declared==='npc'&&grounded))return null;
+            if(declared&&declared!=='npc'||['organization','public'].includes(previous)||institutionName(identity.name))return reject('identity');
+            if(!a&&item.has_account!==true)return reject('unavailable');
+            if(a&&Object.values(state.business||{}).some(deal=>deal?.accountId===a.id))return reject('identity');
+            // Legacy account existence alone cannot distinguish an NPC from a public account.
+            const legacy=a&&sources.some(s=>names.some(n=>namedInSource(n,s.text)));
+            if(previous!=='npc'&&!actor&&!legacy&&!npcSourceMatch(identity,item,sources))return reject('evidence');
             kind='npc';
         }
         if(!a)a=register(state,item,changes,kind);
-        if(!a||a.blocked||kind==='npc'&&['public','organization'].includes(xAccountKind(a))||square&&xAccountKind(a)==='npc')return null;
+        if(!a||a.blocked)return reject('unavailable');
+        if(kind==='npc'&&['public','organization'].includes(xAccountKind(a))||square&&xAccountKind(a)==='npc')return reject('identity');
         if(a.authorKind!==kind){
             a={...a,authorKind:kind,crowd:kind!=='npc'};state.x[a.id]=a;changes.push(xSet(a));
         }
@@ -233,7 +242,9 @@ export function createX({memory,phone,getContext,getSettings}) {
     async function refreshFeedStage(state,current,request,commit,mode,combined){
         const square=mode==='square',following=mode===true,recommended=!square&&!following;
         const chat=structuredClone(getContext().chat||[]),prose=storyEvidenceRows(chat);
-        const sources=[...prose,...establishedSources(getContext())].map(s=>s.text);
+        const sources=establishedReferences([...establishedSources(getContext()),...prose]);
+        const ctx=getContext(),group=ctx.groups?.find(g=>String(g.id)===String(ctx.groupId));
+        const cast=(ctx.characters||[]).filter((c,i)=>group?group.members?.includes(c.avatar):ctx.characterId!=null&&ctx.characterId!==''&&i===Number(ctx.characterId)).map(c=>c.name);
         const edition=square?{id:'square-edition',type:'edition',editionId:crypto.randomUUID(),clock:squareClock(chat),postIds:[]}:null;
         const accounts=xItems(state,'account').filter(a=>!a.blocked&&(!following||a.following));
         if(following&&!accounts.length)return {added:0};
@@ -241,7 +252,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             '当前任务：X 动态。'+X_ACCOUNT_RULES+(following?'仅生成已关注且有剧情身份的NPC公开帖子，不生成公众或机构帖子，不能添加列表外发帖账号；评论者不受关注列表限制。':
                 '为你推荐只选当前剧情世界中有明确身份并适合使用X的NPC（朋友、同学、同事、其他剧情人物）。人数足够时生成10～15条，每位作者一条；合理人数不足按实返回，包括空数组。不创造人物冒充既有NPC。'+
                 '可写个人日常、工作、兴趣和观点，不要求围绕user，不泄露私事。陌生网友、校园资讯、官方、企业、品牌、媒体、赛事等公共账号只属于广场。')+
-                '。首页作者附 authorKind:"npc"；无角色卡的新NPC须附 npcEvidence（当前有效正文、人设、角色设定或世界书中明确描述该人物且含其姓名的逐字原句）。accounts 如提供也遵守相同规则，最多15个；新账号附has_account。';
+                '。首页作者附 authorKind:"npc"；当前出场卡：'+JSON.stringify(cast)+'。已有账号照抄 id；非当前卡的人物也可发帖，用 npcRef 引用含姓名的剧情或设定片段编号，或用 npcEvidence 引用原句。依据只用于确认身份，不可写进帖子作为公开消息。新账号提供 name、handle、has_account:true。身份片段：'+JSON.stringify(sources.slice(-30).map(({ref,text})=>({ref,text})))+'。';
         const userPosts=square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15);
         const reachPosts=userPosts.filter(p=>!combined||state.x['impact:post:'+p.id]).map(p=>({postId:p.id,publicText:p.text,imageDescription:p.imageDescription,postedAtStory:p.postedAtStory||null,sourceIndex:p.sourceIndex??null,counts:xCounts(state,p)}));
         const reachTask=reachPosts.length ? REACH_CONTEXT+publicationScenePrompt(getContext(),userPosts)+
@@ -264,19 +275,19 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
         const results=await ask(state,null,request,current,task+reachTask+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:p.text})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state))+
             '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 最多5条，可为空；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,evidence:"酒馆当前上下文中对应角色正文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',recommended?15:5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10))});
-        state=structuredClone(state);state.x||={};const changes=[],authors=new Set();let added=0,repeatedSquare=false;
+        state=structuredClone(state);state.x||={};const changes=[],authors=new Set(),skipped={};let added=0,repeatedSquare=false;
         if(!square&&!following){
-            for(const old of xItems(state,'account').filter(a=>a.recommended)){const next={...old,recommended:false};state.x[next.id]=next;changes.push(xSet(next));}
+            // Preserve previous recommendations when a refresh has no eligible new posts.
             for(const item of results.accounts){const a=resolvePostAuthor(state,item,changes,false,false,sources);if(a&&!a.blocked){a.recommended=true;changes.push(xSet({...a}));}}
         }
-        for(const item of results.posts){if(!xText(item?.text))continue;
+        for(const item of results.posts){if(!xText(item?.text)){skipped.fields=(skipped.fields||0)+1;continue;}
             const basis=square?squareBasis(item,prose):null;if(square&&!basis)continue;
-            const a=resolvePostAuthor(state,item,changes,following,square,sources);if(!a)continue;
-            if(!square&&!following){a.recommended=true;changes.push(xSet({...a}));}
+            const a=resolvePostAuthor(state,item,changes,following,square,sources,skipped);if(!a)continue;
             const existing=xItems(state,'post').find(p=>p.author===a.id&&(recommended?xCommentKey('',a.id,p.text)===xCommentKey('',a.id,item.text):p.text===xText(item.text)));
-            if(existing){if(square&&existing.feed==='square')repeatedSquare=true;continue;}
+            if(existing){skipped.duplicate=(skipped.duplicate||0)+1;if(square&&existing.feed==='square')repeatedSquare=true;continue;}
             if(recommended){
-                if(authors.has(a.id))continue;
+                if(authors.has(a.id)){skipped.author=(skipped.author||0)+1;continue;}
+                if(!a.recommended){a.recommended=true;changes.push(xSet({...a}));}
                 authors.add(a.id);
             }
             const mentionsUser=!square&&item.mentionsUser===true&&new RegExp('@'+profile(state).alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=$|[^\\p{L}\\p{N}_])','u').test(item.text);
@@ -285,7 +296,6 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             state.x[post.id]=post;addEngagement(state,post,item,changes);
             added++;
         }
-        if(recommended&&results.posts.length&&!added)throw Error('为你推荐没有可保存的新NPC推文：本批有效新增 0 条，原首页已保留。');
         for(const item of square?[]:results.replies){
             if(combined&&!userPosts.some(p=>p.id===item?.postId))continue;
             const post=state.x[item?.postId];if(post?.type!=='post'||post.author!=='user'||!xText(item.text)||noAccount(item))continue;
@@ -302,7 +312,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         }
         if(!combined)changes.push(...audienceChanges(state,results.audience));
         if(square){if(results.posts.length&&!added&&!repeatedSquare)throw Error('本批没有同时符合广场作者与公开依据要求的新帖，原广场已保留。');if(added||!repeatedSquare)changes.push(xSet(edition));}
-        await commit(changes);return {added};
+        await commit(changes);return {added,candidates:results.posts.length,skipped};
         }
     return {
         open:()=>memory.read(),
@@ -354,8 +364,12 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 if(!staged.x[row.key]&&row.value?.type==='comment'){row.value.sourceIndex=chat.length-1;row.value.postedAtStory=clock;}
                 staged.x[row.key]=row.value;changes.push(row);
             }};
+            let stage='首页';
+            try {
             const home=await refreshFeedStage(staged,valid,request,collect,false,true);
+            stage='广场';
             await refreshFeedStage(staged,valid,request,collect,'square',true);
+            stage='互动与粉丝评估';
             const pending=xItems(staged,'post').filter(p=>p.author==='user'&&!staged.x['impact:post:'+p.id]);
             if(pending.length||!xAudience(staged)){
                 const contract='只返回一个 JSON 对象，stats 数组必须恰好覆盖列出的每个 postId，各一次。每项只填 postId、likes、reposts、replies、gained、lost，均为非负整数。初始粉丝未知时另填 initialFollowers。无需理由、等级、传播预测或分类。';
@@ -369,10 +383,13 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 },valid,null,{combined:true,postQueries:pending,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
                 collect(changes);
             }else collect(settleInfluence(staged,chat,[]));
+            stage='趋势';
             await refreshTrendsStage(staged,valid,request,collect,true);
             if(!valid())throw Error('聊天或人设已改变。');
             collect([xSet({id:'public-refresh',type:'refresh',floor})]);
-            await commit(changes);return {added:home.added};
+            stage='保存';
+            await commit(changes);return home;
+            }catch(error){throw Error(stage+'刷新失败：'+error.message);}
         });},
         react(id,kind){return run(async(state,_c,_r,commit)=>{const p=state.x[id];if(p?.type!=='post'||!['liked','reposted'].includes(kind))throw Error('帖子不可用。');if(p.author!=='user')xAccount(state,p.author);await commit([xSet({...p,[kind]:!p[kind],[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})})]);});},
         comment(id,value,replyTo=null){return run(async(state,current,request,commit)=>{
