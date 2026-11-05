@@ -524,7 +524,7 @@ for(const size of [10,15])test('recommended feed saves '+size+' distinct establi
   await panel.action('account',original.id);assert.match(panel.html(),/乐队成员/);assert.ok(panel.html().includes(saved.at(-1).text));
   assert.match(panel.html(),/data-x-action="follow"/);assert.match(panel.html(),/data-x-action="thread"/);
   const snapshot=structuredClone(f.state().x),count=f.count();
-  f.reply({posts});const duplicate=await f.x.refresh();assert.equal(duplicate.ok,false);assert.match(duplicate.error,/有效新增 0 条/);
+  f.reply({posts});const duplicate=await f.x.refresh();ok(duplicate);assert.equal(duplicate.value.added,0);assert.equal(duplicate.value.skipped.duplicate,size);
   assert.equal(f.count(),count+1);assert.deepEqual(f.state().x,snapshot);
   f.reply({posts:[...posts.slice(0,5),...feedResult().posts]});ok(await f.x.refresh());
   assert.equal(xItems(f.state(),'post').length,size+10);
@@ -538,8 +538,10 @@ test('short NPC batches are valid; unsupported, duplicate-only or oversized batc
   f.reply({posts:good.slice(0,9)});ok(await f.x.refresh());assert.equal(xItems(f.state(),'post').length,9);
   for(const posts of [good.map(p=>({...p,name:'Same',handle:'same'})),good.map(p=>({...p,handle:''})),[...good,...good]]){
    const before=structuredClone((await f.memory.read()).state.x),count=f.count();f.reply({posts});
-   const result=await f.x.refresh();assert.equal(result.ok,false);
-   assert.match(result.error,/有效新增 0 条|最多 15/);assert.equal(f.count(),count+1);assert.deepEqual(f.state().x,before);
+   const result=await f.x.refresh();
+   if(posts.length>15){assert.equal(result.ok,false);assert.match(result.error,/最多 15/);}
+   else{ok(result);assert.equal(result.value.added,0);assert.ok(Object.values(result.value.skipped).length);}
+   assert.equal(f.count(),count+1);assert.deepEqual(f.state().x,before);
   }
   f.reply({accounts:good});assert.equal((await f.x.refresh()).ok,false);
  }finally{f.close();}
@@ -569,7 +571,7 @@ test('combined refresh saves full recommendations and eight world trends, locks 
   f.context.chat.pop();await f.memory.read();assert.equal(xItems(f.state(),'post').length,0);assert.equal(f.state().x['public-refresh'],undefined);
   f.context.chat.push({mes:'2026-11-05 12:00 revised'});ok(await f.x.publish('A plain lunch.'));
   f.reply(()=>JSON.stringify({posts:[{name:'虚构网友',handle:'random',text:'无依据'}]}));const failed=await f.x.refreshPublic();
-  assert.equal(failed.ok,false);assert.match(failed.error,/有效新增 0 条/);assert.equal(f.count(),5);
+  assert.equal(failed.ok,false);assert.match(failed.error,/广场刷新失败/);assert.equal(f.count(),6);
   assert.equal(f.state().x['public-refresh'],undefined);assert.equal(xItems(f.state(),'account').length,0);
  }finally{f.close();}
 });
