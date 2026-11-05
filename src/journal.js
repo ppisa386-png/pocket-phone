@@ -68,12 +68,15 @@ export function reconcileJournal(raw, revisions, legacyRevisions = null) {
     return { journal, removed: before - journal.events.length, migrated };
 }
 
+export function messageErased(journal,collection,key) {
+    return journal.erasedMessages?.[collection==='smsContext'?'messages':collection]?.includes(key)===true;
+}
 export function appendChange(journal, revisions, changes, id = crypto.randomUUID()) {
     if (!revisions.length) throw new Error('请先开始一段聊天。');
     validateChanges(changes);
     const next = readJournal(journal);
     if (next.events.some(event => event.id === id)) return next; // Safe retry of the same operation.
-    next.events.push({ id, source: { index: revisions.length - 1, revision: revisions.at(-1), visibilityNormalized: true }, changes: copy(changes) });
+    next.events.push({ id, source: { index: revisions.length - 1, revision: revisions.at(-1), visibilityNormalized: true }, changes: changes.map(c=>messageErased(next,c.collection,c.key)?{collection:c.collection,key:c.key,value:null}:copy(c)) });
     return next;
 }
 
@@ -106,11 +109,14 @@ export function replayJournal(journal) {
 
 // A manual erase is permanent for this phone history, unlike a story action.
 // Keep event IDs/source anchors with null changes so imports cannot resurrect it.
-export function eraseMessageFromJournal(raw, messageId) {
+export function eraseMessageFromJournal(raw, messageId, collection="messages") {
     const journal = readJournal(raw);
+    journal.erasedMessages??={};
+    const ids=journal.erasedMessages[collection]??=[];
+    if(!ids.includes(messageId))ids.push(messageId);
     for (const event of journal.events) for (const change of event.changes) {
-        if (['messages','smsContext'].includes(change.collection) && change.key === messageId) change.value = null;
-        else if (change.collection === 'messages' && change.value?.replyTo === messageId) delete change.value.replyTo;
+        if ((change.collection===collection||(collection==='messages'&&change.collection==='smsContext')) && change.key === messageId) change.value = null;
+        else if (collection==='messages' && change.collection === 'messages' && change.value?.replyTo === messageId) delete change.value.replyTo;
     }
     return journal;
 }

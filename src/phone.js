@@ -485,11 +485,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 await smsResponse(latest, current);
             }, 'messages');
         },
-        deleteMessage(messageId) {
+        deleteMessage(messageId,collection='messages') {
             return task(async view => {
-                if(view.state.messages[messageId]?.role!=='assistant')throw new Error('只能删除对方的短信。');
-                await memory.eraseMessage(await memory.begin(),messageId);
-            },'messages');
+                await memory.eraseMessage(await memory.begin(view),messageId,collection);
+            },collection);
         },
         editMessage(messageId,text) {
             return task(async(view)=>{

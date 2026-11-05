@@ -7,7 +7,7 @@ import { storyTime,readStoryClock } from './story-clock.js?v=1.1.12';
 import { importStoryAssets } from './assets-story.js?v=1.1.25';
 import { importStorySquare } from './x-opinion.js?v=1.1.25';
 import { importStoryPhone } from './story-phone.js?v=1.1.28';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.1.13';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, messageErased, isMemoryHidden } from './journal.js?v=1.1.13';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -193,16 +193,19 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 return ticket;
             });
         },
-        eraseMessage(ticket, messageId) {
+        eraseMessage(ticket,messageId,collection='messages') {
             return schedule(async () => {
                 const basis = tickets.get(ticket), snapshot = await sync();
                 if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
                     basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
-                if (replayJournal(snapshot.journal).messages[messageId]?.role !== 'assistant') throw new Error('这条短信已不存在。');
-                let next = eraseMessageFromJournal(snapshot.journal, messageId);
-                next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
+                if(!['messages','whatsapp','wechat','snapchat','x'].includes(collection))throw Error('不支持此操作。');
+                const message=replayJournal(snapshot.journal)[collection][messageId];
+                if(!['user','assistant'].includes(message?.role)||(collection!=='messages'&&message.type!=='message'))throw Error('这条聊天消息已不存在。');
+                let next=eraseMessageFromJournal(snapshot.journal,messageId,collection);
+                next=appendChange(next,snapshot.revisions,[{collection,key:messageId,value:null}]);
+                if(collection==='messages')next=syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
                 await save(snapshot, next);
-                tickets.delete(ticket); generation++;
+                tickets.delete(ticket);
                 await bus?.emit?.('durian-phone-records-erased');
                 if (sameChat(snapshot)) { active = { ...snapshot, journal: next }; notify(); }
             });
@@ -221,6 +224,9 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 const latest = replayJournal(snapshot.journal);
                 const changed = (before, after) => JSON.stringify(before) !== JSON.stringify(after);
                 const writes = batches.flatMap(batch => batch.changes);
+                if(writes.some(c=>c.value&&(messageErased(snapshot.journal,c.collection,c.key)||
+                    (!latest[c.collection]?.[c.key]&&c.value.replyTo&&messageErased(snapshot.journal,c.collection,c.value.replyTo)))))
+                    throw Error('消息已删除，本次写入已取消。');
                 const touchesFunds = writes.some(({collection,value}) => collection === 'assets' ||
                     (value?.type === 'transfer' && value.direction === 'outgoing'));
                 const fundsChanged = touchesFunds && (changed(basis.state.assets, latest.assets) ||

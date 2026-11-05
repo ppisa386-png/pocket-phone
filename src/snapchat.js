@@ -146,6 +146,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             try{await answerMessage(fresh.state,a,last,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(ticket,changes);});}
             catch(error){if(current())await memory.commit(ticket,batch.map(m=>setSnap({...m,status:'failed'})));throw error;}
         });},
+        deleteMessage(id){return phone.deleteMessage(id,app);},
         editMessage(id,value){return run(async(state,_c,_r,commit)=>{
             const m=state[app][id];if(m?.type!=='message'||m.role!=='assistant')throw new Error('只能修改对方的消息。');
             await commit([setSnap({...m,text:required(value,'消息内容')})]);
