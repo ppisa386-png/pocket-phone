@@ -60,7 +60,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions"><h3>趋势</h3></div>'+
             (edition?'<small>上次刷新结果</small>':'')+
             (edition?.topics?.length?edition.topics.map((topic,i)=>'<article class="pp-x-trend" data-x-trend="'+i+'" data-press="x-trend" data-x-id="'+i+'"><small>'+ (i+1)+(topic.scope?' · '+xEscape(topic.scope):'')+'</small><h4>'+xEscape(topic.title)+'</h4><p class="pp-snap-copy">'+xEscape(topic.summary)+'</p>'+
-                '<div class="pp-snap-actions">'+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
+                '<div class="pp-snap-actions">'+(topic.injected?'<span class="pp-x-trend-on">已注入</span>':'')+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
                 empty(edition?'当前暂无趋势话题':'刷新后查看当前话题趋势'))+'</section>';
     }
     function inbox(state) {
@@ -135,6 +135,10 @@ export function createXPanel({adapter,getView,redraw,notice}) {
                 editor={scope,fields,values:fields.map(f=>f.value)};redraw();return;
             }
             if(action==='cancel-edit'){editor=null;redraw();return;}
+            if(action==='delete-post'){
+                if(!window.confirm('确认删除这条推文？它的评论与互动记录会一并删除，无法恢复。'))return;
+                await perform('deletePost',[id],'已删除推文');return;
+            }
             if(action==='delete-message'){
                 if(!window.confirm('删除这条私信？删除后不会再出现在聊天记录中。'))return;
                 await perform('deleteMessage',[id],'已删除私信');return;
@@ -166,7 +170,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             }
             if(action==='all'||action==='following'){commentHistory.length=0;following=action==='following';page='';redraw();return;}
             if(action==='reset-followers'){await perform('resetFollowers',[],'已还原初始粉丝');return;}
-            const map={inject:['toggleInjection',[id]],refresh:['refreshPublic',[],'本楼公开内容已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]]};
+            const map={inject:['toggleInjection',[id]],refresh:['refreshPublic',[],'本楼公开内容已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]],'trend-inject':['toggleTrendInjection',[id]]};
             if(map[action])await perform(...map[action]);
         },
         press(element){
@@ -180,10 +184,18 @@ export function createXPanel({adapter,getView,redraw,notice}) {
                     actions.push({icon:'inject',label:selected?'取消注入这篇推文':'注入这篇推文',active:status==='active'&&selected,
                         disabled:busy||status!=='active',run:()=>api.action('inject',id)});
                 }
+                actions.push({icon:'delete',label:'删除推文',danger:true,disabled:busy,run:()=>api.action('delete-post',id)});
                 return actions;
             }
-            const simple={ 'x-comment':['comment','修改回复'], 'x-trend':['trend','修改趋势话题'], 'x-account':['account','修改账号资料'] };
+            const simple={ 'x-comment':['comment','修改回复'], 'x-account':['account','修改账号资料'] };
             if(simple[kind])return [{icon:'edit',label:simple[kind][1],disabled:busy,run:()=>openEditor({kind:simple[kind][0],id})}];
+            if(kind==='x-trend'){
+                const topic=state.x?.['trend-edition']?.topics?.[Number(id)];
+                if(!topic)return [];
+                return [{icon:'edit',label:'修改趋势话题',disabled:busy,run:()=>openEditor({kind:'trend',id})},
+                    {icon:'inject',label:topic.injected?'取消注入这个趋势':'注入这个趋势',active:topic.injected===true,
+                        disabled:busy,run:()=>api.action('trend-inject',id)}];
+            }
             if(kind==='x-message'){
                 const message=state.x?.[id],account=state.x?.[message?.accountId];
                 if(message?.type!=='message'||account?.type!=='account')return [];

@@ -16,6 +16,7 @@ function setup(getGenerationState,independent=false){
  return {x,memory,phone,context,settings,bus,state:()=>phone.snapshot(),reply:r=>{response=r;},count:()=>count,prompt:()=>lastPrompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
+const squareRows=(n,offset=0)=>Array.from({length:n},(_,i)=>({name:'路人'+(offset+i),handle:'local'+(offset+i),text:'街坊动态 '+(offset+i)+' 号。',publicBasis:{access:'background',summary:'Ordinary local life',involvesCharacters:false}}));
 test('legacy duplicate roots display once, preserving their replies, different authors, and user-authored repeats',()=>{
  const post={id:'p',type:'post',author:'user',metrics:{replies:1}},x={p:post};
  const add=(id,author,text,fields={})=>{x[id]={id,type:'comment',postId:'p',author,text,...fields};};
@@ -76,7 +77,7 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   assert.equal(f.count(),before+1);assert.equal(calls,1);assert.match(topic,/CURRENT_COMMENT_TOPIC/);assert.doesNotMatch(topic,/JUST_OPENED_THE_GIFT/);
   assert.doesNotMatch(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.match(f.prompt(),/ALREADY_KNOWN/);assert.doesNotMatch(f.prompt(),/OTHER_SECRET|ROUTER_SECRET/);
   assert.doesNotMatch(JSON.stringify(f.context.chatMetadata),/JUST_OPENED_THE_GIFT|ALREADY_KNOWN/);
-  f.reply({posts:[]});ok(await f.x.refresh('square'));assert.equal(calls,1,'crowd-only square never requests actors private state');
+  f.reply({posts:squareRows(10)});ok(await f.x.refresh('square'));assert.equal(calls,1,'crowd-only square never requests actors private state');
   f.settings.api.memorySource='none';f.reply({text:''});ok(await f.x.comment(post.id,'Another comment'));assert.doesNotMatch(f.prompt(),/JUST_OPENED_THE_GIFT/);assert.doesNotMatch(f.prompt(),/ALREADY_KNOWN/);
  }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
 });
@@ -224,9 +225,9 @@ test('square refresh needs no following and rejects character authors while crea
   f.reply({posts:[{name:'Alex',handle:'alex_new',text:'Not a square author'},
     {name:'alex',handle:'a2',text:'Still the character'},
     {name:'Juniper',handle:'juniper_walks',text:'The park is lovely today.',metrics:{likes:12,reposts:2,replies:6},publicBasis:{access:'background',summary:'Ordinary local park visitor',involvesCharacters:false},
-      comments:[{key:'one',name:'Rowan',handle:'rowan',text:'How crowded is it?'},{key:'two',isAuthor:true,replyTo:'one',text:'Quiet by the lake.'}]}]});
+      comments:[{key:'one',name:'Rowan',handle:'rowan',text:'How crowded is it?'},{key:'two',isAuthor:true,replyTo:'one',text:'Quiet by the lake.'}]},...squareRows(9,100)]});
   ok(await f.x.refresh('square'));assert.equal(f.count(),before+1);
-  const posts=xItems(f.state(),'post');assert.equal(posts.length,1);assert.equal(posts[0].feed,'square');
+  const posts=xItems(f.state(),'post');assert.equal(posts.length,10);assert.ok(posts[0].feed==='square');
   assert.equal(xItems(f.state(),'account').some(a=>a.following),false);assert.equal(f.state().x[posts[0].author].crowd,true);
   assert.equal(xItems(f.state(),'comment').length,2);assert.equal(xUnread(f.state()),0);
   assert.deepEqual(xCounts(f.state(),posts[0]),{likes:12,reposts:2,replies:6});
@@ -271,7 +272,7 @@ test('square contents and engagement roll back and unrelated crowd threads stay 
   f.reply({posts:[{accountId:id,text:'The park',comments:[{key:'a',name:'Bea',handle:'bea',text:'A friend remark'},{key:'b',isAuthor:true,replyTo:'a',text:'Reply only to Bea'}]}]});ok(await f.x.refresh(true));
   const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};
   assert.doesNotMatch(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Reply only to Bea/);
-  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'A local park report',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},metrics:{likes:15,reposts:4,replies:0}}]});ok(await f.x.refresh('square'));
+  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'A local park report',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},metrics:{likes:15,reposts:4,replies:0}},...squareRows(9,80)]});ok(await f.x.refresh('square'));
   const p=xItems(f.state(),'post').find(p=>p.feed==='square');ok(await f.x.react(p.id,'liked'));
   f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
   assert.equal(xItems(f.state(),'post').length,0);assert.equal(xItems(f.state(),'comment').length,0);
@@ -281,7 +282,7 @@ test('square contents and engagement roll back and unrelated crowd threads stay 
 
 test('reposted posts appear on the personal profile and canceling removes them',async()=>{
  const {createXPanel}=await import('../src/x-view.js');const f=setup();try{
-  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'My favorite park',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false}}]});ok(await f.x.refresh('square'));
+  f.reply({posts:[{name:'Juniper',handle:'juniper',text:'My favorite park',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false}},...squareRows(9,60)]});ok(await f.x.refresh('square'));
   const post=xItems(f.state(),'post')[0];ok(await f.x.react(post.id,'reposted'));
   const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:f.state,redraw(){},notice(){}});
   await panel.action('profile');assert.match(panel.html(),/你转发了/);assert.match(panel.html(),/My favorite park/);
@@ -292,7 +293,7 @@ test('reposted posts appear on the personal profile and canceling removes them',
 test('one square refresh carries style instructions and never records automatic opinion, all with rollback',async()=>{
  const f=setup();try{
  const impact={significant:true,topic:'The record',summary:'Critics debate the new album.',publicBasis:'Published reviews',stakes:'Possible interview questions'};
- f.reply({posts:[{name:'Rowan',handle:'r1',text:'nice park',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},impact:{...impact,significant:false}},{name:'Ivy',handle:'i1',text:'reviews are split',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},impact}]});ok(await f.x.refresh('square'));
+ f.reply({posts:[{name:'Rowan',handle:'r1',text:'nice park',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},impact:{...impact,significant:false}},{name:'Ivy',handle:'i1',text:'reviews are split',publicBasis:{access:'background',summary:'Local life',involvesCharacters:false},impact},...squareRows(8,70)]});ok(await f.x.refresh('square'));
  assert.equal(f.count(),1);assert.match(f.prompt(),/禁止每条末尾统一缀两三个/);assert.match(f.prompt(),/不擅自强制英语/);assert.equal(xItems(f.state(),'opinion').length,0);
  f.context.chat[0].mes='Changed starting scene';f.bus.emit('MESSAGE_EDITED');await f.memory.read();assert.equal(xItems(f.state(),'opinion').length,0);
  }finally{f.close();}
@@ -354,7 +355,7 @@ for(const independent of [false,true])test('X trends '+(independent?'independent
   assert.equal(xAudience(f.state()),null);for(const [id,value] of Object.entries(before))assert.deepEqual(f.state().x[id],value,'ranking never fabricates post engagement');
   f.reply(response);ok(await f.x.refreshTrends());assert.equal(f.count(),2);assert.match(f.prompt(),/"previous":\{"clock"/);
   assert.equal(xItems(f.state(),'trends').length,1);assert.deepEqual(f.state().x['trend-edition'].topics,response.topics);
-  f.reply(trendResult([victory,personal],false));ok(await f.x.refreshTrends());assert.equal(f.state().x['trend-edition'].topics.length,8);assert.ok(f.state().x['trend-edition'].topics.every(t=>!t.sourcePostIds.length),'posts can leave the list');
+  f.reply(trendResult([victory,personal],false));ok(await f.x.refreshTrends());assert.equal(f.state().x['trend-edition'].topics.length,10);assert.ok(f.state().x['trend-edition'].topics.every(t=>!t.sourcePostIds.length),'posts can leave the list');
  }finally{f.close();}
 });
 
@@ -368,7 +369,7 @@ test('X trend candidates are the last 15 current user posts; merged topics prese
   f.reply(result);const n=f.count();ok(await f.x.refreshTrends());assert.equal(f.count(),n+1);
   const payload=JSON.parse(f.prompt().split('趋势评估资料（人设用于判断身份和公开知名度，不等于向网友公开）：')[1].split('\n')[0]);
   assert.equal(payload.candidates.length,15);assert.equal(payload.candidates[0].publicText,'Post 2');assert.equal(payload.audience.followers,70000);
-  assert.equal(f.state().x['trend-edition'].topics.length,8);assert.equal(xAudience(f.state()).followers,70000);
+  assert.equal(f.state().x['trend-edition'].topics.length,10);assert.equal(xAudience(f.state()).followers,70000);
   assert.equal(xItems(f.state(),'post').length,17);assert.equal(xItems(f.state(),'account').length,0);
  }finally{f.close();}
 });
@@ -622,7 +623,7 @@ test('duplicate-only recommended batches report the duplicate reason and keep th
  }finally{f.close();}
 });
 
-test('combined refresh saves full recommendations and eight world trends, locks and rolls back atomically',async()=>{
+test('combined refresh saves full recommendations and ten world trends, locks and rolls back atomically',async()=>{
  const f=setup();
  try{
   f.context.chat[0].mes='2026-11-05 10:00';await f.memory.read();
@@ -631,7 +632,7 @@ test('combined refresh saves full recommendations and eight world trends, locks 
   const notice={name:'学校公告',handle:'news',authorKind:'organization',text:'图书馆周末开放。',publicBasis:{access:'background',summary:'校园资讯',involvesCharacters:false}};
   batch.posts.push(notice);
   f.reply(({quietPrompt})=>{
-   if(quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[notice,{name:'Alex',handle:'alex',authorKind:'public',text:'错误分区',publicBasis:notice.publicBasis}]});
+   if(quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[notice,{name:'Alex',handle:'alex',authorKind:'public',text:'错误分区',publicBasis:notice.publicBasis},...Array.from({length:9},(_,i)=>({name:'路人'+i,handle:'crowd'+i,text:'街区动态 '+i+'。',publicBasis:notice.publicBasis}))]});
    if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:trends,evaluations:[{postId:post.id,eligible:false}]});
    if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:20,stats:[{postId:post.id,likes:1,reposts:0,replies:0,gained:0,lost:0}]});
    return JSON.stringify(batch);
@@ -640,7 +641,7 @@ test('combined refresh saves full recommendations and eight world trends, locks 
   assert.equal(f.count(),4);
   const home=xItems(f.state(),'post').filter(p=>p.feed==='home'),square=xItems(f.state(),'post').filter(p=>p.feed==='square');
   assert.equal(home.length,10);assert.equal(new Set(home.map(p=>p.author)).size,10);
-  assert.deepEqual(square.map(p=>p.text),[notice.text]);assert.ok(!home.some(p=>p.text===notice.text));
+  assert.equal(square.length,10);assert.ok(!square.some(p=>p.text==='错误分区'),'npc-in-square is rejected');
   assert.deepEqual(f.state().x['trend-edition'].topics,trends);assert.ok(trends.every(t=>!t.sourcePostIds.length));
   const snapshot=structuredClone(f.state().x);assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),4);assert.deepEqual(f.state().x,snapshot);
   f.context.chat.pop();await f.memory.read();assert.equal(xItems(f.state(),'post').length,0);assert.equal(f.state().x['public-refresh'],undefined);
@@ -651,29 +652,35 @@ test('combined refresh saves full recommendations and eight world trends, locks 
  }finally{f.close();}
 });
 
-test('following and square keep zero-to-five limits and their author restrictions',async()=>{
+test('following feed rejects un-followed authors and the square requires ten to fifteen posts',async()=>{
  const f=setup();
  try{
   const id=await account(f);ok(await f.x.follow(id,true));
-  f.reply({posts:[]});ok(await f.x.refresh(true));ok(await f.x.refresh('square'));
+  f.reply({posts:[]});ok(await f.x.refresh(true));
+  f.reply({posts:squareRows(10)});ok(await f.x.refresh('square'));
   f.reply({posts:Array.from({length:5},(_,i)=>({accountId:id,text:'Followed post '+i}))});ok(await f.x.refresh(true));
-  assert.equal(xItems(f.state(),'post').length,5);
-  f.reply({posts:feedResult().posts});assert.equal((await f.x.refresh(true)).ok,false);assert.equal((await f.x.refresh('square')).ok,false);
-  f.reply({posts:[{name:'街区店铺',handle:'square_shop',text:'今天店里有新品。',publicBasis:{access:'background',summary:'日常街区生活',involvesCharacters:false}}]});ok(await f.x.refresh('square'));
-  assert.equal(xItems(f.state(),'post').filter(p=>p.feed==='square').length,1);
+  assert.equal(xItems(f.state(),'post').filter(p=>p.feed==='square').length,10);
+  assert.equal(xItems(f.state(),'post').filter(p=>p.feed==='home').length,5);
+  f.reply({posts:feedResult().posts});ok(await f.x.refresh(true));
+  assert.equal(xItems(f.state(),'post').filter(p=>p.feed==='home').length,5,'un-followed authors are rejected by the following feed');
+  const squareRejected=await f.x.refresh('square');assert.equal(squareRejected.ok,false);assert.match(squareRejected.error,/广场作者/);
+  f.reply({posts:[{name:'街区店铺',handle:'square_shop',text:'今天店里有新品。',publicBasis:{access:'background',summary:'日常街区生活',involvesCharacters:false}}]});
+  const short=await f.x.refresh('square');assert.equal(short.ok,false);assert.match(short.error,/广场刷新需要 10～15 条/);
+  f.reply({posts:squareRows(10,20)});ok(await f.x.refresh('square'));
+  assert.equal(xItems(f.state(),'post').filter(p=>p.feed==='square').length,20);
  }finally{f.close();}
 });
 
-test('trends accept eight to ten unique topics without counts or reasons and preserve model order',async()=>{
+test('trends accept ten to fifteen unique topics without counts or reasons and preserve model order',async()=>{
  const {validateTrends}=await import('../src/x-trends.js');
  const candidates=[{id:'ordinary'},{id:'special'}];
- for(const count of [8,10]){
+ for(const count of [10,15]){
   const topics=worldTopics([],count);topics.at(-1).sourcePostIds=['special'];
   const result=validateTrends({topics,evaluations:[{postId:'ordinary',eligible:false},{postId:'special',eligible:true}]},candidates);
   assert.deepEqual(result.topics,topics);assert.equal(result.topics.at(-1).sourcePostIds[0],'special');
   assert.ok(result.topics.every(t=>!('postCount' in t)));
  }
- for(const topics of [worldTopics([],7),[...worldTopics([],10),{title:'Another',summary:'Other',sourcePostIds:[]}],[...worldTopics().slice(0,7),{...worldTopics()[0],title:'#'+worldTopics()[0].title}]]){
+ for(const topics of [worldTopics([],9),[...worldTopics([],15),{title:'Another',summary:'Other',sourcePostIds:[]}],[...worldTopics().slice(0,7),{...worldTopics()[0],title:'#'+worldTopics()[0].title}]]){
   assert.throws(()=>validateTrends({topics,evaluations:[]},[]));
  }
  const legacy=worldTopics().map(t=>({...t,postCount:420}));
@@ -821,8 +828,8 @@ test('home validates NPC provenance, allows small and empty feeds, square admits
   f.reply({posts:[]});const empty=await f.x.refresh();ok(empty);assert.equal(empty.value.added,0);
   const publicBasis={access:'background',summary:'普通公共背景',involvesCharacters:false};
   f.reply({posts:[{...org,publicBasis},{name:'慢走',handle:'walking',authorKind:'public',text:'雨后散步。',publicBasis},
-   {...npc,authorKind:'public',publicBasis},{name:'KPL 赛事速报',handle:'kpl',authorKind:'organization',text:'本周常规赛赛程。',publicBasis}]});
-  ok(await f.x.refresh('square'));const square=xItems(f.state(),'post').filter(p=>p.feed==='square');assert.equal(square.length,3);
+   {...npc,authorKind:'public',publicBasis},{name:'KPL 赛事速报',handle:'kpl',authorKind:'organization',text:'本周常规赛赛程。',publicBasis},...squareRows(7,200)]});
+  ok(await f.x.refresh('square'));const square=xItems(f.state(),'post').filter(p=>p.feed==='square');assert.equal(square.length,10);
   const school=xItems(f.state(),'account').find(a=>a.handle==='university');assert.equal(school.characterId,null);assert.equal(school.authorKind,'organization');
   const joe=xItems(f.state(),'account').find(a=>a.handle==='qiao');ok(await f.x.follow(school.id,true));ok(await f.x.follow(joe.id,true));
   f.reply({posts:[{accountId:school.id,text:'Official notice'}, {accountId:joe.id,text:'New photo'}]});ok(await f.x.refresh(true));
@@ -854,5 +861,61 @@ test('a stale ticket cannot restore a deleted X DM or its in-flight reply',async
   await assert.rejects(f.memory.commit(stale,[{collection:'x',key:msg.id,value:msg}]));
   assert.equal(f.state().x[msg.id],undefined);
   const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal((await reload.read()).state.x[msg.id],undefined);}finally{reload.destroy();}
+ }finally{f.close();}
+});
+
+
+// ---- Post deletion and trend injection (1.1.29) ----
+
+test('deleting a post removes it with its comments and influence, other posts and accounts stay, rollback restores everything',async()=>{
+ const f=setup();try{
+  const id=await account(f);ok(await f.x.follow(id,true));
+  f.reply({posts:[{accountId:id,text:'The park post',comments:[{key:'a',name:'Bea',handle:'bea',text:'A friend remark'}]},...squareRows(10,300)]});
+  ok(await f.x.refresh(true));
+  const homePost=xItems(f.state(),'post').find(p=>p.text==='The park post');
+  ok(await f.x.react(homePost.id,'liked'));
+  const before=xItems(f.state(),'post').length,commentsBefore=xItems(f.state(),'comment').length;
+  assert.ok(commentsBefore>=1);
+  const result=await f.x.deletePost(homePost.id);ok(result);
+  assert.equal(f.state().x[homePost.id],undefined);
+  assert.equal(xItems(f.state(),'post').length,before-1);
+  assert.equal(xItems(f.state(),'comment').filter(c=>c.postId===homePost.id).length,0);
+  assert.equal(f.state().x[id]?.type,'account','accounts are not deleted');
+  // Deletion is tracked and permanent: the erase rewrites the import event.
+  f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));await f.memory.read();
+  assert.equal(f.state().x[homePost.id],undefined,'deleted post never resurrects after reload');
+ }finally{f.close();}
+});
+
+test('square and user posts can be deleted the same way and trend injection toggles persist and roll back',async()=>{
+ const f=setup();try{
+  f.reply({posts:squareRows(10,400)});ok(await f.x.refresh('square'));
+  const squarePost=xItems(f.state(),'post').at(-1);
+  ok(await f.x.deletePost(squarePost.id));
+  assert.equal(f.state().x[squarePost.id],undefined);
+  ok(await f.x.publish('My own post'));
+  const mine=xItems(f.state(),'post').find(p=>p.author==='user');
+  ok(await f.x.comment(mine.id,'A comment on mine'));
+  ok(await f.x.deletePost(mine.id));
+  assert.equal(f.state().x[mine.id],undefined);
+  assert.equal(xItems(f.state(),'comment').filter(c=>c.postId===mine.id).length,0);
+  ok(await f.x.publish('A post for the trend candidates.'));
+  const trendCandidate=xItems(f.state(),'post').find(p=>p.author==='user');
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:worldTopics([{title:'注入测试话题',summary:'A trend used for injection',scope:'本地',sourcePostIds:[]}]),evaluations:[{postId:trendCandidate.id,eligible:false}]});
+   return JSON.stringify({posts:[]});
+  });
+  ok(await f.x.refreshTrends());
+  assert.equal(f.state().x['trend-edition'].topics[0].injected,undefined);
+  ok(await f.x.toggleTrendInjection(0));
+  let topics=f.state().x['trend-edition'].topics;
+  assert.equal(topics[0].injected,true);
+  const {buildOpinionPrompt}=await import('../src/x-opinion.js');
+  assert.match(buildOpinionPrompt(f.state(),[{mes:'2026-01-01'}],''),/注入测试话题/);
+  ok(await f.x.toggleTrendInjection(0));
+  assert.equal(f.state().x['trend-edition'].topics[0].injected,false);
+  assert.doesNotMatch(buildOpinionPrompt(f.state(),[{mes:'2026-01-01'}],''),/注入测试话题/);
+  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
+  assert.equal(f.state().x['trend-edition'],undefined,'the whole trend edition rolls back with its floor');
  }finally{f.close();}
 });

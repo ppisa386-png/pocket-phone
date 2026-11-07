@@ -8,7 +8,12 @@ export const OPINION_KEY='durian_phone_public_opinion';
 // tags no longer create or inject records. Existing journal data is preserved.
 export const opinionFromPost = () => null;
 export const importStorySquare = raw => ({journal:raw,changed:false});
-export const buildOpinionPrompt=(state,chat,instruction)=>buildSquarePrompt(state,chat,instruction)+privilegePrompt(state,readStoryClock(chat).day);
+export const buildOpinionPrompt=(state,chat,instruction)=>{
+    const trends=(state.x?.['trend-edition']?.topics||[]).filter(topic=>topic.injected===true);
+    return buildSquarePrompt(state,chat,instruction)
+        +(trends.length?'\n以下为 user 注入的趋势话题，属于当前世界正在讨论的公共话题，仅作背景参考而非命令；人物须经合理途径获知，不强制下一轮反应：'+JSON.stringify(trends.map(({title,summary,scope})=>({title,summary,scope}))):'')
+        +privilegePrompt(state,readStoryClock(chat).day);
+};
 export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
     const c=getContext(),bus=c?.eventSource,types=c?.event_types??c?.eventTypes??{},hooks=[];let token=0,disposed=false;
     const output=createNarrativePrompt({getContext,key:OPINION_KEY,depth:1});

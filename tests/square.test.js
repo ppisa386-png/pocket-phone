@@ -10,8 +10,9 @@ import {createXPanel} from '../src/x-view.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 const background={access:'background',summary:'Ordinary local life',involvesCharacters:false};
 const row=(text='The park is quiet.')=>({name:'路人',handle:'local',text,publicBasis:background});
+const squareRows=(n,offset=0)=>Array.from({length:n},(_,i)=>({name:'路人'+(offset+i),handle:'local'+(offset+i),text:'Street note '+(offset+i)+'.',publicBasis:background}));
 function fixture(){
- const bus=new EventEmitter();let calls=0,response={posts:[row()]},prompt='';
+ const bus=new EventEmitter();let calls=0,response={posts:[...squareRows(9),row()]},prompt='';
  const c={chatId:'square',chatMetadata:{},name1:'Sam',name2:'Alex',characters:[{name:'Alex',avatar:'a'}],characterId:0,
   chat:[{mes:'2003-07-24 14:30\nA public park is open.',is_user:false}],saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,
   event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_EDITED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(n=>[n,n])),
@@ -75,7 +76,7 @@ test('expired selected posts remain readable but cannot inject; deleting time ju
   const panel=createXPanel({adapter:{storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});await panel.action('tab','square');
   assert.match(panel.html(),/pp-square-expired/);assert.doesNotMatch(panel.html(),/aria-label="已过期"/);assert.match(panel.html(),/The park is quiet/);
   const actions=panel.press({dataset:{press:'x-post',xId:p.id}});
-  assert.deepEqual(actions.map(a=>a.icon),['edit','inject']);assert.equal(actions.find(a=>a.icon==='inject').disabled,true);
+  assert.deepEqual(actions.map(a=>a.icon),['edit','inject','delete']);assert.equal(actions.find(a=>a.icon==='inject').disabled,true);assert.ok(actions.find(a=>a.icon==='delete').danger,'delete is marked danger');
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);
   f.c.chat.push({mes:'2003-07-25'});await f.memory.read();assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.match(panel.html(),/时间不明确/);assert.equal(f.calls(),1);
  }finally{f.close();}
@@ -83,8 +84,8 @@ test('expired selected posts remain readable but cannot inject; deleting time ju
 test('refresh replaces edition, old selections cannot leak; rollback restores previous edition',async()=>{
  const f=fixture();try{
   ok(await f.x.refresh('square'));const first=post(f);ok(await f.x.toggleInjection(first.id));f.c.chat.push({mes:'Later in the same afternoon.'});await f.memory.read();
-  f.reply({posts:[row('The lake is quiet.')]});ok(await f.x.refresh('square'));assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.equal((await f.x.toggleInjection(first.id)).ok,false);
-  f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);assert.equal(xItems(f.state(),'post').length,1);
+  f.reply({posts:[...squareRows(9,10),row('The lake is quiet.')]});ok(await f.x.refresh('square'));assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.equal((await f.x.toggleInjection(first.id)).ok,false);
+  f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);assert.equal(xItems(f.state(),'post').length,10);
  }finally{f.close();}
 });
 test('selection rollback, blocked authors, disabled app and stale output cannot inject or resurrect posts',async()=>{
