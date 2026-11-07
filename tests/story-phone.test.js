@@ -264,7 +264,7 @@ test('narrative X publishes an image and original text under the alias, threads 
   await f.bridge.prepare();assert.match(f.prompts[STORY_PHONE_KEY].value,/<!--durian-x:/);
   const evidence='19:23 Sam posted on X: “Evening!”',imageDescription='a moon over the lake';
   const reply={name:'Alex',text:'So quiet.',evidence:'Alex replied: “So quiet.”'};
-  const row={action:'published',author:'user',text:'Evening!',time:'19:23',evidence,imageDescription,replies:[reply,reply,{...reply,text:'Never written'}]};
+  const row={action:'published',author:'user',text:'Evening!',time:'19:23',evidence,imageDescription,replies:[reply,reply]};
   f.context.chat.push(xFloor(['2026-09-02 19:30',evidence,imageDescription,reply.evidence].join('\n'),row,row));
   const readX=async()=>(await f.memory.read()).state.x;
   let x=await readX();
@@ -340,7 +340,7 @@ test('narrative X metrics target exact user or NPC posts, merge only evidenced f
   assert.equal((await f.memory.read()).state.x.u1.metrics.replies,4000);
   f.context.chat.length=2;state=(await f.memory.read()).state;assert.equal(state.x.u1.metrics.likes,12);assert.equal(state.x.n1.metrics.reposts,3);assert.equal(state.x.u1.metrics.replies,4000);
   f.context.chat.pop();state=(await f.memory.read()).state;assert.deepEqual(state.x.u1.metrics,saved[0].metrics);
-  const invalid={...row,metrics:{likes:{value:-1,evidence},replies:{value:9000,evidence:'正文没有这句话'},reposts:{value:2.5,evidence}}};
+  const invalid={...row,metrics:{likes:{value:-1},replies:{value:2.5},reposts:{value:'x'}}};
   f.context.chat.push(xFloor(evidence,invalid));assert.deepEqual((await f.memory.read()).state.x.u1.metrics,saved[0].metrics);
   assert.equal(f.requests(),0);
  }finally{f.close();}

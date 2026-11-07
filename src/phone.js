@@ -1,15 +1,15 @@
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.1.8';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.1.19';
-import { exactStoryTime } from './story-clock.js?v=1.1.12';
-import { isMemoryHidden } from './journal.js?v=1.1.13';
-import { CHINESE_NAME_RULE } from './names.js?v=1.1.8';
-import { phoneQuietOptions } from './api-context.js?v=1.1.8';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.17';
-export { validateContacts } from './contacts.js?v=1.1.17';
-import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.25';
-import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.1.13';
-import { narrativeTurn } from './contact-policy.js?v=1.1.13';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.1.8';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.1.29';
+import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.1.29';
+import { exactStoryTime } from './story-clock.js?v=1.1.29';
+import { isMemoryHidden } from './journal.js?v=1.1.29';
+import { CHINESE_NAME_RULE } from './names.js?v=1.1.29';
+import { phoneQuietOptions } from './api-context.js?v=1.1.29';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.29';
+export { validateContacts } from './contacts.js?v=1.1.29';
+import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.29';
+import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.1.29';
+import { narrativeTurn } from './contact-policy.js?v=1.1.29';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.1.29';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -183,7 +183,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         return [set('profiles', 'contactGate', value), ...(contactId ? [set('profiles', 'contactGate:' + contactId, value)] : [])];
     }
     function eventReplyPrompt() {
-        return getSettings().proactiveEnabled ? '\n事件判断：' + getSettings().prompts.contactEvent + '\n可在回复 JSON 附带 event_action（start/continue/end/none）、event_requires_response、event_evidence（user 本次原话）、event_reason。只有本次 user 原话触发具体需要后续反应的事件才 start；普通交流用 none，已解决或放弃用 end。这里仅输出本次回复，不生成第二次联系。' : '';
+        return getSettings().proactiveEnabled ? '\n事件判断：' + getSettings().prompts.contactEvent + '\n可在回复 JSON 附带 event_action（start/continue/end/none）、event_requires_response。只有本次对话触发具体需要后续反应的事件才 start；普通交流用 none，已解决或放弃用 end。这里仅输出本次回复，不生成第二次联系。' : '';
     }
     function replyEventChanges(data, participant, userText, smsSourceIds = null) {
         if (!getSettings().proactiveEnabled || !getSettings().prompts.contactEvent?.trim()) return [];
@@ -351,7 +351,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const found = validateEstablishedContacts(data, chat, context, sources, Object.values(view.state.contacts), (number, reason) => {
                         if (rejected.length < 10) rejected.push('第 ' + number + ' 项：' + reason);
                     });
-                    if (data.contacts?.length && !found.length) throw Object.assign(new Error('已收到联系人回复，但未能核对设定原文或既有关系，未新增联系人。详细原因见报错记录。'), {
+                    if (data.contacts?.length && !found.length) throw Object.assign(new Error('已收到联系人回复，但未能核对开局人物设定，未新增联系人。详细原因见报错记录。'), {
                         retryable: false, diagnostic: '候选人数：' + data.contacts.length + '；通过人数：0\n' + rejected.join('\n'),
                     });
                     return found;
@@ -378,7 +378,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const prompt = contactPrompt(getSettings().prompts.contacts, context, sources, Object.values(view.state.contacts));
                 const contacts = await request(prompt, data => {
                     const found=validateContacts(data,chat,context,sources,Object.values(view.state.contacts));
-                    if(data.contacts?.length&&!found.length)throw new Error('未能核对返回的姓名或取号依据，请重试。');
+                    if(data.contacts?.length&&!found.length)throw new Error('未能核对返回的联系人资料，请重试。');
                     return found;
                 }, valid, null, {}, current.job);
                 if (!valid()) return;
@@ -487,7 +487,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         },
         deleteMessage(messageId) {
             return task(async view => {
-                if(view.state.messages[messageId]?.role!=='assistant')throw new Error('只能删除对方的短信。');
+                if(!view.state.messages[messageId])throw new Error('这条短信已不存在。');
                 await memory.eraseMessage(await memory.begin(),messageId);
             },'messages');
         },

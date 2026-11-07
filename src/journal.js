@@ -1,6 +1,6 @@
 // Small, chat-local event journal. It stores phone changes, never a copy of prose.
 export const JOURNAL_KEY = 'durian_phone_history';
-export const COLLECTIONS = ['profiles', 'contacts', 'calls', 'messages', 'snapchat', 'whatsapp', 'wechat', 'x', 'orders', 'assets', 'daily', 'smsContext', 'business'];
+export const COLLECTIONS = ['profiles', 'contacts', 'calls', 'messages', 'snapchat', 'whatsapp', 'wechat', 'x', 'orders', 'assets', 'daily', 'smsContext', 'business', 'location', 'weather'];
 const SCHEMA = 1;
 const EMPTY_REVISION = 'root';
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -111,6 +111,15 @@ export function eraseMessageFromJournal(raw, messageId) {
     for (const event of journal.events) for (const change of event.changes) {
         if (['messages','smsContext'].includes(change.collection) && change.key === messageId) change.value = null;
         else if (change.collection === 'messages' && change.value?.replyTo === messageId) delete change.value.replyTo;
+    }
+    return journal;
+}
+
+export function eraseRecordFromJournal(raw, collection, recordId) {
+    if (collection === 'messages') return eraseMessageFromJournal(raw, recordId);
+    const journal = readJournal(raw);
+    for (const event of journal.events) for (const change of event.changes) {
+        if (change.collection === collection && change.key === recordId) change.value = null;
     }
     return journal;
 }

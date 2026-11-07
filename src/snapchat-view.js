@@ -1,7 +1,7 @@
-import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.17';
-import { displayStoryTime } from './story-clock.js?v=1.1.12';
-import { icon } from './icons.js?v=1.1.8';
-import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=1.1.17';
+import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.29';
+import { displayStoryTime } from './story-clock.js?v=1.1.29';
+import { icon } from './icons.js?v=1.1.29';
+import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=1.1.29';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -18,7 +18,6 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
     const disabled=()=>getView().busy||posting?' disabled':'';
     const actionIcons={profile:'person',voice:'phone',video:'video',cash:'cash'};
     const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-snap-action="'+action+'" data-snap-id="'+snapEsc(id)+'" aria-label="'+snapEsc(label)+'" title="'+snapEsc(label)+'" '+extra+disabled()+'>'+(actionIcons[action]?icon(actionIcons[action]):snapEsc(label))+'</button>';
-    const messageTools=i=>'<div class="pp-message-tools"><button type="button" class="pp-icon-button" data-snap-action="edit-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="修改消息"'+disabled()+'>'+icon('edit')+'</button><button type="button" class="pp-icon-button" data-snap-action="reroll-message" data-snap-id="'+snapEsc(i.id)+'" aria-label="重新生成消息"'+disabled()+'>'+icon('retry')+'</button></div>';
     const field=(name,label,fallback='',type='text')=>'<label class="pp-field"><span>'+label+'</span><input data-snap-field="'+name+'" name="'+name+'" type="'+type+'" value="'+snapEsc(value(name,fallback))+'" '+(type==='number'?'min="0" step="'+(1/unitScale(walletCurrency(getView())||'USD'))+'"':'maxlength="200"')+'></label>';
     const textarea=(name,label)=>'<label class="pp-field"><span>'+label+'</span><textarea data-snap-field="'+name+'" name="'+name+'" enterkeyhint="enter" rows="3" maxlength="6000">'+snapEsc(value(name))+'</textarea></label>';
     const select=(name,options,fallback)=>'<select name="'+name+'" data-snap-field="'+name+'" aria-label="内容类型">'+options.map(k=>'<option value="'+k+'"'+(value(name,fallback)===k?' selected':'')+'>'+snapKind[k]+'</option>').join('')+'</select>';
@@ -43,7 +42,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
         const chat=items.map(i=>{
             if(i.type==='transfer')return transferHTML(i,a.blocked);
             if(i.type==='call')return '<article class="pp-snap-card"><strong>'+snapKind[i.mode]+'通话 · '+({connected:'通话中',ended:'已结束',no_answer:'未接听'})[i.status]+'</strong>'+i.turns.map(t=>'<p class="pp-snap-copy"><b>'+(t.role==='user'?'你':snapEsc(a.name))+'：</b>'+snapEsc(t.text)+'</p>').join('')+'</article>';
-            return '<article class="pp-snap-message '+(i.role==='user'?'is-user':'')+'"><small>'+(i.role==='user'?'你':snapEsc(a.name))+' · '+snapKind[i.kind]+' · '+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p>'+(i.role==='assistant'?messageTools(i)+(editingId===i.id?form('edit-message',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消'):''):'')+(i.status==='queued'?'<small>未发送</small>':'')+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id):i.status==='no_reply'?'<small>对方暂未回复</small>':'')+'</article>';
+            return '<article class="pp-snap-message '+(i.role==='user'?'is-user':'')+'" data-press="snap-message" data-snap-id="'+snapEsc(i.id)+'"><small>'+(i.role==='user'?'你':snapEsc(a.name))+' · '+snapKind[i.kind]+' · '+snapTime(i)+'</small><p class="pp-snap-copy">'+snapEsc(i.text)+'</p>'+(editingId===i.id?form('edit-message',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消'):'')+(i.status==='queued'?'<small>未发送</small>':'')+(['failed','pending'].includes(i.status)?button('retry','重试回复',i.id):i.status==='no_reply'?'<small>对方暂未回复</small>':'')+'</article>';
         }).join('');
         return button('list','‹ 聊天列表')+'<div class="pp-snap-person"><span class="pp-snap-avatar">'+snapEsc(a.name.slice(0,1))+'</span><div><strong>'+snapEsc(a.name)+'</strong><small>@'+snapEsc(a.handle)+'</small></div></div><div class="pp-snap-actions">'+(!a.blocked?button('voice','语音通话',a.id)+button('video','视频通话',a.id)+button('cash','转账',a.id)+(a.identityKnown?'':button('reveal','自我介绍',a.id))+button('block','拉黑',a.id):button('unblock','解除拉黑',a.id))+'</div><div class="pp-snap-thread">'+chat+'</div>'+
             (a.blocked?empty('已拉黑，不能发送消息或通话。'):page==='cash'?form('cash',field('amount','金额','','number')+'<input type="hidden" name="currency" value="'+(walletCurrency(state)||'')+'"><p>'+(walletCurrency(state)||'请先在小榴莲建立账本')+'</p>'+field('memo','附言'),'发送转账')+button('thread','返回聊天',a.id):active?form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',active.id):form('message',select('kind',['text','voice','image','video'],'text')+textarea('message','消息内容'),'发送'));
@@ -89,7 +88,7 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
         if(!page&&!accountId)return false;
         accountId=null;page='';redraw();return true;
     }
-    return {
+    const api = {
         html, queueCurrent, back,
         reset(){selectedAccounts.clear();epoch++;posting=false;editingId=null;tab='chat';accountId=null;page='';drafts=Object.create(null);status='';},
         input(target){if(target.dataset.snapSelect){if(posting||getView().busy)return;target.checked?selectedAccounts.add(target.dataset.snapSelect):selectedAccounts.delete(target.dataset.snapSelect);redraw();return;}if(target.dataset.snapField)drafts[key(target.dataset.snapField)]=target.type==='checkbox'?target.checked:target.value;},
@@ -99,6 +98,10 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             if(action==='edit-message'){editingId=id;drafts[key('editText')]=getView().snapchat[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='reroll-message'){await perform('rerollMessage',[id]);return;}
+            if(action==='delete-message'){
+                if(!window.confirm('删除这条消息？删除后不会再出现在聊天记录中。'))return;
+                await perform('deleteMessage',[id],'已删除消息');return;
+            }
             if(action==='tab'){editingId=null;tab=id;accountId=null;page='';status='';redraw();return;}
             if(action==='profile'){editingId=null;page='profile';redraw();return;}
             if(action==='list'){editingId=null;accountId=null;page='';redraw();return;}
@@ -124,5 +127,17 @@ export function createSnapPanel({adapter,getView,redraw,notice}) {
             }
             redraw();
         },
+        press(element){
+            const id=element.dataset.snapId,item=getView().snapchat?.[id];
+            if(!item||item.type!=='message')return [];
+            const busy=!!(posting||getView().busy),actions=[];
+            if(item.role==='assistant'){
+                actions.push({icon:'edit',label:'修改消息',disabled:busy,run:()=>api.action('edit-message',id)});
+                actions.push({icon:'refresh',label:'重新生成消息',disabled:busy,run:()=>api.action('reroll-message',id)});
+            }
+            actions.push({icon:'delete',label:'删除消息',danger:true,disabled:busy,run:()=>api.action('delete-message',id)});
+            return actions;
+        },
     };
+    return api;
 }

@@ -1,4 +1,4 @@
-import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.1.28';
+import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.1.29';
 // A page exposes only editable display fields. IDs, private state and ownership
 // stay in the journal. Each field retains its original value for stale-edit checks.
 export function pageFields(state,scope){
@@ -33,8 +33,40 @@ export function pageFields(state,scope){
     }
     return fields;
 }
-export function pageEdits(state,scope,edits){
-    const available=new Map(pageFields(state,scope).map(f=>[JSON.stringify([f.id,f.path]),f])),records=new Map();
+export function objectFields(state,scope){
+    const kind=scope?.kind,id=scope?.id,fields=[];
+    const add=(r,path,label,number=false)=>{
+        const v=path.reduce((a,k)=>a?.[k],r);
+        fields.push({id:r.id,path,label,number,value:String(v??(number?'0':''))});
+    };
+    if(kind==='post'){
+        const p=state.x?.[id];
+        if(p?.type!=='post'||state.x[p.author]?.blocked)return [];
+        const author=p.author==='user'?'你':state.x[p.author]?.name||'用户';
+        add(p,['text'],author+' · 推文');
+        for(const [k,label] of [['likes','点赞'],['reposts','转发'],['replies','回复']])add(p,['metrics',k],author+' · '+label,true);
+    }else if(kind==='comment'){
+        const c=state.x?.[id];
+        if(c?.type!=='comment')return [];
+        add(c,['text'],(c.author==='user'?'你':state.x[c.author]?.name||'用户')+' · 回复');
+    }else if(kind==='trend'){
+        const edition=state.x?.['trend-edition'],index=Number(id),topic=edition?.topics?.[index];
+        if(!edition||!topic)return [];
+        for(const [k,label] of [['title','话题'],['scope','范围'],['summary','摘要']])add(edition,['topics',index,k],'趋势 '+(index+1)+' · '+label);
+    }else if(kind==='account'){
+        const a=state.x?.[id];
+        if(a?.type!=='account')return [];
+        for(const [k,label] of [['name','名称'],['handle','账号'],['bio','简介']])add(a,[k],a.name+' · '+label);
+    }else if(kind==='message'){
+        const m=state.x?.[id],a=state.x?.[m?.accountId];
+        if(m?.type!=='message'||a?.type!=='account')return [];
+        if(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text')return [];
+        add(m,['text'],m.role==='user'?'你的私信':a.name+'的私信');
+    }
+    return fields;
+}
+function resolveEdits(state,fields,edits){
+    const available=new Map(fields.map(f=>[JSON.stringify([f.id,f.path]),f])),records=new Map();
     for(const edit of edits){
         const f=available.get(JSON.stringify([edit.id,edit.path]));
         if(!f||f.value!==edit.before)throw Error('页面内容已变化，请重新打开编辑。');
@@ -46,4 +78,10 @@ export function pageEdits(state,scope,edits){
         obj[f.path.at(-1)]=value;records.set(f.id,row);
     }
     return [...records.values()].map(value=>({collection:'x',key:value.id,value}));
+}
+export function pageEdits(state,scope,edits){
+    return resolveEdits(state,pageFields(state,scope),edits);
+}
+export function objectEdits(state,scope,edits){
+    return resolveEdits(state,objectFields(state,scope),edits);
 }

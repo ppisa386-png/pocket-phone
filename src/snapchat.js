@@ -1,9 +1,9 @@
-import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.17';
-import { publicationScenePrompt } from './social-context.js?v=1.1.17';
-import { parseModelObject } from './model-json.js?v=1.1.8';
-import { requireCash, moneyMinor } from './assets-core.js?v=1.1.17';
-import { readStoryClock } from './story-clock.js?v=1.1.12';
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.8';
+import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.1.29';
+import { publicationScenePrompt } from './social-context.js?v=1.1.29';
+import { parseModelObject } from './model-json.js?v=1.1.29';
+import { requireCash, moneyMinor } from './assets-core.js?v=1.1.29';
+import { readStoryClock } from './story-clock.js?v=1.1.29';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.29';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
@@ -50,7 +50,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
         if(!current())throw new Error(appName+' 已关闭或聊天已变化。');
         const ticket=await memory.begin(view);
         const commit=async changes=>{if(!current())throw new Error('聊天已变化，本次操作已取消。');if(changes.length)await memory.commit(ticket,changes);};
-        return work(view.state,current,request,commit,view.revision);
+        return work(view.state,current,request,commit,view.revision,ticket);
     },app);
     const profile=state=>snapProfile({snapchat:state[app],assets:state.assets},getContext().name1);
     function target(state,account) {
@@ -155,6 +155,10 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             const a=friendBy(state,m.accountId),thread=threadFor(state,a.id),before=thread.slice(0,thread.findIndex(x=>x.id===id));
             const result=await ask(state,a,request,current,'当前任务：仅重写选中的一条 '+appName+' 消息。只用它之前的聊天，不预知后续；简短自然，通常一句话。保持消息类型，不生成其他消息，不触发或改变转账。此前聊天：'+JSON.stringify(before.map(({role,kind,text})=>({role,kind,text})))+'\n被选中的消息：'+JSON.stringify({kind:m.kind,text:m.text})+'\n输出 {"text":"这条消息的新内容"}。',d=>({text:required(d.text,'回复内容',600)}));
             await commit([setSnap({...m,text:result.text})]);
+        });},
+        deleteMessage(id){return run(async(state,_c,_r,_commit,_revision,ticket)=>{
+            if(state[app][id]?.type!=='message')throw new Error('这条消息已不存在。');
+            await memory.eraseRecord(ticket,app,id);
         });},
         send(id,kind,value){return run(async(state,current,request,commit)=>{
             const a=friendBy(state,id);if(!mediaKinds.includes(kind))throw new Error('消息类型不可用。');

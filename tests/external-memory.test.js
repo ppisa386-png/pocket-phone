@@ -74,7 +74,7 @@ function fixture() {
     const bus=new EventEmitter();
     const c={...context(),name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'Alex gives Sam his number: +1 212 555 0123.',name:'Alex',is_user:false},{mes:'Later that evening.',name:'Alex',is_user:false}],onlineStatus:'connected',saveMetadata:async()=>{},eventSource:bus,event_types:Object.fromEntries(['MESSAGE_DELETED','MESSAGE_EDITED','CHAT_CHANGED','GENERATION_STARTED','GENERATION_ENDED'].map(n=>[n,n]))};
     const memory=createPhoneMemory({getContext:()=>c}); const s=settings(); const prompts=[];
-    c.generateQuietPrompt=async options=>{prompts.push(options.quietPrompt); return options.quietPrompt.includes('"contacts"')?JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:c.chat[0].mes}]}):'{"status":"reply","text":"Meet you there."}';};
+    c.generateQuietPrompt=async options=>{prompts.push(options.quietPrompt); return options.quietPrompt.includes('"contacts"')?JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,sourceIndex:0}]}):'{"status":"reply","text":"Meet you there."}';};
     const phone=createPhoneService({memory,getContext:()=>c,getSettings:()=>s});
     return {c,bus,memory,phone,prompts,s,close(){phone.destroy();memory.destroy();}};
 }

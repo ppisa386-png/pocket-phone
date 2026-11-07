@@ -1,5 +1,5 @@
-import { dateDay, exactStoryTime } from './story-clock.js?v=1.1.12';
-import { appendChange, replayJournal } from './journal.js?v=1.1.13';
+import { dateDay, exactStoryTime } from './story-clock.js?v=1.1.29';
+import { appendChange, replayJournal } from './journal.js?v=1.1.29';
 
 export const smsCategory = value => value === 'A' || value === 'B' ? value : null;
 const limits = { A: 24 * 60, B: 72 * 60 };
@@ -104,9 +104,9 @@ export function smsReplyClassification(id, contactId, category) {
 // This only removes context, never declares the fictional matter resolved.
 export function smsEventForAI(state, event, now) {
     if (!event || event.origin !== 'communication' || event.channel === 'phone') return event;
-    const linked = Array.isArray(event.smsSourceIds) ? event.smsSourceIds :
-        Object.values(state.messages || {}).filter(m => m.contactId === event.participant?.id &&
-            typeof event.evidence === 'string' && event.evidence && m.text?.includes(event.evidence)).map(m => m.id);
+    // Linked message ids come from the communication path; the old evidence-quote
+    // fallback is gone because new events carry no evidence text.
+    const linked = Array.isArray(event.smsSourceIds) ? event.smsSourceIds : [];
     if (linked.length && linked.every(id => !state.messages?.[id] || smsExpired(state.smsContext?.[id], now))) return null;
     return event;
 }

@@ -1,22 +1,25 @@
-import {paperDraft} from './daily-core.js?v=1.1.25';
-import { bindInputViewport } from './input-viewport.js?v=1.1.8';
-import { createDailyPanel } from './daily-view.js?v=1.1.25';
-import { storyTime, displayStoryDate } from './story-clock.js?v=1.1.12';
-import { createAssetPanel } from './assets-view.js?v=1.1.17';
-import { createAmazonPanel } from './amazon-view.js?v=1.1.17';
-import { bindComposerKeys } from './composer.js?v=1.1.8';
-import { createXPanel } from './x-view.js?v=1.1.28';
-import { xUnread } from './x.js?v=1.1.28';
-import { createChatPanel } from './chat-view.js?v=1.1.25';
-import { chatUnread } from './chat-apps.js?v=1.1.21';
-import { createSnapPanel } from './snapchat-view.js?v=1.1.17';
-import { snapUnread } from './snapchat.js?v=1.1.17';
-import { createApiPanel } from './api-view.js?v=1.1.17';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.28';
-import { icon } from './icons.js?v=1.1.20';
-import { renderMessagesScreen } from './messages-view.js?v=1.1.20';
-import { unreadMessages, messageParticipants } from './messages.js?v=1.1.8';
-import { renderPhoneScreen } from './phone-view.js?v=1.1.20';
+import {paperDraft} from './daily-core.js?v=1.1.29';
+import { bindInputViewport } from './input-viewport.js?v=1.1.29';
+import { createDailyPanel } from './daily-view.js?v=1.1.29';
+import { createWeatherPanel } from './weather-view.js?v=1.1.29';
+import { storyTime, displayStoryDate } from './story-clock.js?v=1.1.29';
+import { createAssetPanel } from './assets-view.js?v=1.1.29';
+import { createAmazonPanel } from './amazon-view.js?v=1.1.29';
+import { bindComposerKeys } from './composer.js?v=1.1.29';
+import { createXPanel } from './x-view.js?v=1.1.29';
+import { xUnread } from './x.js?v=1.1.29';
+import { createChatPanel } from './chat-view.js?v=1.1.29';
+import { chatUnread } from './chat-apps.js?v=1.1.29';
+import { createSnapPanel } from './snapchat-view.js?v=1.1.29';
+import { snapUnread } from './snapchat.js?v=1.1.29';
+import { createApiPanel } from './api-view.js?v=1.1.29';
+import { isBlocked } from './contact-events.js?v=1.1.29';
+import { createPressMenu } from './press-menu.js?v=1.1.29';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.1.29';
+import { icon } from './icons.js?v=1.1.29';
+import { renderMessagesScreen } from './messages-view.js?v=1.1.29';
+import { unreadMessages, messageParticipants } from './messages.js?v=1.1.29';
+import { renderPhoneScreen } from './phone-view.js?v=1.1.29';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
@@ -100,6 +103,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const chatPanels=Object.fromEntries(['whatsapp','wechat'].map(app=>[app,createChatPanel({app,adapter,getView:()=>viewFor(app),redraw:()=>{if(!destroyed&&opened&&route==='app:'+app)renderChat(app);},notice})]));
     const currentChat=()=>chatPanels[route.slice(4)];
     function renderChat(app) {
+        pressMenu.close(true);
         const active=shadow.activeElement,field=active?.dataset.chatField;
         const selection=field&&['TEXTAREA','INPUT'].includes(active.tagName)&&active.type!=='number'?[active.selectionStart,active.selectionEnd]:null;
         const old=content.querySelector('.pp-chat-scroll'),scroll=old?.scrollTop||0,page=old?.dataset.chatPage,count=old?.dataset.chatCount;
@@ -114,6 +118,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const snapPanel = createSnapPanel({adapter,getView:()=>viewFor('snapchat'),redraw:()=>{if(!destroyed&&opened&&route==='app:snapchat')renderSnapchat();},notice});
 
     function renderSnapchat() {
+        pressMenu.close(true);
         const active=shadow.activeElement;const field=active?.dataset.snapField;
         const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
         const old=content.querySelector('.pp-snap-body');
@@ -130,6 +135,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     const xPanel = createXPanel({adapter,getView:()=>viewFor('x'),redraw:()=>{if(!destroyed&&opened&&route==='app:x')renderX();},notice});
     function renderX() {
+        pressMenu.close(true);
         const active=shadow.activeElement,field=active?.dataset.xField;
         const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
         const old=content.querySelector('.pp-x-body'),scroll=old?.scrollTop||0,page=old?.dataset.xPage,count=old?.dataset.xCount;
@@ -141,25 +147,29 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         queueMicrotask(()=>{if(opened&&route==='app:x')void xPanel.readVisible();});
     }
 
-    const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice});
-    function editDailyEdition(id) {
+    const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice,editPart:editDailyPart});
+    const weatherPanel=createWeatherPanel({adapter,getView:()=>viewFor('weather'),redraw:()=>{if(!destroyed&&opened&&route==='app:weather')renderWeather();}});
+    function editDailyPart(id,scope) {
         const before=paperDraft(phoneView,id);
         if(!before||!adapter.daily?.editEdition||shadow.querySelector('.pp-daily-editor'))return;
+        const draft=structuredClone(before),isArticle=scope?.kind==='article';
+        const article=isArticle?draft.articles.find(row=>row.id===scope.id):null;
+        if(isArticle&&!article)return;
+        const meta={publication:['报头',100],date:['刊登日期',10,'date'],location:['地区',80]};
+        const rows=isArticle
+            ?[['section','栏目',80],['headline','标题',500],['summary','导语',2000,'textarea'],['body','正文',20000,'textarea']]
+            :[[scope.field,meta[scope.field]?.[0]||'内容',meta[scope.field]?.[1]||100,meta[scope.field]?.[2]]];
         const dialog=document.createElement('dialog');
-        dialog.className='pp-daily-editor';dialog.setAttribute('aria-label','编辑整张报纸');
-        dialog.innerHTML='<form><h3>编辑整张报纸</h3><div></div><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存整张报纸</button></footer></form>';
-        const form=dialog.querySelector('form'),fields=form.querySelector('div'),draft=structuredClone(before);
+        dialog.className='pp-daily-editor';dialog.setAttribute('aria-label',isArticle?'编辑这篇报道':'编辑报纸信息');
+        dialog.innerHTML='<form><h3>'+(isArticle?'编辑这篇报道':'编辑'+rows[0][1])+'</h3><div></div><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存</button></footer></form>';
+        const form=dialog.querySelector('form'),fields=form.querySelector('div');
         const field=(parent,row,key,title,max,type='text')=>{
             const label=document.createElement('label'),input=document.createElement(type==='textarea'?'textarea':'input');
             label.textContent=title;if(type!=='textarea')input.type=type;else input.rows=key==='body'?6:3;
-            input.maxLength=max;input.value=row[key];input.required=!['section','location','date'].includes(key);
+            input.maxLength=max;input.value=row[key]??'';input.required=!['section','location','date'].includes(key);
             input.oninput=()=>{row[key]=input.value;};label.append(input);parent.append(label);
         };
-        field(fields,draft,'publication','报头',100);field(fields,draft,'date','刊登日期',10,'date');field(fields,draft,'location','地区',80);
-        for(const [i,article] of draft.articles.entries()){
-            const group=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent='报道 '+(i+1);group.append(legend);fields.append(group);
-            field(group,article,'section','栏目',80);field(group,article,'headline','标题',500);field(group,article,'summary','导语',2000,'textarea');field(group,article,'body','正文',20000,'textarea');
-        }
+        for(const [key,label,max,type] of rows)field(fields,isArticle?article:draft,key,label,max,type);
         dialog.addEventListener('close', () => dialog.remove(), {once:true});
         dialog.addEventListener('keydown', event => { if (event.key === 'Escape') event.stopPropagation(); });
         form.querySelector('[type="button"]').onclick = () => dialog.close();
@@ -180,7 +190,32 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         shadow.append(dialog);
         dialog.showModal();
     }
-    function renderDaily(){const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
+    function renderDaily(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
+    function renderWeather(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=weatherPanel.html();content.scrollTop=scroll;}
+    function pressActions(target){
+        const kind=target.dataset.press;
+        if(kind==='chat-message')return currentChat()?.press(target)||[];
+        if(kind==='snap-message')return snapPanel.press(target);
+        if(kind==='sms-message'){
+            const id=target.dataset.smsMessage,message=phoneView.messages?.[id];
+            if(!message)return [];
+            const view=viewFor('messages'),busy=!!(phoneView.busy||view.busy),blocked=isBlocked(view,message.contactId,'messages'),actions=[];
+            if(message.role==='assistant'){
+                actions.push({icon:'edit',label:'修改短信',disabled:busy,run:()=>{smsEditing={id,text:message.text};renderMessages();}});
+                actions.push({icon:'refresh',label:'重新生成短信',disabled:busy||blocked,run:()=>phoneAction(()=>adapter.phone.rerollMessage(id))});
+            }
+            actions.push({icon:'delete',label:'删除短信',danger:true,disabled:busy,run:()=>{
+                if(!window.confirm('确认删除这条短信？删除后将从手机记录和手机记忆中移除，无法恢复。'))return;
+                if(smsEditing?.id===id)smsEditing=null;
+                phoneAction(()=>adapter.phone.deleteMessage(id));
+            }});
+            return actions;
+        }
+        if(kind==='daily-article'||kind==='daily-meta')return dailyPanel.press(target);
+        if(String(kind).startsWith('x-'))return xPanel.press(target);
+        return [];
+    }
+    const pressMenu=createPressMenu({shadow,root:layer,phone,getActions:pressActions});
     const assetPanel=createAssetPanel({adapter,getView:()=>viewFor('assets'),redraw:()=>{if(!destroyed&&opened&&route==='app:assets')renderAssets();},notice});
     function renderAssets(){
         const old=content.querySelector('.pp-asset-body'), scroll=old?.scrollTop||0, page=old?.dataset.assetPage;
@@ -340,6 +375,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (Object.values(phoneView.calls || {}).some(call => call.direction === 'incoming' && !call.read && ['ended', 'declined', 'missed', 'interrupted'].includes(call.status))) phoneAction(() => adapter.phone.markCallsRead());
     }
     function renderMessages() {
+        pressMenu.close(true);
         const input = shadow.querySelector('[data-sms-draft]');
         const focused = input && shadow.activeElement === input;
         const selection = input ? [input.selectionStart, input.selectionEnd] : null;
@@ -378,6 +414,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function render() {
         if (destroyed) return;
+        pressMenu.close(true);
         if (!settings.enabled && (route === 'home' || route.startsWith('app:'))) { route = 'settings'; history = []; }
         phone.dataset.home = String(route === 'home');
         phone.dataset.activeApp = route.startsWith('app:') ? route.slice(4) : '';
@@ -399,6 +436,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (app?.id === 'snapchat') renderSnapchat();
         else if (app?.id === 'x') renderX();
         else if (app?.id === 'daily') renderDaily();
+        else if (app?.id === 'weather') renderWeather();
         else if (app?.id === 'assets') renderAssets();
         else if (app?.id === 'amazon') renderAmazon();
         else if (app) renderEmptyApp(app.id);
@@ -416,6 +454,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (next === 'app:phone') phoneAction(() => adapter.phone.open());
         if (next === 'app:messages') phoneAction(() => adapter.phone.openMessages());
         if (next === 'app:daily' && adapter.daily) phoneAction(() => adapter.daily.open());
+        if (next === 'app:weather' && adapter.weather) phoneAction(() => adapter.weather.open());
         if (next === 'app:assets' && adapter.assets) phoneAction(() => adapter.assets.open());
         if (next === 'app:amazon' && adapter.amazon) phoneAction(() => adapter.amazon.open());
         if (next === 'app:x' && adapter.x) phoneAction(() => adapter.x.open());
@@ -468,8 +507,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
-        if(target.dataset.dailyAction==='edit'){editDailyEdition(target.dataset.dailyId);return;}
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
+        if(target.dataset.weatherAction){void weatherPanel.action(target.dataset.weatherAction);return;}
         if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }
@@ -518,13 +557,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.smsContact) { selectedSMSContactId = target.dataset.smsContact; pickingSMSContact = false; renderMessages(); }
         if (target.hasAttribute('data-sms-sync')) openContactSearch();
         if(target.hasAttribute('data-contact-cancel')){contactSearchOpen=false;render();}
-        if(target.dataset.smsEdit){smsEditing={id:target.dataset.smsEdit,text:phoneView.messages[target.dataset.smsEdit]?.text||''};renderMessages();}
         if(target.hasAttribute('data-sms-edit-cancel')){smsEditing=null;renderMessages();}
-        if(target.dataset.smsDelete && window.confirm('确认删除这条短信？删除后将从手机记录和手机记忆中移除，无法恢复。')) {
-            if(smsEditing?.id===target.dataset.smsDelete)smsEditing=null;
-            phoneAction(()=>adapter.phone.deleteMessage(target.dataset.smsDelete));
-        }
-        if(target.dataset.smsReroll)phoneAction(()=>adapter.phone.rerollMessage(target.dataset.smsReroll));
         if (target.dataset.smsRetry) phoneAction(() => adapter.phone.retryMessage(target.dataset.smsRetry));
         if (action === 'reset-prompt' && persist({ prompts: { ...settings.prompts, [promptId]: PROMPTS[promptId].text } })) { renderPrompts(); notice('已恢复此项默认提示词'); }
     }, { signal: lifetime.signal });
@@ -730,7 +763,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             Object.values(chatPanels).forEach(panel=>panel.reset());
-            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();
+            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();weatherPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }
@@ -751,6 +784,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened && route === 'app:snapchat') renderSnapchat();
         if (opened && route === 'app:x') renderX();
         if (opened && route === 'app:daily') renderDaily();
+        if (opened && route === 'app:weather') renderWeather();
         if (opened && route === 'app:assets') renderAssets();
         if (opened && route === 'app:amazon') renderAmazon();
         if (opened && route === 'home') renderHome();

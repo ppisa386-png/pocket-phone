@@ -1,5 +1,57 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 全面清理证据要求，保留来源编号与追踪（1.1.29 之上）
+基线为本地工作区（七天预报之上）。按用户确认的方案，删除全部 App 中"要求 AI 提供原文证据/逐字引文/证明片段/判断理由"的提示词要求、JSON 协议字段与证据校验；来源编号、事件 ID、修订绑定、同楼序号、已处理状态、防重复与回退全部保留，未重写任何 App 的业务设计。改动以两个只读盘点代理的全量清单为依据逐文件实施。
+
+核心等效替换（先建新标识、后删证据依赖）：①正文标记总闸（story-phone.js storyAnnotations）evidence 改为可选——带证据的旧标记仍按原规则严格核对（旧存档闸门序号与事件 ID 逐字节不变），新标记直接采信；②durian-money 无证据事件 ID 由"修订＋evidence"改为"修订＋posN 同楼序位"（旧存档 legacyId 路径不变）；③评估新事件按"修订＋源楼＋kind＋name＋action＋日期＋金额"定 ID 与去重，新增结构守卫"sourceIndex ≤ wallet.lastIndex 的事件跳过并计入 skippedUnverified"（替代原证据匹配楼层窗口，防旧事重扣）；④待处理事项无 ref/id 时按"源楼＋kind＋name＋action"唯一匹配；⑤联系人扫描新增模型填报 sourceIndex 字段锚定交付楼层（替代引文反查），persona 路径改姓名成员检查；⑥X 首页 npcEvidence 改为作者名/别名在剧情与设定来源中的成员检查（防编造人物），广场/日报 publicBasis 只留 access/summary/sourceIndex 声明；⑦送货标记（id＋arrived）即回执；⑧联系事件删除 event_evidence/event_reason 及零调用的 eventDirective/eventChange 死代码，短信过期豁免仅凭 smsSourceIds；⑨residence resolveResidence 仅校验地区币种配对与非语言 place，迁居仅保留结构校验（sourceIndex 指向真实花费摘要楼层）；⑩config.js 两个含证据旧默认（contacts/xSquare）登记为迁移识别串，旧默认自动升级、自定义不覆盖。
+
+提示词清理范围：durian-contact/message/outreach/money/debt/x(published/reply/metrics)/business(offer/investigate/date/incident)/delivery/daily-used/square-used 模板删除 evidence 键及逐字引文要求；assets.js 评估协议删除 dateEvidence、events[].evidence、classifications[].reason；daily.js/X output 删除 evidence/witnessEvidence/公共依据引用；RESIDENCE_RULE、ASSET_ITEM_RULES、contacts/xSquare PROMPTS 清理；story-phone/daily/x-business/x-feed 等相关校验函数同步删除证据分支。保留的内容接地规则：user 自发短信/推文文本必须已逐字写在正文（程序校验）、金额须原文明示、通话对白须在正文中、turns 逐字对白格式、旧证据标记严格核对。
+
+验证：完整 npm test 573/573（567＋新增 6 项证据清理测试）。测试翻转要点：伪造/缺少证据的拒绝用例改为新契约下的接受或结构拒绝（证据不再参与判断）；新增 tests/evidence-cleanup.test.js 覆盖：无证据 SMS 标记同楼导入且 ID/顺序独立、带证据旧标记不匹配引文仍拒绝（含 money）、无证据 money 用 posN ID 且金额仍须在正文、评估无证据事件结算＋已结算楼层按来源编号禁重扣、daily-used/square-used 无证据生效、证据时代旧默认提示词自动迁移且自定义不覆盖。专项回归全部通过：contacts 23/23、assets 74/74、economic-rights 10/10、x 66/66、story-phone 33/33、daily/delivery/square/phone/external-memory 全过。
+专项说明：X 首页"缺少依据"计数移除，拒绝类别只剩身份/账号/重复/字段；广场 limited 的目击证据校验删除，知情边界改为提示词语义约束；小榴莲 skippedUnverified 语义由"证据未核对"改为"来源楼层已被结算覆盖"。未完成：天气 App 无证据类要求（durian-location 本就不要求依据）无需改动；X npcEvidenceMatches 函数已删除，旧 npcEvidence 字段在请求中会被忽略（不报错）。
+
+## 本地待发布 · 天气 App 七天预报（1.1.29 之上）
+基线为本地工作区（1.1.29 统一版本之上）。按用户确认的需求为天气 App 新增七天天气预报：`src/weather.js` 新增 stateAtHour 统一确定性链（当前实况、提示词背景与预报共用同一条演化链）、dayHours、summarizeDay 与 buildForecast（导出，供测试与面板使用），weatherAt 改为委托 stateAtHour（仅超过 240 小时的陈旧记录行为微调为按天重锚定，常规路径不变），weatherBackground 重写为"今天＋明天＋第三至第七天极端预警＋正文 AI 使用规则"的多行块，今天/明天的极端以行内"预计时段出现类型（强度）"后缀保留完整预警信息、不重复进预警块；`src/weather-view.js` 新增今日逐时温度条与七天列表（sceneIcon 支持尺寸参数）；`style.css` 新增对应深色样式。设计要点：预报不单独存储，是已保存记录（种子/气候/时刻/状态）的确定性函数——重开 App、重载聊天、剧情回退都重放出同一套预报，从不重摇；跨天滚动自动完成（原第二天在同一条链上成为当天实况基准、末尾自动补第七天），已生成的未来极端小时不会因滚动丢失。所有生成与变化完全本地，不调用模型，不使用现实日期。
+验证：完整 npm test 567/567（567＝557＋新增 10 项）。新增覆盖验收清单：刷新产生完整七天窗口（剧情日期连续、星期合法、hi≥lo、降水 0-100%、风力范围、场景图标、24 小时逐时数据）；气候约束（哈尔滨一月七天 hi<15）与重开/重载/再读取三次 deepEqual 不重摇；跨午夜后新窗口 days[0] 与旧窗口 days[1] 逐字段 deepEqual（第二天成为当天基准）且日期整体滑动至第八天；每小时演化后 current 实况温度与当天逐时曲线同点、预报 deepEqual 不变（dayHours 已改为严格复用 stateAtHour 链，修复了两条链不一致导致实况与曲线同小时不同值的问题）；普通天气注入仅两行（正则计数=2）且无预警块；种子搜索确定性找到极端日（第三至第七天）验证"未来极端天气预警（尚未发生的预报）"块含日期＋类型＋强度＋预计时段＋城市，多个极端日全部出现；今天/明天极端只走行内后缀不重复进预警块；注入/预报/演化全程模型调用计数为 0；删楼后记录连同预报消失。
+专项回归：天气+位置导入 25/25 全过。preview.html 已用 Node 构建器重建：含 pp-weather-day/pp-weather-hour 样式与 buildForecast，内嵌脚本语法检查通过。
+未完成：Android 真机与浏览器触屏回归（环境无 Playwright/Chromium）；七天面板与深色样式未经截图确认；未接入真实模型验证正文 AI 对"只发今明＋极端预警"的实际遵循；七天预报的"确定性函数"设计取代了字面"逐日独立存储"，语义等价已写入 REQUIREMENTS（用户如要求物理逐日存储需另行确认）。
+
+## 长期约定 · SillyTavern 扩展兼容性（2026-11-07 用户确认）
+讨论结论：用户确立长期开发约定——本插件一切开发以酒馆扩展运行环境为前提，覆盖接口使用、事件清理、上下文刷新、提示词注入、CSS 隔离、数据持久化与隔离、密钥保管、纯前端架构及"自动化测试通过 ≠ 酒馆真实环境验证通过"的区分。取代什么：不取代任何既有功能约定，是适用于后续所有开发/修复/重构的横向规则，已完整写入 REQUIREMENTS.md 当前约定。
+实现状态（2026-11-07 对现有代码的合规核对）：已满足——manifest 规范入口（manifest.json）；全链 getContext()（index.js/src）；宿主 script.js 等内部导出仅在 try/catch 内读取、失败不阻断启动（index.js:67）；各桥接模块事件 hooks 注册并在 destroy() 中 removeListener（memory/story-phone/assets-story/daily-story/x-opinion/delivery/continuity/narrative-prompt 等）；聊天数据按 chatMetadata[JOURNAL_KEY] 绑定并以楼修订回退、切换聊天重新同步（memory.js sameChat/CHAT_CHANGED）；提示词经 setExtensionPrompt 且处理 dry-run 与不同生成类型；UI 挂载 Shadow DOM + :host all:initial（ui.js:76、style.css:2）；密钥存浏览器 localStorage 前缀 durian_phone_api_key:，不进扩展设置，诊断日志经 getSecrets 脱敏（api.js/diagnostics.js）；纯前端无 Node 服务依赖。
+修订（2026-11-07，用户确认）：删除"真实酒馆环境测试"必列项——真实环境验证不再要求，测试以 npm test 与静态检查为准，报告仍如实说明验证范围。取代原约定第四节的真实验证清单要求。
+
+## 1.1.29 · 天气 App 完成、深色主题与版本统一
+基线为本地工作区（天气位置导入契约修复之上）。按用户确认的方向完成中断批次的遗留开发并统一版本，未回退任何已有功能。产品修正两处：`src/weather.js` 的 conditions 补上南半球季节换算（此前 climate.south 从未参与计算，悉尼等城市直接按北半球月份取温，现按月份表对调读取）；`src/weather-view.js` 修复刷新失败仍显示"已抽取天气"成功文案的缺陷（appTask 失败返回 {ok:false,error} 而不抛错，现按返回显示具体错误）。天气面板 `style.css` 整体改为深色主题：按天气家族（晴、云、雨、雪、大风、台风、极端及 fog/storm 备用键）保留各自的深色底色区分，文字/数字用手机深色调色板保证对比度，未改其他 App 样式。位置规则注入门控沿用 sceneBackground 既有实现（三 App 至少一个启用才注入、天气关闭而日报/小榴莲开启时仅保留规则），本轮以测试固化；规则文本保持简短，未换城市不标记的语义未变。小榴莲共享位置仅作背景：payload 附 currentLocation、提示词明确旅行/出差/短期停留不据此换币，本轮以测试固化既有财务路径不受位置变化影响，未重写财务业务逻辑。
+版本统一 1.1.29：manifest.json（version 与 index.js?v）、package.json、config.js VERSION 及 index.js 与 src 全部模块缓存参数统一提升，残留旧参数 0 处。构建工具：本机无可用 Python（仅 Microsoft Store 占位 stub），新增 tools/build_preview.mjs 为 build_preview.py 的逐字节等价 Node 移植（模块列表补入 press-menu.js、weather.js、weather-view.js——三者是 11-07 后 ui.js 新增依赖，旧列表构建会缺件，版本标签改为从 config.js 派生），package.json 的 build:preview 改用 Node 版；build_preview.py 保留供有 Python 的环境，两者模块列表需同步维护。
+验证：完整 npm test 557/557（541 原有＋新增 16：天气 12、位置导入 3、小榴莲共享位置 1）。tests/weather.test.js 覆盖：手动刷新（无位置/无时间拒绝、pending 状态、种子/气候/小时/日期落库、温度风湿度范围合法）；现实城市气候适配（新加坡/雷克雅未克/北京昼夜均值、悉尼南半球对调）；架空地点稳定派生气候并随首次刷新存档；随机分布（4000 样本 ≥8 种类型、单一类型 <60%、极端合计 <5%、台风/冰雹不从初始出现、寒潮/热浪季节约束、哈尔滨可降雪而新加坡不可）；逐小时演化（同一小时不重摇、weatherAt 与按引擎 rngAt 手工 advanceWeather 逐位一致、延续与转换并存、超 240 小时折叠重放确定）；换城后新城市 pending 且旧记录保留；正文注入内容与三 App 门控（sceneBackground/weatherBackground 及 buildStoryPhonePrompt 场景块位于语言规则之前）；天气 App 关闭时刷新拒绝且不落库；存档重载与时间推进重放一致；无剧情时间回退显示上次刷新天气；面板渲染与刷新成功/失败文案。tests/assets.test.js 新增共享位置 1 项：东京旅行时 payload.currentLocation=东京 而 currency/region 保持 USD/US、提示词含"不据此换币"约束。
+专项回归全部通过：长按/删除/修改/重 roll（chat-apps、daily、snapchat、social-navigation、square 合计 103/103）、X 刷新去重与私信（x 66/66）、恋爱暧昧 NPC 主动联系（outreach 15/15）、小榴莲（assets、economic-rights、assets-rights、assets-evidence 合计 98/98）、来源编号与历史回退及记忆同步（continuity、narrative-bridges、memory、host-pipeline 合计 48/48）。
+preview.html 已用 Node 构建器真实重建：含 pp-weather 样式、durian-location 机制、createWeatherPanel/createPressMenu，版本标签 1.1.29；内嵌脚本 406KB 语法检查通过、残留 import 0 处。
+未完成：Android 真机与浏览器触屏回归未运行（本环境无 Playwright/Chromium，浏览器用例未跑），深色主题视觉效果未经截图确认，仅保证 CSS 覆盖全部场景键与对比度取值；天气面板未接入长按气泡；未接入真实模型验证正文 AI 对位置标记规则的实际遵循率；两份构建脚本（.py/.mjs）依赖人工同步。
+
+## 本地待发布 · 天气位置导入契约修复与全量回归恢复
+基线为本地工作区（非 git，1.1.28 解压树＋三个待发布特性＋此前中断的天气功能批次）。用户确认天气 App 保留、不整体回退。本轮修复 `src/weather.js` 的 `importStoryLocation` 返回契约：由 `changed ? journal : raw` 改为与其他导入器统一的 `{journal, changed}`，无论是否发生位置变化都返回正确结构；memory.js 同步链（located.journal → importStorySquare → importStoryAssets → migrateDailyArchives → syncSMSContext）随之恢复，不再在每次聊天同步时抛 `Cannot read properties of undefined (reading 'events')`。另将 `src/story-phone.js` 的场景背景（位置标记规则＋天气背景）拼接位置移回 `COMMUNICATION_LANGUAGE_RULE` 之前，恢复"语言规则收尾"的既有提示词契约，场景内容本身未改。未动天气引擎、面板及其他模块。
+验证：完整 npm test 544/544（原 541＋新增 3）。新增 tests/weather-location.test.js：位置发生变化（上海→北京逐楼入账、重放到最新城市、同聊天重放不变）、未发生变化（无标记或仅 user 标记原样返回同一 journal、同城市重复标记不新增事件）。针对性回归：outreach 15/15、x 66/66、chat-apps/daily/snapchat/social-navigation/square 合计 103/103，长按气泡、X 首页刷新修复、恋爱暧昧 NPC 主动追问三项特性无回归。
+未完成：天气功能此前无任何文档记录，本条仅记录修复轮，REQUIREMENTS 约定条目待补；天气引擎、面板、提示注入尚无专门测试；preview.html 未重建（11-04 版无天气）；版本号与模块缓存参数未统一（outreach.js 仍 1.1.25，index.js 挂载 daily/assets 仍 1.1.25）；天气面板为浅色设计而手机整体深色。以上均待用户指示。
+
+## 本地待发布 · 恋爱与暧昧 NPC 的 X 动态再次主动联系
+基线 1.1.28（跨 App 主动联系本地实现之上）。低、中频主动联系新增特殊契机：`src/outreach.js` 新增 `xTriggerCandidates(state,user)`，程序只核对通信事实——按日志重放顺序遍历短信会话、按记录时间排序遍历 WhatsApp／微信会话，取 NPC 最新一条未获回复的消息（user 消息回复状态为 queued、pending、failed、blocked 视为未送达、不算回复），再筛出晚于该消息的 user 公开动态（非匿名 X 账号的原创推文或转发他人推文；楼层 day／hour 优先、缺失时以发送时间兜底），被拉黑或已拒绝的联系人不列入。`outreachPrompt` 仅在低、中频时把候选以 JSON 追加进统一判定提示，并写明：仅恋爱或暧昧关系（情侣、相互暧昧、发展中的明确浪漫关系）可用，普通朋友、同学、同事、家人及单方面好感不适用，关系依据不足不得认定、不得编造或凭名单推断；发帖不等于回复；可沉默或表达情绪、不强制克制或负面；无需关注 user 或解释消息来源；同一条动态只作一次契机。高频不追加、机制不变。
+导入路径、App 开关、拉黑、待处理请求与每五条有效角色正文一次的统一判定全部沿用原实现，不新增模型调用与关系数据库；资格无独立持久化状态，每次从日志重放现算，存档重载、删楼、改楼自然重算。NPC 再次联系后其新消息成为最新未回复锚点，旧动态按时间顺序自动失效。
+验证：完整 npm test 541/541（新增 6 项）：低／中频短信未回复＋非匿名原创帖进入契机且高频不进入并保留「不设冷却」；微信或 WhatsApp 未回复＋转发（中频）进入契机且候选只含事实字段、无需任何 X 账号或关注；匿名账号、已回复（短信与微信）、动态早于消息、无新动态均不触发而发送失败仍算未回复并保留「优先留白」等待规则；拉黑与各类拒绝排除、关闭 App 时候选不进提示；NPC 再联系后旧动态失效且生成提示不改任何状态（发帖不标记已回复）；存档重载稳定、删帖楼与删消息楼回退后资格消失。恋爱或暧昧关系及人物反应由正文模型判断，测试以提示契约断言约束。
+未完成：版本号与模块缓存参数保持现值（outreach.js 仍为 1.1.25，新增的 story-clock／contact-events 等 import 用各自现值），发布前需统一提升并确认全部导入版本；未接入真实模型验证人物情绪表现。
+
+## 本地待发布 · X 首页刷新有效新增 0 条修复
+基线 1.1.28。排查 1.1.28 首页综合刷新报「本批有效新增 0 条」的四个根因并修复：其一，`npcEvidence` 原为逐字节 `includes` 匹配，正文全半角、空白或标点差异即判无效，现于 `src/x-feed.js` 新增 `npcEvidenceMatches`：NFKC 归一并去除空白、标点后核对，仍要求引用包含候选姓名且出自提供的设定或剧情原文，改写与编造照旧拒绝；其二，旧版已发过首页帖、但缺少 `authorKind`／`characterId` 分字段的账号，原被强制提供证据而 prompt 只对新 NPC 要求证据，现 `src/x.js` 的 `resolvePostAuthor` 对「NPC 分类、全角色卡同名、或历史上发过非广场帖」三类已确立账号豁免证据，并为 NPC 账号按角色卡回填 `characterId`（`card:头像` 形式）供记忆召回使用；其三，角色卡匹配从「当前主角色＋群组成员」放宽到全卡池，非主角色但真实存在的设定 NPC 不再被误排除，虚构人物、陌生网友与机构账号仍被身份校验拦截；其四，刷新提示词新增程序核对的名单——已确立 NPC 账号（可直接用 accountId）、其余已知个人账号、尚无账号的设定角色，模型无需猜测程序可提供的 ID。另容忍模型返回字符串 `'true'` 的 `has_account`。
+失败报告升级为按原因计数：身份不符、缺少依据、账号不可用、重复帖子、字段无效，只报数量不记录正文或模型输出；帖子为空仍是正常 0 条新增，不算错误；综合刷新任一阶段失败继续整体回退保留原数据。未取消任何身份校验。
+验证：完整 npm test 535/535（新增 4 项）：旧版无分类字段账号（有卡回填、无卡不臆造链接）继续发首页帖、证据排版差异通过而改写与缺账号字段仍拒绝、未分类已知账号无依据报「缺少依据 1 条」且不泄正文、纯重复批次报「重复帖子 N 条」并保持原状态。x-feed.js 版本参数仍为 1.1.28，未发现误建的 y-feed.js 残留。
+
+## 本地待发布 · 长按气泡操作、区域级编辑与聊天消息单条删除
+基线 1.1.28。移除聊天消息旁常驻的铅笔、重 roll、删除按钮，以及日报和 X 顶部整页铅笔、广场注入按钮，统一改为长按目标后弹出横向图标气泡。新增 `src/press-menu.js`：触屏 500 毫秒识别、移动 10 像素取消、右键与 Shift+F10／菜单键等价入口、点击抑制、滚动与重渲染关闭、按手机边界夹取并优先显示在目标上方，带指向尾巴。气泡只提供入口，实际修改、生成、注入或删除仍走各 App 原方法。
+聊天：WhatsApp、微信（共用 `chat-view.js`／`chat-apps.js`）、Snapchat、短信和 X 私信长按消息提供操作。NPC 消息显示修改、重新生成、删除，user 消息只显示删除；修改与重新生成沿用原权限和忙碌锁。短信复用既有 `memory.eraseMessage`；其余 App 新增按记录 ID 的删除，确认后写聊天日志并标记为空值，重载不恢复，正文同步不会补回，已删记录不再进入通信历史。删除提升日志版本号，旧异步写回失效。只删除选中消息，不动其他消息、财务和账本。
+日报：长按报道只编辑该报道的栏目、标题、导语、正文，并在同气泡注入／取消注入，沿用有效期、已采用、归档与剧情回退限制；长按报头、刊登日期、地区只改对应字段，不改剧情时钟。X：长按推文、评论、趋势话题、账号资料分别编辑对应对象，广场帖子保留注入资格时同气泡提供注入；私信支持单条删除。删除未扩展到推文、评论、趋势或账号。
+验证：完整 npm test 531/531，新增 5 个用例覆盖 WhatsApp／微信、Snapchat、X 私信的删除持久化、重复删除失败、删除 user 消息不影响账号、长按动作数量与权限、旧票据不能写回已删除消息；另更新日报、广场、社交导航及聊天用例到新 DOM 契约。`tests/chat-apps-browser.mjs`、`tests/daily-browser.mjs`、`tests/x-audience-browser.mjs`、`tests/browser.mjs` 已同步为长按流程，但本环境缺少 Playwright／Chromium，浏览器用例未运行；Android 真机长按、原生文字选择菜单与滚动冲突未验证。
+未完成：版本号与模块缓存参数仍为 1.1.28，发布前需统一提升并确认所有导入版本；长按气泡尚无 DOM 单元测试，仅靠浏览器用例。
+
 ## 1.1.28 · X 首页与广场分工、评论补齐、趋势及正文互动
 基线 main 1.1.27（4883359）。首页推荐改为有依据的剧情 NPC，人数足够时 10～15 位作者，允许少量或空批次。关注流沿用关注关系并核对作者分区。广场接收普通人及校园、官方、媒体、品牌和赛事账号，沿用公开依据和 24 小时注入规则。仅按明确类别、机构名称等依据调整旧帖显示位置，身份不清的旧帖保留原位置；不改写帖子、账号或互动历史。原内置广场提示自动迁移，自定义提示保留。
 评论详情按实际累计数补到最多 15 条；缺额在进入详情时用单次请求补齐，结果无效可手动重试，已足额不请求。样本单独保存，保持回复线程与用户主动评论，不增计互动或粉丝。作者按钮按保存的 ID 进入主页并返回原帖。趋势生成 8～10 个公共话题，取消讨论量与评判理由。正文互动按帖子 ID 与原文片段核对 user 或 NPC 帖，逐项登记点赞、转发、评论下限；首次粉丝评估与后续互动刷新均保留下限，不重复结算粉丝。

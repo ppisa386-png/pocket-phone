@@ -545,6 +545,83 @@ test('short NPC batches are valid; unsupported, duplicate-only or oversized batc
  }finally{f.close();}
 });
 
+test('legacy accounts without classification fields keep home posting rights and get card links backfilled',async()=>{
+ const f=setup();
+ try{
+  f.context.characters.push({name:'Nora',avatar:'nora.png'});
+  const cardLegacy={id:'legacy-card',type:'account',name:'Alex',handle:'legacy_alex',dmPolicy:'requests'};
+  const proseLegacy={id:'legacy-prose',type:'account',name:'Bea',handle:'legacy_bea',dmPolicy:'requests'};
+  const seeded=[cardLegacy,proseLegacy,
+   {id:'legacy-card-post',type:'post',author:'legacy-card',text:'旧版首页动态一',feed:'home',liked:false,reposted:false},
+   {id:'legacy-prose-post',type:'post',author:'legacy-prose',text:'旧版首页动态二',feed:'home',liked:false,reposted:false}];
+  await f.memory.commit(await f.memory.begin(),seeded.map(value=>({collection:'x',key:value.id,value})));
+  f.reply({posts:[{accountId:'legacy-card',authorKind:'npc',text:'乐队日常'},{accountId:'legacy-prose',authorKind:'npc',text:'摄影师日常'},
+   {name:'Nora',handle:'nora',authorKind:'npc',has_account:true,text:'非当前主角色也可以发帖'}]});
+  ok(await f.x.refresh());
+  assert.ok(f.prompt().includes('已确立NPC账号直接用 accountId 发帖并附 authorKind:"npc"：[{"id":"legacy-card","name":"Alex"},{"id":"legacy-prose","name":"Bea"}]'),'the prompt hands the model the program-verified identity roster');
+  assert.ok(f.prompt().includes('尚无账号的设定角色可作为新作者附 name/handle/has_account:true/authorKind:"npc"：["Nora"]'));
+  const fresh=xItems(f.state(),'post').filter(p=>!p.id.startsWith('legacy-'));
+  assert.deepEqual(fresh.map(p=>p.text),['乐队日常','摄影师日常','非当前主角色也可以发帖']);
+  assert.ok(fresh.every(p=>p.feed==='home'));
+  assert.equal(f.state().x['legacy-card'].authorKind,'npc');
+  assert.equal(f.state().x['legacy-card'].characterId,'card:alex.png','card match backfills the missing link');
+  assert.equal(f.state().x['legacy-prose'].authorKind,'npc');
+  assert.equal(f.state().x['legacy-prose'].characterId,undefined,'no card, no invented link');
+  assert.equal(f.state().x[fresh.at(-1).author].characterId,'card:nora.png','non-current card NPC links to its own card');
+ }finally{f.close();}
+});
+
+test('NPC evidence matching tolerates layout drift while paraphrases and missing account fields are still rejected',async()=>{
+ const f=setup();
+ try{
+  f.context.chat.push({mes:'Bea 在后台和 Sam 聊起了新专辑。'});
+  f.reply({posts:[
+   {name:'Bea',handle:'bea',authorKind:'npc',has_account:'true',npcEvidence:'Ｂｅａ　在后台和 Sam 聊起了新专辑！！',text:'封面定稿。'},
+   {name:'Cara',handle:'cara',authorKind:'npc',has_account:true,npcEvidence:'Cara 随口聊起了巡演安排',text:'没有依据的帖子。'},
+   {name:'Dana',handle:'dana',authorKind:'npc',text:'缺少账号字段的帖子。'}]});
+  ok(await f.x.refresh());
+  const saved=xItems(f.state(),'post');
+  assert.deepEqual(saved.map(p=>p.text),['封面定稿。']);
+  assert.equal(saved[0].feed,'home');assert.equal(f.state().x[saved[0].author].authorKind,'npc');
+  assert.equal(xItems(f.state(),'account').length,1,'rejected authors create no accounts');
+ }finally{f.close();}
+});
+
+test('known accounts post with accountId, fabricated authors report the reason without post text, and empty batches are normal zero adds',async()=>{
+ const f=setup();
+ try{
+  f.context.chat.push({mes:'Bea 在后台和 Sam 聊起了新专辑。'});
+  const bea={id:'bea-known',type:'account',name:'Bea',handle:'bea',dmPolicy:'requests'};
+  await f.memory.commit(await f.memory.begin(),[{collection:'x',key:bea.id,value:bea}]);
+  f.reply({posts:[{accountId:'bea-known',authorKind:'npc',text:'正常的剧情更新'}]});
+  ok(await f.x.refresh());
+  assert.deepEqual(xItems(f.state(),'post').map(p=>p.text),['正常的剧情更新']);
+  assert.equal(f.state().x['bea-known'].authorKind,'npc');
+  assert.ok(f.prompt().includes('其余已知个人账号发帖须用 accountId 并附 authorKind:"npc"：[{"id":"bea-known","name":"Bea"}]'));
+  f.reply({posts:[{name:'陌生人',handle:'stranger',authorKind:'npc',has_account:true,text:'来历不明的帖子'}]});
+  const failed=await f.x.refresh();
+  assert.equal(failed.ok,false);
+  assert.match(failed.error,/有效新增 0 条（身份不符 1 条）/);
+  assert.doesNotMatch(failed.error,/来历不明的帖子/,'diagnostics count reasons only, never quote post text');
+  assert.equal(xItems(f.state(),'post').length,1,'the failed stage keeps existing data');
+  f.reply({posts:[]});const empty=await f.x.refresh();ok(empty);assert.equal(empty.value.added,0);
+ }finally{f.close();}
+});
+
+test('duplicate-only recommended batches report the duplicate reason and keep the home feed',async()=>{
+ const f=setup();
+ try{
+  const posts=[{name:'同学0',handle:'dup',authorKind:'npc',has_account:true,npcEvidence:'同学0是校园乐队成员。',text:'同一条动态'}];
+  f.reply({posts});ok(await f.x.refresh());
+  const snapshot=structuredClone(f.state().x);
+  f.reply({posts});const again=await f.x.refresh();
+  assert.equal(again.ok,false);
+  assert.match(again.error,/有效新增 0 条（重复帖子 1 条）/);
+  assert.doesNotMatch(again.error,/同一条动态/);
+  assert.deepEqual(f.state().x,snapshot);
+ }finally{f.close();}
+});
+
 test('combined refresh saves full recommendations and eight world trends, locks and rolls back atomically',async()=>{
  const f=setup();
  try{
@@ -720,5 +797,31 @@ test('home validates NPC provenance, allows small and empty feeds, square admits
   f.reply({posts:[{accountId:school.id,text:'Official notice'}, {accountId:joe.id,text:'New photo'}]});ok(await f.x.refresh(true));
   assert.equal(xItems(f.state(),'post').some(p=>p.text==='Official notice'),false);assert.equal(f.state().x[school.id].following,true);
   assert.equal(xItems(f.state(),'post').at(-1).author,joe.id);
+ }finally{f.close();}
+});
+
+test('X direct messages delete one record permanently and long-press never rerolls',async()=>{
+ const f=setup();try{
+  const id=await account(f,'open');f.reply({status:'reply',text:'Hello'});ok(await f.x.send(id,'Hi'));
+  const all=xItems(f.state(),'message'),theirs=all.find(m=>m.role==='assistant'),mine=all.find(m=>m.role==='user');
+  ok(await f.x.deleteMessage(theirs.id));assert.equal(f.state().x[theirs.id],undefined);
+  assert.deepEqual(xItems(f.state(),'message').map(m=>m.id),all.map(m=>m.id).filter(m=>m!==theirs.id));
+  assert.equal(f.state().x[mine.id].text,'Hi');
+  const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal((await reload.read()).state.x[theirs.id],undefined);}finally{reload.destroy();}
+  assert.equal((await f.x.deleteMessage(theirs.id)).ok,false);
+  ok(await f.x.deleteMessage(mine.id));assert.equal(xItems(f.state(),'message').length,0);
+  assert.equal(Object.keys(f.state().x).filter(k=>f.state().x[k].type==='account').length,1);
+ }finally{f.close();}
+});
+
+test('a stale ticket cannot restore a deleted X DM or its in-flight reply',async()=>{
+ const f=setup();try{
+  const id=await account(f,'open');f.reply({status:'reply',text:'Hello'});ok(await f.x.send(id,'Hi'));
+  const msg=xItems(f.state(),'message').find(m=>m.role==='assistant');
+  const stale=await f.memory.begin();
+  ok(await f.x.deleteMessage(msg.id));
+  await assert.rejects(f.memory.commit(stale,[{collection:'x',key:msg.id,value:msg}]));
+  assert.equal(f.state().x[msg.id],undefined);
+  const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal((await reload.read()).state.x[msg.id],undefined);}finally{reload.destroy();}
  }finally{f.close();}
 });

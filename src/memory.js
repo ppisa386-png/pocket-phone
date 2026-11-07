@@ -1,13 +1,14 @@
-import {timedAudienceChanges} from './x-influence.js?v=1.1.28';
-import {privilegeRows} from './x-privilege.js?v=1.1.18';
-import { reservedCash } from './assets-core.js?v=1.1.17';
-import { migrateDailyArchives } from './daily-archive.js?v=1.1.13';
-import { syncSMSContext } from './sms-context.js?v=1.1.19';
-import { storyTime,readStoryClock } from './story-clock.js?v=1.1.12';
-import { importStoryAssets } from './assets-story.js?v=1.1.25';
-import { importStorySquare } from './x-opinion.js?v=1.1.25';
-import { importStoryPhone } from './story-phone.js?v=1.1.28';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, isMemoryHidden } from './journal.js?v=1.1.13';
+import {timedAudienceChanges} from './x-influence.js?v=1.1.29';
+import {privilegeRows} from './x-privilege.js?v=1.1.29';
+import { reservedCash } from './assets-core.js?v=1.1.29';
+import { migrateDailyArchives } from './daily-archive.js?v=1.1.29';
+import { syncSMSContext } from './sms-context.js?v=1.1.29';
+import { storyTime,readStoryClock } from './story-clock.js?v=1.1.29';
+import { importStoryAssets } from './assets-story.js?v=1.1.29';
+import { importStorySquare } from './x-opinion.js?v=1.1.29';
+import { importStoryPhone } from './story-phone.js?v=1.1.29';
+import { importStoryLocation } from './weather.js?v=1.1.29';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.1.29';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
     'MESSAGE_EDITED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED',
@@ -110,7 +111,8 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         if (!sameChat(snapshot)) { unavailable='CHANGED'; return null; }
         const reconciled = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
         const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
-        const square=importStorySquare(imported.journal,snapshot.revisions,current.chat,current);
+        const located=importStoryLocation(imported.journal,snapshot.revisions,current.chat,current);
+        const square=importStorySquare(located.journal,snapshot.revisions,current.chat,current);
         const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
         const archive=migrateDailyArchives(finances.journal,snapshot.revisions);
         const sms=syncSMSContext(archive.journal,snapshot.revisions,current.chat);
@@ -120,7 +122,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         for(const r of privilegeRows(state))if(r.status==='active'&&day!==null&&day>r.end)
             timed.push({collection:'x',key:r.id,value:{...r,status:'expired'}});
         if(timed.length)journal=appendChange(journal,snapshot.revisions,timed);
-        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || square.changed || finances.changed || archive.changed || sms.changed) await save(snapshot, journal);
+        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || located.changed || square.changed || finances.changed || archive.changed || sms.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
@@ -194,13 +196,16 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
             });
         },
         eraseMessage(ticket, messageId) {
+            return this.eraseRecord(ticket, 'messages', messageId);
+        },
+        eraseRecord(ticket, collection, recordId) {
             return schedule(async () => {
                 const basis = tickets.get(ticket), snapshot = await sync();
                 if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
                     basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
-                if (replayJournal(snapshot.journal).messages[messageId]?.role !== 'assistant') throw new Error('这条短信已不存在。');
-                let next = eraseMessageFromJournal(snapshot.journal, messageId);
-                next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
+                if (!replayJournal(snapshot.journal)[collection]?.[recordId]) throw new Error('这条记录已不存在。');
+                let next = eraseRecordFromJournal(snapshot.journal, collection, recordId);
+                if (collection === 'messages') next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
                 await save(snapshot, next);
                 tickets.delete(ticket); generation++;
                 await bus?.emit?.('durian-phone-records-erased');

@@ -117,9 +117,13 @@ test('X home lock persists on user turns; pencils on home, square, search and on
  const chat=[{mes:'scene'},{is_user:true,mes:'wait'}];
  const state={x:{'public-refresh':{floor:0},a:{id:'a',type:'account',name:'A',handle:'a'},m:{id:'m',type:'message',accountId:'a',role:'user',text:'private thread'}}};
  const p=createXPanel({getView:()=>state,adapter:{storyChat:()=>chat},redraw(){},notice(){}});
- assert.match(p.html(),/data-x-action="refresh"[^>]*disabled/);assert.match(p.html(),/data-x-action="edit-page"/);chat.push({mes:'new'});assert.doesNotMatch(p.html(),/data-x-action="refresh"[^>]*disabled/);
- for(const tab of ['square','search']){await p.action('tab',tab);assert.match(p.html(),/data-x-action="edit-page"/);assert.doesNotMatch(p.html(),/data-x-action="(?:square-refresh|trends-refresh|refresh)"/);}
- await p.action('tab','messages');assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);await p.action('thread','a');await p.action('edit-page');
+ assert.match(p.html(),/data-x-action="refresh"[^>]*disabled/);assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);
+ assert.deepEqual(p.press({dataset:{press:'x-account',xId:'a'}}).map(a=>a.icon),['edit']);
+ chat.push({mes:'new'});assert.doesNotMatch(p.html(),/data-x-action="refresh"[^>]*disabled/);
+ for(const tab of ['square','search']){await p.action('tab',tab);assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);assert.doesNotMatch(p.html(),/data-x-action="(?:square-refresh|trends-refresh|refresh)"/);}
+ await p.action('tab','messages');assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);await p.action('thread','a');
+ const messageActions=p.press({dataset:{press:'x-message',xId:'m'}});assert.deepEqual(messageActions.map(a=>a.icon),['edit','delete']);
+ await messageActions.find(a=>a.icon==='edit').run();
  assert.match(p.html(),/private thread<\/textarea>/);assert.match(p.html(),/保存修改/);p.back();assert.doesNotMatch(p.html(),/保存修改/);
 });
 

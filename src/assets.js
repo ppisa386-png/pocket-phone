@@ -1,15 +1,15 @@
-import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.17';
-import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.1.17';
-import { changeWalletCurrency } from './assets-currency.js?v=1.1.17';
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.17';
-import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.8';
-import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.12';
-import { parseModelObject } from './model-json.js?v=1.1.8';
-import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.12';
-import { latestMemory } from './external-memory.js?v=1.1.25';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.17';
-import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.17';
-import { isMemoryHidden } from './journal.js?v=1.1.13';
+import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.1.29';
+import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.1.29';
+import { changeWalletCurrency } from './assets-currency.js?v=1.1.29';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.1.29';
+import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES } from './assets-policy.js?v=1.1.29';
+import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.1.29';
+import { parseModelObject } from './model-json.js?v=1.1.29';
+import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.1.29';
+import { latestMemory } from './external-memory.js?v=1.1.29';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.1.29';
+import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.1.29';
+import { isMemoryHidden } from './journal.js?v=1.1.29';
 
 export const ASSET_OUTPUT_CONTRACT = '本次是小榴莲后台数据任务，不是角色扮演正文续写。沿用上述人设、事实和世界观，仅临时改用本次任务要求的JSON输出格式。只返回一个完整JSON对象，以{开头、}结尾；不要写解释、对白、思考、状态栏、HTML注释、durian-money注释或多个结果。正文格式要求不适用于本次账本结果。按任务提供的真实资料填写，不能只复述示例；没有项目才用空数组。事实已发生但金额未知的收支必须按本次评估规则估算，不能因正文没写数字就填null；实物估值确实无法合理判断时才可暂留null，不虚构事项。';
 
@@ -67,9 +67,6 @@ function array(data, key, max = 300) {
     if (!Array.isArray(value) || value.length > max) throw Error('评估条目数量或格式不正确：' + key);
     return value;
 }
-function residenceEvidence(chat,summaryText='') {
-    return [...newProse(chat,0).filter(row=>!chat[row.index].is_user && !['user','system'].includes(chat[row.index].role) && row.text.trim()),{text:summaryText}];
-}
 function newProse(chat, from) {
     return chat.map((m, index) => ({ index, text: String(m.mes || '').replace(/<(think|thinking|script|style)[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<!--[\s\S]*?-->/g, '') }))
         .filter(({ index }) => index >= from && (!chat[index].is_system || isMemoryHidden(chat[index])));
@@ -102,11 +99,11 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
         code: 'ASSET_DATE_MISMATCH', diagnostic: '错误代码：ASSET_DATE_MISMATCH；正文日期：' + dayDate(clock) + '；模型日期：' + dayDate(day),
     });
     if (clock === null) {
-        const evidence = assetText(data.dateEvidence, 1000);
-        if (!evidence || !memoryText.includes(evidence) || readStoryClock([{ mes: evidence }]).day !== day) throw Error('记忆中的剧情日期未通过核对，未更改账本。');
+        // Without a scene clock the model's date is trusted after format checks;
+        // memory quotes are no longer required as proof of the date.
     }
     if (before && day < before.lastDay) throw Error('剧情日期早于上次结算，请先核对时间或回退对应正文。');
-    const home=assessmentResidence(before,data,persona,hasResidence(before)?[]:residenceEvidence(chat,memoryText),residenceSummaries);
+    const home=assessmentResidence(before,data,persona,[],residenceSummaries);
     if (!before && !home) throw Error('无法确定 user 常住地区，请在人设或正文说明 user 通常在哪里生活后再建账。');
     const currency=home?.currency || walletCurrency(original);
     if (before && currency!==walletCurrency(original)) throw Error('换币须先确认换算比例。');
@@ -143,7 +140,8 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
             const supplied=raw.id||raw.ref;
             const item = { ...raw, id: eventReferences.get(supplied) || supplied };
             if(!item.id&&Number.isInteger(item.sourceIndex)){
-                const matches=pending.filter(e=>e.sourceIndex===item.sourceIndex&&financialEventKey(e)===financialEventKey(item)&&assetText(item.evidence,1500)&&financialEvidenceMatches(e.evidence,item.evidence));
+                // No id/ref: match by source floor plus event kind/name/action.
+                const matches=pending.filter(e=>e.sourceIndex===item.sourceIndex&&financialEventKey(e)===financialEventKey(item));
                 if(matches.length===1)item.id=matches[0].id;
                 else if(matches.length>1)throw Error('待估事项匹配不唯一，请使用提供的ref或id。');
             }
@@ -170,14 +168,20 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
                     if (!event.payDate && dateDay(item.payDate) !== null) event.payDate = item.payDate;
                 }
             } else {
-                const matches=prose.filter(p=>financialEvidenceMatches(p.text,item.evidence));
-                const source=matches.find(p=>p.index===item.sourceIndex)??(item.sourceIndex==null&&matches.length===1?matches[0]:null);
-                if(source)item.sourceIndex=source.index;
-                if (!source || !assetText(item.evidence, 1500) || !financialEvidenceMatches(source.text, item.evidence)) { skippedUnverified++; continue; }
-                const key = financialEventKey(item), evidence = assetText(item.evidence, 1500);
-                if (assetRows(state, 'story_event').some(e => e.sourceIndex === item.sourceIndex && e.evidence === evidence && financialEventKey(e) === key)) throw Error('该正文事件已经登记，不得重复。');
-                const id = 'assessed:' + revision + ':' + item.sourceIndex + ':' + evidence + ':' + key;
-                event = validateFinancialEvent(item, id, item.sourceIndex, readStoryClock(chat.slice(0, item.sourceIndex + 1)).day,currency);
+                // New events are located by source floor, not by quoted prose: a
+                // valid sourceIndex is trusted, otherwise the event belongs to
+                // the floor this assessment was taken on.
+                const sourceIndex = Number.isInteger(item.sourceIndex) && item.sourceIndex >= 0 && item.sourceIndex <= index ? item.sourceIndex : index;
+                item.sourceIndex = sourceIndex;
+                // Floors the last settlement already covered are barred: old
+                // facts cannot be re-charged by re-declaring them.
+                if (before && sourceIndex <= before.lastIndex) { skippedUnverified++; continue; }
+                const key = financialEventKey(item);
+                const amountMinor = item.amount == null ? null : moneyMinor(item.amount, false, currency);
+                if (assetRows(state, 'story_event').some(e => e.sourceIndex === sourceIndex && financialEventKey(e) === key && (e.amountMinor ?? null) === amountMinor))
+                    throw Error('该正文事件已经登记，不得重复。');
+                const id = 'assessed:' + revision + ':' + sourceIndex + ':' + key + ':' + (item.date || '') + ':' + (item.amount == null ? '' : String(item.amount));
+                event = validateFinancialEvent(item, id, sourceIndex, readStoryClock(chat.slice(0, sourceIndex + 1)).day,currency);
             }
             if (event.day !== null && event.day > day) throw Error('不能提前登记未来收支。');
             if (event.kind === 'job' && (event.day === null || event.day < before.lastDay)) throw Error('工作变动日期不明确或早于已结算期间。');
@@ -210,13 +214,13 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
         // Classification repairs preserve ownership, cost and all cash history.
         const classified = new Set();
         for (const item of array(data, 'classifications')) {
-            const old = state.assets[item.id], reason = assetText(item.reason, 600);
+            const old = state.assets[item.id];
             if (!old || old.type !== 'holding' || old.active === false || !['fixed', 'luxury'].includes(old.category) ||
-                classified.has(item.id) || !['fixed', 'luxury', 'exclude'].includes(item.category) || !reason)
-                throw Error('资产分类修正无效：仅允许修正已有固定资产/奢侈品，需提供原因且不能重复。');
+                classified.has(item.id) || !['fixed', 'luxury', 'exclude'].includes(item.category))
+                throw Error('资产分类修正无效：仅允许修正已有固定资产/奢侈品，且不能重复。');
             classified.add(item.id);
             add([assetSet({ ...old, category: item.category === 'exclude' ? old.category : item.category,
-                excludedFromAssets: item.category === 'exclude', classificationReason: reason, classificationDay: day })]);
+                excludedFromAssets: item.category === 'exclude', classificationDay: day })]);
         }
         for (const v of array(data, 'valuations')) {
             const old = state.assets[v.id];
@@ -347,7 +351,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             const dateContract = assessmentDate
                 ? '本次评估日期固定为 ' + assessmentDate + '，来自手机已识别的当前正文时间。date 可省略；若返回必须原样填写此日期，不重新从旧剧情、角色卡、记忆或现实日期选择。' +
                     (wallet ? '结算区间为 ' + dayDate(wallet.lastDay) + ' 至 ' + assessmentDate + '，完整经过 ' + elapsedDays + ' 天；所有期间估算只按此区间。' : '首次只估算此时的当前快照，不结算开场前的时间。')
-                : '正文尚未识别出明确日期。date 必须来自当前千千结记忆，按 YYYY-MM-DD 返回，dateEvidence 填记忆中含日期的逐字原句；没有可靠日期不能用现实日期猜填。';
+                : '正文尚未识别出明确日期。date 按剧情实际日期以 YYYY-MM-DD 返回，综合剧情、人设与记忆判断；没有可靠依据时用当前评估日期。';
             const persona=context.powerUserSettings?.persona_description||'';
             const currency=walletCurrency(view.state);
             const residenceSummaries=expenseFloorSummaries(view.state,floors);
@@ -355,7 +359,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             const pending=wallet?pendingAssessments(view.state):[];
             const pendingSalaries=wallet?assetRows(view.state,'job').filter(j=>j.monthlyMinor==null).map(({id,name})=>({id,name})):[];
             const pendingContract=WAGE_ASSESSMENT_RULES+(wallet?PENDING_ASSESSMENT_RULES+'本次必须处理的事项：'+JSON.stringify(pending.map(({id,ref,kind,name,needs})=>({id,ref,kind,name,needs})))+'另外pendingSalaries中的每个工作必须估算固定月薪并在salaries按id返回：'+JSON.stringify(pendingSalaries):'首次建账用initial快照吸收已有事实，未知余额和已确认固定工作的月薪合理估算，不单独重复结算开场前事件。');
-            const payload = { persona, currency, pendingAssessments:pending, pendingSalaries, previousResidence:wallet?.region||null,
+            const payload = { persona, currency, pendingAssessments:pending, pendingSalaries, previousResidence:wallet?.region||null, currentLocation:view.state.location?.current?.city||null,
                 expenseSummaryIndices:residenceSummaries.map(f=>f.messageIndex),
                 currencyChanges:wallet?.currencyChanges||[], ...recoveryPayload, initialized: !!wallet, from: wallet ? dayDate(wallet.lastDay) : null,
                 assessmentDate: assessmentDate || null, elapsedDays, clock: { ...clock, date: assessmentDate || null }, balance: cashBalance(view.state) === null ? null : majorAmount(cashBalance(view.state),currency), ledger: {
@@ -367,17 +371,17 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 },
                 orders: Object.values(view.state.orders || {}).filter(o => o.type === 'order' && o.sourceIndex > (wallet?.lastIndex ?? -1)),
                 unsettledFromIndex: wallet ? wallet.lastIndex + 1 : 0, throughIndex:index };
-            const prompt = getSettings().prompts.general + '\n' + getSettings().prompts.assetAssessment + '\n' + ASSET_ASSESSMENT_RULES + '\n' + homeContract + '\n'+pendingContract+'\n金额以常住地区本币为单位。顶层 currency 与金额的单位必须相符。现有账本的地区变更仅按本次常住地规则处理，跨币区须先确认换币，不在本次结算。' +
+            const prompt = getSettings().prompts.general + '\n' + getSettings().prompts.assetAssessment + '\n' + ASSET_ASSESSMENT_RULES + '\n' + homeContract + '\n'+pendingContract+'\n金额以常住地区本币为单位。顶层 currency 与金额的单位必须相符。现有账本的地区变更仅按本次常住地规则处理，跨币区须先确认换币，不在本次结算。剧情资料中的 currentLocation 只是共享当前位置，仅作地理背景；旅行、出差、短期停留不改变常住地，不据此换币。' +
                 (recovery ? '\n' + OWNERSHIP_RECOVERY_RULES : '') + '\n输入账本字段以 Minor 结尾的是最小货币单位，本币每单位对应 '+(currency?unitScale(currency):'所选币种的标准倍率')+' 个最小单位。输出金额统一使用主要货币单位的数字，日元等零小数币种填整数。只输出以下 JSON，未用数组填空。' + dateContract +
-                '\n首次：{"date":"YYYY-MM-DD","dateEvidence":"","initial":{"balance":1000,"holdings":[{"name":"名称","category":"fixed/luxury/investment","value":100,"details":"已知权利范围及合同条件，未知写未知","rights":{}}],"jobs":[{"name":"工作","monthlySalary":3000}]},"note":"可选简短说明"}。initial 是截至当前的完整快照，已到账工资已在余额，不追发开场前工资。'+
-                '\n后续：{"date":"YYYY-MM-DD","dateEvidence":"","events":[{"id":"已有未处理 story_event 的 id；补漏事件省略","sourceIndex":0,"evidence":"补漏时当前酒馆可见正文逐字原句；未知楼号可省略，由插件唯一定位","kind":"income/expense/asset/job","name":"事项","amount":5,"date":"YYYY-MM-DD","category":"可选 fixed/luxury/investment","action":"资产 acquire/amend/dispose 或工作 start/change/end","holdingId":"amend修改或dispose终止时已有资产id","details":"新资产或amend生效后的完整合同摘要","rights":{},"jobId":"调薪/离职时旧工作id","monthlySalary":3000,"salaryMode":"劳动报酬one_off或scheduled","salaryEmployer":"仅固定月薪匹配的employer","payDate":"仅固定月薪对应工资周期日"}],"salaries":[{"id":"monthlyMinor 为 null 的新工作id","monthlySalary":3000}],"valuations":[{"id":"资产id","value":100}],"living":{"total":0,"bookedIds":[]},"business":[{"id":"投资资产id","from":"本段起日 YYYY-MM-DD","to":"本段止日 YYYY-MM-DD","netIncome":0,"bookedIds":[]}],"note":"可选简短说明"}。'+
-                '\n处理所有未完成事件，财产暂无法估值时保留null待估；已有明确收支金额不可改。新财产事件可附 marketValue 给出正常价值，details 保留股份数量、车型等已知规格；既有待估财产必须先尝试依据现有资料估算正常市价，使用 valuations 填已有资产 id 和数值；这不是新增 events，也不用编造正文消费依据或扣余额。实在无法合理估算才省略或填 null 并在 note 说明。工作月薪可在 events 中一次给定。普通明确消费已记 cash 不再返回。已记消费但未分类且符合资产范围的财产，可另附 ownership:[{eventId:"对应 story_event id",category:"fixed/luxury/investment",value:正常价值}]；本人 Amazon 订单可用 orderId 和 itemId 替代 eventId。只能新增未登记的财产，不重复扣款，不登记日常工具、消耗品或送给别人的礼物。每次核对旧 fixed/luxury 是否误登普通物品或分错类，可附 classifications:[{id:已有资产id,category:fixed/luxury/exclude,reason:分类依据}]。exclude仅移出资产展示，保留原始财产和收支，不出售、不退款、不重复记收入支出；excludedFromAssets的条目不可重新acquire/ownership，确有分类纠正依据可用classifications恢复。investment不通过此接口修改。'+
+                '\n首次：{"date":"YYYY-MM-DD","initial":{"balance":1000,"holdings":[{"name":"名称","category":"fixed/luxury/investment","value":100,"details":"已知权利范围及合同条件，未知写未知","rights":{}}],"jobs":[{"name":"工作","monthlySalary":3000}]},"note":"可选简短说明"}。initial 是截至当前的完整快照，已到账工资已在余额，不追发开场前工资。'+
+                '\n后续：{"date":"YYYY-MM-DD","events":[{"id":"已有未处理 story_event 的 id；补漏事件省略","sourceIndex":0,"kind":"income/expense/asset/job","name":"事项","amount":5,"date":"YYYY-MM-DD","category":"可选 fixed/luxury/investment","action":"资产 acquire/amend/dispose 或工作 start/change/end","holdingId":"amend修改或dispose终止时已有资产id","details":"新资产或amend生效后的完整合同摘要","rights":{},"jobId":"调薪/离职时旧工作id","monthlySalary":3000,"salaryMode":"劳动报酬one_off或scheduled","salaryEmployer":"仅固定月薪匹配的employer","payDate":"仅固定月薪对应工资周期日"}],"salaries":[{"id":"monthlyMinor 为 null 的新工作id","monthlySalary":3000}],"valuations":[{"id":"资产id","value":100}],"living":{"total":0,"bookedIds":[]},"business":[{"id":"投资资产id","from":"本段起日 YYYY-MM-DD","to":"本段止日 YYYY-MM-DD","netIncome":0,"bookedIds":[]}],"note":"可选简短说明"}。sourceIndex 填事项所属的正文楼号，不确定可省略。'+
+                '\n处理所有未完成事件，财产暂无法估值时保留null待估；已有明确收支金额不可改。新财产事件可附 marketValue 给出正常价值，details 保留股份数量、车型等已知规格；既有待估财产必须先尝试依据现有资料估算正常市价，使用 valuations 填已有资产 id 和数值；这不是新增 events，也不用编造正文消费依据或扣余额。实在无法合理估算才省略或填 null 并在 note 说明。工作月薪可在 events 中一次给定。普通明确消费已记 cash 不再返回。已记消费但未分类且符合资产范围的财产，可另附 ownership:[{eventId:"对应 story_event id",category:"fixed/luxury/investment",value:正常价值}]；本人 Amazon 订单可用 orderId 和 itemId 替代 eventId。只能新增未登记的财产，不重复扣款，不登记日常工具、消耗品或送给别人的礼物。每次核对旧 fixed/luxury 是否误登普通物品或分错类，可附 classifications:[{id:已有资产id,category:fixed/luxury/exclude}]。exclude仅移出资产展示，保留原始财产和收支，不出售、不退款、不重复记收入支出；excludedFromAssets的条目不可重新acquire/ownership，确有分类纠正依据可用classifications恢复。investment不通过此接口修改。'+
                 '\nbookedIds优先填写ledger.offsetReferences中的短ref（C1/P1等），不要凭空拼接长ID。P编号的待处理收支必须先在events补齐金额，events.id也可填写P编号；原事件ID和真实cash流水ID仍兼容。只有该总额实际包含的流水才列入，生活/经营不能重复引用同一笔；固定月薪由程序处理，不得抵扣；一次性劳动报酬只按income入账一次。若本次补漏新增收支，优先只在events登记并从生活/经营估算中排除此项，禁止编造未知流水ID。\n生活 total 是整个区间总生活费，bookedIds 列其中已记费用；business netIncome 是整个区间总净现金收益，bookedIds 列已记经营收支。已售产业只算持有时段。禁止将股票浮盈、工资、资产市值变化作为 business 收益。开销/经营仅计算 from 至 date 的完整实际期间，未经过时间均0。'+
                 '\n账本与待核对资料：' + JSON.stringify(payload);
             // One assessment attempt per click; failure commits nothing. A saved
             // revision remains locked across reloads and changes of API settings.
             const changes = await request(prompt, data => {
-                const home=assessmentResidence(wallet,data,persona,hasResidence(wallet)?[]:residenceEvidence(chat,memoryText),residenceSummaries);
+                const home=assessmentResidence(wallet,data,persona,[],residenceSummaries);
                 if(wallet && home && currency!==home.currency) return {home};
                 if(currencyOnly) {
                     if(!home) throw Error('无法确定 user 常住地区，旧账保持原币。请补充常住地后再试。');

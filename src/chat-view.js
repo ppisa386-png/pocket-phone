@@ -1,7 +1,7 @@
-import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.17';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.18';
-import { displayStoryTime } from './story-clock.js?v=1.1.12';
-import { icon } from './icons.js?v=1.1.20';
+import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.1.29';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.1.29';
+import { displayStoryTime } from './story-clock.js?v=1.1.29';
+import { icon } from './icons.js?v=1.1.29';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const chatKinds={text:'文字',voice:'语音',image:'照片',video:'视频'};
@@ -68,10 +68,9 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
             if(i.type==='transfer')return transferHTML(i,a.blocked);
             if(i.type==='call')return '<article class="pp-chat-call">'+icon(i.mode==='video'?'video':'phone')+'<strong>'+chatKinds[i.mode]+'通话 · '+chatCallLabels[i.status]+'</strong>'+i.turns.map(t=>'<p><b>'+chatEsc(t.role==='user'?'你':a.name)+'：</b>'+chatEsc(t.text)+'</p>').join('')+'</article>';
             const own=i.role==='user';
-            const tools=own?'':'<div class="pp-chat-message-tools">'+button('edit','修改消息',i.id,'edit',disabled())+button('reroll','重新生成消息',i.id,'retry',disabled())+'</div>';
             const editing=editingId===i.id?form('edit',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消修改'):'';
             const stateText={sent:wc?'':'已发送',queued:'未发送',pending:'等待回复',failed:'发送失败',no_reply:'对方暂未回复'}[i.status]||'';
-            return '<article class="pp-chat-message '+(own?'is-user':'')+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatEsc(i.text)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+tools+editing+(wc&&['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
+            return '<article class="pp-chat-message '+(own?'is-user':'')+'" data-press="chat-message" data-chat-id="'+chatEsc(i.id)+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatEsc(i.text)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+editing+(wc&&['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
         }).join('')||'<p class="pp-chat-thread-start">'+chatEsc(a.name)+'</p>';
     }
     function composerHTML(a) {
@@ -119,7 +118,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         return false;
     }
     async function bulk(){const token=epoch,result=await perform('addEstablished');if(token===epoch&&result?.ok){status='已添加 '+result.value.added+' 位好友'+(result.value.updated?'，更新 '+result.value.updated+' 位':'')+'。';redraw();}}
-    return {html,back,queueCurrent,
+    const api={html,back,queueCurrent,
         reset(){epoch++;posting=false;reading=false;tab='chats';accountId=null;page='';editingId=null;status='';drafts=Object.create(null);},
         input(target){const name=target.dataset.chatField;if(name){const changed=value(name)!==target.value;drafts[key(name)]=target.value;
             if(name==='kind'&&!wc&&target.value==='transfer'&&accountId){drafts[key(name)]='text';page='cash';editingId=null;redraw();return;}
@@ -133,6 +132,10 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
             if(action==='edit'){editingId=id;drafts[key('editText')]=getView()[app]?.[id]?.text||'';redraw();return;}
             if(action==='cancel-edit'){editingId=null;redraw();return;}
             if(action==='later-request'){accountId=null;page='';redraw();return;}
+            if(action==='delete'){
+                if(!window.confirm('删除这条消息？删除后不会再出现在聊天记录中。'))return;
+                await perform('deleteMessage',[id],'已删除消息');return;
+            }
             if(action==='bulk'){await bulk();return;}
             const handlers={'accept-request':['accept',[id,true]],'decline-request':['accept',[id,false]],reroll:['rerollMessage',[id]],retry:['retryMessage',[id]],block:['block',[id,true]],unblock:['block',[id,false]],reveal:['reveal',[id]],voice:['call',[id,'voice']],video:['call',[id,'video']],hangup:['hangup',[id]],settle:['settle',[id,true]],cancel:['settle',[id,false]]};
             if(handlers[action])await perform(...handlers[action]);
@@ -151,5 +154,17 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
             if(name==='call'){const call=threadItems(id).find(i=>i.type==='call'&&i.status==='connected');if(call){const result=await perform('call',[id,call.mode,data.call,call.id]);if(token===epoch&&result?.ok)delete drafts[prefix+'call'];}redraw();return;}
             if(name==='cash'){const result=await perform('transfer',[id,data.amount,wc?walletCurrency(getView()):null,data.memo]);if(token===epoch&&result?.ok){delete drafts[prefix+'amount'];delete drafts[prefix+'memo'];page='';await perform('settle',[result.value,true]);}redraw();}
         },
+        press(element){
+            const id=element.dataset.chatId,item=getView()[app]?.[id];
+            if(!item||item.type!=='message')return [];
+            const busy=!!(posting||getView().busy),actions=[];
+            if(item.role==='assistant'){
+                actions.push({icon:'edit',label:'修改消息',disabled:busy,run:()=>api.action('edit',id)});
+                actions.push({icon:'refresh',label:'重新生成消息',disabled:busy,run:()=>api.action('reroll',id)});
+            }
+            actions.push({icon:'delete',label:'删除消息',danger:true,disabled:busy,run:()=>api.action('delete',id)});
+            return actions;
+        },
     };
+    return api;
 }

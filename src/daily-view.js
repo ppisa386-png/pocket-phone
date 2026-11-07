@@ -1,7 +1,7 @@
-import { dailyArticles, dailyExpiry, dailyStatus, dailyArchives } from './daily-core.js?v=1.1.25';
-import { dayDate } from './story-clock.js?v=1.1.12';
+import { dailyArticles, dailyExpiry, dailyStatus, dailyArchives } from './daily-core.js?v=1.1.29';
+import { dayDate } from './story-clock.js?v=1.1.29';
 const dailyEscape = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-export function createDailyPanel({adapter,getView,redraw,notice}) {
+export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
     let working=false,status='',epoch=0,folder=false,archiveId=null;
     const expanded=new Set();
     function back() {
@@ -18,18 +18,38 @@ export function createDailyPanel({adapter,getView,redraw,notice}) {
         const articles=archived?[...archived.articles]:dailyArticles(state),order=new Map((edition?.articleIds||[]).map((id,i)=>[id,i]));articles.sort((a,b)=>order.get(a.id)-order.get(b.id));
         const publication=edition?.publication||articles[0]?.outlet||'今日报刊';
         const date=!edition?'每日选编':(edition.printDate||dayDate(edition.day)||'日期待明确').replaceAll('-',' / ');
-        return '<section class="pp-daily"><header class="pp-daily-masthead"><small>THE PRESS · 今日选读</small><h2>'+dailyEscape(publication)+'</h2><div><span>'+dailyEscape(date)+'</span><span>'+dailyEscape(edition?.location||'今日选读')+'</span></div></header>'
+        return '<section class="pp-daily"><header class="pp-daily-masthead"><small>THE PRESS · 今日选读</small><h2 data-press="daily-meta" data-daily-field="publication" title="长按修改报头">'+dailyEscape(publication)+'</h2><div><span data-press="daily-meta" data-daily-field="date" title="长按修改刊登日期">'+dailyEscape(date)+'</span><span data-press="daily-meta" data-daily-field="location" title="长按修改地区">'+dailyEscape(edition?.location||'今日选读')+'</span></div></header>'
             +(archived?'<div class="pp-daily-toolbar"><button type="button" data-daily-action="archive-back">‹ 返回报纸夹</button><b class="pp-daily-expired">已过期 · 仅供回看</b></div>':'<div class="pp-daily-toolbar"><button type="button" class="pp-daily-folder-button" data-daily-action="archive" aria-label="过往报纸夹" title="过往报纸夹"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h7l2 3h9v11H3zM3 6V4h7l2 2h8v3"/></svg></button><span>'+(edition?(expiry==='expired'?'<b class="pp-daily-expired">已过期</b>':expiry==='unknown'?'剧情日期不明确':'本日刊'):'还没有本日报纸')+'</span><button type="button" class="pp-daily-refresh" data-daily-action="update"'+(busy?' disabled':'')+'>看看新闻</button></div>')
             +'<p class="pp-daily-status" role="status">'+dailyEscape(working?'正在取阅…':status)+'</p>'
-            +(edition?'<button type="button" class="pp-daily-inject" data-daily-action="edit" data-daily-id="'+dailyEscape(edition.editionId)+'" aria-label="编辑整张报纸" title="编辑整张报纸"'+(busy?' disabled':'')+'><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 20 4-1 12-12-3-3L5 16zM14 7l3 3"/></svg></button>':'')
             +(!articles.length?'<div class="pp-daily-empty"><span>☷</span><p>'+(edition?'本期暂无可刊登的报道':'今天的世界，有什么新鲜事？')+'</p></div>':'<div class="pp-daily-grid">'+articles.map(a=>{
-                const used=archived?'expired':dailyStatus(a,state,chat),label=used==='used'?'已采用':used==='expired'?'已过期':used==='unknown'?'日期不明确':used==='old'?'旧报道':a.selected?'已选 · 取消注入':'注入正文';
-                return '<article class="pp-daily-article pp-daily-'+a.placement+(a.placement==='lead'||a.body.length>500?' pp-daily-wide':'')+(expanded.has(a.id)?' pp-daily-expanded':'')+'" data-daily-article="'+dailyEscape(a.id)+'"><div class="pp-daily-byline"><span>'+dailyEscape(a.section||(a.placement==='lead'?'头条':a.placement==='brief'?'短讯':'报道'))+'</span><span>'+dailyEscape(a.outlet)+'</span></div><h3>'+dailyEscape(a.headline)+'</h3><p class="pp-daily-deck">'+dailyEscape(a.summary)+'</p>'
+                const used=archived?'expired':dailyStatus(a,state,chat);
+                return '<article class="pp-daily-article pp-daily-'+a.placement+(a.placement==='lead'||a.body.length>500?' pp-daily-wide':'')+(expanded.has(a.id)?' pp-daily-expanded':'')+'" data-daily-article="'+dailyEscape(a.id)+'" data-press="daily-article" data-daily-id="'+dailyEscape(a.id)+'"><div class="pp-daily-byline"><span>'+dailyEscape(a.section||(a.placement==='lead'?'头条':a.placement==='brief'?'短讯':'报道'))+'</span><span>'+dailyEscape(a.outlet)+'</span></div><h3>'+dailyEscape(a.headline)+'</h3><p class="pp-daily-deck">'+dailyEscape(a.summary)+'</p>'
                     +(expanded.has(a.id)?'<div class="pp-daily-body">'+dailyEscape(a.body)+'</div>':'')
-                    +'<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+expanded.has(a.id)+'">'+(expanded.has(a.id)?'收起全文':'阅读全文')+'</button><button type="button" data-daily-action="inject" data-daily-id="'+dailyEscape(a.id)+'" class="pp-daily-inject" aria-label="'+label+'" title="'+label+'" aria-pressed="'+(used==='active'&&a.selected)+'"'+(busy||used!=='active'?' disabled':'')+'><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H5v18h14V8M14 3v5h5M8 13h8m-4-3 3 3-3 3"/></svg></button></footer></article>';
+                    +'<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+expanded.has(a.id)+'">'+(expanded.has(a.id)?'收起全文':'阅读全文')+'</button></footer></article>';
             }).join('')+'</div>')+'<div class="pp-daily-end">'+dailyEscape(publication)+' · '+dailyEscape(edition?.location||'今日选读')+'</div></section>';
     }
-    return {html,back,reset(){epoch++;working=false;status='';folder=false;archiveId=null;expanded.clear();},async action(action,id){
+    const api={html,back,reset(){epoch++;working=false;status='';folder=false;archiveId=null;expanded.clear();},
+        press(element){
+            const state=getView(),chat=adapter.storyChat?.()||[],archives=dailyArchives(state,chat);
+            const archived=folder&&archiveId?archives.find(e=>e.editionId===archiveId):null;
+            const edition=archived||state.daily?.edition;
+            if(!edition)return [];
+            const busy=!!(working||state.busy);
+            if(element.dataset.dailyField){
+                const field=element.dataset.dailyField;
+                const label={publication:'报头',date:'刊登日期',location:'地区'}[field]||'报纸信息';
+                return [{icon:'edit',label:'修改'+label,disabled:busy,run:()=>editPart?.(edition.editionId,{kind:'meta',field})}];
+            }
+            const id=element.dataset.dailyId;
+            const article=(archived?archived.articles:dailyArticles(state)).find(a=>a.id===id);
+            if(!article)return [];
+            const used=archived?'expired':dailyStatus(article,state,chat);
+            const actions=[{icon:'edit',label:'修改这篇报道',disabled:busy,run:()=>editPart?.(edition.editionId,{kind:'article',id})}];
+            actions.push({icon:'inject',label:article.selected?'取消注入这篇报道':'注入这篇报道',active:used==='active'&&article.selected===true,
+                disabled:busy||used!=='active',run:()=>api.action('inject',id)});
+            return actions;
+        },
+        async action(action,id){
         if(action==='archive'){folder=true;archiveId=null;expanded.clear();redraw();return;}
         if(action==='archive-back'){back();return;}
         if(action==='archive-edition'){if(dailyArchives(getView(),adapter.storyChat?.()||[]).some(e=>e.editionId===id)){folder=true;archiveId=id;expanded.clear();redraw();}return;}
@@ -41,4 +61,5 @@ export function createDailyPanel({adapter,getView,redraw,notice}) {
         catch(e){if(token===epoch)status=e.message;}
         finally{if(token===epoch)working=false;redraw();}
     }};
+    return api;
 }

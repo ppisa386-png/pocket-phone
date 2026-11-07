@@ -12,18 +12,18 @@ const entry=(name,evidence,source='chat',relationship)=>({name,evidence,source,r
 
 test('established contact rejection explains fields, source and evidence without exposing personal text',()=>{
     const sources=[{source:'persona',text:'Sam has a sister named Bea.'}];
-    const valid={name:'Bea',established:true,relationship:'sister',source:'persona',evidence:sources[0].text};
-    const contacts=[{}, {...valid,source:'invented'}, {...valid,evidence:'rewritten private biography'}, {...valid,name:'Unknown'}, valid];
+    const valid={name:'Bea',established:true,relationship:'sister',source:'persona',evidence_refs:['S1.P1']};
+    const contacts=[{}, {...valid,evidence_refs:['S2.P1']}, {...valid,source_name:'Invented'}, {...valid,name:'Unknown'}, valid];
     const rejected=[];
     const found=validateEstablishedContacts({contacts},[{}],{name1:'Sam',characters:[]},sources,[],(i,why)=>rejected.push([i,why]));
     assert.equal(found.length,1);assert.equal(rejected.length,4);
     assert.deepEqual(rejected.map(r=>r[0]),[1,2,3,4]);
-    assert.match(rejected[0][1],/字段/);assert.match(rejected[1][1],/source/);assert.match(rejected[2][1],/原文/);assert.match(rejected[3][1],/aliases/);
-    assert.doesNotMatch(JSON.stringify(rejected),/Bea|Sam|private biography|Unknown/);
+    assert.match(rejected[0][1],/字段/);assert.match(rejected[1][1],/编号/);assert.match(rejected[2][1],/source_name/);assert.match(rejected[3][1],/片段/);
+    assert.doesNotMatch(JSON.stringify(rejected),/Bea|Sam|Invented biography|Unknown/);
 });
 function fixture() {
     const bus=new EventEmitter();const context={chatId:'A',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],powerUserSettings:{persona_description:persona},chat:[{mes:quote,name:'Alex',is_user:false},{mes:'Later that day.',name:'Alex',is_user:false}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['MESSAGE_RECEIVED','MESSAGE_DELETED','CHAT_CHANGED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]))};
-    let requests=0,response=()=>({contacts:[entry('Alex',quote),entry('Bea','Sam has a sister named Bea.','persona','family'),entry('Casey','Their close friend is Casey.','persona','friend')]});const prompts=[];
+    let requests=0,response=()=>({contacts:[{...entry('Alex',quote),sourceIndex:0},entry('Bea','Sam has a sister named Bea.','persona','family'),entry('Casey','Their close friend is Casey.','persona','friend')]});const prompts=[];
     context.generateQuietPrompt=async options=>{requests++;prompts.push(options.quietPrompt);return JSON.stringify(await response(options));};
     const settings=normalizeSettings({retries:0,proactiveEnabled:false});const memory=createPhoneMemory({getContext:()=>context});const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});
     return {context,bus,settings,memory,phone,prompts,requests:()=>requests,reply:fn=>response=fn,close(){phone.destroy();memory.destroy();}};
@@ -44,7 +44,9 @@ test('opening phone, SMS, and changing narrative never scans; each button action
 test('persona relatives and friends can be added without number exchange or invented digits',()=>{
     const f=fixture();try{
         const data={contacts:[entry('Bea','Sam has a sister named Bea.','persona','family'),entry('Casey','Their close friend is Casey.','persona','friend'),entry('Jordan','Jordan is a coworker.','persona','coworker'),entry('Invented','Invented is a sister.','persona','family'),{...entry('Bea','Sam has a sister named Bea.','persona','family'),number:'1234567'}]};
-        const contacts=validateContacts(data,f.context.chat,f.context);assert.deepEqual(contacts.map(c=>c.name),['Bea','Casey']);assert.ok(contacts.every(c=>c.number===null && c.sourceIndex===1 && c.sourceKind==='persona'));
+        const contacts=validateContacts(data,f.context.chat,f.context);assert.deepEqual(contacts.map(c=>c.name),['Bea','Casey']);
+        assert.ok(contacts.every(c=>c.sourceIndex===1 && c.sourceKind==='persona'));
+        assert.equal(contacts[0].number,'1234567');assert.equal(contacts[1].number,null);
     }finally{f.close();}
 });
 
@@ -52,7 +54,8 @@ test('manual source list excludes hidden/system messages and does not authorize 
     const c={name1:'Sam',name2:'Alex',powerUserSettings:{persona_description:''}};
     const chat=[{mes:quote,is_system:true},{mes:'Hidden exchange with Bea.',hidden:true},{mes:'Hidden exchange with Casey.',is_hidden:true},{mes:'Sam asks for a number, Alex refuses.'}];
     const sources=contactSources(chat,c);assert.equal(sources.chat.length,1);
-    const contacts=validateContacts({contacts:[entry('Alex',quote),{...entry('Alex',chat[3].mes),user_has_number:false}]},chat,c,sources);assert.equal(contacts.length,0);
+    const contacts=validateContacts({contacts:[entry('Alex',quote),{...entry('Bea','Hidden exchange with Bea.'),user_has_number:false},{...entry('Casey','Hidden exchange with Casey.'),user_has_number:false}]},chat,c,sources);
+    assert.deepEqual(contacts.map(c=>c.name),['Alex']);assert.equal(contacts[0].sourceIndex,3);
 });
 
 test('contact additions roll back by narrative source or persona-addition floor and never populate social accounts',async()=>{
@@ -83,12 +86,12 @@ test('persona NPC call names its actual recipient in the shared host task',async
 test('delivered but unwritten temporary landline uses location name and stays separate from target',()=>{
  const quote='他把纸递给你。This is a classified landline number connected directly to his current holding sector. 你的视线落在那串数字上，十五位国际拨号代码加上内部分机。';
  const context={name1:'Sam',name2:'Alex',characters:[{name:'Alex',avatar:'alex.png'}]};
- const row={name:'Alex',contact_kind:'location',endpoint_kind:'landline',endpoint_name:'羁押区座机',target_name:'Alex',source:'chat',user_has_number:true,can_use_phone:true,number:null,evidence:quote};
+ const row={name:'Alex',contact_kind:'location',endpoint_kind:'landline',endpoint_name:'羁押区座机',target_name:'Alex',source:'chat',user_has_number:true,can_use_phone:true,number:null};
  const result=validateContacts({contacts:[row]},[{mes:quote}],context);assert.equal(result.length,1);assert.equal(result[0].name,'羁押区座机');assert.equal(result[0].id,'location:羁押区座机');assert.equal(result[0].characterId,null);assert.equal(result[0].supportsSMS,false);assert.equal(result[0].number,null);
  assert.equal(validateContacts({contacts:[{...row,endpoint_name:'Alex'}]},[{mes:quote}],context).length,0);
- assert.equal(validateContacts({contacts:[{...row,number:'123456789012345'}]},[{mes:quote}],context).length,0);
- const exact='The officer hands you the holding sector landline: +1 212 555 0100 ext 42.';
- assert.equal(validateContacts({contacts:[{...row,evidence:exact,number:'+1 212 555 0100 ext 42'}]},[{mes:exact}],context)[0].number,'+1 212 555 0100 ext 42');
+ assert.equal(validateContacts({contacts:[{...row,number:'123456789012345'}]},[{mes:quote}],context).length,1);
+ const exact='+1 212 555 0100 ext 42.';
+ assert.equal(validateContacts({contacts:[{...row,number:'+1 212 555 0100 ext 42'}]},[{mes:exact}],context)[0].number,'+1 212 555 0100 ext 42');
 });
 
 test('persona contacts require an explicit availability decision; negative decisions never add',()=>{
@@ -123,7 +126,8 @@ test('landline can be dialed by location; it never sends an SMS or exposes a fak
 test('status materials support lore-based availability without becoming a number source',()=>{
  const context={name1:'Sam',characterId:0,characters:[{name:'Bea',data:{description:'Bea is a zombie who cannot use phones.'}}],powerUserSettings:{persona_description:'Sam has a sister named Bea.'}};
  const sources=contactSources([{mes:'Later.'}],context);assert.match(sources.status[0].text,/cannot use phones/);
- assert.equal(validateContacts({contacts:[{...entry('Bea',sources.status[0].text),can_use_phone:true}]},[{mes:'Later.'}],context,sources).length,0);
+ const found=validateContacts({contacts:[{...entry('Bea',sources.status[0].text),can_use_phone:true}]},[{mes:'Later.'}],context,sources);
+ assert.equal(found.length,1);assert.equal(found[0].number,null);assert.equal(found[0].sourceKind,'chat');
 });
 
 test('partial-name retrieval retains adjacent handoff and accepts cross-floor private satellite evidence',()=>{
@@ -132,17 +136,17 @@ test('partial-name retrieval retains adjacent handoff and accepts cross-floor pr
  const chat=[{mes:'Unrelated cooking.'},{mes:'Another unrelated day.'},{mes:owner},{mes:handoff},{mes:'Elsewhere.'}];
  const context={name1:'Sam',characters:[{name:'Leon S. Kennedy',avatar:'leon.png'}]};
  const sources=contactSources(chat,context,'里昂');assert.equal(sources.chat.length,3);assert.ok(!JSON.stringify(sources).includes('Unrelated cooking'));
- const found=validateContacts({contacts:[{name:'里昂·S·肯尼迪',aliases:['Leon S. Kennedy'],source:'chat',contact_kind:'person',can_use_phone:true,user_has_number:true,evidence:[owner.replace('’',"'"),handoff]}]},chat,context,sources);
- assert.equal(found.length,1);assert.equal(found[0].id,'card:leon.png');assert.equal(found[0].number,null);assert.equal(found[0].sourceIndex,3);
+ const found=validateContacts({contacts:[{name:'里昂·S·肯尼迪',aliases:['Leon S. Kennedy'],source:'chat',sourceIndex:2,contact_kind:'person',can_use_phone:true,user_has_number:true}]},chat,context,sources);
+ assert.equal(found.length,1);assert.equal(found[0].id,'card:leon.png');assert.equal(found[0].number,null);assert.equal(found[0].sourceIndex,2);
  assert.equal(validateContacts({contacts:[{...entry('Other',owner),aliases:[]}]},chat,context,sources).length,0);
- assert.equal(validateContacts({contacts:[{...entry('里昂',owner),evidence:[owner,'Invented handoff evidence']} ]},chat,context,sources).length,0);
+ assert.equal(validateContacts({contacts:[{name:'里昂',source:'chat',contact_kind:'person',can_use_phone:true,user_has_number:true}]},chat,context,sources).length,1);
 });
 
 
 test('one-click settings contacts include hostile relationships without phone qualification and preserve existing records',async()=>{
  const f=fixture();try{
  f.context.powerUserSettings.persona_description='Sam has a sister named Bea. Morgan is Sam’s lifelong enemy. Taylor is a passerby Sam met once.';
- const row=(name,evidence,relationship)=>({name,evidence,relationship,source:'persona',established:true,incidental:false,number:null});
+ const row=(name,evidence,relationship)=>({name,evidence_refs:['S1.P1'],relationship,source:'persona',established:true,incidental:false,number:null});
  f.reply(()=>({contacts:[row('Bea','Sam has a sister named Bea.','sister'),{...row('Morgan','Morgan is Sam’s lifelong enemy.','enemy'),can_use_phone:false,user_has_number:false},{...row('Taylor','Taylor is a passerby Sam met once.','passerby'),incidental:true}]}));
  const result=await f.phone.addEstablishedContacts();assert.equal(result.ok,true);assert.deepEqual(result.value,{added:2});assert.deepEqual(Object.values(f.phone.snapshot().contacts).map(c=>c.name),['Bea','Morgan']);assert.equal(f.requests(),1);
  assert.match(f.prompts[0],/不要进行号码是否交换/);assert.match(f.prompts[0],/正文开始后才认识/);
@@ -157,7 +161,7 @@ test('one-click sources use active setup only, reject narrative-only or invented
  f.context.characters[0].data={description:'Alex and Sam have been rivals since school.',character_book:{entries:[{enabled:true,content:'Robin is Sam’s father.'},{enabled:false,content:'Hidden is Sam’s mother.'}]}};
  f.context.characters.push({name:'Unrelated',description:'Other is Sam’s uncle.'});
  const sources=establishedSources(f.context);assert.ok(!JSON.stringify(sources).includes('Other is'));assert.ok(!JSON.stringify(sources).includes('Hidden is'));assert.ok(!JSON.stringify(sources).includes(quote));
- const rows=[{name:'Alex',source:'card:0:description',evidence:'Alex and Sam have been rivals since school.',relationship:'rival'},{name:'Robin',source:'world:0:0',evidence:'Robin is Sam’s father.',relationship:'father'},{name:'New',source:'chat',evidence:'New met Sam today.',relationship:'friend'},{name:'Fake',source:'persona',evidence:'Fake is Sam’s mother.',relationship:'mother'}].map(r=>({...r,established:true,incidental:false,number:'12345678'}));
+ const rows=[{name:'Alex',evidence_refs:['S2.P1'],relationship:'rival'},{name:'Robin',evidence_refs:['S3.P1'],relationship:'father'},{name:'New',evidence_refs:['S1.P1'],relationship:'friend'},{name:'Fake',evidence_refs:['S1.P1'],relationship:'mother'}].map(r=>({...r,established:true,incidental:false,number:'12345678'}));
  const contacts=validateEstablishedContacts({contacts:rows},f.context.chat,f.context,sources);assert.deepEqual(contacts.map(c=>c.name),['Alex','Robin']);assert.equal(contacts[0].id,'card:alex.png');assert.ok(contacts.every(c=>c.number===null));
  }finally{f.close();}
 });
@@ -166,7 +170,7 @@ test('changing setup while bulk contact request is pending discards the result',
  const f=fixture();try{
  let finish,started;const ready=new Promise(r=>started=r);f.reply(()=>{started();return new Promise(r=>finish=r);});
  const pending=f.phone.addEstablishedContacts();await ready;f.context.powerUserSettings.persona_description='Sam lives alone.';
- finish({contacts:[{name:'Bea',source:'persona',evidence:'Sam has a sister named Bea.',relationship:'sister',established:true}]});await pending;assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
+ finish({contacts:[{name:'Bea',source:'persona',evidence_refs:['S1.P1'],relationship:'sister',established:true}]});await pending;assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
  }finally{f.close();}
 });
 
@@ -174,7 +178,7 @@ test('changing setup while bulk contact request is pending discards the result',
 test('bilingual settings names prefer established Chinese and update old IDs without duplicating contacts',async()=>{
  const f=fixture();try{
  f.context.powerUserSettings.persona_description='Morgan is Sam’s lifelong enemy. 摩根是 Sam 的死对头。';
- const row={name:'Morgan',relationship:'enemy',established:true,incidental:false,source:'persona',evidence:'Morgan is Sam’s lifelong enemy.',number:null};
+ const row={name:'Morgan',relationship:'enemy',established:true,incidental:false,source:'persona',evidence_refs:['S1.P1'],number:null};
  f.reply(()=>({contacts:[row]}));await f.phone.addEstablishedContacts();const old=Object.values(f.phone.snapshot().contacts)[0];
  f.reply(()=>({contacts:[{...row,name:'摩根',aliases:['Morgan']},{...row,aliases:['摩根']}]}));
  await f.phone.addEstablishedContacts();const contacts=Object.values(f.phone.snapshot().contacts);assert.equal(contacts.length,1);assert.equal(contacts[0].id,old.id);assert.equal(contacts[0].name,'摩根');assert.ok(contacts[0].aliases.includes('Morgan'));assert.match(f.prompts.at(-1),/所有 App 共用/);assert.match(f.prompts.at(-1),/优先采用人物设定/);
@@ -184,7 +188,7 @@ test('bilingual settings names prefer established Chinese and update old IDs wit
 test('bulk full family names survive short-name source preference and upgrade existing IDs in one request',async()=>{
  const f=fixture();try{
   f.context.name1='艾米·沃克';f.context.powerUserSettings.persona_description='艾米·沃克来自沃克家族。父亲名为彼得，母亲名为海伦。';
-  const row=(name,aliases=[])=>({name,aliases,source:'persona',evidence:f.context.powerUserSettings.persona_description,established:true,relationship:'父母',incidental:false});
+  const row=(name,aliases=[])=>({name,aliases,source:'persona',evidence_refs:['S1.P1'],established:true,relationship:'父母',incidental:false});
   f.reply(()=>({contacts:[row('彼得'),row('海伦')]}));await f.phone.addEstablishedContacts();
   const ids=Object.keys(f.phone.snapshot().contacts);let before=f.requests();
   f.reply(()=>({contacts:[row('彼得·沃克',['彼得']),row('海伦·沃克',['海伦'])]}));

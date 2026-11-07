@@ -19,6 +19,7 @@ try{
  for(const width of [390,320]){
   const context=await browser.newContext({viewport:{width,height:844},isMobile:true,hasTouch:true});const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.route('**/*',route=>{if(route.request().url().startsWith(origin))return route.continue();external.push(route.request().url());return route.abort();});
   await p.goto(origin);await p.locator('.pp-launcher').tap();
+  const longPress=async(locator)=>{await locator.dispatchEvent('pointerdown',{pointerType:'touch',pointerId:11,isPrimary:true,bubbles:true,cancelable:true});await p.waitForTimeout(600);await locator.dispatchEvent('pointerup',{pointerType:'touch',pointerId:11,isPrimary:true,bubbles:true,cancelable:true});await p.locator('.pp-press-bubble').waitFor();};
   assert.equal(await p.locator('[data-app="snapchat"]').count(),0);
   await p.locator('[data-app="settings"]').tap();
   await p.locator('[data-section="contact"]').tap();
@@ -70,8 +71,8 @@ try{
       await p.locator('[data-chat-field="message"]').fill('');
    }
    await p.locator('.pp-phone').screenshot({path:resolve(screenshots,app+'-chat-'+width+'.png')});
-   await p.getByRole('button',{name:'修改消息',exact:true}).first().tap();await p.locator('[data-chat-field="editText"]').fill('周六下午两点见。');await p.locator('[data-chat-form="edit"] button[type="submit"]').tap();await p.getByText('周六下午两点见。',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+3);
-   await p.evaluate(()=>window.response={text:'周六两点，店门口见。'});await p.getByRole('button',{name:'重新生成消息',exact:true}).first().tap();await p.getByText('周六两点，店门口见。',{exact:true}).waitFor();
+   await longPress(p.locator('article[data-press="chat-message"]').last());await p.locator('.pp-press-action[aria-label="修改消息"]').tap();await p.locator('[data-chat-field="editText"]').fill('周六下午两点见。');await p.locator('[data-chat-form="edit"] button[type="submit"]').tap();await p.getByText('周六下午两点见。',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.modelCalls),before+3);
+   await p.evaluate(()=>window.response={text:'周六两点，店门口见。'});await longPress(p.locator('article[data-press="chat-message"]').last());await p.locator('.pp-press-action[aria-label="重新生成消息"]').tap();await p.getByText('周六两点，店门口见。',{exact:true}).waitFor();
    if(app==='whatsapp'){
       assert.equal(await p.locator('.pp-chat-compose-extra').count(),0);
       await p.locator('[data-chat-field="kind"]').selectOption('transfer');

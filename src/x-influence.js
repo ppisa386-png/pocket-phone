@@ -1,9 +1,9 @@
 // Only public, addressable sources get an impact. A later development has to
 // identify a different public record or an evidenced narrative floor.
-import {dateDay,readStoryClock} from './story-clock.js?v=1.1.12';
-import {effectiveReply} from './contact-policy.js?v=1.1.13';
-import {xComments} from './x-comments.js?v=1.1.8';
-import {xAudience} from './x-audience.js?v=1.1.25';
+import {dateDay,readStoryClock} from './story-clock.js?v=1.1.29';
+import {effectiveReply} from './contact-policy.js?v=1.1.29';
+import {xComments} from './x-comments.js?v=1.1.29';
+import {xAudience} from './x-audience.js?v=1.1.29';
 
 export const refreshFloor=chat=>chat.findLastIndex(effectiveReply);
 const set=value=>({collection:'x',key:value.id,value});

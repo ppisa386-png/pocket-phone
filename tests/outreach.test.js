@@ -141,3 +141,130 @@ test('recovering an earlier split quote leaves legacy exact-match IDs intact; in
     assert.deepEqual(state.whatsapp[oldId],old);
     assert.deepEqual(Object.values(state.whatsapp).filter(r=>r.type==='message').map(r=>r.text).sort(),['恢复来信','旧记录来信'].sort());
 });
+
+// X-activity re-outreach: the program verifies facts only (an unanswered
+// NPC message on SMS/WhatsApp/WeChat followed by user's public original post
+// or repost from the non-anonymous account); romance stays a narrative
+// judgment and the trigger widens only low and medium frequencies.
+import {xTriggerCandidates} from '../src/outreach.js';
+import {dateDay} from '../src/story-clock.js';
+
+const DAY1=dateDay('2026-11-01'),DAY2=dateDay('2026-11-02'),DAY3=dateDay('2026-11-03');
+const stamp=(date,time='12:00')=>({date,time,precision:'scene'});
+const userPost=(id,day,at=3000)=>({id,type:'post',author:'user',alias:'Sam Lee',text:'推文'+id,createdAt:at,postedAtStory:{day,hour:12},liked:false,reposted:false});
+const npcPost=(id,day,at=1000)=>({id,type:'post',author:'acc1',text:'乙的帖子'+id,createdAt:at,postedAtStory:{day,hour:10},liked:false,reposted:false});
+const sms=(id,role,at,storyTime,extra={})=>({id,contactId:'card:alex.png',name:'Alex',role,text:(role==='assistant'?'NPC_':'USER_')+id,createdAt:at,storyTime,read:false,...extra});
+const appMessage=(id,role,at,storyTime,extra={})=>({id,type:'message',accountId:'acc1',role,kind:'text',text:(role==='assistant'?'NPC_':'USER_')+id,createdAt:at,storyTime,read:false,status:role==='assistant'?'received':'answered',...extra});
+const chatAccount=extra=>({id:'acc1',type:'account',name:'乙',handle:'yi',friend:'friends',...extra});
+const xState=()=>{const state=replayJournal();state.x.profile={id:'profile',type:'profile',alias:'Sam Lee'};return state;};
+
+test('low and medium frequencies list an unanswered SMS thread after a non-anonymous original post; high keeps its own rule',()=>{
+    const build=()=>{const state=xState();state.x.p1=userPost('p1',DAY2);state.messages.m1=sms('m1','assistant',1000,stamp('2026-11-01'));return state;};
+    for(const frequency of ['low','medium']){
+        const prompt=buildStoryPhonePrompt(build(),context,normalizeSettings({proactiveFrequency:frequency}),four);
+        assert.match(prompt,/特殊再次联系契机（仅供恋爱或暧昧关系使用）/);
+        assert.match(prompt,/"channel":"sms","name":"Alex","unanswered"/);
+        assert.match(prompt,/NPC_m1/);assert.match(prompt,/推文p1/);
+        // ordinary friends, classmates, colleagues, family and one-sided
+        // affection without ambiguity stay ineligible; the AI must judge the
+        // relationship from persona and story, never invent one.
+        assert.match(prompt,/仅当该人物与user当前处于恋爱关系或暧昧关系（情侣、相互暧昧、发展中的明确浪漫关系）时/);
+        assert.match(prompt,/普通朋友、同学、同事、家人，或单方面好感而尚未形成暧昧关系的不适用/);
+        assert.match(prompt,/不得凭联系人名单、聊天次数或称呼推断/);
+        // silence stays a choice; no mechanical repetition of one post.
+        assert.match(prompt,/也可继续沉默，不强制克制也不强制负面情绪/);
+        assert.match(prompt,/同一条动态只作为一次契机/);
+    }
+    const settings=normalizeSettings({proactiveFrequency:'high'});
+    assert.doesNotMatch(buildStoryPhonePrompt(build(),context,settings,four),/特殊再次联系契机/);
+    assert.match(buildStoryPhonePrompt(build(),context,settings,four),/不设冷却/);
+});
+
+test('reposts after unanswered WhatsApp/WeChat messages qualify without any X account or follow; candidates stay pure facts',()=>{
+    for(const app of ['whatsapp','wechat']){
+        const state=xState();
+        state.x.n1={...npcPost('n1',DAY1),reposted:true,repostedAt:4000,repostedDay:DAY2};
+        state[app].acc1=chatAccount();
+        state[app].w1=appMessage('w1','assistant',1000,stamp('2026-11-01'));
+        const candidates=xTriggerCandidates(state,'Sam Lee');
+        assert.equal(candidates.length,1);
+        assert.equal(candidates[0].channel,app);
+        assert.equal(candidates[0].name,'乙');
+        assert.deepEqual(Object.keys(candidates[0]),['channel','name','unanswered','posts']);
+        assert.equal(candidates[0].posts[0].kind,'转发');
+        const prompt=buildStoryPhonePrompt(state,context,normalizeSettings({proactiveFrequency:'medium'}),four);
+        assert.match(prompt,/特殊再次联系契机/);
+        assert.match(prompt,new RegExp('"channel":"'+app+'"'));
+    }
+});
+
+test('anonymous alias, user replies, pre-message or missing posts never qualify; undelivered drafts are not replies',()=>{
+    const base=()=>{const state=xState();state.messages.m1=sms('m1','assistant',1000,stamp('2026-11-01'));return state;};
+    const anon=base();anon.x.profile={id:'profile',type:'profile',alias:'马甲'};anon.x.p1=userPost('p1',DAY2);
+    assert.deepEqual(xTriggerCandidates(anon,'Sam Lee'),[],'匿名账号发布不算契机');
+    const replied=base();replied.x.p1=userPost('p1',DAY2);replied.messages.m2=sms('m2','user',2000,stamp('2026-11-01','13:00'),{replyStatus:'sent'});
+    assert.deepEqual(xTriggerCandidates(replied,'Sam Lee'),[],'user已回复短信');
+    assert.doesNotMatch(buildStoryPhonePrompt(replied,context,normalizeSettings({}),four),/特殊再次联系契机/);
+    const chatApp=xState();chatApp.x.p1=userPost('p1',DAY2);chatApp.wechat.acc1=chatAccount();
+    chatApp.wechat.w1=appMessage('w1','assistant',1000,stamp('2026-11-01'));
+    chatApp.wechat.w2=appMessage('w2','user',2000,stamp('2026-11-01','13:00'));
+    assert.deepEqual(xTriggerCandidates(chatApp,'Sam Lee'),[],'user已在聊天App回复');
+    const queued={...chatApp,wechat:{...chatApp.wechat,w2:{...chatApp.wechat.w2,status:'pending'}}};
+    assert.equal(xTriggerCandidates(queued,'Sam Lee').length,1,'未送达的草稿不算回复');
+    const none=base();
+    assert.deepEqual(xTriggerCandidates(none,'Sam Lee'),[],'没有新X动态');
+    assert.match(buildStoryPhonePrompt(none,context,normalizeSettings({}),four),/优先留白/);
+    const early=base();early.x.p1=userPost('p1',DAY1,500);
+    assert.deepEqual(xTriggerCandidates(early,'Sam Lee'),[],'动态早于未回复消息');
+});
+
+test('blocked or declined contacts and disabled apps keep the special trigger closed',()=>{
+    const smsState=()=>{const state=xState();state.x.p1=userPost('p1',DAY2);state.messages.m1=sms('m1','assistant',1000,stamp('2026-11-01'));return state;};
+    const blocked=smsState();blocked.profiles['blocked:card:alex.png']={messages:true};
+    assert.deepEqual(xTriggerCandidates(blocked,'Sam Lee'),[],'被拉黑的短信联系人');
+    for(const app of ['whatsapp','wechat']){
+        for(const poisoned of [{blocked:true},{friend:'declined'},{inboundRequest:'declined'}]){
+            const state=xState();state.x.p1=userPost('p1',DAY2);
+            state[app].acc1=chatAccount(poisoned);
+            state[app].w1=appMessage('w1','assistant',1000,stamp('2026-11-01'));
+            assert.deepEqual(xTriggerCandidates(state,'Sam Lee'),[],app+' '+JSON.stringify(poisoned));
+        }
+    }
+    // a disabled app keeps its candidate out of the prompt
+    const state=xState();state.x.p1=userPost('p1',DAY2);
+    state.whatsapp.acc1=chatAccount();
+    state.whatsapp.w1=appMessage('w1','assistant',1000,stamp('2026-11-01'));
+    assert.equal(xTriggerCandidates(state,'Sam Lee').length,1);
+    assert.match(buildStoryPhonePrompt(state,context,normalizeSettings({}),four),/特殊再次联系契机/);
+    assert.doesNotMatch(buildStoryPhonePrompt(state,context,normalizeSettings({apps:{whatsapp:false}}),four),/特殊再次联系契机/);
+});
+
+test('a newer unanswered NPC message retires the same post; building the prompt mutates nothing',()=>{
+    const state=xState();
+    state.x.p1=userPost('p1',DAY2);
+    state.messages.m1=sms('m1','assistant',1000,stamp('2026-11-01'));
+    state.messages.m2=sms('m2','assistant',4000,stamp('2026-11-03'));
+    assert.deepEqual(xTriggerCandidates(state,'Sam Lee'),[],'NPC再次联系后旧动态不再是契机');
+    assert.equal(state.messages.m1.read,false);
+    const before=structuredClone(state);
+    buildStoryPhonePrompt(state,context,normalizeSettings({}),four);
+    assert.deepEqual(state,before,'发帖不把消息标记为已回复，也不改其他状态');
+});
+
+test('reload and floor rollback recompute the X trigger from the journal',async()=>{
+    const chat=[...four,{mes:'第五楼，user在X上发布了新动态。'}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    const message={id:'m1',contactId:'card:alex.png',name:'Alex',role:'assistant',text:'NPC_m1',createdAt:1,storyTime:stamp('2026-11-01'),read:false};
+    let journal=appendChange(undefined,rev.slice(0,1),[
+        {collection:'x',key:'profile',value:{id:'profile',type:'profile',alias:'Sam Lee'}},
+        {collection:'messages',key:'m1',value:message}]);
+    journal=appendChange(journal,rev,[{collection:'x',key:'p1',value:userPost('p1',DAY2,2)}]);
+    for(let i=0;i<2;i++)assert.equal(xTriggerCandidates(replayJournal(journal),'Sam Lee').length,1,'存档重载后资格不变');
+    const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
+    assert.equal(Object.keys(rolled.messages).length,1);
+    assert.equal(xTriggerCandidates(rolled,'Sam Lee').length,0,'发帖楼被删除后资格消失');
+    const wiped=replayJournal(reconcileJournal(journal,[]).journal);
+    assert.equal(Object.keys(wiped.messages).length,0);
+    assert.equal(xTriggerCandidates(wiped,'Sam Lee').length,0,'消息楼回退后资格消失');
+    assert.ok(DAY1<DAY2&&DAY2<DAY3,'epoch day anchors stay comparable');
+});

@@ -14,6 +14,7 @@ const paths = {
     daily: '<path d="M5 3h14v18H5a2 2 0 0 1-2-2V7h2M5 7v12M8 6h8M8 9h8M8 12h3v3H8zM14 12h2M14 15h2M8 18h8"/>',
     assets: '<path d="m12 4 2-3m-2 3 3 2 3-1v3l3 2-1 3 1 3-3 2-1 3-4-1-3 2-3-2-3-1 1-4-2-3 2-2V7l4-1 3-2Z"/><path d="M12 7c-4 3-5 9-2 13M15 8l1 2m-9 0 1 2m8 2-1 2m-7-1 1 2m4-6-1 2"/>',
     edit: '<path d="m16 3 5 5L8 21H3v-5L16 3ZM14 5l5 5"/>',
+    inject: '<path d="M14 3H5v18h14V8M14 3v5h5M8 13h8m-4-3 3 3-3 3"/>',
     send: '<path d="M3 12h18m-7-7 7 7-7 7"/>',
     phone: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a15 15 0 0 1-7-7l2-2-2-5Z"/>',
     messages: '<path d="M4 4h16v12H9l-5 4V4Z"/><path d="M8 8h8M8 12h5"/>',
@@ -41,6 +42,7 @@ const paths = {
     retry: '<path d="M4 9a8 8 0 1 1 1 9M4 3v6h6"/>',
     block: '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
     unblock: '<circle cx="12" cy="12" r="9"/><path d="m7.7 12.2 2.8 2.8 5.8-6"/>',
+    weather: '<circle cx="8" cy="8" r="3.2"/><path d="M8 2.2v1.6M8 12.2v1.6M2.2 8h1.6M12.2 8h1.6M4 4l1.1 1.1M10.9 10.9 12 12M12 4l-1.1 1.1M5.1 10.9 4 12"/><path d="M7 17.5h9a3.5 3.5 0 1 0-1-6.86A5 5 0 0 0 5.4 13 2.6 2.6 0 0 0 7 17.5Z"/>',
 };
 
 export function icon(name) {

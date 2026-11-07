@@ -12,6 +12,8 @@ const { chromium } = process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
     ? createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + '/')('playwright') : require('playwright');
 const screenshotDir = resolve(project, '..', 'qa-results');
 await mkdir(screenshotDir, { recursive: true });
+const longPress = async (p, locator) => { await locator.dispatchEvent('pointerdown', { pointerType: 'touch', pointerId: 11, isPrimary: true, bubbles: true, cancelable: true }); await p.waitForTimeout(600); await locator.dispatchEvent('pointerup', { pointerType: 'touch', pointerId: 11, isPrimary: true, bubbles: true, cancelable: true }); await p.locator('.pp-press-bubble').waitFor(); };
+const closeBubble = async p => { await p.locator('.pp-content').first().dispatchEvent('pointerdown', { bubbles: true }); await p.locator('.pp-press-bubble').waitFor({ state: 'detached' }); };
 const fixture = legacy => '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#ddd;font-family:sans-serif;color:#c00}button{border:10px solid red;background:red;font-size:30px}#extensions_settings{max-width:300px}.menu_button{width:min-content!important;white-space:normal!important}</style></head><body><div id="extensions_settings"></div><p id="chat">正文不应被修改</p><script>window.saved=0;const extensionSettings=JSON.parse(localStorage.getItem("fixture-settings")||"{}");const context={extensionSettings,mainApi:"openai",saveSettingsDebounced(){window.saved++;localStorage.setItem("fixture-settings",JSON.stringify(extensionSettings));}}' + (legacy ? '' : ';context.event_types={APP_READY:"ready"};context.eventSource={on(type,fn){queueMicrotask(fn)}}') + ';window.SillyTavern={getContext(){return context}}</script><script type="module" src="/index.js"></script></body></html>';
 const phoneFixture = () => fixture(false).replace('<script type="module" src="/index.js"></script>', `<script>
 const ctx = window.SillyTavern.getContext();
@@ -334,8 +336,8 @@ try {
         await p.screenshot({path:resolve(screenshotDir,'snap-chat-320.png')});
         await p.setViewportSize({width:390,height:844});
 
-        await p.locator('[data-snap-action="edit-message"]').first().tap();await p.locator('[data-snap-field="editText"]').fill('Edited snap');await p.locator('[data-snap-form="edit-message"] button[type="submit"]').tap();await p.getByText('Edited snap',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat pencil is local');
-        await p.locator('[data-snap-action="reroll-message"]').first().tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();check(await p.getByText('How are you?',{exact:true}).count()===1,'Snapchat reroll leaves the other reply untouched');
+        await longPress(p, p.locator('.pp-snap-message').first());await p.locator('.pp-press-action[aria-label="修改消息"]').tap();await p.locator('[data-snap-field="editText"]').fill('Edited snap');await p.locator('[data-snap-form="edit-message"] button[type="submit"]').tap();await p.getByText('Edited snap',{exact:true}).waitFor();check(await p.evaluate(()=>window.modelCalls)===queuedCalls+1,'Snapchat pencil is local');
+        await longPress(p, p.locator('.pp-snap-message').first());await p.locator('.pp-press-action[aria-label="重新生成消息"]').tap();await p.getByText('Hey Moon!',{exact:true}).waitFor();check(await p.getByText('How are you?',{exact:true}).count()===1,'Snapchat reroll leaves the other reply untouched');
 
         check(await p.locator('[data-snap-field="message"]').inputValue()==='','Snapchat sent draft clears');
         check(await p.getByText('@alex',{exact:true}).count()===1,'Snapchat header displays only account handle');
@@ -439,7 +441,7 @@ try {
         await p.locator('[data-x-field="comment"]').fill('When will you arrive?');await p.locator('[data-x-form="comment"] button[type="submit"]').tap();await p.getByText('When will you arrive?',{exact:false}).waitFor();
         check(await p.evaluate(()=>window.modelCalls)===before+4,'square comments save locally without an extra model request');
         await p.getByRole('button',{name:'回复 5',exact:true}).waitFor();check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'square and threaded comments fit mobile width');
-        await p.locator('[data-x-action="back"]').tap();check(await p.getByRole('button',{name:'编辑当前页面',exact:true}).count()===1,'back from square thread returns to square');
+        await p.locator('[data-x-action="back"]').tap();check(await p.locator('.pp-x-post').filter({hasText:'A quiet afternoon in the park.'}).count()===1,'back from square thread returns to square');
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="square"]').tap();await p.getByRole('button',{name:'已赞 13',exact:true}).waitFor();check(true,'square posts and reactions survive reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='Different scene';await c.eventSource.emit('MESSAGE_EDITED');});await p.getByText('暂无帖子',{exact:true}).waitFor();check(true,'square UI rolls back after source edit');await ctx.close();
     }
@@ -490,20 +492,22 @@ try {
         await p.evaluate(()=>{const c=window.SillyTavern.getContext();c.chat[0].mes='2003-07-24 14:30\nA local park is open.';c.generateQuietPrompt=async o=>{window.modelCalls++;if(o.quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:10,stats:[]});if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[],evaluations:[]});if(o.quietPrompt.includes('当前任务：X 动态'))return JSON.stringify({posts:[]});window.squarePrompt=o.quietPrompt;return JSON.stringify({posts:[{name:'Rowan',handle:'rowan',text:'The park is peaceful today.',publicBasis:{access:'public',summary:'Public park visit',sourceIndex:0,evidence:'A local park is open.'}}]});};});
         await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="square"]').tap();await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();await p.getByRole('button',{name:'综合刷新',exact:true}).tap();await p.getByText('本楼公开内容已刷新',{exact:true}).waitFor();await p.locator('[data-x-action="tab"][data-x-id="square"]').tap();await p.getByText('The park is peaceful today.',{exact:true}).waitFor();
         const prepare=()=>p.evaluate(async()=>{const c=window.SillyTavern.getContext();await c.eventSource.emit('GENERATION_STARTED','normal');await c.eventSource.emit('GENERATION_AFTER_COMMANDS','normal');const text=c.extensionPrompts.durian_phone_public_opinion.value;await c.eventSource.emit('GENERATION_ENDED');return text;});
-        check((await prepare())==='','unselected square has no narrative instructions');
-        await p.getByRole('button',{name:'注入正文',exact:true}).tap();await p.getByRole('button',{name:'已选 · 取消注入',exact:true}).waitFor();
+        const park=p.locator('.pp-x-post').filter({hasText:'The park is peaceful today.'}).first();
+        const injectState=async()=>{await longPress(p,park);const state=await p.locator('.pp-press-action[data-kind="inject"]').evaluate(el=>({disabled:el.disabled,active:el.dataset.active==='true'}));await closeBubble(p);return state;};
+        check((await injectState()).active===false,'unselected square has no active injection');
+        await longPress(p,park);await p.locator('.pp-press-action[data-kind="inject"]').tap();check((await injectState()).active===true,'selecting a post marks it injected');
         check((await prepare()).includes('The park is peaceful today.'),'only manually selected post enters narrative');
-        await p.getByRole('button',{name:'已选 · 取消注入',exact:true}).tap();await p.getByRole('button',{name:'注入正文',exact:true}).waitFor();check((await prepare())==='','cancel selection clears next narrative');
-        await p.getByRole('button',{name:'注入正文',exact:true}).tap();await p.getByRole('button',{name:'已选 · 取消注入',exact:true}).waitFor();
-        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="square"]').tap();await p.getByRole('button',{name:'已选 · 取消注入',exact:true}).waitFor();check((await prepare()).includes('The park is peaceful today.'),'selection persists across reload');
+        await longPress(p,park);await p.locator('.pp-press-action[data-kind="inject"]').tap();check((await injectState()).active===false,'cancel selection clears next narrative');
+        await longPress(p,park);await p.locator('.pp-press-action[data-kind="inject"]').tap();
+        await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();await p.locator('[data-x-action="tab"][data-x-id="square"]').tap();check((await injectState()).active===true,'selection persists across reload');check((await prepare()).includes('The park is peaceful today.'),'persisted selection injects after reload');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();const data=c.chatMetadata.durian_phone_history.events.flatMap(e=>e.changes).find(x=>x.value?.publication).value;const evidence='Alex read the park post.';c.chat.push({name:'Alex',is_user:false,mes:evidence+'<!--durian-square-used:'+JSON.stringify({id:data.id,used:true,evidence})+'-->'});await c.eventSource.emit('GENERATION_ENDED');});
-        await p.getByRole('button',{name:'已采用',exact:true}).waitFor();check(await p.getByRole('button',{name:'已采用',exact:true}).isDisabled(),'adopted content is disabled');check((await prepare())==='','adopted post stops injecting');
-        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});await p.getByRole('button',{name:'已选 · 取消注入',exact:true}).waitFor();check((await prepare()).includes('The park is peaceful today.'),'deleting adoption restores selection');
+        check((await injectState()).disabled===true,'adopted content is disabled');check((await prepare())==='','adopted post stops injecting');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});check((await injectState()).active===true,'deleting adoption restores selection');
         await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.push({mes:'2003-07-25 14:30',is_user:false});await c.eventSource.emit('GENERATION_ENDED');});
-        await p.locator('.pp-square-expired').waitFor();check(await p.getByRole('button',{name:'已过期',exact:true}).isDisabled(),'expired post cannot be selected');check((await prepare())==='','expiry removes even previously selected content');
+        await p.locator('.pp-square-expired').waitFor();check((await injectState()).disabled===true,'expired post cannot be selected');check((await prepare())==='','expiry removes even previously selected content');
         check(await p.getByText('The park is peaceful today.',{exact:true}).count()===1,'expired content remains readable');
         await p.setViewportSize({width:320,height:740});check(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'expiry and injection controls fit 320px');await p.screenshot({path:resolve(screenshotDir,'square-expired-mobile.png')});
-        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});await p.getByRole('button',{name:'已选 · 取消注入',exact:true}).waitFor();check((await prepare()).includes('The park is peaceful today.'),'time rollback restores valid selection');
+        await p.evaluate(async()=>{const c=window.SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});check((await injectState()).active===true,'time rollback restores valid selection');check((await prepare()).includes('The park is peaceful today.'),'time rollback restores injection');
         await p.screenshot({path:resolve(screenshotDir,'square-selected-mobile.png')});check(await p.evaluate(()=>window.modelCalls)===0,'adoption and expiry add no model calls after reload');await ctx.close();
     }
     {
@@ -546,11 +550,12 @@ try {
             const b=el.getBoundingClientRect(),p=el.closest('.pp-content').getBoundingClientRect();return b.top>=p.top&&Math.abs(b.bottom-p.bottom)<2;
         }),'long SMS history cannot push input off screen');
         await p.locator('[data-qa-clone]').evaluateAll(es=>es.forEach(e=>e.remove()));
+        const lunch=p.locator('.pp-sms-item').filter({hasText:'Meet at lunch?'}).first();
         p.once('dialog', dialog => dialog.dismiss());
-        await p.locator('[data-sms-delete]').tap();
+        await longPress(p,lunch);await p.locator('.pp-press-action[aria-label="删除短信"]').tap();
         check(await p.getByText('Meet at lunch?',{exact:true}).count()===1,'cancel deletion preserves SMS');
         p.once('dialog', dialog => dialog.accept());
-        await p.locator('[data-sms-delete]').tap();
+        await longPress(p,lunch);await p.locator('.pp-press-action[aria-label="删除短信"]').tap();
         await p.getByText('Meet at lunch?',{exact:true}).waitFor({state:'detached'});
         check(await p.getByText('Yes, see you there.',{exact:true}).count()===1,'confirm deletes only selected char SMS');
         await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="messages"]').tap();await p.locator('[data-sms-contact]').tap();

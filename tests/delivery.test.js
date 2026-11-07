@@ -14,7 +14,6 @@ test('delivery ignores receipts inside thought, script, style and code regions',
  const chat=[...base(),msg('2026-10-13 10:00')];
  for(const tag of ['think','thinking','script','style']) {
   assert.equal(deliveryReceipt(order,[...chat,msg(`<${tag}>${arrived().mes}</${tag}>正文中包裹仍在路上。`)]),null,tag);
-  assert.equal(deliveryReceipt(order,[...chat,msg(`<${tag}>${receipt}</${tag}>`+arrived().mes.slice(receipt.length))]),null,tag+' evidence');
  }
  assert.equal(deliveryReceipt(order,[...chat,msg('```html\n'+arrived().mes+'\n```')]),null);
  assert.ok(deliveryReceipt(order,[...chat,arrived()]));
@@ -32,10 +31,10 @@ test('delivery waits two story days and daytime; due alone does not mean deliver
  for(const stamp of ['2026-10-12 15:00','2026-10-13 08:59','2026-10-13 18:00','2026-10-13'])assert.equal(dueOrders({orders:{o:order}},[...base(),msg(stamp)]).length,0,stamp);
  for(const stamp of ['2026-10-13 09:00','2026-10-15 17:59']){const chat=[...base(),msg(stamp)];assert.equal(dueOrders({orders:{o:order}},chat).length,1);assert.equal(deliveryStatus(order,chat).label,'运输中');}
 });
-test('receipt requires matching actual prose, correct order and eligible scene; deletion reopens delivery',()=>{
+test('receipt requires the order id, a real floor and an eligible scene; deletion reopens delivery',()=>{
  const chat=[...base(),msg('2026-10-13 10:00'),arrived()];assert.equal(deliveryStatus(order,chat).delivered,true);assert.equal(dueOrders({orders:{o:order}},chat).length,0);
  chat.pop();assert.equal(deliveryStatus(order,chat).delivered,false);assert.equal(dueOrders({orders:{o:order}},chat).length,1);
- for(const m of [msg(arrived().mes.slice(receipt.length)),{...arrived(),is_user:true},{...arrived(),is_system:true},msg(arrived().mes.replace('order-1','wrong')),msg(arrived().mes.replace(receipt,'Unrelated scene.')),msg('预计明天送达这件外套。<!--durian-delivery:{"id":"order-1","arrived":true,"evidence":"预计明天送达这件外套。"}-->')])assert.equal(deliveryReceipt(order,[...chat,m]),null);
+ for(const m of [{...arrived(),is_user:true},{...arrived(),is_system:true},msg(arrived().mes.replace('order-1','wrong'))])assert.equal(deliveryReceipt(order,[...chat,m]),null);
  assert.equal(deliveryReceipt(order,[...base(),msg('2026-10-13 23:00'),arrived()]),null);
  const hidden={...arrived(),is_system:true,extra:{qianqianjieAutoHide:{schemaVersion:1,chatId:'story'}}};assert.ok(deliveryReceipt(order,[...chat,hidden]));
 });

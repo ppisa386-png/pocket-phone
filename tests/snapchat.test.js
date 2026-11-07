@@ -4,8 +4,8 @@ import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
 import {createSnapchat,snapItems,snapExpired,snapAmount,snapUnread,snapStoryRefreshState} from '../src/snapchat.js';
-import {normalizeSettings} from '../src/config.js';
-import {buildContinuityPrompt} from '../src/continuity.js';
+import {normalizeSettings} from '../src/config.js';import {buildContinuityPrompt} from '../src/continuity.js';
+import {createSnapPanel} from '../src/snapchat-view.js';
 
 function setup() {
  const bus=new EventEmitter();let response={},calls=0,lastPrompt='';
@@ -42,6 +42,23 @@ test('failed reply retries the same sent message once; all media remain text',as
  let messages=snapItems(f.state(),'message');assert.equal(messages.length,1);assert.equal(messages[0].status,'failed');
  f.reply({status:'reply',kind:'video',text:'A short wave at the camera'});ok(await f.snap.retryMessage(messages[0].id));assert.equal(snapItems(f.state(),'message').length,2);assert.equal((await f.snap.retryMessage(messages[0].id)).ok,false);f.close();
 });
+
+test('deleting one snap preserves the rest, survives reload, and long-press reflects permissions',async()=>{
+ const f=setup();try{const id=await friend(f);f.reply({status:'reply',text:'Hello',kind:'voice'});ok(await f.snap.send(id,'text','Mine'));
+  const all=snapItems(f.state(),'message'),theirs=all.find(m=>m.role==='assistant'),mine=all.find(m=>m.role==='user');
+  const panel=createSnapPanel({adapter:{userName:()=>'Moon'},getView:()=>f.state(),redraw(){},notice(){}});
+  await panel.action('thread',id);
+  assert.deepEqual(panel.press({dataset:{press:'snap-message',snapId:theirs.id}}).map(a=>a.icon),['edit','refresh','delete']);
+  assert.deepEqual(panel.press({dataset:{press:'snap-message',snapId:mine.id}}).map(a=>a.icon),['delete']);
+  assert.doesNotMatch(panel.html(),/pp-snap-message-tools/);
+  ok(await f.snap.deleteMessage(theirs.id));assert.equal(f.state().snapchat[theirs.id],undefined);
+  assert.deepEqual(snapItems(f.state(),'message').map(m=>m.id),all.map(m=>m.id).filter(x=>x!==theirs.id));
+  const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal((await reload.read()).state.snapchat[theirs.id],undefined);}finally{reload.destroy();}
+  assert.equal((await f.snap.deleteMessage(theirs.id)).ok,false);
+  ok(await f.snap.deleteMessage(mine.id));assert.equal(snapItems(f.state(),'message').length,0);
+ }finally{f.close();}
+});
+
 
 test('voice and video calls enforce separate prompt boundaries and one active call',async()=>{
  const f=setup();const id=await friend(f);f.reply({status:'answered',text:'Hello'});ok(await f.snap.call(id,'voice'));assert.match(f.prompt(),/只允许听觉/);const c=snapItems(f.state(),'call')[0];

@@ -73,6 +73,26 @@ for(const app of ['whatsapp','wechat']) {
         await panel.action('thread','a');assert.match(panel.html(),/&lt;script&gt;/);await panel.action('cash');assert.equal(panel.back(),true);assert.match(panel.html(),/data-chat-form="message"/);await panel.action('edit','m');assert.equal(panel.back(),true);assert.equal(panel.back(),true);assert.equal(panel.back(),false);
         await panel.action('add');assert.match(panel.html(),/发送好友申请/);panel.reset();assert.doesNotMatch(panel.html(),/data-chat-form="add"/);
     });
+    test(app+': long-press menu targets one message and deletion is permanent without touching other records',async()=>{
+        const f=fixture(app);try{
+            const id=await add(f);f.reply({status:'reply',messages:[{kind:'text',text:'Hello'},{kind:'text',text:'Again'}]});ok(await f.api.send(id,'text','Mine'));
+            const all=chatItems(f.state(),app,'message'),theirs=all.filter(m=>m.role==='assistant'),mine=all.find(m=>m.role==='user');
+            const snapshot=structuredClone(f.state()[app]);
+            const panel=createChatPanel({app,adapter:{userName:()=>'Sam'},getView:()=>f.state(),redraw(){},notice(){}});
+            await panel.action('thread',id);
+            assert.deepEqual(panel.press({dataset:{press:'chat-message',chatId:theirs[0].id}}).map(a=>a.icon),['edit','refresh','delete']);
+            assert.deepEqual(panel.press({dataset:{press:'chat-message',chatId:mine.id}}).map(a=>a.icon),['delete']);
+            assert.doesNotMatch(panel.html(),/pp-chat-message-tools/);
+            ok(await f.api.deleteMessage(theirs[0].id));
+            assert.equal(f.state()[app][theirs[0].id],undefined);
+            assert.deepEqual(f.state()[app][mine.id],snapshot[mine.id]);
+            assert.deepEqual(chatItems(f.state(),app,'message').map(m=>m.id),all.map(m=>m.id).filter(x=>x!==theirs[0].id));
+            const reload=createPhoneMemory({getContext:()=>f.ctx});try{assert.equal((await reload.read()).state[app][theirs[0].id],undefined);}finally{reload.destroy();}
+            assert.equal((await f.api.deleteMessage(theirs[0].id)).ok,false);
+            ok(await f.api.deleteMessage(mine.id));assert.equal(chatItems(f.state(),app,'message').filter(m=>m.role==='user').length,0);
+            assert.equal(chatItems(f.state(),app,'account').length,1);
+        }finally{f.close();}
+    });
 }
 test('same people in both apps keep independent recognition, messages, history budgets and transfer reservations',async()=>{
     const f=fixture('whatsapp');try{const id=await add(f),wc=f.make('wechat');f.reply({accepted:true,name:'Alex'});ok(await wc.addByName('Alex'));const wid=chatItems(f.state(),'wechat','account')[0].id;

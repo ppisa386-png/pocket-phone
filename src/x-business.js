@@ -1,10 +1,10 @@
-import {brandImpact} from './x-influence.js?v=1.1.25';
+import {brandImpact} from './x-influence.js?v=1.1.29';
 // Projects and counters live in the rollback journal. Only the private draw
 // survives removal of its source floor, so a replay of the same plan cannot reroll it.
-import {socialContact} from './outreach.js?v=1.1.25';
-import {effectiveReply} from './contact-policy.js?v=1.1.13';
-import {appendChange,replayJournal} from './journal.js?v=1.1.13';
-import {dateDay,dayDate,readStoryClock} from './story-clock.js?v=1.1.12';
+import {socialContact} from './outreach.js?v=1.1.29';
+import {effectiveReply} from './contact-policy.js?v=1.1.29';
+import {appendChange,replayJournal} from './journal.js?v=1.1.29';
+import {dateDay,dayDate,readStoryClock} from './story-clock.js?v=1.1.29';
 
 const write=(key,value)=>({collection:'business',key,value});
 const projects=state=>Object.values(state.business||{}).filter(p=>p.id);
@@ -27,7 +27,7 @@ export function dealDecision(p,kind,turn,day,risky,terms){
 }
 export function dmDealTask(state,id){
     const plans=projects(state).filter(p=>p.accountId===id&&p.status==='invited').map(publicPlan);
-    return plans.length?'\n本账号的合作邀约：'+JSON.stringify(plans)+'。若本条user私信明确同意并实际成立合作或明确拒绝，在JSON加 deal:{id,kind:"accept或reject",evidence:"user本条私信逐字引文",terms:"实际约定"}。询价、意向、回复和接受私信请求不等于合作。':'';
+    return plans.length?'\n本账号的合作邀约：'+JSON.stringify(plans)+'。若本条user私信明确同意并实际成立合作或明确拒绝，在JSON加 deal:{id,kind:"accept或reject",terms:"实际约定"}。询价、意向、回复和接受私信请求不等于合作。':'';
 }
 export function businessPrompt(state,settings,chat,user){
     if(!settings.apps.x)return '';
@@ -37,17 +37,17 @@ export function businessPrompt(state,settings,chat,user){
         const records=Object.values(state.x);
         const posts=records.filter(p=>p.type==='post'&&p.author==='user').slice(-20).map(({text,metrics})=>({text,metrics}));
         const accounts=records.filter(a=>a.type==='account').map(({name,id,blocked,dmAccepted,inboundRequest})=>({name,id,blocked,dmAccepted,inboundRequest}));
-        parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文","evidence":"本楼逐字到达事实"}-->。只用商业标签。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
+        parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文"}。只用商业标签。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
     }
     const open=plans.filter(p=>p.status==='invited');
-    if(open.length)parts.push('已有商业邀约 '+JSON.stringify(open.map(publicPlan))+'。仅对本楼实际发生的事实按顺序附<!--durian-business:{"kind":"investigate/accept/reject","id":"对应企划ID","terms":"成立时的约定","evidence":"本楼逐字依据"}-->。调查须已实际查证背景、产品或信誉（含委托完成）；浏览主页、询价不算。接受须明确达成合作，不替user决定。报价、签约及索赔均不等于资金收付，仅实际付款或已满足的结算条件沿用现有财务规则。');
+    if(open.length)parts.push('已有商业邀约 '+JSON.stringify(open.map(publicPlan))+'。仅对本楼实际发生的事实按顺序附<!--durian-business:{"kind":"investigate/accept/reject","id":"对应企划ID","terms":"成立时的约定"}。调查须已实际查证背景、产品或信誉（含委托完成）；浏览主页、询价不算。接受须明确达成合作，不替user决定。报价、签约及索赔均不等于资金收付，仅实际付款或已满足的结算条件沿用现有财务规则。');
     const undated=plans.filter(p=>p.status==='active'&&p.startDay===null);
-    if(undated.length)parts.push('这些合作的成立日期尚未明确：'+JSON.stringify(undated.map(publicPlan))+'。若本楼明确提及实际签约日期，可附<!--durian-business:{"kind":"date","id":"企划ID","date":"YYYY-MM-DD","evidence":"含明确成立日期的逐字原句"}-->，不得推测或改用设备时间。');
+    if(undated.length)parts.push('这些合作的成立日期尚未明确：'+JSON.stringify(undated.map(publicPlan))+'。若本楼明确提及实际签约日期，可附<!--durian-business:{"kind":"date","id":"企划ID","date":"YYYY-MM-DD"}，不得推测或改用设备时间。');
     const day=readStoryClock(chat).day;
     for(const p of plans.filter(p=>p.risk==='tracking')){
         const age=counter.turn+1-p.startTurn,w=windowFor(p.startDay);
         if(age<=0||age%10||!w||day===null||day>w.last)continue;
-        parts.push('隐藏商业风险（不可对读者披露机制）：'+JSON.stringify(publicPlan(p))+'，成立日 '+dayDate(p.startDay)+'，已过 '+(day-p.startDay)+' 天。只能在 '+dayDate(w.first)+' 至 '+dayDate(w.last)+' 内实际发生；不到日期不可提前，跳过期限不补写。可等待。事件须符合既有合作，不改写user行为。若实际发生，按争议严重度、推广深度、粉丝规模及曝光判断影响，同等条件下越近期声誉受损和掉粉通常越大，较久通常较轻；不凭索赔扣款。正文写明实际后果，附<!--durian-business:{"kind":"incident","id":"对应企划ID","loss":首日实际净掉粉整数,"longTail":有明确持续传播时才填true,"evidence":"本楼已发生的争议及公众反应逐字原句"}-->。当前粉丝 '+followers);
+        parts.push('隐藏商业风险（不可对读者披露机制）：'+JSON.stringify(publicPlan(p))+'，成立日 '+dayDate(p.startDay)+'，已过 '+(day-p.startDay)+' 天。只能在 '+dayDate(w.first)+' 至 '+dayDate(w.last)+' 内实际发生；不到日期不可提前，跳过期限不补写。可等待。事件须符合既有合作，不改写user行为。若实际发生，按争议严重度、推广深度、粉丝规模及曝光判断影响，同等条件下越近期声誉受损和掉粉通常越大，较久通常较轻；不凭索赔扣款。正文写明实际后果，附<!--durian-business:{"kind":"incident","id":"对应企划ID","loss":首日实际净掉粉整数,"longTail":有明确持续传播时才填true}。当前粉丝 '+followers);
     }
     return parts.join('\n');
 }
@@ -95,7 +95,7 @@ export function importBusiness(raw,revisions,chat,settings,annotations){
                 if(!p?.id)continue;
                 if(row.kind==='date'&&p.status==='active'&&p.startDay===null){
                     const day=dateDay(row.date);
-                    if(day!==null&&row.evidence.includes(row.date)&&(clock.day===null||day<=clock.day))
+                    if(day!==null&&(clock.day===null||day<=clock.day))
                         add([write(p.id,{...p,startDay:day,risk:p.risk==='tracking'&&clock.day>windowFor(day).last?'expired':p.risk})]);
                     continue;
                 }

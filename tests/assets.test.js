@@ -95,7 +95,6 @@ test('legacy audit errors keep retry available but cannot change money or existi
             {recoveredAssets:[{...giftRows()[0],amount:2000}]},
             {recoveredAssets:[{...giftRows()[0],category:'investment'}]},
             {recoveredAssets:[{...giftRows()[0],sourceIndex:999}]},
-            {recoveredAssets:[{...giftRows()[0],evidence:'这是编造的成交事实。'}]},
         ]) {f.reply(data);assert.equal((await f.assets.update()).ok,false);assert.deepEqual(f.state().assets,before);}
         f.reply({recoveredAssets:giftRows()});ok(await f.assets.update());
     }finally{f.close();}
@@ -104,7 +103,7 @@ test('legacy audit errors keep retry available but cannot change money or existi
 test('legacy audit can share the next assessment; old cash remains barred, new life costs settle',async()=>{
     const f=setup();try{
         await missedLegacyGifts(f);await f.append('继续旅行。','2026-01-03');
-        f.reply({...evaluation('2026-01-03'),recoveredAssets:giftRows(),events:[{kind:'expense',name:'重扣旧购物',sourceIndex:1,evidence:dressFact,amount:50}],living:{total:10,bookedIds:[]}});
+        f.reply({...evaluation('2026-01-03'),recoveredAssets:giftRows(),events:[{kind:'expense',name:'重扣旧购物',sourceIndex:1,amount:50}],living:{total:10,bookedIds:[]}});
         ok(await f.assets.update());assert.equal(assetRows(f.state(),'holding').length,4);assert.equal(cashBalance(f.state()),99000);
         assert.equal(f.state().assets.wallet.skippedUnverified,1);assert.equal(f.state().assets.wallet.lastDay,day('2026-01-03'));
         await f.append('次日。','2026-01-04');f.reply(evaluation('2026-01-04'));ok(await f.assets.update());
@@ -424,12 +423,11 @@ test('failure makes one model attempt, no partial write; chat change discards la
     } finally { f.close(); }
 });
 
-test('memory date can initialize but stale or mismatching evidence cannot; real date is never a fallback', () => {
+test('without a scene clock the model date initializes and later model dates are trusted', () => {
     const args = { chat: [{ mes: '没有日期的剧情。' }], index: 0, revision: 'a', memoryText: '日期：1999-03-02\n当前记忆。' };
-    const data = { ...initial('1999-03-02'), dateEvidence: '日期：1999-03-02' };
-    assert.equal(applyAssessment({ assets: {} }, data, {...args,persona:'Sam 常住美国。'}).at(-1).value.lastDay, day('1999-03-02'));
-    assert.throws(() => applyAssessment({ assets: {} }, { ...data, date: '1999-03-03' }, args));
-    assert.throws(() => applyAssessment({ assets: {} }, data, { ...args, memoryText: '' }));
+    assert.equal(applyAssessment({ assets: {} }, initial('1999-03-02'), {...args,persona:'Sam 常住美国。'}).at(-1).value.lastDay, day('1999-03-02'));
+    const later = applyAssessment({ assets: {} }, initial('1999-03-03'), args);
+    assert.equal(later.at(-1).value.lastDay, day('1999-03-03'));
 });
 
 test('narrative prompt is each normal turn, absent for quiet/impersonate/disabled app and cleared afterwards', async () => {
@@ -644,10 +642,10 @@ test('classification repair excludes tools without deleting cash, values or owne
  }finally{f.close();}
 });
 
-test('invalid classification IDs, duplicates, investment and missing reasons fail atomically',()=>{
+test('invalid classification IDs, duplicates and investment targets fail atomically',()=>{
  const d=day('2026-01-01'), original={assets:{wallet:{id:'wallet',type:'wallet',ownershipAuditVersion:1,openingMinor:100000,lastDay:d,lastIndex:0},tool:{id:'tool',type:'holding',category:'fixed',name:'工具',valueMinor:8500,active:true},right:{id:'right',type:'holding',category:'investment',name:'版权',active:true}}};
  const args={chat:[{mes:'日期：2026-01-01'},{mes:'日期：2026-01-02'}],index:1,revision:'next'};
- for(const rows of [[{id:'no',category:'exclude',reason:'未知'}],[{id:'right',category:'exclude',reason:'不能排除投资'}],[{id:'tool',category:'investment',reason:'不能改变收益性质'}],[{id:'tool',category:'exclude'}],[{id:'tool',category:'exclude',reason:'普通工具'},{id:'tool',category:'fixed',reason:'重复'}]]){
+ for(const rows of [[{id:'no',category:'exclude'}],[{id:'right',category:'exclude'}],[{id:'tool',category:'investment'}],[{id:'tool',category:'exclude'},{id:'tool',category:'fixed'}]]){
   const copy=structuredClone(original);assert.throws(()=>applyAssessment(original,{...evaluation('2026-01-02'),classifications:rows},args),/分类修正无效/);assert.deepEqual(original,copy);
  }
 });
@@ -663,13 +661,13 @@ test('one-click valuation of an existing gift needs no new prose or cash transac
  }finally{f.close();}
 });
 
-test('unverified new event is skipped while valid valuation and living expense settle',async()=>{
+test('events anchored to already-settled floors are skipped while valid valuation and living expense settle',async()=>{
  const f=setup();try{
   const first=initial();first.initial.holdings=[{name:'钻戒',category:'luxury',value:null}];f.reply(first);ok(await f.assets.update());
   await f.append('今天继续生活。','2026-01-11');const h=assetRows(f.state(),'holding')[0];
-  f.reply({...evaluation('2026-01-11'),events:[{kind:'expense',name:'虚构购买',amount:9,sourceIndex:1,evidence:'不存在的消费'}],valuations:[{id:h.id,value:5000}],living:{total:100,bookedIds:[]}});
+  f.reply({...evaluation('2026-01-11'),events:[{kind:'expense',name:'重扣旧购物',amount:9,sourceIndex:0}],valuations:[{id:h.id,value:5000}],living:{total:100,bookedIds:[]}});
   ok(await f.assets.update());assert.equal(f.state().assets[h.id].valueMinor,500000);assert.equal(cashBalance(f.state()),90000);assert.equal(f.state().assets.wallet.skippedUnverified,1);
-  assert.equal(assetRows(f.state(),'cash_transaction').some(t=>t.memo==='虚构购买'),false);
+  assert.equal(assetRows(f.state(),'cash_transaction').some(t=>t.memo==='重扣旧购物'),false);
   const panel=createAssetPanel({adapter:{},getView:f.state,redraw(){},notice(){}});assert.match(panel.html(),/跳过 1 条/);
   f.c.chat.pop();await f.memory.read();assert.equal(f.state().assets[h.id].valueMinor,null);assert.equal(cashBalance(f.state()),100000);
  }finally{f.close();}
@@ -700,10 +698,11 @@ test('Chinese persona and narrative resolve local money, independent of language
  }
 });
 
-test('unresolved residence, travel-only evidence, invented source and wrong region/currency cannot open a wallet',async()=>{
- for(const home of [null,{region:'CN',currency:'CNY',evidence:'Sam 使用中文。'},{region:'JP',currency:'JPY',evidence:'Sam 正在日本旅游。'},{region:'JP',currency:'CNY',evidence:'Sam 常住日本。'},{region:'JP',currency:'JPY',evidence:'不存在的原句'}]){
+test('wrong region/currency pairs cannot open a wallet; declared homes are trusted',async()=>{
+ for(const home of [null,{region:'JP',currency:'CNY'}]){
   const f=setup();try{f.c.powerUserSettings.persona_description='Sam 使用中文。Sam 正在日本旅游。';f.reply({...initial(),residence:home});assert.equal((await f.assets.update()).ok,false);assert.equal(f.state().assets.wallet,undefined);}finally{f.close();}
  }
+ const f=setup();try{f.c.powerUserSettings.persona_description='Sam 使用中文。Sam 正在日本旅游。';f.reply({...initial(),residence:{region:'JP',currency:'JPY'}});ok(await f.assets.update());assert.equal(f.state().assets.wallet.currency,'JPY');}finally{f.close();}
 });
 
 test('legacy USD migration quotes the pair, converts atomically using a user rate and rolls back with its floor',async()=>{
@@ -729,19 +728,19 @@ test('residence combines persona and everyday school geography without requiring
    f.c.chat[0].mes='日期：2026-01-01\n'+place+'的清晨。\n你走进学校，开始高三开学第一天。';
    f.reply({...initial(),residence:{place,region,currency,evidence:['Identity: 高中毕业班学生',place+'的清晨。你走进学校，开始高三开学第一天。']}});
    const n=f.count();ok(await f.assets.update());assert.equal(f.count(),n+1);assert.equal(f.state().assets.wallet.currency,currency);
-   assert.match(f.prompt(),/不要求原文出现国家全名/);assert.doesNotMatch(f.prompt(),/residenceContext/);
+   assert.match(f.prompt(),/place允许填写推断出的真实地区/);assert.doesNotMatch(f.prompt(),/residenceContext/);
   }finally{f.close();}
  }
 });
-test('residence accepts separate literal excerpts and formatting but still rejects invented conclusions and nationality-only evidence',async()=>{
+test('residence resolution validates only the region/currency pair and a non-language place',async()=>{
  const {resolveResidence}=await import('../src/currency.js');
  const persona='Nationality: 美国\nIdentity: 高中毕业班学生';
  const prose=[{text:'<p>南加州的清晨。</p>你走进学校。'},{text:'这里是你上学的地方。'}];
- for(const evidence of [['Nationality: 美国','南加州的清晨。你走进学校。'], '南加州的清晨。……这里是你上学的地方。'])
-  assert.deepEqual(resolveResidence({region:'US',currency:'USD',place:'南加州',evidence},persona,prose),{region:'US',currency:'USD'});
- for(const evidence of ['你常住美国。',['南加州的清晨。','你已永久定居美国。'],'Nationality: 美国'])
-  assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:evidence==='Nationality: 美国'?'美国':'南加州',evidence},persona,prose));
- assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:'南加州',evidence:['你正在南加州旅游。']},'',[{text:'你正在南加州旅游。'}]));
+ assert.deepEqual(resolveResidence({region:'US',currency:'USD',place:'南加州',evidence:['Nationality: 美国','南加州的清晨。']},persona,prose),{region:'US',currency:'USD'});
+ assert.deepEqual(resolveResidence({region:'US',currency:'USD',place:'南加州',inferred:true},persona,prose),{region:'US',currency:'USD'});
+ assert.deepEqual(resolveResidence({region:'JP',currency:'JPY',place:'东京',evidence:'不存在的原句'},persona,prose),{region:'JP',currency:'JPY'});
+ assert.throws(()=>resolveResidence({region:'US',currency:'CNY',place:'南加州'},persona,prose),/币种不匹配/);
+ assert.throws(()=>resolveResidence({region:'US',currency:'USD',place:'中文'},persona,prose),/语言名称/);
 });
 
 for(const mode of ['id','ref','source'])test('API estimates an actual expense with no narrative number after several floors via '+mode,async()=>{
@@ -816,18 +815,20 @@ test('unavailable, disabled and cross-chat summaries never block the existing cu
   }finally{bridge?.close();f.close();}
  }
 });
-test('travel, planned relocation, another person and invented relocation evidence keep the confirmed home',async()=>{
- for(const [fact,subject,evidence] of [
-  ['Sam去东京旅行，支付了餐费。','user',null],
-  ['Sam计划搬到东京定居，支付了餐费。','user',null],
-  ['朋友搬到东京定居，Sam支付了餐费。','friend',null],
-  ['Sam支付了餐费。','user','Sam已搬到东京定居。']
+test('a declared completed user migration with a real expense floor proposes the switch; other subjects keep the home',async()=>{
+ for(const [fact,subject] of [
+  ['Sam去东京旅行，支付了餐费。','user'],
+  ['Sam计划搬到东京定居，支付了餐费。','user'],
+  ['Sam已搬到东京定居，支付了餐费。','user'],
+  ['朋友搬到东京定居，Sam支付了餐费。','friend']
  ]){
   const f=setup();let bridge;try{
    f.reply({...initial(),initial:{balance:80,holdings:[],jobs:[]}});ok(await f.assets.update());
    await f.append(fact+marker({kind:'expense',name:'餐费',amount:null,evidence:fact}),'2026-01-02');bridge=residenceBridge(f,[{messageIndex:1,summary:fact}]);
-   f.reply({...evaluation('2026-01-02'),events:[{ref:'P1',amount:10}],residenceChange:{sourceIndex:1,subject,status:'completed',region:'JP',currency:'JPY',place:'东京',evidence:evidence||fact}});
-   ok(await f.assets.update());assert.equal(f.state().assets.wallet.region,'US');assert.equal(cashBalance(f.state()),7000);
+   f.reply({...evaluation('2026-01-02'),events:[{ref:'P1',amount:10}],residenceChange:{sourceIndex:1,subject,status:'completed',region:'JP',currency:'JPY',place:'东京'}});
+   const r=await f.assets.update();ok(r);
+   if(subject==='user'){assert.equal(r.value.switchFrom,'USD');assert.equal(r.value.switchTo,'JPY');assert.equal(f.state().assets.wallet.region,'US');}
+   else{assert.equal(f.state().assets.wallet.region,'US');assert.equal(cashBalance(f.state()),7000);}
   }finally{bridge?.close();f.close();}
  }
 });
@@ -902,10 +903,29 @@ test('initial residence uses host context without appending a private narrative 
   f.reply({...initial(),residence:{region:'CN',currency:'CNY',place:'中国',inferred:true,reason:'近期人物、生活和高考环境共同指向中国。'}});ok(await f.assets.update());assert.equal(f.state().assets.wallet.region,'CN');assert.doesNotMatch(f.prompt(),/最近正文0|用户回复0|residenceContext/);
  }finally{f.close();}
 });
-test('inference still requires supplied context, an explanation and a valid local currency pair',async()=>{
+test('inference needs no explanation; only the region/currency pair is enforced',async()=>{
  const {resolveResidence}=await import('../src/currency.js');
+ assert.deepEqual(resolveResidence({region:'JP',currency:'JPY',inferred:true},'学生',[],{allowInference:true}),{region:'JP',currency:'JPY'});
+ assert.deepEqual(resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:'学校环境'},'学生',[],{allowInference:true}),{region:'JP',currency:'JPY'});
  assert.throws(()=>resolveResidence({region:'JP',currency:'CNY',inferred:true,reason:'学校环境'},'学生',[],{allowInference:true}));
- assert.throws(()=>resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:''},'学生',[],{allowInference:true}));
- assert.throws(()=>resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:'无资料猜测'},'',[],{allowInference:true}));
- assert.throws(()=>resolveResidence({region:'JP',currency:'JPY',inferred:true,reason:'迁居猜测'},'学生',[]));
+ assert.deepEqual(resolveResidence({region:'JP',currency:'JPY'},'学生',[]),{region:'JP',currency:'JPY'});
+});
+
+test('shared currentLocation ships with the assessment payload as background only and never moves the residence currency',async()=>{
+ const f=setup();try{
+  f.reply({...initial()});ok(await f.assets.update());
+  let payload=JSON.parse(f.prompt().split('账本与待核对资料：')[1].split('\n')[0]);
+  assert.equal(payload.currentLocation,null);
+  assert.match(f.prompt(),/currentLocation 只是共享当前位置/);
+  assert.match(f.prompt(),/旅行、出差、短期停留不改变常住地，不据此换币/);
+  f.c.chat.push({mes:'2026-01-02 10:00\nSam is traveling in Tokyo.<!--durian-location:{"city":"东京"}-->',is_user:false});
+  await f.memory.read();
+  f.reply(evaluation('2026-01-02'));ok(await f.assets.update());
+  payload=JSON.parse(f.prompt().split('账本与待核对资料：')[1].split('\n')[0]);
+  assert.equal(payload.currentLocation,'东京');
+  assert.equal(payload.currency,'USD');
+  assert.equal(payload.previousResidence,'US');
+  assert.equal(f.state().assets.wallet.currency,'USD');
+  assert.equal(f.state().assets.wallet.region,'US');
+ }finally{f.close();}
 });

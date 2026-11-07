@@ -10,7 +10,7 @@ function setup() {
     const bus = new EventEmitter();
     const types = Object.fromEntries(['CHAT_CHANGED', 'MESSAGE_DELETED', 'MESSAGE_EDITED', 'GENERATION_STARTED', 'GENERATION_ENDED'].map(n => [n, n]));
     let requests = 0;
-    let response = () => JSON.stringify({ contacts: [{ name: 'Alex', number: '+1 212 555 0123', user_has_number: true, evidence: quote }] });
+    let response = () => JSON.stringify({ contacts: [{ name: 'Alex', number: '+1 212 555 0123', user_has_number: true, sourceIndex: 0 }] });
     const context = { chatId: 'A', name1: 'Sam', name2: 'Alex', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
         chat: [{ mes: quote, name: 'Alex' }], chatMetadata: {}, saveMetadata: async () => {}, onlineStatus: 'connected', eventSource: bus, event_types: types,
         async generateQuietPrompt(options) {
@@ -23,15 +23,17 @@ function setup() {
     return { phone, memory, context, settings, bus, requests: () => requests, reply: fn => { response = fn; }, close: () => { phone.destroy(); memory.destroy(); } };
 }
 
-test('contact evidence and digits are checked; implicit exchange stays numberless', () => {
+test('declared numbers are format-checked; implicit exchange stays numberless', () => {
     const chat = [{ mes: quote }, { mes: 'You and Bea exchange phone numbers.' }];
     const result = validateContacts({ contacts: [
-        { name: 'Alex', number: '999999', evidence: quote, user_has_number: true },
-        { name: 'Alex', number: null, evidence: 'invented evidence', user_has_number: true },
-        { name: 'Alex', number: '+1 212 555 0123', evidence: quote, user_has_number: false },
-        { name: 'Bea', number: null, evidence: chat[1].mes, user_has_number: true },
+        { name: 'Alex', number: '999999', user_has_number: true },
+        { name: 'Alex', number: null, user_has_number: true },
+        { name: 'Alex', number: '+1 212 555 0123', user_has_number: false },
+        { name: 'Bea', number: null, user_has_number: true },
     ] }, chat, { name1: 'Sam' });
-    assert.equal(result.length, 1); assert.equal(result[0].number, null); assert.equal(result[0].sourceIndex, 1);
+    assert.deepEqual(result.map(c => c.name), ['Alex', 'Bea']);
+    assert.equal(result[0].number, '999999'); assert.equal(result[0].sourceIndex, 1);
+    assert.equal(result[1].number, null);
     assert.throws(() => parseJSON('nonsense'));
 });
 

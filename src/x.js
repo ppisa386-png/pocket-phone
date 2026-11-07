@@ -1,18 +1,18 @@
-import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.1.18';
-import {pageEdits} from './x-edit.js?v=1.1.28';
-import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.1.28';
-import {dmDealTask,dealDecision} from './x-business.js?v=1.1.25';
-import {JOURNAL_KEY} from './journal.js?v=1.1.13';
-import {readStoryClock} from './story-clock.js?v=1.1.12';
-import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.28';
-import { publicationScenePrompt } from './social-context.js?v=1.1.17';
-import { xCommentKey, xComments, X_COMMENT_LIMIT } from './x-comments.js?v=1.1.28';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.28';
-import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.1.28';
-import {establishedSources} from './contacts.js?v=1.1.17';
-import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.1.8';
-import { parseModelObject } from './model-json.js?v=1.1.8';
-import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.25';
+import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.1.29';
+import {pageEdits,objectEdits} from './x-edit.js?v=1.1.29';
+import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.1.29';
+import {dmDealTask,dealDecision} from './x-business.js?v=1.1.29';
+import {JOURNAL_KEY} from './journal.js?v=1.1.29';
+import {readStoryClock} from './story-clock.js?v=1.1.29';
+import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.1.29';
+import { publicationScenePrompt } from './social-context.js?v=1.1.29';
+import { xCommentKey, xComments, X_COMMENT_LIMIT } from './x-comments.js?v=1.1.29';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.1.29';
+import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.1.29';
+import {establishedSources} from './contacts.js?v=1.1.29';
+import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.1.29';
+import { parseModelObject } from './model-json.js?v=1.1.29';
+import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.1.29';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
@@ -73,7 +73,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         if(!current())throw Error('X 已关闭或聊天已变化。');
         const ticket=await memory.begin(view);
         const commit=async changes=>{if(!current())throw Error('聊天已变化，本次操作已取消。');if(changes.length)await memory.commit(ticket,changes);};
-        return work(view.state,current,request,commit);
+        return work(view.state,current,request,commit,ticket);
     },'x');
     function prompt(state,a,task,combined) {
         const p=profile(state);
@@ -165,40 +165,56 @@ export function createX({memory,phone,getContext,getSettings}) {
         if(count<target)throw Error('有效评论不足，已有 '+saved.length+' 条，本次需要补齐到 '+target+' 条。请重试。');
         await commit(changes);
     }
+    // Returns {account} on success or {rejected:reason}; the reason is used for
+    // aggregate diagnostics only and never contains private model output.
     function resolvePostAuthor(state,item,changes,following,square,sources) {
-        if(noAccount(item))return null;
+        const reject=reason=>({rejected:reason});
+        if(noAccount(item))return reject('account');
         let a=item.accountId?state.x[item.accountId]:null;
-        if(item.accountId&&a?.type!=='account')return null;
+        if(item.accountId&&a?.type!=='account')return reject('account');
         if(!a)a=xItems(state,'account').find(old=>item.handle&&old.handle?.toLowerCase()===xText(item.handle).replace(/^@/,'').toLowerCase());
-        if(a?.blocked||(following&&!a?.following))return null;
+        if(a?.blocked||(following&&!a?.following))return reject('account');
         const identity=a||item,names=nameAliases(identity),context=getContext();
-        if(!names.length||sameNamedPerson(identity,{name:context.name1}))return null;
+        if(!names.length||sameNamedPerson(identity,{name:context.name1}))return reject('identity');
         const cards=context.characters||[];
-        const group=context.groups?.find(g=>String(g.id)===String(context.groupId));
-        const cast=cards.filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
-        const actor=cast.some(c=>sameNamedPerson(c,identity));
+        // Any character card counts as a story NPC; the cast filter used before
+        // wrongly dropped non-primary characters that exist in the settings.
+        const actor=cards.some(c=>sameNamedPerson(c,identity));
         const previous=xAccountKind(a),declared=item.authorKind;
         let kind;
         if(square){
             kind=declared||previous||(institutionName(identity.name)?'organization':'public');
-            if(!['public','organization'].includes(kind)||previous==='npc')return null;
-            if(actor&&!(kind==='organization'&&institutionName(identity.name)))return null;
-            if(kind==='public'&&sources.some(s=>names.some(n=>s.includes(n))))return null;
+            if(!['public','organization'].includes(kind)||previous==='npc')return reject('identity');
+            if(actor&&!(kind==='organization'&&institutionName(identity.name)))return reject('identity');
+            if(kind==='public'&&sources.some(s=>names.some(n=>s.includes(n))))return reject('identity');
         }else{
-            if(declared&&declared!=='npc'||['organization','public'].includes(previous)||institutionName(identity.name))return null;
-            const evidence=item.npcEvidence;
-            const grounded=typeof evidence==='string'&&evidence.trim().length>=4&&names.some(n=>evidence.includes(n))&&sources.some(s=>s.includes(evidence));
-            if(!a&&item.has_account!==true)return null;
-            if(a&&Object.values(state.business||{}).some(deal=>deal?.accountId===a.id))return null;
-            if(previous!=='npc'&&!actor&&!(declared==='npc'&&grounded))return null;
+            if(declared&&declared!=='npc'||['organization','public'].includes(previous)||institutionName(identity.name))return reject('identity');
+            // A brand-new NPC author must be a real story figure: the name (or an
+            // alias) has to appear in the provided story sources. Quotes are no
+            // longer required; fabricated names still fail this membership check.
+            const grounded=sources.some(s=>names.some(n=>s.includes(n)));
+            if(!a&&item.has_account!==true&&item.has_account!=='true')return reject('account');
+            if(a&&Object.values(state.business||{}).some(deal=>deal?.accountId===a.id))return reject('identity');
+            // Established story NPCs: classified NPC accounts, any character
+            // card, and legacy accounts that already authored home feed posts
+            // before classification fields existed (their posts stay in the
+            // home area, so they keep their posting rights).
+            const established=previous==='npc'||actor||!!a&&previous==null&&xItems(state,'post').some(p=>p.author===a.id&&p.feed!=='square');
+            if(!established&&!(declared==='npc'&&grounded))return reject('identity');
             kind='npc';
         }
         if(!a)a=register(state,item,changes,kind);
-        if(!a||a.blocked||kind==='npc'&&['public','organization'].includes(xAccountKind(a))||square&&xAccountKind(a)==='npc')return null;
+        if(!a||a.blocked||kind==='npc'&&['public','organization'].includes(xAccountKind(a))||square&&xAccountKind(a)==='npc')return reject('identity');
         if(a.authorKind!==kind){
             a={...a,authorKind:kind,crowd:kind!=='npc'};state.x[a.id]=a;changes.push(xSet(a));
         }
-        return a;
+        if(kind==='npc'&&!a.characterId){
+            // Legacy accounts can miss the card link; backfill it so memory
+            // queries and later classification keep working.
+            const cardId=localizedPerson(a,getContext(),xItems(state,'account')).cardId;
+            if(cardId){a={...a,characterId:cardId};state.x[a.id]=a;changes.push(xSet(a));}
+        }
+        return {account:a};
     }
     async function answer(state,a,m,current,request,commit) {
         const result=await ask(state,a,request,current,'当前任务：X 私信。仅回应本会话最后一条 user 消息，不查看其他账号的私信。对方的私信设置：'+a.dmPolicy+'；会话此前已通过：'+!!a.dmAccepted+'；记录：'+JSON.stringify(xThread(state,a.id).slice(-40).map(({role,text})=>({role,text})))+
@@ -206,7 +222,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         const changes=[xSet({...a,dmAccepted:a.dmAccepted||result.status==='reply'}),xSet({...m,status:result.status==='reply'?'answered':result.status})];
         if(result.status==='reply')changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false}));
         const deal=result.deal,p=state.business?.[deal?.id];
-        if(p?.accountId===a.id&&['accept','reject'].includes(deal?.kind)&&typeof deal.evidence==='string'&&deal.evidence.trim()&&m.text.includes(deal.evidence)){
+        if(p?.accountId===a.id&&['accept','reject'].includes(deal?.kind)){
             const context=getContext(),draw=context.chatMetadata?.[JOURNAL_KEY]?.businessDraws?.[p.id];
             changes.push(...dealDecision(p,deal.kind,state.business.counter.turn,readStoryClock(context.chat).day,draw,deal.terms));
         }
@@ -237,11 +253,26 @@ export function createX({memory,phone,getContext,getSettings}) {
         const edition=square?{id:'square-edition',type:'edition',editionId:crypto.randomUUID(),clock:squareClock(chat),postIds:[]}:null;
         const accounts=xItems(state,'account').filter(a=>!a.blocked&&(!following||a.following));
         if(following&&!accounts.length)return {added:0};
+        // Give the model the identity roster the program can already verify,
+        // so it does not have to guess which account IDs are eligible.
+        const identityAid=!square?(()=>{
+            const all=xItems(state,'account'),established=[],unclassified=[];
+            for(const account of accounts){
+                const kind=xAccountKind(account);
+                if(kind==='npc'||kind==null&&xItems(state,'post').some(p=>p.author===account.id&&p.feed!=='square'))established.push({id:account.id,name:account.name});
+                else if(kind==null&&!institutionName(account.name))unclassified.push({id:account.id,name:account.name});
+            }
+            const candidates=following?[]:(getContext().characters||[]).filter(c=>!sameNamedPerson(c,{name:getContext().name1})&&!all.some(a=>sameNamedPerson(a,c))).map(c=>c.name);
+            return (following?'\n关注流发帖身份由程序核对，禁止编造名单外人物、陌生网友或机构账号：已确立NPC账号直接用 accountId 发帖并附 authorKind:"npc"：':'\n首页发帖身份由程序核对，禁止编造名单外人物、陌生网友或机构账号：已确立NPC账号直接用 accountId 发帖并附 authorKind:"npc"：')+JSON.stringify(established)+
+                '；其余已知个人账号发帖须用 accountId 并附 authorKind:"npc"：'+JSON.stringify(unclassified)+
+                (following?'':'；尚无账号的设定角色可作为新作者附 name/handle/has_account:true/authorKind:"npc"：'+JSON.stringify(candidates))+
+                '；其他正文出现过的真实剧情人物作为新作者时必须附 has_account:true、authorKind:"npc"。';
+        })():'';
         const task=square?'当前任务：X 广场。无需关注任何人。'+getSettings().prompts.xSquare+'\n'+SQUARE_RULES+'\n禁止用作广场作者的角色姓名：'+JSON.stringify((getContext().characters||[]).map(c=>c.name)):
             '当前任务：X 动态。'+X_ACCOUNT_RULES+(following?'仅生成已关注且有剧情身份的NPC公开帖子，不生成公众或机构帖子，不能添加列表外发帖账号；评论者不受关注列表限制。':
                 '为你推荐只选当前剧情世界中有明确身份并适合使用X的NPC（朋友、同学、同事、其他剧情人物）。人数足够时生成10～15条，每位作者一条；合理人数不足按实返回，包括空数组。不创造人物冒充既有NPC。'+
                 '可写个人日常、工作、兴趣和观点，不要求围绕user，不泄露私事。陌生网友、校园资讯、官方、企业、品牌、媒体、赛事等公共账号只属于广场。')+
-                '。首页作者附 authorKind:"npc"；无角色卡的新NPC须附 npcEvidence（当前有效正文、人设、角色设定或世界书中明确描述该人物且含其姓名的逐字原句）。accounts 如提供也遵守相同规则，最多15个；新账号附has_account。';
+                '。首页作者附 authorKind:"npc"。accounts 如提供也遵守相同规则，最多15个；新账号附has_account。'+identityAid;
         const userPosts=square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15);
         const reachPosts=userPosts.filter(p=>!combined||state.x['impact:post:'+p.id]).map(p=>({postId:p.id,publicText:p.text,imageDescription:p.imageDescription,postedAtStory:p.postedAtStory||null,sourceIndex:p.sourceIndex??null,counts:xCounts(state,p)}));
         const reachTask=reachPosts.length ? REACH_CONTEXT+publicationScenePrompt(getContext(),userPosts)+
@@ -260,23 +291,27 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
 
 输出每条推文的累计点赞、转发、回复数量，保持三项数据与具体内容及粉丝规模相符。不使用固定互动比例，不额外根据经过多少剧情时间调整数据；持续传播和七天影响由独立机制处理。没有新的公开内容或互动变化时，不因重复刷新而机械累加数据。结果填入 "engagementUpdates"，其中 "metrics" 为累计数，包含已经展示的评论。
 `+JSON.stringify({followers:xAudience(state)?.followers??null,posts:reachPosts}) : '';
-        const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT(recommended)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须满足任务的逐字依据规则。':'');
+        const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT(recommended)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须填写。':'');
         const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
         const results=await ask(state,null,request,current,task+reachTask+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:p.text})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state))+
-            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 最多5条，可为空；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,evidence:"酒馆当前上下文中对应角色正文的连续逐字句子",witnessEvidence:"limited 时另填原文已发生外部目击的逐字句子，不能只写可能被看见",involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子，不需引用；public/limited 必须有有效引用，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',recommended?15:5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10))});
+            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 最多5条，可为空；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',recommended?15:5),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10))});
         state=structuredClone(state);state.x||={};const changes=[],authors=new Set();let added=0,repeatedSquare=false;
         if(!square&&!following){
             for(const old of xItems(state,'account').filter(a=>a.recommended)){const next={...old,recommended:false};state.x[next.id]=next;changes.push(xSet(next));}
-            for(const item of results.accounts){const a=resolvePostAuthor(state,item,changes,false,false,sources);if(a&&!a.blocked){a.recommended=true;changes.push(xSet({...a}));}}
+            for(const item of results.accounts){const resolved=resolvePostAuthor(state,item,changes,false,false,sources),a=resolved.account;if(a&&!a.blocked){a.recommended=true;changes.push(xSet({...a}));}}
         }
-        for(const item of results.posts){if(!xText(item?.text))continue;
-            const basis=square?squareBasis(item,prose):null;if(square&&!basis)continue;
-            const a=resolvePostAuthor(state,item,changes,following,square,sources);if(!a)continue;
+        // Safe filtering diagnostics: only aggregated reasons are counted;
+        // no post text, private story content or full model output is kept.
+        const skipped={identity:0,account:0,duplicate:0,invalid:0};
+        for(const item of results.posts){if(!xText(item?.text)){skipped.invalid++;continue;}
+            const basis=square?squareBasis(item,prose):null;if(square&&!basis){skipped.invalid++;continue;}
+            const resolved=resolvePostAuthor(state,item,changes,following,square,sources),a=resolved.account;
+            if(!a){skipped[resolved.rejected||'identity']++;continue;}
             if(!square&&!following){a.recommended=true;changes.push(xSet({...a}));}
             const existing=xItems(state,'post').find(p=>p.author===a.id&&(recommended?xCommentKey('',a.id,p.text)===xCommentKey('',a.id,item.text):p.text===xText(item.text)));
-            if(existing){if(square&&existing.feed==='square')repeatedSquare=true;continue;}
+            if(existing){if(square&&existing.feed==='square')repeatedSquare=true;skipped.duplicate++;continue;}
             if(recommended){
-                if(authors.has(a.id))continue;
+                if(authors.has(a.id)){skipped.duplicate++;continue;}
                 authors.add(a.id);
             }
             const mentionsUser=!square&&item.mentionsUser===true&&new RegExp('@'+profile(state).alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=$|[^\\p{L}\\p{N}_])','u').test(item.text);
@@ -285,7 +320,11 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             state.x[post.id]=post;addEngagement(state,post,item,changes);
             added++;
         }
-        if(recommended&&results.posts.length&&!added)throw Error('为你推荐没有可保存的新NPC推文：本批有效新增 0 条，原首页已保留。');
+        // Empty model batches (no fitting NPC) return added: 0 normally;
+        // only batches whose posts were all filtered report a failure with
+        // the aggregated reasons so the failing step stays identifiable.
+        const breaks=Object.entries({identity:'身份不符',account:'账号不可用',duplicate:'重复帖子',invalid:'字段无效'}).map(([key,label])=>skipped[key]?label+' '+skipped[key]+' 条':'').filter(Boolean).join('；');
+        if(recommended&&results.posts.length&&!added)throw Error('为你推荐没有可保存的新NPC推文：本批有效新增 0 条'+(breaks?'（'+breaks+'）':'')+'，原首页已保留。');
         for(const item of square?[]:results.replies){
             if(combined&&!userPosts.some(p=>p.id===item?.postId))continue;
             const post=state.x[item?.postId];if(post?.type!=='post'||post.author!=='user'||!xText(item.text)||noAccount(item))continue;
@@ -301,7 +340,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             addEngagement(state,post,item,changes);
         }
         if(!combined)changes.push(...audienceChanges(state,results.audience));
-        if(square){if(results.posts.length&&!added&&!repeatedSquare)throw Error('本批没有同时符合广场作者与公开依据要求的新帖，原广场已保留。');if(added||!repeatedSquare)changes.push(xSet(edition));}
+        if(square){if(results.posts.length&&!added&&!repeatedSquare)throw Error('本批没有同时符合广场作者与公开依据要求的新帖'+(breaks?'（'+breaks+'）':'')+'，原广场已保留。');if(added||!repeatedSquare)changes.push(xSet(edition));}
         await commit(changes);return {added};
         }
     return {
@@ -342,9 +381,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(p?.type!=='post'||p.feed!=='square'||squareStatus(p,state,chat)!=='active')throw Error('这条内容已采用、过期或时间不明确，无法注入。');
             await commit([xSet({...p,publication:{...p.publication,selected:!p.publication.selected,selectedIndex:chat.length-1}})]);
         });},
-        refreshTrends(){return run((...args)=>refreshTrendsStage(...args,false));},
-        refresh(following=false){return run((...args)=>refreshFeedStage(...args,following,false));},
-        editPage(scope,edits){return run(async(state,_current,_request,commit)=>{await commit(pageEdits(state,scope,edits));});},
+        refreshTrends(){return run((state,current,request,commit)=>refreshTrendsStage(state,current,request,commit,false));},
+        refresh(following=false){return run((state,current,request,commit)=>refreshFeedStage(state,current,request,commit,following,false));},
+        editPage(scope,edits){return run(async(state,_current,_request,commit)=>{await commit(scope?.kind?objectEdits(state,scope,edits):pageEdits(state,scope,edits));});},
         refreshPublic(){return run(async(state,current,request,commit)=>{
             const context=getContext(),chat=context.chat,floor=refreshFloor(chat);
             if(floor<0||state.x['public-refresh']?.floor===floor)throw Error('当前楼层没有新的刷新机会。');
@@ -402,7 +441,8 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             catch(error){if(current())await memory.commit(ticket,[xSet({...m,status:'failed'})]);throw error;}
         });},
         retryMessage(id){return run(async(state,current,request,commit)=>{const m=state.x[id];if(m?.type!=='message'||m.role!=='user'||!['failed','pending','request'].includes(m.status))throw Error('此消息不需要重试。');const a=xAccount(state,m.accountId);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await answer(state,a,m,current,request,commit);});},
-        completeComments(id){return run((...args)=>completeComments(...args,id));},
+        deleteMessage(id){return run(async(state,_c,_r,_commit,ticket)=>{if(state.x[id]?.type!=='message')throw Error('这条私信已不存在。');await memory.eraseRecord(ticket,'x',id);});},
+        completeComments(id){return run((state,current,request,commit)=>completeComments(state,current,request,commit,id));},
         markPostRead(id){return run(async(state,_c,_r,commit)=>{await commit([...(state.x[id]?.outreachMention?[xSet({...state.x[id],read:true})]:[]),...xItems(state,'comment').filter(c=>c.postId===id&&c.author!=='user'&&!c.read).map(c=>xSet({...c,read:true}))]);});},
         markRead(id){return run(async(state,_c,_r,commit)=>{await commit(xThread(state,id).filter(m=>m.role==='assistant'&&!m.read).map(m=>xSet({...m,read:true})));});},
     };

@@ -33,6 +33,7 @@ try{
  const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),p=await ctx.newPage();
  p.on('pageerror',e=>errors.push(e.message));await p.route('**/*',r=>{if(r.request().url().startsWith(origin))return r.continue();external.push(r.request().url());return r.abort();});
  await p.goto(origin);await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();
+ const longPress=async(locator)=>{await locator.dispatchEvent('pointerdown',{pointerType:'touch',pointerId:11,isPrimary:true,bubbles:true,cancelable:true});await p.waitForTimeout(600);await locator.dispatchEvent('pointerup',{pointerType:'touch',pointerId:11,isPrimary:true,bubbles:true,cancelable:true});await p.locator('.pp-press-bubble').waitFor();};
  await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'—');assert.equal(await p.evaluate(()=>window.calls),0);
  await p.locator('[data-x-action="reset-followers"]').tap();await p.getByText('已还原初始粉丝',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');
  await p.locator('[data-x-field="alias"]').fill('Moon');await p.getByRole('button',{name:'保存',exact:true}).tap();
@@ -49,13 +50,13 @@ try{
  await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();assert.equal(await p.locator('[data-x-followers]').innerText(),'70');
  await p.locator('[data-x-action="reset-followers"]').tap();await p.getByText('已还原初始粉丝',{exact:true}).waitFor();assert.equal(await p.locator('[data-x-followers]').innerText(),'50');assert.equal(await p.evaluate(()=>window.calls),5);
  await p.locator('[data-x-action="tab"][data-x-id="home"]').tap();assert.ok(await p.locator('[data-x-action="refresh"]').isDisabled());
- await p.getByRole('button',{name:'编辑当前页面'}).tap();
- const postEditor=p.locator('textarea').filter({visible:true});
- await postEditor.first().fill('Edited project');await p.getByRole('button',{name:'保存修改'}).tap();await p.getByText('Edited project',{exact:true}).waitFor();
+ await longPress(p.locator('.pp-x-post').filter({hasText:'My public project'}).first());await p.locator('.pp-press-action[data-kind="edit"]').tap();
+ await p.locator('[data-x-form="edit-page"] textarea').first().fill('Edited project');await p.getByRole('button',{name:'保存修改'}).tap();await p.getByText('Edited project',{exact:true}).waitFor();
  for(const [tab,content,edited] of [['square','Park report','Updated park'],['search','Public project discussion','Updated trend']]){
   await p.locator('[data-x-action="tab"][data-x-id="'+tab+'"]').tap();
-  await p.getByText(content,{exact:true}).waitFor();await p.getByRole('button',{name:'编辑当前页面'}).tap();
-  await p.locator('[data-x-form="edit-page"] textarea').first().fill(edited);
+  await p.getByText(content,{exact:true}).waitFor();
+  await longPress(p.locator(tab==='search'?'.pp-x-trend':'.pp-x-post').filter({hasText:content}).first());await p.locator('.pp-press-action[data-kind="edit"]').tap();
+  await p.locator('[data-x-form="edit-page"] input, [data-x-form="edit-page"] textarea').first().fill(edited);
   await p.getByRole('button',{name:'保存修改'}).tap();await p.getByText(edited,{exact:true}).waitFor();
  }
  await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();

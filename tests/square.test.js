@@ -31,13 +31,14 @@ test('recent source window counts twenty character replies, includes hidden memo
  const p=storyEvidenceRows(chat);assert.equal(p.filter(x=>x.role==='assistant').length,24);assert.equal(p[0].text,'user 0');
  assert.ok(p.some(x=>x.text==='reply 5'));assert.equal(p.at(-1).text,'next request');assert.doesNotMatch(JSON.stringify(p),/PRIVATE_|SYSTEM_SECRET/);
 });
-test('private, missing, out-of-window and speculative limited sighting evidence is rejected',()=>{
+test('private declarations and invalid summaries are rejected; declared access and source floors are trusted',()=>{
  const prose=[{index:4,role:'assistant',text:'The terrace is visible. A passerby saw two silhouettes.'}];
  const b={access:'public',summary:'Visible public scene',sourceIndex:4,evidence:'The terrace is visible.'};
  assert.ok(squareBasis({publicBasis:b},prose));assert.equal(squareBasis({publicBasis:{...b,access:'private'}},prose),null);
- assert.equal(squareBasis({publicBasis:{...b,access:'limited'}},prose),null);
- assert.equal(squareBasis({publicBasis:{...b,sourceIndex:3}},prose),null);
- assert.equal(squareBasis({publicBasis:{...b,evidence:'Invented witness'}},prose),null);
+ assert.ok(squareBasis({publicBasis:{...b,access:'limited'}},prose));
+ assert.equal(squareBasis({publicBasis:{...b,sourceIndex:3}},prose).sourceIndex,3);
+ assert.equal(squareBasis({publicBasis:{...b,summary:''}},prose),null);
+ assert.equal(squareBasis({publicBasis:{...b,access:'dubious'}},prose),null);
  assert.ok(squareBasis({publicBasis:{...b,access:'limited',witnessEvidence:'A passerby saw two silhouettes.'}},prose));
  assert.equal(squareBasis({publicBasis:{...background,involvesCharacters:true}},prose),null);
 });
@@ -72,7 +73,9 @@ test('expired selected posts remain readable but cannot inject; deleting time ju
   ok(await f.x.refresh('square'));const p=post(f);ok(await f.x.toggleInjection(p.id));
   f.c.chat.push({mes:'2003-07-25 14:30'});await f.memory.read();assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.equal((await f.x.toggleInjection(p.id)).ok,false);
   const panel=createXPanel({adapter:{storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});await panel.action('tab','square');
-  assert.match(panel.html(),/pp-square-expired/);assert.match(panel.html(),/aria-label="已过期"[^>]* disabled/);assert.match(panel.html(),/The park is quiet/);
+  assert.match(panel.html(),/pp-square-expired/);assert.doesNotMatch(panel.html(),/aria-label="已过期"/);assert.match(panel.html(),/The park is quiet/);
+  const actions=panel.press({dataset:{press:'x-post',xId:p.id}});
+  assert.deepEqual(actions.map(a=>a.icon),['edit','inject']);assert.equal(actions.find(a=>a.icon==='inject').disabled,true);
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);
   f.c.chat.push({mes:'2003-07-25'});await f.memory.read();assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.match(panel.html(),/时间不明确/);assert.equal(f.calls(),1);
  }finally{f.close();}

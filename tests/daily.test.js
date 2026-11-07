@@ -51,12 +51,12 @@ test('missing date stays unknown, future article dates cannot be invented by mod
   assert.equal(dailyExpiry({day:dateDay('2003-07-24')},[{mes:'2003-07-23'}]),'unknown');assert.equal(dailyExpiry({day:null},[{mes:'2003-07-24'}]),'unknown');
  }finally{f.close();}
 });
-test('private or old sources cannot be reported; all-invalid results preserve previous edition and do not retry',async()=>{
+test('private declarations and invalid summaries cannot be reported; all-invalid results preserve previous edition and do not retry',async()=>{
  const f=setup();try{ok(await f.daily.update());const before=f.state().daily.edition;
-  for(const basis of [{...background,access:'private'},{access:'public',summary:'Source',sourceIndex:0,evidence:'Never said this.'},{access:'limited',summary:'Curtains open',sourceIndex:0,evidence:'音乐节公开开幕。'}]){
+  for(const basis of [{...background,access:'private'},{access:'public',summary:''},{access:'dubious',summary:'Source',involvesCharacters:true},{...background,involvesCharacters:true}]){
    f.reply({articles:[{...article('不得出现'),publicBasis:basis}]});assert.equal((await f.daily.update()).ok,false);assert.deepEqual(f.state().daily.edition,before);
   }
-  assert.equal(f.calls(),4);f.reply(()=>{throw Error('offline');});assert.equal((await f.daily.update()).ok,false);assert.equal(f.calls(),5);assert.deepEqual(f.state().daily.edition,before);
+  assert.equal(f.calls(),5);f.reply(()=>{throw Error('offline');});assert.equal((await f.daily.update()).ok,false);assert.equal(f.calls(),6);assert.deepEqual(f.state().daily.edition,before);
  }finally{f.close();}
 });
 test('headlines, feature and short mention preserve editorial hierarchy; private rows are filtered',async()=>{
@@ -64,12 +64,12 @@ test('headlines, feature and short mention preserve editorial hierarchy; private
   const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});assert.match(panel.html(),/pp-daily-lead/);assert.match(panel.html(),/pp-daily-brief/);assert.doesNotMatch(panel.html(),/私事/);await panel.action('read',first(f).id);assert.match(panel.html(),/主办方公布/);assert.equal(f.calls(),1);
  }finally{f.close();}
 });
-test('daily source quotations are verified locally without attaching original floors',async()=>{
+test('declared character news keep their source floor without attaching original prose',async()=>{
  const f=setup();try{
   for(let i=1;i<=25;i++)f.c.chat.push({mes:'公开活动 '+i+' 已举行。',is_user:false});
   f.c.chat[25].is_system=true;f.c.chat[25].extra={qianqianjieAutoHide:{schemaVersion:1,chatId:'qq'}};
-  f.reply({articles:[{...article('旧消息'),subject:'character',publicBasis:{access:'public',summary:'Old event',sourceIndex:0,evidence:'编造的旧消息。'}}]});assert.equal((await f.daily.update()).ok,false);
-  f.reply({articles:[{...article('最新消息'),subject:'character',publicBasis:{access:'public',summary:'Public event',sourceIndex:25,evidence:'公开活动 25 已举行。'}}]});ok(await f.daily.update());assert.equal(first(f).publicBasis.sourceIndex,25);
+  f.reply({articles:[{...article('旧消息'),subject:'character',publicBasis:{access:'public',summary:'Old event',sourceIndex:0}}]});ok(await f.daily.update());assert.equal(first(f).publicBasis.sourceIndex,0);
+  f.reply({articles:[{...article('最新消息'),subject:'character',publicBasis:{access:'public',summary:'Public event',sourceIndex:25}}]});ok(await f.daily.update());assert.equal(first(f).publicBasis.sourceIndex,25);
   const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.recentProse,undefined);assert.doesNotMatch(f.prompt(),/公开活动 25 已举行/);
  }finally{f.close();}
 });
@@ -139,7 +139,7 @@ test('creative world news only needs a genuine context keyword, not a previously
   ok(await f.daily.toggle(first(f).id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/"fictionalWorldNews":true/);
   assert.match(f.prompt(),/不能凭空说 user/);assert.match(f.prompt(),/不是只能报道/);
   const panel=createDailyPanel({adapter:{storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
-  assert.match(panel.html(),/<h2>Los Angeles Times<\/h2>/);assert.doesNotMatch(panel.html(),/<h2>榴莲日报/);
+  assert.match(panel.html(),/<h2[^>]*>Los Angeles Times<\/h2>/);assert.doesNotMatch(panel.html(),/<h2[^>]*>榴莲日报/);
  }finally{f.close();}
 });
 
@@ -164,7 +164,7 @@ test('new editions require four to six valid unique stories and a newspaper titl
 test('legacy editions remain readable, with their recorded outlet as the masthead',()=>{
  const old={daily:{edition:{editionId:'old',day:dateDay('2003-07-24'),articleIds:['a']},a:{...article(),id:'a',type:'article',editionId:'old'}}};
  const panel=createDailyPanel({adapter:{storyChat:()=>[{mes:'2003-07-24'}]},getView:()=>old,redraw(){},notice(){}});
- assert.match(panel.html(),/<h2>城中日报<\/h2>/);
+ assert.match(panel.html(),/<h2[^>]*>城中日报<\/h2>/);
  assert.match(panel.html(),/城市音乐节开幕/);assert.equal(dailyArticles(old).length,1);
 });
 
@@ -215,7 +215,11 @@ test('archive keeps three expired dates, same-day refresh replaces rather than a
   assert.equal(Object.values(f.state().daily).filter(a=>a.type==='archive').length,3);
   const count=f.calls(),panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
   await panel.action('archive');assert.match(panel.html(),/过往报纸夹/);assert.equal((panel.html().match(/data-daily-action="archive-edition"/g)||[]).length,3);
-  await panel.action('archive-edition',old[0].editionId);await panel.action('read',old[0].articles[0].id);assert.match(panel.html(),/主办方公布/);assert.match(panel.html(),/已过期 · 仅供回看/);assert.equal((panel.html().match(/ disabled/g)||[]).length,4);
+  await panel.action('archive-edition',old[0].editionId);
+  assert.doesNotMatch(panel.html(),/data-daily-action="edit"/);
+  const archivedActions=panel.press({dataset:{press:'daily-article',dailyId:old[0].articles[0].id}});
+  assert.deepEqual(archivedActions.map(a=>a.icon),['edit','inject']);assert.equal(archivedActions.find(a=>a.icon==='inject').disabled,true);
+  await panel.action('read',old[0].articles[0].id);assert.match(panel.html(),/主办方公布/);assert.match(panel.html(),/已过期 · 仅供回看/);
   await panel.action('inject',old[0].articles[0].id);assert.equal(f.calls(),count);assert.equal((await f.daily.toggle(old[0].articles[0].id)).ok,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
   assert.equal(panel.back(),true);assert.match(panel.html(),/过往报纸夹/);assert.equal(panel.back(),true);assert.match(panel.html(),/第28日新闻/);assert.equal(panel.back(),false);
   const copy=setup();try{copy.c.chat=structuredClone(f.c.chat);copy.c.chatMetadata=structuredClone(f.c.chatMetadata);await copy.daily.open();assert.deepEqual(dailyArchives(copy.state(),copy.c.chat),old);assert.equal(copy.calls(),0);}finally{copy.close();}
@@ -256,7 +260,11 @@ test('manual editing preserves article identity and selection, updates injection
  const f=setup();try{
   ok(await f.daily.update());const article=first(f);ok(await f.daily.toggle(article.id));
   const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
-  assert.equal((panel.html().match(/data-daily-action="edit"/g)||[]).length,1);
+  assert.doesNotMatch(panel.html(),/data-daily-action="edit"/);
+  const articleActions=panel.press({dataset:{press:'daily-article',dailyId:article.id}});
+  assert.deepEqual(articleActions.map(a=>a.icon),['edit','inject']);
+  const metaActions=panel.press({dataset:{press:'daily-meta',dailyField:'publication'}});
+  assert.deepEqual(metaActions.map(a=>a.icon),['edit']);
   const fields={headline:'修改后的标题',summary:'修改后的导语',body:'修改后的正文 <script>。'};
   ok(await f.daily.edit(article.id,fields));await f.memory.read();
   assert.deepEqual(first(f),{...article,...fields,selected:true,selectedIndex:f.c.chat.length-1});

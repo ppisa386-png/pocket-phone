@@ -1,9 +1,9 @@
-import { walletCurrency } from './currency.js?v=1.1.17';
-import { assetRows, assetSet, assetText } from './assets-core.js?v=1.1.17';
-import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.1.17';
-import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES, financialEvidenceMatches } from './assets-policy.js?v=1.1.8';
-import { readStoryClock } from './story-clock.js?v=1.1.12';
-import { isMemoryHidden } from './journal.js?v=1.1.13';
+import { walletCurrency } from './currency.js?v=1.1.29';
+import { assetRows, assetSet, assetText } from './assets-core.js?v=1.1.29';
+import { validateFinancialEvent, applyFinancialEvent, applyAssetChanges } from './assets-events.js?v=1.1.29';
+import { ASSET_CATEGORY_RULES, ASSET_ITEM_RULES } from './assets-policy.js?v=1.1.29';
+import { readStoryClock } from './story-clock.js?v=1.1.29';
+import { isMemoryHidden } from './journal.js?v=1.1.29';
 
 // One migration audit for ledgers settled before ownership recovery existed.
 // This is NOT permission to reroll money, prices or the settlement period.
@@ -18,7 +18,7 @@ export function ownershipRecoveryProse(state, chat) {
         (!chat[p.index].is_system || isMemoryHidden(chat[p.index])) && p.day !== null && p.day >= state.assets.wallet.startDay).slice(-20);
 }
 
-export const OWNERSHIP_RECOVERY_RULES = '本次还需一次性检查酒馆当前可见剧情中对应ownershipRecoveryFloors的旧版已结算事实，仅补登记漏掉的user实物财产。返回recoveredAssets数组（确无遗漏返回[]），每条为{sourceIndex:原楼层index,evidence:同楼逐字取得依据,name:具体物品名,category:"fixed或luxury",owner:"user",amount:null,marketValue:合理正常市价或null,details:已知规格及取得方式}。'
+export const OWNERSHIP_RECOVERY_RULES = '本次还需一次性检查酒馆当前可见剧情中对应ownershipRecoveryFloors的旧版已结算事实，仅补登记漏掉的user实物财产。返回recoveredAssets数组（确无遗漏返回[]），每条为{sourceIndex:原楼层index,name:具体物品名,category:"fixed或luxury",owner:"user",amount:null,marketValue:合理正常市价或null,details:已知规格及取得方式}。'
     + '只登记已经买到/获赠且当前仍属于user的财产，付款人可以是别人；试穿、试背、想买、计划、他人物品、回忆旧物、无法确定内容的购物袋不算。逐项对照ownershipRecoveryHoldings全部记录（含已出售/排除条目），同一物品即使换了名称也不得再登；整套和单件不能重复，已有笼统收藏不得遮蔽明确后续新取得的物品。'
     + '旧楼仅恢复财产所有权，不补记现金、不重算旧生活费/工资/投资收益、不修改或重新估价已有财产，不回溯新增投资权益。旧楼提到的收支不能放入events绕过限制。不要续写剧情或补写正文注释。' + ASSET_CATEGORY_RULES + ASSET_ITEM_RULES;
 
@@ -34,7 +34,7 @@ export function applyOwnershipRecovery(original, data, chat) {
     const add = rows => { changes.push(...rows); applyAssetChanges(state, rows); };
     for (const raw of data.recoveredAssets) {
         const source = prose.find(p => p.index === raw.sourceIndex);
-        if (!source || !financialEvidenceMatches(source.text, raw.evidence)) throw Error('旧账补登记缺少可核对的原楼层依据。');
+        if (!source) throw Error('旧账补登记缺少有效的原楼层 sourceIndex。');
         if (raw.owner !== 'user' || !['fixed', 'luxury'].includes(raw.category) || raw.amount != null ||
             (raw.kind && raw.kind !== 'asset') || (raw.action && raw.action !== 'acquire') || raw.holdingId || raw.id)
             throw Error('旧账补查只能新增user实物财产，不能登记现金、投资或改写旧资产。');
