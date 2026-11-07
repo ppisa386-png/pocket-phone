@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
-import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherBackground, sceneBackground, buildForecast, monthDayOf, WEATHER_LOCATION_RULE } from '../src/weather.js';
+import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherBackground, sceneBackground, buildForecast, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
@@ -447,4 +447,51 @@ test('deleted floors remove the record together with its forecast window', async
         assert.equal(f.weather.report(await f.state()).forecast, undefined);
         assert.equal(weatherBackground(await f.state(), f.c.chat), '');
     } finally { f.close(); }
+});
+
+// ---- Real vs fictional locations: kind detection and climate adaptation ----
+
+test('location kinds: real table cities, worldbook-named fictional cities, and unconfirmed places', () => {
+    const context = { name1: 'Sam', characterId: 0, powerUserSettings: { persona_description: 'Sam 在虚构的云京城生活。' },
+        characters: [{ name: 'Alex', avatar: 'alex.png', data: { description: 'Alex 久居虚构的雾港城。', character_book: { entries: [{ enabled: true, content: '虚构的上海是云京国的港口。' }] } } }] };
+    assert.equal(locationKind('北京', context), 'real');
+    assert.equal(locationKind('雾港城', context), 'fictional');
+    assert.equal(locationKind('上海', context), 'fictional', 'a same-named place in the world material is fictional');
+    assert.equal(locationKind('无名小城', context), 'unconfirmed');
+    assert.equal(locationKind('', context), 'unconfirmed');
+});
+
+test('fictional and unconfirmed places never borrow a same-named real city climate', () => {
+    const context = { name1: 'Sam', characters: [], powerUserSettings: { persona_description: '' } };
+    void context;
+    assert.equal(climateFor('上海', null, 'real').archetype, 'cfa');
+    assert.equal(climateFor('上海', null, 'fictional', context).fictional, true);
+    assert.notEqual(JSON.stringify(climateFor('上海', null, 'fictional', context)), JSON.stringify(climateFor('上海', null, 'real')));
+    assert.notEqual(JSON.stringify(climateFor('上海', null, 'unconfirmed', context)), JSON.stringify(climateFor('上海', null, 'real')));
+});
+
+test('worldbook climate settings drive a fictional city weather profile', async () => {
+    const f = setup([{ mes: '2008-10-15 10:00\n开场。', is_user: false }]);
+    try {
+        f.c.characters[0] = { name: 'Alex', avatar: 'alex.png', data: { character_book: { entries: [{ enabled: true, content: '云京城地处热带，全年炎热，夏季多暴雨。' }] } } };
+        f.c.chat.push(marker('2026-10-15 10:00\nThe caravan reached 云京城.', '云京城'));
+        await f.memory.read();
+        await f.weather.refresh();
+        const record = (await f.state()).weather['云京城'];
+        assert.equal(record.kind, 'fictional');
+        assert.equal(record.climate.archetype, 'af');
+        assert.equal(record.climate.fromWorld, true);
+        const clock = { day: dateDay('2008-10-15'), hour: 10 };
+        let sum = 0; for (let i = 0; i < 300; i++) sum += initialWeather(record.climate, clock, freshRng(i)).temp;
+        assert.ok(sum / 300 > 22, 'the worldbook tropical setting keeps the city hot');
+        await f.weather.refresh();
+        assert.equal((await f.state()).weather['云京城'].climate.archetype, 'af', 'the saved profile is reused, not re-rolled');
+    } finally { f.close(); }
+});
+
+test('the same fictional city name in a different world gets a different climate', () => {
+    const cold = { name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'a.png', data: { character_book: { entries: [{ enabled: true, content: '云京城地处极地，冰原茫茫，常年寒风。' }] } } }] };
+    const hot = { name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'a.png', data: { character_book: { entries: [{ enabled: true, content: '云京城地处热带，全年炎热。' }] } } }] };
+    assert.equal(worldClimate('云京城', cold).archetype, 'et');
+    assert.equal(worldClimate('云京城', hot).archetype, 'af');
 });

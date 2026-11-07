@@ -3,11 +3,61 @@
 import { readStoryClock, dayDate } from './story-clock.js?v=1.1.29';
 import { effectiveReply } from './contact-policy.js?v=1.1.29';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.1.29';
+import { establishedSources } from './contacts.js?v=1.1.29';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
 
 const norm = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
 export const normCity = city => norm(city);
+
+// The marker carries only a city name, so the location kind is decided locally:
+// a known real city is real unless the world declares itself fictional (an
+// explicit fictional marker beside the city name or a world-level declaration),
+// a city named in the world setting is fictional, and anything else stays
+// unconfirmed — never silently borrowing a same-named real city's climate.
+export function locationKind(city, context) {
+    const name = normCity(city);
+    if (!name) return 'unconfirmed';
+    const material = typeof context === 'object' && context ? worldMaterial(context) : [];
+    if (CITY_TABLE[name]) {
+        const nearCity = material.some(text => text.includes(city) && /架空|虚构|异世界/.test(text));
+        const worldDeclared = /架空世界|异世界|平行世界|另一个世界/.test(material.join('\n'));
+        return nearCity || worldDeclared ? 'fictional' : 'real';
+    }
+    return material.some(text => text.includes(city)) ? 'fictional' : 'unconfirmed';
+}
+function worldMaterial(context) {
+    return establishedSources(context || {}).map(source => String(source.text || '')).filter(Boolean);
+}
+// Worldbook climate settings beat the local draw: descriptors that appear in
+// world material naming the city map onto a climate archetype. Missing or too
+// vague settings return null and fall back to the derived profile.
+const CLIMATE_HINTS = [
+    ['af', ['热带', '全年炎热', '酷暑', '湿热']],
+    ['am', ['季风', '雨季漫长']],
+    ['aw', ['干湿分明', '稀树草原']],
+    ['bwh', ['沙漠', '干旱', '少雨', '荒漠']],
+    ['bsh', ['半干旱']],
+    ['csa', ['地中海']],
+    ['cfa', ['副热带', '湿润', '梅雨']],
+    ['cfb', ['温带海洋', '四季如春', '温和湿润']],
+    ['dfa', ['大陆性湿润']],
+    ['dfb', ['大陆性', '漫长冬季', '严寒']],
+    ['dwa', ['干燥冬季', '季风性温带']],
+    ['et', ['极地', '苔原', '冰原']],
+    ['h', ['高原', '山地气候']],
+];
+export function worldClimate(city, context) {
+    const material = worldMaterial(context).filter(text => text.includes(city));
+    if (!material.length) return null;
+    const text = material.join('\n');
+    let best = null;
+    for (const [archetype, hints] of CLIMATE_HINTS) {
+        const score = hints.reduce((total, hint) => total + text.split(hint).length - 1, 0);
+        if (score > 0 && (!best || score > best.score)) best = { archetype, score };
+    }
+    return best ? { archetype: best.archetype, offset: 0, south: false, fromWorld: true } : null;
+}
 
 const hash32 = text => { let h = 2166136261; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const mulberry32 = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -155,15 +205,22 @@ city(['开普敦', 'capetown', 'cape town'], { archetype: 'csa', south: true });
 city(['雷克雅未克', 'reykjavik'], { archetype: 'et' });
 city(['墨西哥城', 'mexicocity', 'mexico city'], { archetype: 'h', offset: 3 });
 
-// Known real cities use the table. Unknown or fictional cities get a stable
-// locally derived climate, which is saved with the first weather refresh.
-export function climateFor(cityName, cached = null) {
+// Real cities use the table. Fictional and unconfirmed places never borrow a
+// same-named real city's climate: fictional ones take any worldbook climate
+// setting, then a stable locally derived profile saved with the first refresh.
+export function climateFor(cityName, cached = null, kind = 'real', context = null) {
     if (cached && ARCHETYPES[cached.archetype]) return cached;
     const key = normCity(cityName);
-    const known = CITY_TABLE[key];
-    if (known) return { archetype: known.archetype, offset: known.offset || 0, south: !!known.south };
+    if (kind !== 'real') {
+        const world = worldClimate(cityName, context);
+        if (world) return world;
+    } else {
+        const known = CITY_TABLE[key];
+        if (known) return { archetype: known.archetype, offset: known.offset || 0, south: !!known.south };
+    }
     const h = hash32(key);
-    return { archetype: ARCH_IDS[h % ARCH_IDS.length], offset: ((h >>> 8) % 13) - 6, south: ((h >>> 16) % 10) === 0, derived: true };
+    const derived = { archetype: ARCH_IDS[h % ARCH_IDS.length], offset: ((h >>> 8) % 13) - 6, south: ((h >>> 16) % 10) === 0, derived: true };
+    return kind === 'fictional' ? { ...derived, fictional: true } : derived;
 }
 
 const monthOf = day => { const date = dayDate(day); return date ? +date.slice(5, 7) - 1 : null; };
@@ -496,12 +553,13 @@ export function createWeather({ memory, phone, getContext }) {
             if (!location?.city) throw new Error('正文尚未标记当前位置，暂不能刷新天气。');
             if (clock.day == null || clock.hour == null) throw new Error('当前剧情没有明确的日期和时间，暂不能刷新天气。');
             const key = normCity(location.city);
-            const climate = climateFor(location.city, view.state.weather?.[key]?.climate);
+            const kind = locationKind(location.city, getContext());
+            const climate = climateFor(location.city, view.state.weather?.[key]?.climate, kind, getContext());
             const hour = clock.day * 24 + Math.floor(clock.hour);
             const seed = crypto.randomUUID();
             const state = initialWeather(climate, clock, rngAt(seed, key, hour));
             if (!current()) throw new Error('剧情或设置已变化，本次天气刷新未保存。');
-            await memory.commit(await memory.begin(view), [{ collection: 'weather', key, value: { city: location.city, climate, seed, hour, date: dayDate(clock.day), state, refreshedAt: Date.now() } }]);
+            await memory.commit(await memory.begin(view), [{ collection: 'weather', key, value: { city: location.city, climate, kind, seed, hour, date: dayDate(clock.day), state, refreshedAt: Date.now() } }]);
             return { refreshed: true };
         }, 'weather'),
     };

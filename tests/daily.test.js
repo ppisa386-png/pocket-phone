@@ -290,17 +290,19 @@ test('whole-paper edit saves the masthead, print date, region and all articles t
 // ---- Editorial columns and real-history material contract ----
 
 test('the fourteen columns normalize, count over a seven-edition ring and keep custom wording',()=>{
- const rows=[{...article('娱乐头条'),section:'文化'},{...article('案件报道'),section:'治安与司法'},{...article('赛事'),section:'体育赛事'},{...article('星座'),section:'星座运势'}];
+ const rows=[{...article('娱乐头条'),section:'文化'},{...article('案件报道'),section:'治安与司法'},{...article('赛事'),section:'体育赛事'},{...article('明星动态'),section:'星闻快递'}];
  const data=complete({location:'本地',articles:rows});
  const changes=dailyChanges(data,{prose:[{index:0,role:'assistant',text:'剧情。'}],day:dateDay('2008-10-14'),sourceIndex:0,existing:[],chat:[{mes:'2008-10-14'}]});
  const sections=changes.filter(c=>c.value?.type==='article').map(c=>c.value.section);
- assert.deepEqual(sections,['文化与娱乐','治安与司法','体育','星座运势']);
+ assert.deepEqual(sections,['文化与娱乐','治安与司法','体育','文化与娱乐']);
+ assert.ok(sections.every(name=>DAILY_SECTIONS.includes(name)),'every article lands in one of the fourteen columns');
  assert.deepEqual(DAILY_SECTIONS.length,14);assert.equal(new Set(DAILY_SECTIONS).size,14);
  const state={daily:Object.fromEntries(changes.filter(c=>c.collection==='daily').map(c=>[c.key,c.value]))};
- assert.equal(dailySectionCounts(state)['文化与娱乐'],1);
+ assert.equal(dailySectionCounts(state)['文化与娱乐'],2);
  assert.equal(dailySectionCounts(state)['治安与司法'],1);
  assert.equal(dailySectionCounts(state)['体育'],1);
  assert.equal(dailySectionCounts(state)['政治与公共事务'],0);
+ for(const name of DAILY_SECTIONS)assert.ok(name in dailySectionCounts(state),'all fourteen columns are counted');
  assert.deepEqual(historicalSources(state),{mode:'model-knowledge',external:null});
 });
 
@@ -339,16 +341,50 @@ test('the editorial prompt carries the historical-material contract, columns and
   assert.equal(payload.recentSections['治安与司法'],0);
   assert.equal(payload.recentSections['政治与公共事务'],0);
   assert.match(f.prompt(),/现实历史素材/);
-  assert.match(f.prompt(),/剧情日期所在年份和月份真实发生过的重大事件/);
-  assert.match(f.prompt(),/其他年份同一月份的真实事件/);
-  assert.match(f.prompt(),/创作符合当前世界观的原创事件/);
+  assert.match(f.prompt(),/剧情年份、月份相同的现实历史事件/);
+  assert.match(f.prompt(),/参考同一年其他月份的真实事件/);
+  assert.match(f.prompt(),/参考相近年份的同月事件/);
+  assert.match(f.prompt(),/不要求与剧情日期同一天/);
+  assert.match(f.prompt(),/允许根据历史事件的类型、背景和发展模式进行创作/);
+  assert.match(f.prompt(),/按文章实际内容归入最合适的正式栏目/);
   assert.match(f.prompt(),/历史素材参考新闻1～3篇/);
   assert.match(f.prompt(),/奥运会、世界大战、美国总统选举、知名国际冲突、全球金融危机/);
   assert.match(f.prompt(),/所在城市及周边、所在国家或地区、邻近国家和地区/);
   assert.match(f.prompt(),/剧情日期之后发生的事件绝不能提前报道/);
-  assert.match(f.prompt(),/不得虚构一个"真实发生过"的历史事件/);
+  assert.match(f.prompt(),/不得虚构一个/);
   assert.match(f.prompt(),/section 必须从这14个栏目中选最贴切的一个/);
   assert.match(f.prompt(),/优先补充出现最少的栏目/);
-  assert.match(f.prompt(),/其他年份同月的事件仅作历史参考或创作原型，不得冒充当前剧情年份的真实新闻/);
+  assert.match(f.prompt(),/其他年份同月或相近年份的事件仅作历史参考或创作原型，不得冒充当前剧情年份的真实新闻/);
+ }finally{f.close();}
+});
+
+
+test('fictional worlds switch the editorial contract and carry the world setting',async()=>{
+ const f=setup();try{
+  f.c.characters[0].data={description:'云京国是故事世界的主要国家。',character_book:{entries:[{enabled:true,content:'云京城是云京国的首都，地处热带，全年炎热。'}]}};
+  f.c.chat[0].mes='2008-10-15\n本地剧情。';
+  f.c.chat.push({mes:'The party arrives in 云京城.<!--durian-location:{"city":"云京城"}-->',is_user:false});
+  await f.memory.read();
+  ok(await f.daily.update());
+  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split(String.fromCharCode(10))[0]);
+  assert.equal(payload.locationKind,'fictional');
+  assert.equal(payload.currentLocation,'云京城');
+  assert.match(payload.worldSetting,/云京城是云京国的首都/);
+  assert.match(f.prompt(),/当前架空世界为唯一现实/);
+  assert.match(f.prompt(),/不得将现实世界的具体国家、城市、政府或媒体当作架空世界的实际地理与政治实体/);
+  assert.match(f.prompt(),/不得冒充架空世界真实发生过的事件/);
+  assert.doesNotMatch(f.prompt(),/所在城市及周边、所在国家或地区、邻近国家和地区/);
+ }finally{f.close();}
+});
+test('real locations keep the real-history editorial contract',async()=>{
+ const f=setup();try{
+  f.c.chat[0].mes='2008-10-15\n本地剧情。';
+  f.c.chat.push({mes:'Sam arrives in Shanghai.<!--durian-location:{"city":"上海"}-->',is_user:false});
+  await f.memory.read();
+  ok(await f.daily.update());
+  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split(String.fromCharCode(10))[0]);
+  assert.equal(payload.locationKind,'real');
+  assert.match(f.prompt(),/剧情年份、月份相同的现实历史事件/);
+  assert.doesNotMatch(f.prompt(),/当前架空世界为唯一现实/);
  }finally{f.close();}
 });

@@ -52,11 +52,43 @@ const dailyText = (value, max) => typeof value === 'string' && value.trim().leng
 // The fourteen editorial columns. Every article's section names one of them;
 // the rotation window in the schema record counts how often each appeared.
 export const DAILY_SECTIONS = ['政治与公共事务', '国际与外交', '社会新闻', '治安与司法', '体育', '经济与商业', '城市建设与交通', '教育', '医疗与健康', '科技与科学', '环境与自然', '文化与娱乐', '农业能源与产业', '生活旅游与消费'];
-const normalizeSection = value => {
-    const text = dailyText(value, 80);
-    if (!text || DAILY_SECTIONS.includes(text)) return text;
-    const hits = DAILY_SECTIONS.filter(name => name.includes(text) || text.includes(name));
-    return hits.length === 1 ? hits[0] : text; // Unambiguous near-miss maps; custom prompts keep their own wording.
+const SECTION_HINTS = [
+    ['政治与公共事务', ['政治', '政府', '选举', '议会', '政策', '立法', '政务', '行政', '领导']],
+    ['国际与外交', ['外交', '国际', '峰会', '条约', '使馆', '联合国', '双边', '两国']],
+    ['社会新闻', ['社会', '民生', '社区', '人口', '舆论', '热点', '福利', '慈善']],
+    ['治安与司法', ['治安', '案件', '刑事', '警察', '警方', '司法', '法院', '审判', '犯罪', '逮捕', '破获']],
+    ['体育', ['体育', '运动', '联赛', '足球', '篮球', '比赛', '锦标赛', '冠军', '奥运', '球员', '赛事', '夺冠']],
+    ['经济与商业', ['经济', '商业', '市场', '金融', '企业', '并购', '上市', '贸易', '股市', '物价', '营收']],
+    ['城市建设与交通', ['城建', '市政', '交通', '地铁', '公交', '道路', '桥梁', '基建', '机场', '铁路', '通车']],
+    ['教育', ['教育', '学校', '高考', '大学', '招生', '课堂', '学费', '教师', '校园', '开学']],
+    ['医疗与健康', ['医疗', '医院', '健康', '疫情', '疾病', '卫生', '疫苗', '药品', '问诊']],
+    ['科技与科学', ['科技', '科学', '研究', '技术', '发明', '航天', '互联网', '实验', '芯片', '人工智能']],
+    ['环境与自然', ['环境', '自然', '气候', '污染', '洪水', '地震', '台风', '生态', '灾害']],
+    ['文化与娱乐', ['文化', '娱乐', '电影', '音乐', '演出', '艺术', '展览', '游戏', '明星', '影视', '节庆', '音乐节']],
+    ['农业能源与产业', ['农业', '能源', '产业', '工业', '矿产', '电力', '石油', '粮食', '种植', '养殖', '工厂']],
+    ['生活旅游与消费', ['生活', '旅游', '消费', '购物', '餐饮', '假期', '民宿', '景区', '零售', '房价']],
+];
+// Every generated article must land in one of the fourteen columns: an exact
+// column name wins, a unique near-miss maps, and anything else is classified
+// by the article's own content (its wording counts triple over the body) with
+// a neutral column catching the leftovers. No valid news is ever dropped over
+// a section name, and the normalized name is what sectionLog counts.
+const normalizeSection = row => {
+    const text = dailyText(row?.section, 80);
+    if (DAILY_SECTIONS.includes(text)) return text;
+    if (text) {
+        const nameHits = DAILY_SECTIONS.filter(name => name.includes(text) || text.includes(name));
+        if (nameHits.length === 1) return nameHits[0];
+    }
+    const haystack = [row?.headline, row?.summary, row?.body].filter(value => typeof value === 'string').join('\n').slice(0, 4000);
+    let best = DAILY_SECTIONS[2], bestScore = 0;
+    for (const [name, hints] of SECTION_HINTS) {
+        let score = 0;
+        if (text) for (const hint of hints) if (text.includes(hint)) score += 3;
+        for (const hint of hints) { let at = haystack.indexOf(hint); while (at >= 0) { score++; at = haystack.indexOf(hint, at + 1); } }
+        if (score > bestScore) { bestScore = score; best = name; }
+    }
+    return best;
 };
 // Rotation window: the schema record keeps a tiny per-edition section-count ring
 // (last seven editions) so the editorial prompt can prefer the columns that
@@ -109,7 +141,7 @@ export function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[
         // item, retaining its previous selection/adoption rather than rerolling it.
         const prior = [...existing,...existing.filter(e=>e.type==='archive').flatMap(e=>e.articles||[])].find(a=>a.type==='article'&&a.outlet===outlet&&a.headline===headline&&a.body===body);
         articles.push({id:prior?.id||crypto.randomUUID(), type:'article', editionId, headline, outlet, summary, body,
-            section:normalizeSection(row.section), placement:row.placement, subject:basis.fictional?'world':'character',
+            section:normalizeSection(row), placement:row.placement, subject:basis.fictional?'world':'character',
             publicBasis:basis, selected:!!prior&&(dailyUsed(prior,chat)||(prior.selected===true&&existing.some(e=>e.type==='edition'&&e.editionId===prior.editionId&&e.day===day))),
             ...(Number.isInteger(prior?.selectedIndex)?{selectedIndex:prior.selectedIndex}:{}),sourceIndex});
     }
