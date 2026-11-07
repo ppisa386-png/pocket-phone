@@ -44,6 +44,11 @@ const paths = {
     unblock: '<circle cx="12" cy="12" r="9"/><path d="m7.7 12.2 2.8 2.8 5.8-6"/>',
     weather: '<circle cx="8" cy="8" r="3.2"/><path d="M8 2.2v1.6M8 12.2v1.6M2.2 8h1.6M12.2 8h1.6M4 4l1.1 1.1M10.9 10.9 12 12M12 4l-1.1 1.1M5.1 10.9 4 12"/><path d="M7 17.5h9a3.5 3.5 0 1 0-1-6.86A5 5 0 0 0 5.4 13 2.6 2.6 0 0 0 7 17.5Z"/>',
 };
+// Press-menu action aliases: regenerating uses the retry circle arrows and
+// deleting uses the trash glyph. Unknown names would otherwise all fall back
+// to the phone glyph and render as identical wrong icons.
+paths.refresh = paths.retry;
+paths.delete = paths.trash;
 
 export function icon(name) {
     if (name === 'launcher') return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-device-mobile-star" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M11 21h-3a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v5" /><path d="M11 4h2" /><path d="M17.8 20.817l-2.172 1.138a.392 .392 0 0 1 -.568 -.41l.415 -2.411l-1.757 -1.707a.389 .389 0 0 1 .217 -.665l2.428 -.352l1.086 -2.193a.392 .392 0 0 1 .702 0l1.086 2.193l2.428 .352a.39 .39 0 0 1 .217 .665l-1.757 1.707l.414 2.41a.39 .39 0 0 1 -.567 .411l-2.172 -1.138" /></svg>';

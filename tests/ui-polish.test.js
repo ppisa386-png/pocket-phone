@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { icon } from '../src/icons.js';
 import assert from 'node:assert/strict';
 import { renderPhoneScreen } from '../src/phone-view.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
@@ -61,4 +62,10 @@ test('WeChat retains its existing transfer entry and payment card', async () => 
     assert.match(page, /pp-chat-compose-extra/);
     assert.match(page, /data-chat-action="cash"/);
     assert.doesNotMatch(page, /<option value="transfer">转账<\/option>/);
+});
+test('press-menu action icons all render distinct glyphs, never the phone fallback', () => {
+    const names = ['edit', 'refresh', 'delete', 'inject'];
+    const glyphs = names.map(name => icon(name));
+    for (const glyph of glyphs) assert.notEqual(glyph, icon('phone'), 'no press action may fall back to the phone glyph');
+    assert.equal(new Set(glyphs).size, names.length, 'edit, refresh, delete and inject each have their own glyph');
 });
