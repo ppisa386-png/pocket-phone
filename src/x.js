@@ -159,11 +159,17 @@ export function createX({memory,phone,getContext,getSettings}) {
             JSON.stringify({post:{id:post.id,author:post.author,text:post.text,imageDescription:post.imageDescription,sourceIndex:post.sourceIndex},
                 accounts:xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)),
                 comments:saved.map(({id,author,text,replyTo})=>({id,author,text,replyTo}))});
-        const rows=await ask(state,null,request,current,task,d=>list(d,'comments',missing),{postQueries:[post],finalOutputContract:contract});
+        // The shared engagement shape tells the model "超过15条时选15条", so it may
+        // return up to 15 rows even when fewer are missing. A cap at `missing` here
+        // discarded every fill for posts with large totals and left the detail page
+        // stuck on its one sample comment.
+        const rows=await ask(state,null,request,current,task,d=>list(d,'comments',X_COMMENT_LIMIT),{postQueries:[post],finalOutputContract:contract});
         const staged=structuredClone(state),changes=[];
         const count=addSamples(staged,post,rows,changes,target);
-        if(count<target)throw Error('有效评论不足，已有 '+saved.length+' 条，本次需要补齐到 '+target+' 条。请重试。');
+        // Partial progress commits: duplicates or skipped rows must never wipe the
+        // whole batch. The remaining gap stays visible through the 补齐 button.
         await commit(changes);
+        return {completed:count>=target,saved:count,target};
     }
     // Returns {account} on success or {rejected:reason}; the reason is used for
     // aggregate diagnostics only and never contains private model output.

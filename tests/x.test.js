@@ -713,7 +713,7 @@ test('narrative 4000 replies remain visible through both first stats and later r
  }finally{f.close();}
 });
 
-for(const total of [0,1,8,15,16,100,4000])test('detail fills and displays min(15,'+total+') once, leaves totals intact, persists and rolls back',async()=>{
+for(const total of [0,1,8,10,15,16,100,4000])test('detail fills and displays min(15,'+total+') once, leaves totals intact, persists and rolls back',async()=>{
  const f=setup();
  try{
   const id='saved',post={id,type:'post',author:total%2?'user':'alex',text:'Public event',feed:'home',metrics:{likes:80,reposts:9,replies:total}};
@@ -738,7 +738,7 @@ for(const total of [0,1,8,15,16,100,4000])test('detail fills and displays min(15
  }finally{f.close();}
 });
 
-test('detail fill preserves direct user repeats, follows stored parent IDs, rejects duplicates, and never counts samples twice',async()=>{
+test('detail fill commits partial progress, never saves duplicates, follows stored parent IDs and never counts samples twice',async()=>{
  const f=setup();
  try{
   const id=await account(f);ok(await f.x.publish('Public question'));const post=xItems(f.state(),'post')[0];
@@ -747,12 +747,43 @@ test('detail fill preserves direct user repeats, follows stored parent IDs, reje
   await f.memory.commit(await f.memory.begin(),[{collection:'x',key:post.id,value:{...post,metrics:{likes:6,reposts:3,replies:8},includedDirectReplies:1}}]);
   const before=xCounts(f.state(),f.state().x[post.id]);assert.equal(before.replies,9);
   const rows=Array.from({length:7},(_,i)=>({accountId:id,text:'Reply '+i,replyTo:i===0?originals[0].id:null}));
-  f.reply({comments:[rows[0],rows[0],...rows.slice(2)]});const bad=await f.x.completeComments(post.id);
-  assert.equal(bad.ok,false);assert.deepEqual(xItems(f.state(),'comment'),originals);
+  // A duplicate among the rows no longer wipes the batch: valid rows commit,
+  // the duplicate is saved once and the remaining gap stays on the 补齐 button.
+  f.reply({comments:[rows[0],rows[0],...rows.slice(2)]});const partial=await f.x.completeComments(post.id);
+  ok(partial);assert.equal(partial.value.completed,false);assert.equal(partial.value.saved,8);assert.equal(partial.value.target,9);
+  const afterPartial=xItems(f.state(),'comment');
+  assert.equal(afterPartial.length,8);assert.equal(afterPartial.filter(c=>c.text==='Reply 0').length,1,'duplicates display once');
+  assert.deepEqual(afterPartial.slice(0,2),originals);assert.equal(afterPartial[2].replyTo,originals[0].id);
   f.reply({comments:rows});ok(await f.x.completeComments(post.id));
   const visible=xItems(f.state(),'comment');assert.equal(visible.length,9);assert.equal(visible[2].replyTo,originals[0].id);
   assert.deepEqual(visible.slice(0,2),originals);assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),before);
   assert.equal(f.state().x[post.id].includedDirectReplies,1);
+ }finally{f.close();}
+});
+
+test('a model returning the full fifteen rows still fills posts whose aggregate exceeds fifteen; other posts stay untouched',async()=>{
+ const f=setup();
+ try{
+  const account={id:'alex',type:'account',name:'Alex',handle:'alex',dmPolicy:'requests'};
+  const big={id:'big',type:'post',author:'alex',text:'Viral post',feed:'home',metrics:{likes:300,reposts:40,replies:300},includedDirectReplies:1};
+  const other={id:'other',type:'post',author:'alex',text:'Quiet post',feed:'home'};
+  const sample={id:'s1',type:'comment',postId:'big',author:'alex',text:'Nice weather.',ambient:true,read:true,replyTo:null};
+  await f.memory.commit(await f.memory.begin(),[big,other,account,sample].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  // The standing shape says "超过15条时选15条": the model returns fifteen rows
+  // while only fourteen are missing — previously this discarded the whole fill
+  // and the detail page stayed on its single sample comment.
+  const rows=Array.from({length:15},(_,i)=>({accountId:'alex',text:'Fresh comment '+i}));
+  f.reply({comments:rows});
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{x:f.x},getView:f.state,redraw(){},notice(){}});
+  await panel.action('comments','big');
+  assert.equal((panel.html().match(/data-x-comment="/g)||[]).length,15);
+  const saved=xItems(f.state(),'comment').filter(c=>c.postId==='big');
+  assert.equal(saved.length,15);assert.equal(new Set(saved.map(c=>c.text)).size,15,'no duplicate display');
+  assert.equal(xItems(f.state(),'comment').filter(c=>c.postId==='other').length,0,'cross-post isolation');
+  assert.deepEqual(xCounts(f.state(),f.state().x.big),big.metrics);
+  const calls=f.count();await panel.action('comments','big');assert.equal(f.count(),calls,'a completed post never re-fills');
  }finally{f.close();}
 });
 
