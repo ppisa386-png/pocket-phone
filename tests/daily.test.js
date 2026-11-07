@@ -1,4 +1,4 @@
-import {paperDraft} from '../src/daily-core.js';
+import {paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources} from '../src/daily-core.js';
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -284,5 +284,71 @@ test('whole-paper edit saves the masthead, print date, region and all articles t
   const archived=paperDraft(f.state(),id);assert.deepEqual(archived,draft);
   const updated={...archived,publication:'历史报头'};ok(await f.daily.editEdition(id,archived,updated));assert.deepEqual(paperDraft(f.state(),id),updated);
   assert.equal(f.calls(),2);
+ }finally{f.close();}
+});
+
+// ---- Editorial columns and real-history material contract ----
+
+test('the fourteen columns normalize, count over a seven-edition ring and keep custom wording',()=>{
+ const rows=[{...article('娱乐头条'),section:'文化'},{...article('案件报道'),section:'治安与司法'},{...article('赛事'),section:'体育赛事'},{...article('星座'),section:'星座运势'}];
+ const data=complete({location:'本地',articles:rows});
+ const changes=dailyChanges(data,{prose:[{index:0,role:'assistant',text:'剧情。'}],day:dateDay('2008-10-14'),sourceIndex:0,existing:[],chat:[{mes:'2008-10-14'}]});
+ const sections=changes.filter(c=>c.value?.type==='article').map(c=>c.value.section);
+ assert.deepEqual(sections,['文化与娱乐','治安与司法','体育','星座运势']);
+ assert.deepEqual(DAILY_SECTIONS.length,14);assert.equal(new Set(DAILY_SECTIONS).size,14);
+ const state={daily:Object.fromEntries(changes.filter(c=>c.collection==='daily').map(c=>[c.key,c.value]))};
+ assert.equal(dailySectionCounts(state)['文化与娱乐'],1);
+ assert.equal(dailySectionCounts(state)['治安与司法'],1);
+ assert.equal(dailySectionCounts(state)['体育'],1);
+ assert.equal(dailySectionCounts(state)['政治与公共事务'],0);
+ assert.deepEqual(historicalSources(state),{mode:'model-knowledge',external:null});
+});
+
+test('the rotation ring keeps the last seven editions and rolls back with its floor',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());
+  for(let i=2;i<=8;i++){
+   f.c.chat.push({mes:'2008-10-'+(10+i)+'\n本地剧情。'});await f.memory.read();
+   f.reply({articles:[{...article('第'+i+'期头条'),section:'治安与司法'},{...article('第'+i+'期次条'),section:'体育'}]});
+   ok(await f.daily.update());
+  }
+  const log=f.state().daily.archiveSchema.sectionLog;
+  assert.equal(log.length,7,'older editions roll out of the window');
+  const counts=dailySectionCounts(f.state());
+  assert.equal(counts['治安与司法'],7);assert.equal(counts['体育'],7);assert.equal(counts['文化与娱乐'],14);
+  assert.equal(counts['政治与公共事务'],0);
+  f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
+  const rolled=f.state().daily.archiveSchema.sectionLog;
+  assert.equal(rolled.length,7,'the full window stays, its content rolls back');
+  assert.equal(rolled.at(-1).counts['治安与司法'],1,'the rolled-back edition leaves the window');
+  assert.equal(dailySectionCounts(f.state())['治安与司法'],6);
+ }finally{f.close();}
+});
+
+test('the editorial prompt carries the historical-material contract, columns and rotation window',async()=>{
+ const f=setup();try{
+  f.c.chat[0].mes='2008-10-14\n本地剧情。';
+  ok(await f.daily.update());
+  f.c.chat.push({mes:'2008-10-15\n本地剧情继续。'});await f.memory.read();
+  ok(await f.daily.update());
+  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split(String.fromCharCode(10))[0]);
+  assert.equal(payload.date,'2008-10-15');
+  assert.deepEqual(payload.columns,DAILY_SECTIONS);
+  assert.deepEqual(payload.history,{mode:'model-knowledge',external:null},'reserved seam for a future external history feed');
+  assert.equal(payload.recentSections['文化与娱乐'],4,'the window reflects the editions before this one');
+  assert.equal(payload.recentSections['治安与司法'],0);
+  assert.equal(payload.recentSections['政治与公共事务'],0);
+  assert.match(f.prompt(),/现实历史素材/);
+  assert.match(f.prompt(),/剧情日期所在年份和月份真实发生过的重大事件/);
+  assert.match(f.prompt(),/其他年份同一月份的真实事件/);
+  assert.match(f.prompt(),/创作符合当前世界观的原创事件/);
+  assert.match(f.prompt(),/历史素材参考新闻1～3篇/);
+  assert.match(f.prompt(),/奥运会、世界大战、美国总统选举、知名国际冲突、全球金融危机/);
+  assert.match(f.prompt(),/所在城市及周边、所在国家或地区、邻近国家和地区/);
+  assert.match(f.prompt(),/剧情日期之后发生的事件绝不能提前报道/);
+  assert.match(f.prompt(),/不得虚构一个"真实发生过"的历史事件/);
+  assert.match(f.prompt(),/section 必须从这14个栏目中选最贴切的一个/);
+  assert.match(f.prompt(),/优先补充出现最少的栏目/);
+  assert.match(f.prompt(),/其他年份同月的事件仅作历史参考或创作原型，不得冒充当前剧情年份的真实新闻/);
  }finally{f.close();}
 });

@@ -2540,6 +2540,32 @@ function dailyStatus(article, state, chat) {
     return dailyExpiry(state.daily.edition, chat);
 }
 const dailyText = (value, max) => typeof value === 'string' && value.trim().length <= max ? value.trim() : '';
+// The fourteen editorial columns. Every article's section names one of them;
+// the rotation window in the schema record counts how often each appeared.
+const DAILY_SECTIONS = ['政治与公共事务', '国际与外交', '社会新闻', '治安与司法', '体育', '经济与商业', '城市建设与交通', '教育', '医疗与健康', '科技与科学', '环境与自然', '文化与娱乐', '农业能源与产业', '生活旅游与消费'];
+const normalizeSection = value => {
+    const text = dailyText(value, 80);
+    if (!text || DAILY_SECTIONS.includes(text)) return text;
+    const hits = DAILY_SECTIONS.filter(name => name.includes(text) || text.includes(name));
+    return hits.length === 1 ? hits[0] : text; // Unambiguous near-miss maps; custom prompts keep their own wording.
+};
+// Rotation window: the schema record keeps a tiny per-edition section-count ring
+// (last seven editions) so the editorial prompt can prefer the columns that
+// recently appeared least. Journal-backed, so story rollback restores it.
+function dailySectionCounts(state) {
+    const counts = Object.fromEntries(DAILY_SECTIONS.map(name => [name, 0]));
+    for (const entry of state?.daily?.archiveSchema?.sectionLog || [])
+        for (const [name, count] of Object.entries(entry.counts || {})) counts[name] = (counts[name] || 0) + count;
+    return counts;
+}
+// Reserved seam for an external history database (e.g. GDELT): the editorial
+// payload consumes whatever this returns, so a future structured feed can be
+// wired in without touching the request flow. Today the model's own historical
+// knowledge is the only source and `external` stays null.
+function historicalSources(state, external = null) {
+    void state;
+    return { mode: 'model-knowledge', external };
+}
 // World news is creative output, not a fact-extraction task. Only declared
 // character/private stories need the existing public-evidence check.
 function dailyBasis(row, prose) {
@@ -2574,7 +2600,7 @@ function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[]}) {
         // item, retaining its previous selection/adoption rather than rerolling it.
         const prior = [...existing,...existing.filter(e=>e.type==='archive').flatMap(e=>e.articles||[])].find(a=>a.type==='article'&&a.outlet===outlet&&a.headline===headline&&a.body===body);
         articles.push({id:prior?.id||crypto.randomUUID(), type:'article', editionId, headline, outlet, summary, body,
-            section:dailyText(row.section, 80), placement:row.placement, subject:basis.fictional?'world':'character',
+            section:normalizeSection(row.section), placement:row.placement, subject:basis.fictional?'world':'character',
             publicBasis:basis, selected:!!prior&&(dailyUsed(prior,chat)||(prior.selected===true&&existing.some(e=>e.type==='edition'&&e.editionId===prior.editionId&&e.day===day))),
             ...(Number.isInteger(prior?.selectedIndex)?{selectedIndex:prior.selectedIndex}:{}),sourceIndex});
     }
@@ -2583,6 +2609,13 @@ function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[]}) {
     const lead = articles.find(a=>a.placement==='lead') || articles[0];
     for(const a of articles) a.placement=a===lead?'lead':a.placement==='brief'?'brief':a.placement==='feature'?'feature':a.body.length<160?'brief':'feature';
     const rank = {lead:0, feature:1, brief:2}; articles.sort((a,b) => rank[a.placement] - rank[b.placement]);
+    const schemaRecord = (existing, editionArticles) => {
+        const previous = existing.find(e => e.type === 'archive_schema');
+        const counts = {};
+        for (const a of editionArticles) counts[a.section] = (counts[a.section] || 0) + 1;
+        return { id:'archiveSchema', type:'archive_schema', version:1,
+            sectionLog:[...(previous?.sectionLog||[]), {editionId, day, counts}].slice(-7) };
+    };
     const edition = {id:'edition', type:'edition', editionId, day, sourceIndex, publication, location:dailyText(data.location, 80), articleIds:articles.map(a=>a.id)};
     const oldState = {daily:Object.fromEntries(existing.map(e => [e.id, e]))};
     const archiveCandidates = existing.filter(e => e.type === 'archive');
@@ -2592,11 +2625,11 @@ function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[]}) {
     const archiveDays = new Set();
     const archives = archiveCandidates.sort((a,b) => b.day-a.day || (b.sourceIndex??0)-(a.sourceIndex??0))
         .filter(e => { if (archiveDays.has(e.day)) return false; archiveDays.add(e.day); return true; }).slice(0,3);
-    const retained = [edition, ...articles, ...archives, {id:'archiveSchema',type:'archive_schema',version:1}];
+    const retained = [edition, ...articles, ...archives, schemaRecord(existing, articles)];
     const keys = new Set(retained.map(e => e.id));
     // Keep only current articles and the three complete archived snapshots in
     // replayed state; journal history still enables narrative rollback.
-    return [...existing.filter(e => ['edition','article','archive'].includes(e.type) && !keys.has(e.id))
+    return [...existing.filter(e => ['edition','article','archive','archive_schema'].includes(e.type) && !keys.has(e.id))
         .map(e => ({collection:'daily', key:e.id, value:null})),
         ...retained.map(value => ({collection:'daily', key:value.id, value}))];
 }
