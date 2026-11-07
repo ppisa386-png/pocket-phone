@@ -21,7 +21,9 @@ export function createWeatherPanel({ adapter, getView, redraw }) {
     let working = false, status = '', epoch = 0;
 
     function html() {
-        const view = getView(), state = view.state || {};
+        // getView() returns the flat phone snapshot (location/weather at the top
+        // level, no .state wrapper) merged with runtime fields like busy.
+        const view = getView(), state = view || {};
         const busy = working || view.busy;
         const info = adapter.weather?.report(state);
         if (!info) return '<section class="pp-weather" data-weather="cloud"><div class="pp-weather-pending"><span>☁</span><p>天气待刷新</p></div></section>';

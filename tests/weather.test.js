@@ -272,7 +272,7 @@ test('the weather panel renders the report and refresh reports success', async (
         await f.weather.refresh();
         let current = await f.state();
         let redraws = 0;
-        const panel = createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ state: current, busy: false }), redraw: () => { redraws++; } });
+        const panel = createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, busy: false }), redraw: () => { redraws++; } });
         const html = panel.html();
         assert.match(html, /<h2>上海<\/h2>/);
         assert.match(html, /data-weather="(clear|cloud|rain|snow|wind|typhoon|extreme)"/);
