@@ -9,6 +9,7 @@
 
 验证：完整 npm test 573/573（567＋新增 6 项证据清理测试）。测试翻转要点：伪造/缺少证据的拒绝用例改为新契约下的接受或结构拒绝（证据不再参与判断）；新增 tests/evidence-cleanup.test.js 覆盖：无证据 SMS 标记同楼导入且 ID/顺序独立、带证据旧标记不匹配引文仍拒绝（含 money）、无证据 money 用 posN ID 且金额仍须在正文、评估无证据事件结算＋已结算楼层按来源编号禁重扣、daily-used/square-used 无证据生效、证据时代旧默认提示词自动迁移且自定义不覆盖。专项回归全部通过：contacts 23/23、assets 74/74、economic-rights 10/10、x 66/66、story-phone 33/33、daily/delivery/square/phone/external-memory 全过。
 专项说明：X 首页"缺少依据"计数移除，拒绝类别只剩身份/账号/重复/字段；广场 limited 的目击证据校验删除，知情边界改为提示词语义约束；小榴莲 skippedUnverified 语义由"证据未核对"改为"来源楼层已被结算覆盖"。未完成：天气 App 无证据类要求（durian-location 本就不要求依据）无需改动；X npcEvidenceMatches 函数已删除，旧 npcEvidence 字段在请求中会被忽略（不报错）。
+发布：已推送至 GitHub main，提交 2e00755（快进基线 45bf02f＝1.1.28，无强推）；发布内容含本条及此前全部本地待发布特性。
 
 ## 本地待发布 · 天气 App 七天预报（1.1.29 之上）
 基线为本地工作区（1.1.29 统一版本之上）。按用户确认的需求为天气 App 新增七天天气预报：`src/weather.js` 新增 stateAtHour 统一确定性链（当前实况、提示词背景与预报共用同一条演化链）、dayHours、summarizeDay 与 buildForecast（导出，供测试与面板使用），weatherAt 改为委托 stateAtHour（仅超过 240 小时的陈旧记录行为微调为按天重锚定，常规路径不变），weatherBackground 重写为"今天＋明天＋第三至第七天极端预警＋正文 AI 使用规则"的多行块，今天/明天的极端以行内"预计时段出现类型（强度）"后缀保留完整预警信息、不重复进预警块；`src/weather-view.js` 新增今日逐时温度条与七天列表（sceneIcon 支持尺寸参数）；`style.css` 新增对应深色样式。设计要点：预报不单独存储，是已保存记录（种子/气候/时刻/状态）的确定性函数——重开 App、重载聊天、剧情回退都重放出同一套预报，从不重摇；跨天滚动自动完成（原第二天在同一条链上成为当天实况基准、末尾自动补第七天），已生成的未来极端小时不会因滚动丢失。所有生成与变化完全本地，不调用模型，不使用现实日期。
