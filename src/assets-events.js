@@ -4,6 +4,9 @@ import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets
 import { dateDay, dayDate } from './story-clock.js?v=1.1.29';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
+// 'exclude' is not a category: it is the one-shot verdict that a pending asset
+// event never belonged to the fixed/luxury/investment scope at all.
+const EVENT_CATEGORIES = [...ASSET_CATEGORIES, 'exclude'];
 export const financialEventKey = row => JSON.stringify([row.kind, assetText(row.name), row.action || (row.kind === 'job' ? 'start' : 'acquire')]);
 export function validateFinancialEvent(row, id, index, fallbackDay = null, currency = 'USD') {
     if (!['income', 'expense', 'asset', 'job'].includes(row?.kind)) throw Error('收支类型不正确。');
@@ -14,7 +17,8 @@ export function validateFinancialEvent(row, id, index, fallbackDay = null, curre
     const amountMinor = row.amount == null ? null : moneyMinor(row.amount,false,currency);
     const monthlyMinor = row.monthlySalary == null ? null : moneyMinor(row.monthlySalary,false,currency);
     const marketMinor = row.marketValue == null ? null : moneyMinor(row.marketValue,false,currency);
-    if (row.category && !ASSET_CATEGORIES.includes(row.category)) throw Error('资产分类不正确。');
+    if (row.category && !EVENT_CATEGORIES.includes(row.category)) throw Error('资产分类不正确。');
+    if (row.category === 'exclude' && row.kind !== 'asset') throw Error('排除仅用于误登记的资产事项。');
     if(row.salaryMode!=null&&!['one_off','scheduled'].includes(row.salaryMode))throw Error('劳动报酬类型须为one_off或scheduled。');
     const rights = validateRights(row.rights);
     if (row.kind === 'asset' && row.action && !['acquire','amend','dispose'].includes(row.action)) throw Error('资产变化类型不正确。');
@@ -47,7 +51,7 @@ export function applyFinancialEvent(state, event) {
     if (['income', 'expense'].includes(event.kind)) {
         if (event.amountMinor === null) {
             // Ownership can be known even when the purchase price is missing.
-            if (event.category && event.action !== 'dispose') changes.push(assetSet({ id: 'holding:' + event.id, type: 'holding', name: event.name,
+            if (event.category && event.category !== 'exclude' && event.action !== 'dispose') changes.push(assetSet({ id: 'holding:' + event.id, type: 'holding', name: event.name,
                 category: event.category, details: event.details, rights:event.rights||{}, active: true, valueMinor: event.marketMinor ?? null, valued: event.marketMinor != null, purchaseMinor: null, startDay: event.day, eventId: event.id }));
             return [...changes, assetSet(event)];
         }
@@ -64,6 +68,10 @@ export function applyFinancialEvent(state, event) {
         changes.push(assetSet(cashRecord('cash:' + event.id, delta, event.name, { currency:event.currency||walletCurrency(state), source: 'story', eventId: event.id, day: event.day, salaryMode:event.salaryMode, salaryEmployer: event.salaryEmployer, payDate: event.payDate })));
     }
     if (event.category || event.kind === 'asset' || event.action === 'dispose') {
+        // A plain item that slipped into the pending queue is resolved here:
+        // the event, its source floor and its rollback stay in the journal, but
+        // no holding is created and the item never enters the asset display.
+        if (event.category === 'exclude') return [assetSet(event), assetSet({ ...event, processed: true, excludedFromAssets: true })];
         const id = event.holdingId || 'holding:' + event.id;
         const holding = state.assets?.[id];
         if (event.action === 'dispose') {
