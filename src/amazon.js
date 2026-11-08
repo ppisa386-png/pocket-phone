@@ -5,6 +5,52 @@ const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>formatMoney(minor,currency)+' '+currency;
 const shopSet=value=>({collection:'orders',key:value.id,value});
+const nameKey=s=>String(s||'').normalize('NFKC').trim().toLowerCase().replace(/[\s·.・'’_-]+/g,'');
+const nameParts=s=>String(s||'').split(/[\s·.・'’_-]+/).map(t=>t.normalize('NFKC').trim().toLowerCase()).filter(Boolean);
+const hanText=s=>/\p{Script=Han}/u.test(s||'');
+// Gift recipients resolve locally from character cards and contact names —
+// no phone number, address or contact record is required.
+export function giftCandidates(state,context){
+    const list=[],usedCards=new Set();
+    for(const c of Object.values(state.contacts||{})){
+        if(!c||c.contactKind==='location')continue;
+        const characterId=Number.isInteger(c.characterId)?c.characterId:null;
+        if(characterId!==null)usedCards.add(characterId);
+        const names=[c.name,...(Array.isArray(c.aliases)?c.aliases:[])].filter(n=>typeof n==='string'&&n.trim());
+        if(c.name&&names.length)list.push({key:'contact:'+c.id,names,name:String(c.name),contactId:c.id,characterId});
+    }
+    const grouped=context.groupId!=null&&context.groupId!=='';
+    const members=grouped?context.groups?.find(g=>String(g.id)===String(context.groupId))?.members||[]:[];
+    (context.characters||[]).forEach((card,index)=>{
+        if(usedCards.has(index))return;
+        const active=grouped?members.includes(card?.avatar):context.characterId!=null&&context.characterId!==''&&index===Number(context.characterId);
+        if(!active)return;
+        const names=[card?.name,...(Array.isArray(card?.data?.aliases)?card.data.aliases:[])].filter(n=>typeof n==='string'&&n.trim());
+        if(!names.length||names.some(n=>nameKey(n)===nameKey(context.name1)))return;
+        list.push({key:'card:'+index,names,name:String(card.name||names[0]),contactId:null,characterId:index});
+    });
+    return list;
+}
+export function matchGiftRecipients(query,state,context){
+    const q=nameKey(query);
+    if(!q||q.length>60)return[];
+    return giftCandidates(state,context).filter(c=>c.names.some(n=>{
+        const full=nameKey(n);
+        if(!full)return false;
+        if(full===q)return true;
+        if(q.length>=2&&nameParts(n).includes(q))return true;
+        return q.length>=2&&hanText(q)&&full.includes(q);
+    })).map(({key,name})=>({key,name}));
+}
+export function resolveGiftRecipient(key,state,context){
+    if(typeof key!=='string'||!key||key==='self')return null;
+    const candidate=giftCandidates(state,context).find(c=>c.key===key);
+    if(!candidate)return null;
+    const contact=candidate.contactId?state.contacts[candidate.contactId]:null;
+    return {id:candidate.key,name:candidate.name,phone:contact?.number||null,
+        ...(candidate.contactId?{contactId:candidate.contactId}:{}),
+        ...(candidate.characterId!==null?{characterId:candidate.characterId}:{})};
+}
 export function validateProducts(data,currency = null) {
     if(!Array.isArray(data?.products)||data.products.length>8)throw Error('商品信息格式不正确，请重试。');
     return data.products.map(p=>{
@@ -48,10 +94,12 @@ export function createAmazon({memory,phone,getContext,getSettings}) {
             await commit([shopSet({id:'cart',type:'cart',items})]);
         });},
         remove(id){return run(async(state,_c,_r,commit)=>{await commit([shopSet({id:'cart',type:'cart',items:(state.orders.cart?.items||[]).filter(i=>i.id!==id)})]);});},
-        checkout(recipientId='self',date='',time=''){return run(async(state,_c,_r,commit)=>{
+        checkout(recipient='self',date='',time=''){return run(async(state,_c,_r,commit)=>{
             const items=state.orders.cart?.items||[];if(!items.length)throw Error('购物车是空的。');
-            const c=recipientId==='self'?null:state.contacts[recipientId];if(recipientId!=='self'&&!c)throw Error('请先取得收件人的电话号码。');
             const context=getContext(),clock=readStoryClock(context.chat);
+            const self=recipient==='self';
+            const gift=self?null:resolveGiftRecipient(shopText(recipient,120),state,context);
+            if(!self&&!gift)throw Error('没有找到这个收件角色，请重新选择。');
             const day=date?dateDay(date):clock.day;if(day===null)throw Error('请选择下单日期。');
             const match=time?.match(/^(\d{2}):(\d{2})$/);const hour=match&&+match[1]<24&&+match[2]<60?+match[1]+(+match[2]/60):clock.hour;
             const totals=Object.create(null);for(const i of items)totals[i.product.currency]=(totals[i.product.currency]||0)+i.product.priceMinor*i.quantity;
@@ -59,9 +107,10 @@ export function createAmazon({memory,phone,getContext,getSettings}) {
             const currency=walletCurrency(state);
             if(currency && Object.keys(totals).some(c=>c!==currency))throw Error('购物车币种不同，请重新搜索 '+currency+' 商品。');
             requireCash(state,totals[currency],currency);
-            const id=crypto.randomUUID(),recipient={id:recipientId,name:c?(c.targetName||c.name):context.name1||'user',phone:c?.number||null};
-            await commit([shopSet({id,type:'order',items:structuredClone(items),totals,recipient,createdDay:day,createdHour:hour,dueDay:day+2,sourceIndex:context.chat.length-1,createdAt:Date.now()}),shopSet({id:'cart',type:'cart',items:[]}),assetSet(cashRecord('order:'+id,-totals[currency],'Amazon 购物',{currency,source:'amazon',orderId:id,day})),...items.filter(i=>recipientId==='self'&&i.product.luxury).map(i=>assetSet({id:'holding:order:'+id+':'+i.id,type:'holding',name:i.product.name+' × '+i.quantity,category:'luxury',active:true,valueMinor:null,purchaseMinor:i.quantity*i.product.priceMinor,startDay:day,orderId:id}))]);
+            const id=crypto.randomUUID(),receiver=gift||{id:'self',name:context.name1||'user',phone:null};
+            await commit([shopSet({id,type:'order',items:structuredClone(items),totals,recipient:receiver,createdDay:day,createdHour:hour,dueDay:day+2,sourceIndex:context.chat.length-1,createdAt:Date.now()}),shopSet({id:'cart',type:'cart',items:[]}),assetSet(cashRecord('order:'+id,-totals[currency],'Amazon 购物',{currency,source:'amazon',orderId:id,day})),...items.filter(i=>self&&i.product.luxury).map(i=>assetSet({id:'holding:order:'+id+':'+i.id,type:'holding',name:i.product.name+' × '+i.quantity,category:'luxury',active:true,valueMinor:null,purchaseMinor:i.quantity*i.product.priceMinor,startDay:day,orderId:id}))]);
             return {id};
         });},
+        async recipientMatches(query){const view=await memory.read();const matches=matchGiftRecipients(shopText(query,60),view.state,getContext());return {kind:matches.length===1?'unique':matches.length?'ambiguous':'none',matches};},
     };
 }

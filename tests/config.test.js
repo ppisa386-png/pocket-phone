@@ -59,3 +59,12 @@ test('X square migrates the previous built-in prompt while preserving user custo
  const custom=previous+'只写本地话题。';
  assert.equal(normalizeSettings({prompts:{xSquare:custom}}).prompts.xSquare,custom);
 });
+
+test('old immediate-delivery default migrates to the relaxed timing prompt',()=>{
+ const previous='订单按剧情日期在下单两天后的白天配送，工作时间为 09:00—18:00。到期后结合当下场景，把快递抵达、门铃或投递通知等实际到货事件自然写入正文。日期已跳过配送日则在后续合适的白天送达。礼物送到指定收件人处，不能变成送给 user；人物只能获知其有合理渠道知道的内容。不提前送货，不在半夜配送，不重复已送达的订单，不强迫 user 签收、拆包或作出反应，不接管物品栏。';
+ const migrated=normalizeSettings({prompts:{amazonDelivery:previous}});
+ assert.equal(migrated.prompts.amazonDelivery,PROMPTS.amazonDelivery.text);
+ assert.match(migrated.prompts.amazonDelivery,/自行安排合适的派送时机/);
+ const custom=previous+'我的自定义配送规则。';
+ assert.equal(normalizeSettings({prompts:{amazonDelivery:custom}}).prompts.amazonDelivery,custom);
+});

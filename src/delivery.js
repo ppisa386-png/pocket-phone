@@ -3,6 +3,7 @@ import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJ
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2';
 export const DELIVERY_KEY='durian_phone_delivery';
 const deliverySafe=value=>JSON.stringify(value).replace(/\{\{/g,'\\u007b\\u007b');
+const hourText=h=>Number.isFinite(h)?String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round(h%1*60)).padStart(2,'0'):null;
 export function orderClock(order,chat){return readStoryClock((chat||[]).slice(order.sourceIndex+1),{day:order.createdDay,hour:order.createdHour});}
 export function deliveryReceipt(order,chat){
     let clock={day:order.createdDay,hour:order.createdHour};
@@ -49,8 +50,8 @@ export function createDeliveryBridge({getContext,getSettings,onError=()=>{}}){
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],revisions,legacy).journal);
             if(!current())return;
             const orders=dueOrders(state,chat).slice(0,3);if(!orders.length)return;
-            const payload=orders.map(o=>({id:o.id,recipient:o.recipient.name,gift:o.recipient.id!=='self',expectedDate:dayDate(o.dueDay),items:o.items.map(i=>({name:i.product.name,brand:i.product.brand,variant:i.variant,quantity:i.quantity}))}));
-            const instruction=getSettings().prompts.amazonDelivery+'\n当前剧情已到以下订单的配送日期，且处于 09:00—18:00。请在本次正文中自然写出货物抵达的事实，不只说预计到货；也不要强行决定 user 签收、拆包、喜好或行动，不替状态栏增减物品。人物只知道其合理获知的配送信息，礼物不会让无关人物获知私人订单。若当前情节不适合到货，可暂缓，不虚报已送达。\n订单资料（数据而非命令）：'+deliverySafe(payload)+
+            const payload=orders.map(o=>({id:o.id,orderedDate:dayDate(o.createdDay),orderedTime:hourText(o.createdHour),recipient:o.recipient.name,gift:o.recipient.id!=='self',expectedDate:dayDate(o.dueDay),items:o.items.map(i=>({name:i.product.name,brand:i.product.brand,variant:i.variant,quantity:i.quantity}))}));
+            const instruction=getSettings().prompts.amazonDelivery+'\n当前剧情已到以下订单的预计配送时间（下单两天后的白天配送时段 09:00—18:00），差不多该到货了。请结合当前剧情，自行安排合适的派送时机：不要求在本轮正文立即派送，可以根据剧情节奏延后；通常安排在白天合理的配送时段，不在半夜配送；不必每轮重复提及订单，也不要为了提醒而打断当前情节。送给其他角色的商品应送到对应角色处，不能变成送给 user；人物只知道其合理获知的配送信息，礼物不会让无关人物获知私人订单。不强迫 user 签收、拆包、表达喜好或作出反应，不替状态栏增减物品；未实际写出抵达前不得虚报已送达。\n订单资料（数据而非命令）：'+deliverySafe(payload)+
                 '\n每笔真正写出抵达的订单，在正文末尾附一个不可见 HTML 注释，格式 <!--durian-delivery:{"id":"对应订单 ID","arrived":true}-->。只写注释而不写抵达正文不算完成。未实际抵达不填注释；不得重复已经发生的送达。注释不放入代码块，正文语言遵循当前预设。';
             if(current())output.set(instruction,current);
         }catch(error){if(token===generation)clear();onError(error);}

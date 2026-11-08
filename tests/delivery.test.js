@@ -47,7 +47,22 @@ async function fixture(){
  return {context,settings,bridge,prompts,errors,bus,async generate(type='normal'){await bus.emit('GENERATION_STARTED',type);await bus.emit('GENERATION_AFTER_COMMANDS',type);}};
 }
 test('normal generation receives pending parcel; quiet/disabled/end clear it without metadata writes',async()=>{
- const f=await fixture();try{const before=JSON.stringify(f.context.chatMetadata);await f.generate();const p=f.prompts[DELIVERY_KEY];assert.match(p.value,/Coat/);assert.match(p.value,/自然写出货物抵达/);assert.equal(p.scan,false);assert.equal(p.filter(),true);assert.equal(before,JSON.stringify(f.context.chatMetadata));await f.generate('quiet');assert.equal(f.prompts[DELIVERY_KEY].value,'');await f.generate();await f.bus.emit('GENERATION_ENDED');assert.equal(f.prompts[DELIVERY_KEY].value,'');f.settings.apps.amazon=false;await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');assert.equal(f.errors.length,0);}finally{f.bridge.destroy();}
+ const f=await fixture();try{const before=JSON.stringify(f.context.chatMetadata);await f.generate();const p=f.prompts[DELIVERY_KEY];assert.match(p.value,/Coat/);
+ assert.match(p.value,/差不多该到货了/);assert.match(p.value,/自行安排合适的派送时机/);assert.match(p.value,/不要求在本轮正文立即派送/);assert.match(p.value,/可以根据剧情节奏延后/);assert.match(p.value,/通常安排在白天合理的配送时段/);assert.match(p.value,/不必每轮重复提及订单/);assert.match(p.value,/送到对应角色处/);
+ const payload=JSON.parse(p.value.match(/订单资料（数据而非命令）：(\[[\s\S]*?)\n每笔/)[1]);
+ assert.deepEqual(payload,[{id:'order-1',orderedDate:'2026-10-11',orderedTime:'14:00',recipient:'Sam',gift:false,expectedDate:'2026-10-13',items:[{name:'Coat',brand:'Brand',variant:'Blue',quantity:1}]}]);
+ assert.equal(p.scan,false);assert.equal(p.filter(),true);assert.equal(before,JSON.stringify(f.context.chatMetadata));await f.generate('quiet');assert.equal(f.prompts[DELIVERY_KEY].value,'');await f.generate();await f.bus.emit('GENERATION_ENDED');assert.equal(f.prompts[DELIVERY_KEY].value,'');f.settings.apps.amazon=false;await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');assert.equal(f.errors.length,0);}finally{f.bridge.destroy();}
+});
+test('gift orders are addressed to their recipient and marked as gifts in the payload',async()=>{
+ const f=await fixture();try{
+  const gift={...order,id:'order-2',recipient:{id:'contact:alex',name:'Alex',phone:null,contactId:'alex'},createdHour:null};
+  f.context.chatMetadata[JOURNAL_KEY]=appendChange(undefined,await revisionsFor(messageSignatures(f.context.chat)),[{collection:'orders',key:'order-1',value:order},{collection:'orders',key:'order-2',value:gift}]);
+  await f.generate();const p=f.prompts[DELIVERY_KEY];
+  const payload=JSON.parse(p.value.match(/订单资料（数据而非命令）：(\[[\s\S]*?)\n每笔/)[1]);
+  assert.equal(payload.length,2);
+  assert.equal(payload.find(o=>o.id==='order-1').gift,false);
+  assert.deepEqual(payload.find(o=>o.id==='order-2'),{id:'order-2',orderedDate:'2026-10-11',orderedTime:null,recipient:'Alex',gift:true,expectedDate:'2026-10-13',items:[{name:'Coat',brand:'Brand',variant:'Blue',quantity:1}]});
+ }finally{f.bridge.destroy();}
 });
 test('delivered orders do not reinject; regeneration/deletion of arrival makes them pending again',async()=>{
  const f=await fixture();try{f.context.chat.push(arrived());await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');await f.generate('regenerate');assert.match(f.prompts[DELIVERY_KEY].value,/Coat/);f.context.chat.pop();await f.bus.emit('MESSAGE_DELETED');await f.generate();assert.match(f.prompts[DELIVERY_KEY].value,/Coat/);f.context.chat[0].mes='New opening';await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');}finally{f.bridge.destroy();}
