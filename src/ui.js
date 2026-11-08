@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.1';
 import { icon } from './icons.js?v=1.2';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
@@ -303,7 +303,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const scale = Math.min(2.2, Math.max(0.4, phone.clientWidth / PHONE_BASE_WIDTH));
         const rounded = Math.round(scale * 10000) / 10000;
         layer.style.setProperty('--pp-phone-scale', String(rounded));
-        layer.style.setProperty('--pp-phone-logical-height', Math.round(phone.clientHeight / rounded) + 'px');
+        layer.style.setProperty('--pp-phone-logical-height', (phone.clientHeight / rounded) + 'px');
     }
     function applyAppearance() {
         layer.dataset.theme = settings.theme;
