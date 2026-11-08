@@ -15,7 +15,7 @@ const originalProduct = () => ({
 });
 
 test('every Amazon SVG key resolves to a bundled Fluent UI Emoji image',()=>{
-    assert.equal(AMAZON_IMAGE_KEYS.length,15);
+    assert.equal(AMAZON_IMAGE_KEYS.length,20);
     for(const key of AMAZON_IMAGE_KEYS){
         const source=readFileSync(new URL(shopImageSrc(key)),'utf8');
         assert.match(source,/^<svg\b/);
@@ -27,6 +27,9 @@ test('product image data accepts curated keys, infers legacy products and reject
     assert.equal(shopImageKey('headphone','iPhone'),'headphone');
     assert.equal(shopImageKey(undefined,'MacBook 笔记本电脑'),'laptop');
     assert.equal(shopImageKey(undefined,'礼服连衣裙'),'dress');
+    assert.equal(shopImageKey(undefined,'18K 金项链'),'ring');
+    assert.equal(shopImageKey(undefined,'轻便跑鞋'),'shoes');
+    assert.equal(shopImageKey(undefined,'客厅落地灯'),'home');
     assert.equal(shopImageKey(undefined,'没有明确分类的商品'),'package');
     const named=validateProducts({products:[{...offer,image:'headphone'}]},'USD')[0];
     assert.equal(named.image,'headphone');
