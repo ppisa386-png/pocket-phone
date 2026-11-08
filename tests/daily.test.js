@@ -227,6 +227,65 @@ test('archive keeps three expired dates, same-day refresh replaces rather than a
  }finally{f.close();}
 });
 
+test('archive trash removes exactly one stored edition, preserves the other issues and sends no model request',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());
+  for(let d=25;d<=27;d++){
+   f.c.chat.push({mes:'2003-07-'+d});await f.memory.read();
+   f.reply({articles:[article('第'+d+'日报道')]});ok(await f.daily.update());
+  }
+  const before=dailyArchives(f.state(),f.c.chat);
+  assert.equal(before.length,3);
+  const count=f.calls(),target=before[1],panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
+  await panel.action('archive');
+  assert.match(panel.html(),/data-press="daily-archive"/);
+  const actions=panel.press({dataset:{press:'daily-archive',dailyId:target.editionId}});
+  assert.deepEqual(actions.map(a=>a.icon),['delete']);
+  assert.equal(actions[0].danger,true);
+  assert.equal(actions[0].disabled,false);
+  await panel.action('archive-edition',target.editionId);
+  await panel.action('delete-archive',target.editionId);
+  assert.match(panel.html(),/过往报纸夹/);
+  assert.deepEqual(dailyArchives(f.state(),f.c.chat).map(e=>e.editionId),[before[0].editionId,before[2].editionId]);
+  assert.equal(f.state().daily['archive:'+target.editionId],undefined);
+  assert.equal(f.state().daily.archiveSchema.sectionLog.some(e=>e.editionId===target.editionId),false);
+  assert.equal(dailyEditorialHistory(f.state(),f.c.chat).some(e=>e.editionId===target.editionId),false);
+  assert.equal(f.state().daily.edition.editionId,'not-the-current'?'' : f.state().daily.edition.editionId);
+  assert.equal(f.calls(),count);
+  const copy=setup();try{
+   copy.c.chat=structuredClone(f.c.chat);copy.c.chatMetadata=structuredClone(f.c.chatMetadata);
+   await copy.daily.open();
+   assert.deepEqual(dailyArchives(copy.state(),copy.c.chat).map(e=>e.editionId),[before[0].editionId,before[2].editionId]);
+   assert.equal(copy.calls(),0);
+  }finally{copy.close();}
+  const again=await f.daily.deleteArchive(target.editionId);assert.equal(again.ok,false);
+ }finally{f.close();}
+});
+
+test('an expired current edition in the past-issues folder can be deleted without touching earlier archives',async()=>{
+ const f=setup();try{
+  ok(await f.daily.update());
+  f.c.chat.push({mes:'2003-07-25'});await f.memory.read();
+  f.reply({articles:[article('第二日期刊')]});ok(await f.daily.update());
+  const currentId=f.state().daily.edition.editionId;
+  f.c.chat.push({mes:'2003-07-26'});await f.memory.read();
+  const before=dailyArchives(f.state(),f.c.chat);
+  assert.equal(before[0].editionId,currentId);
+  const oldId=before[1].editionId;
+  const count=f.calls(),panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
+  await panel.action('archive');
+  assert.deepEqual(panel.press({dataset:{press:'daily-archive',dailyId:currentId}}).map(a=>a.icon),['delete']);
+  await panel.action('delete-archive',currentId);
+  assert.equal(f.state().daily.edition,undefined);
+  assert.equal(dailyArticles(f.state()).length,0);
+  assert.deepEqual(dailyArchives(f.state(),f.c.chat).map(e=>e.editionId),[oldId]);
+  assert.equal(f.state().daily.archiveSchema.sectionLog.some(e=>e.editionId===currentId),false);
+  assert.equal(f.calls(),count);
+  ok(await f.daily.update());
+  assert.deepEqual(dailyArchives(f.state(),f.c.chat).map(e=>e.editionId),[oldId]);
+ }finally{f.close();}
+});
+
 test('editorial context labels adopted, selected pending and unselected; followups need a fresh selection',async()=>{
  const f=setup();try{
   ok(await f.daily.update());const rows=dailyArticles(f.state());ok(await f.daily.toggle(rows[0].id));ok(await f.daily.toggle(rows[1].id));
