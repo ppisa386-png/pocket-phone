@@ -1,5 +1,11 @@
 # 榴莲手机开发进度
 
+## v1.2.10 · 修复小榴莲、Amazon、外卖桌面无法打开（2026-11-09；基线 fe99b96）
+**定位**：src/ui.js 中 render() 在 `else if (app?.id === 'weather')` 后错误插入独立的 `if (route !== 'app:weather') clearWeatherThemeTimer()`，下一行仍使用 `else if (app?.id === 'assets')`。结果后续资产、Amazon、外卖三项都成为天气定时器判断的从属分支，所有非天气页面必先执行清理而完全跳过这三个界面的渲染。点击导航确实改变 route，但对应 renderAssets/renderAmazon/renderFood 从未执行；各服务/账本不是原因。
+**修复**：仅在 src/ui.js 把 assets/amazon/food 恢复到完整统一的页面 `else if` 链，并将 `clearWeatherThemeTimer()` 移到分支链结束之后独立运行。页面业务、账本、购物支付、订单、回退、天气定时器自身行为均保持。新增 tests/ui-routing.test.js，通过执行源文件真实 render() 函数、模拟 UI 上下文来检验三个 App、天气、日报、X、桌面、设置等页面分派。REQUIREMENTS.md 同步标明桌面导航与天气清理必须互相独立。
+**发布**：版本升级为 1.2.10（manifest/package/config），index.js、src/ui.js 使用新缓存标识，避免 Termux 手机浏览器重用原错误脚本。GitHub Actions 提交 8c8d6528ff2e 上完整 `npm test` **663/663 通过、0 失败**，`npm run build:preview` 成功：https://github.com/ppisa386-png/pocket-phone/actions/runs/42500001805 。本环境未连接用户实际运行中的 Termux 浏览器，无法代替实机点击验收；用户更新本地插件并刷新酒馆页面后方能加载修复。
+
+
 ## v1.2.9 · 微信 RNWeChat 风格美化（2026-11-09；基线 5aecbdd）
 **参考与边界**：参考 GitHub yubo725/rn-wechat（dev）的传统微信 UI 语言：深灰标题栏、灰白会话/联系人列表、绿色导航选中态与气泡、浅灰聊天背景。使用现有 HTML/CSS 独立实现，不复制 React Native 源码、依赖、图片或服务器。
 **实现**：src/chat-view.js 仅在微信列表提供两个清晰的好友操作入口，微信底部改用微信图标，附加 tab 标记以限定样式；style.css 新增微信作用域的头部、列表、搜索、通讯录、通话、个人资料、会话、聊天输入和转账卡片美化，以及 330px 以下小窗响应式设计。版本与入口、CSS 和聊天模块缓存统一升至 1.2.9。
