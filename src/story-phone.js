@@ -144,7 +144,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                         if(!state.x?.[account.id]&&state.x?.profile?.alias!==context.name1)
                             account.identityKnown=false;
                     }
-                    changes.push(...commRecordPatch(row.platform,id,message.accountId,row.category,true));
+                    changes.push(...commRecordPatch(row.platform,id,message.accountId,row.category,row.platform==='x'?true:row.shown));
                 }
             }
             journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+id,{ignored:true})],id);
