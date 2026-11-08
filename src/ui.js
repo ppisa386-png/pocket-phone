@@ -745,7 +745,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const point = {x:Math.max(4,Math.min(x,Math.max(4,window.innerWidth-rect.width-4))),
             y:Math.max(4,Math.min(y,Math.max(4,window.innerHeight-rect.height-4)))};
         // Keep dragged windows responsive when a keyboard opens and closes.
-        phone.style.height = window.innerWidth <= 480 ? 'calc(100dvh - 20px)' : 'min(' + settings.phoneHeight + 'px, calc(100dvh - 24px))';
+        // The user's saved height wins on every viewport width — a resize must
+        // never snap a resized window back to near-fullscreen.
+        phone.style.height = 'min(' + settings.phoneHeight + 'px, calc(100dvh - ' + (window.innerWidth <= 480 ? 20 : 24) + 'px))';
         phone.style.bottom = 'auto'; phone.style.right = 'auto';
         phone.style.left = point.x + 'px'; phone.style.top = point.y + 'px';
         windowPosition = point;
