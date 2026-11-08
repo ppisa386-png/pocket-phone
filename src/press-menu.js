@@ -116,9 +116,8 @@ export function createPressMenu({ shadow, root, phone, getActions }) {
 
     function onPointerDown(event) {
         if (bubble && !bubble.contains(event.target)) close();
-        if (interactive(event.target)) return;
         const target = event.target.closest?.('[data-press]');
-        if (!target) return;
+        if (!target || (interactive(event.target) && target.dataset.press !== 'daily-archive')) return;
         if (event.pointerType === 'mouse') return;
         startLongPress(target, event);
     }
@@ -131,9 +130,8 @@ export function createPressMenu({ shadow, root, phone, getActions }) {
     }
 
     function onContextMenu(event) {
-        if (interactive(event.target)) return;
         const target = event.target.closest?.('[data-press]');
-        if (!target) return;
+        if (!target || (interactive(event.target) && target.dataset.press !== 'daily-archive')) return;
         event.preventDefault();
         if (bubble) return;
         const actions = getActions(target);
