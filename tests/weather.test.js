@@ -115,7 +115,7 @@ test('an existing marker path stays model-free: refresh with a location makes no
 
 test('weather location can be edited from the shared location record without a model call',async()=>{
     const f=setup();try{
-        f.c.chat.push(marker('2026-01-01 10:00\\nSam has arrived in Shanghai.','上海'));
+        f.c.chat.push(marker('2026-01-01 10:00\nSam has arrived in Shanghai.','上海'));
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         const oldWeather=(await f.state()).weather['上海'],beforeCalls=f.calls();
@@ -146,7 +146,7 @@ test('weather location can be edited from the shared location record without a m
 
 test('editing the location rejects stale names, invalid inputs and rolls back when the story floor is removed',async()=>{
     const f=setup();try{
-        f.c.chat.push(marker('2026-01-01 10:00\\nSam has arrived in Shanghai.','上海'));
+        f.c.chat.push(marker('2026-01-01 10:00\nSam has arrived in Shanghai.','上海'));
         await f.memory.read();
         assert.equal((await f.weather.editLocation('北京','上海')).ok,true);
         const bad=await f.weather.editLocation('<fake>','北京');
