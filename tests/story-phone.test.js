@@ -277,7 +277,9 @@ test('narrative X publishes an image and original text under the alias, threads 
   const {createXPanel}=await import('../src/x-view.js');
   const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>({x}),redraw(){},notice(){}});
   await panel.action('profile');assert.match(panel.html(),/Evening!/);assert.match(panel.html(),/配图.*a moon over the lake/);assert.match(panel.html(),/2026-09-02 19:23/);
-  await panel.action('comments',post.id);assert.match(panel.html(),/data-x-action="comment-author"[^>]*>Alex<\/button>：So quiet\./);
+  await panel.action('comments',post.id);const detailHTML=panel.html();
+  assert.match(detailHTML,/data-x-action="comment-author"[^>]*>Alex<\/button>/);
+  assert.match(detailHTML,/class="pp-x-comment-text pp-snap-copy">So quiet\.<\/p>/);
   f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));assert.deepEqual(await readX(),x);
   const later={action:'reply',postId:post.id,name:'Alex',text:'Back again.',evidence:'Alex replied: Back again.'};
   f.context.chat.push(xFloor(later.evidence,later,{...later,postId:'missing'}));x=await readX();
