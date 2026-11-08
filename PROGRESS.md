@@ -1,5 +1,11 @@
 # 榴莲手机开发进度
 
+## v1.2.11 · 修复 X 私信在正文已展示后重复概述（2026-11-09；基线 db325310）
+**实际定位**：`src/comm-context.js` 已将 X message 纳入与短信、WhatsApp、微信等相同的 `shown` sidecar，`src/continuity.js` 也给 X 私信提供 `shown` 字段及已展示梗概。缺口在 `src/story-phone.js`：故事正文里的 `durian-message` 导入条件原先只允许 WhatsApp，普通 X 私信即使已在正文实际发送／收到，也不能通过这条路径生成带准确 ID 的手机记录，后续正文缺少可用的已展示标记。
+**修复**：正文真实发送或收到的 X 文字私信现在复用现有 `durian-message` 事件导入，按正确 sender/recipient 进入同一手机 X 私信，保存 `origin:narrative` 并令 `shown:true`；同楼重复、非 user 的第三方私信、草稿、回忆、X 关闭或不支持的媒体过滤。X 网名匿名、私信状态与账号匹配沿用现有实现；user 实际发起会话后允许该会话的后续回复。WhatsApp 原有 `shown:false` 显式值不受影响。X 匿名账号即使没有其他主动联系渠道也注入正文私信标记规则。未改商家翻车、支付或已有手机数据，未新增模型请求。
+**防重复叙事**：`src/continuity.js` 已展示规则补充：不要仅因为手机历史再次注入，就安排 user 重开 X 私信确认已定时间、报酬或合作细则，并复述完整对话；真正的新变化和有情节动机的再次讨论仍允许。原有 `durian-message-shown` 对 X 现存消息的标记链路保留。过去没有隐藏标记的旧正文不会因本版本自动虚构新手机记录；后续真实正文生成按新规则记录。
+**回归**：`tests/comm-context.test.js` 新增以周二15:00、15:15、15:30的同一企划为实例的真实故事楼层导入：发信后 `shown:true`、分类 B、两楼后不重新入库、注入正文只提供已展示摘要、删楼回退；X 收到消息、仅在手机内出现的私信仍未展示、第三方／草稿／关闭 X 过滤、纯匿名 X 开启时标签规则覆盖。完整 npm test **667/667 通过**，`npm run build:preview` 通过：https://github.com/ppisa386-png/pocket-phone/actions/runs/42502471464 。版本更新 1.2.11（manifest/package/config）；入口、UI、memory 的 X 正文桥加载及 continuity 缓存参数刷新。Termux 酒馆真实角色模型的叙事行为尚未在此环境实机复现，不能保证模型永不重复描写。
+
 ## v1.2.10 · 修复小榴莲、Amazon、外卖桌面无法打开（2026-11-09；基线 fe99b96）
 **定位**：src/ui.js 中 render() 在 `else if (app?.id === 'weather')` 后错误插入独立的 `if (route !== 'app:weather') clearWeatherThemeTimer()`，下一行仍使用 `else if (app?.id === 'assets')`。结果后续资产、Amazon、外卖三项都成为天气定时器判断的从属分支，所有非天气页面必先执行清理而完全跳过这三个界面的渲染。点击导航确实改变 route，但对应 renderAssets/renderAmazon/renderFood 从未执行；各服务/账本不是原因。
 **修复**：仅在 src/ui.js 把 assets/amazon/food 恢复到完整统一的页面 `else if` 链，并将 `clearWeatherThemeTimer()` 移到分支链结束之后独立运行。页面业务、账本、购物支付、订单、回退、天气定时器自身行为均保持。新增 tests/ui-routing.test.js，通过执行源文件真实 render() 函数、模拟 UI 上下文来检验三个 App、天气、日报、X、桌面、设置等页面分派。REQUIREMENTS.md 同步标明桌面导航与天气清理必须互相独立。
