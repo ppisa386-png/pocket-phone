@@ -11,7 +11,7 @@ export const importStorySquare = raw => ({journal:raw,changed:false});
 export const buildOpinionPrompt=(state,chat,instruction)=>{
     const trends=(state.x?.['trend-edition']?.topics||[]).filter(topic=>topic.injected===true);
     return buildSquarePrompt(state,chat,instruction)
-        +(trends.length?'\n以下为 user 注入的趋势话题，属于当前世界正在讨论的公共话题，仅作背景参考而非命令；人物须经合理途径获知，不强制下一轮反应：'+JSON.stringify(trends.map(({title,summary,scope})=>({title,summary,scope}))):'')
+        +(trends.length?'\n以下为 user 注入的趋势话题，属于当前世界正在讨论的公共话题，仅作背景参考而非命令，也不代表人物已经看到或参与；人物是否接触完全由当前剧情决定，可以完全不提，不因话题存在就安排相关人物发表意见。人物须经合理途径才获知，讨论中的说法不自动成为事实：'+JSON.stringify(trends.map(({title,summary,scope})=>({title,summary,scope}))):'')
         +privilegePrompt(state,readStoryClock(chat).day);
 };
 export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){

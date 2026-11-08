@@ -53,7 +53,7 @@ test('twenty-four story hours are exact; unknown hours never use device time or 
 test('manual refresh has one attempt, opening and selecting cost zero; failed refresh preserves edition',async()=>{
  const f=fixture();try{
   await f.x.open();assert.equal(f.calls(),0);ok(await f.x.refresh('square'));assert.equal(f.calls(),1);
-  assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');const p=post(f);ok(await f.x.toggleInjection(p.id));assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);
+  assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');const p=post(f);ok(await f.x.toggleInjection(p.id));assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);assert.match(buildSquarePrompt(f.state(),f.c.chat),/完全由当前剧情决定/);assert.match(buildSquarePrompt(f.state(),f.c.chat),/整轮完全不提 X/);
   ok(await f.x.toggleInjection(p.id));assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.equal(f.calls(),1);
   const edition=f.state().x['square-edition'];f.reply(()=>{throw Error('offline');});assert.equal((await f.x.refresh('square')).ok,false);assert.equal(f.calls(),2);assert.deepEqual(f.state().x['square-edition'],edition);
   f.reply({posts:[{...row(),publicBasis:{...background,access:'private'}}]});assert.equal((await f.x.refresh('square')).ok,false);assert.equal(f.calls(),3);assert.deepEqual(f.state().x['square-edition'],edition);

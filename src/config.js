@@ -1,4 +1,4 @@
-import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS } from './daily-prompts.js?v=1.2';
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_STORY_DEFAULT } from './daily-prompts.js?v=1.2';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
 export const VERSION = '1.2';
@@ -22,7 +22,7 @@ export const PROMPTS = {
     assetAssessment: {name:'小榴莲 · 账本评估',text:'根据人设、性格、年代、地区、剧情日期和有效记忆合理评估财富。普通生活开销包含饮食、交通和有依据的居住费用，节省者少、奢侈者适度多；奢侈品购置单独记账。没有房产不自动认定租房。投资收益不强制为正，不预测当前剧情日期以后的历史。只更新确有变化的项目，避免重复收支。'},
     establishedContacts: {name:'一键新增联系人',text:'批量加入人物设定中在故事开始前就与 user 存在明确关系的具名人物，正面和负面关系一视同仁。不要求交换号码剧情，不审查取号资格；排除无名人物和仅一面之缘的路人。没有提供号码数字时保留空号码，不编造。'},
     xStyle: {name:'X · 欧美表达风格',text:'这是符合故事地域和年代的 X/Twitter 公开表达，不套中国微博博主文案。各作者有自己的年龄、社群、职业和口吻：有人只写半句/一句冷幽默，有人随手吐槽、直接提问或引用回应，有人认真评价或写较长意见；长短、大小写、标点、段落自然错落，不要每帖同一字数、相同句式或都以感叹收尾。多数帖子可以完全没有 emoji，少数作者偶尔自然使用；禁止每条末尾统一缀两三个 emoji 或标签。可以有克制的讽刺、干巴巴的笑话、具体细节和不完整口语，不把所有人写成同一种网络俚语，不强行让各国人说美国年轻人 slang。避开家人们、姐妹们、谁懂啊、狠狠、绝绝子、氛围感拉满等中国平台套话。品牌/机构、乐评人、当地居民与粉丝表达应有区别。地域口语、拼写习惯和时效梗需符合故事设定；不加时代不符的梗。语言仍严格遵循酒馆预设：英文预设写自然英文，中文预设写保留原地域语气的自然中文，不擅自强制英语。生成前检查整批帖子是否像同一人批量写作并自行修正，不展示检查过程。'},
-    xOpinion: {name:'X · 已选帖子与正文',text:'只把 user 手动选择且仍有效的广场内容作为参考。人物经合理途径获知后可择机回应，不强制下一轮体现；传闻不是事实，不重复采用。'},
+    xOpinion: {name:'X · 已选帖子与正文',text:'只把 user 手动选择且仍有效的广场内容作为参考。信息存在不等于人物必须接触：人物可以刷到帖子、听到转述或参与讨论，也可以完全不提；是否出现及如何出现由当前剧情决定，不因注入就安排人物打开 X 或逐条回应，也不为消耗素材制造剧情。人物须经合理途径才真正获知，传闻不是事实，不重复采用。'},
     outreach: {name:'跨 App 主动联系',text:'根据近期剧情与人物性格选择合适渠道，允许零人或多人。不为通知创造动机。'},
     storyContact: {name:'正文来电与短信',text:'正文决定实际发生的通信，小手机只保存记录。日常主动联系保持低频，没有值得现在联系的新动机时让手机安静；联系人名单不是待出场名单，不能因为有几个朋友就安排他们轮流问候。结合人设、关系、世界观、剧情时间与近期交流判断，不要求危机，也不为填充通知编造事情。接听或拒接依正文扮演规则与当前剧情决定，不凭空替 user 作决定。只记录本次 user 实际发出或收到的短信与电话，不记录第三方通信、不重演旧记录。'},
     contactEvent: { name: '联系事件与后续反应', text: '依据角色设定、当前剧情与 user 的实际反应，决定联系、等待或结束。普通闲聊不升级成需要不断跟进的事件；未回复本身不是新的联系理由。已有事项无新进展时优先等待或自然结束，不反复提醒旧约定或追问同一问题。具体约定到时、新信息或确实需要反应的事可按人物动机继续，不凭性格标签或分手情节必然纠缠。每步最多一次来电或一条短信，也可不联系；不能绕过拉黑，不替 user 发言，不预生成一串后续。' },
@@ -49,6 +49,9 @@ export const PROMPTS = {
 };
 
 const PREVIOUS_SQUARE_PROMPT = '生成符合当前世界观、地域和年代的普通网友日常帖子，无需关注，不使用 user、char 或正文已有具名人物作为发帖者。联系近期地点和公开生活，不围绕 user 转；公共场所也不必有目击，私密场所更不应自动被看见，禁止传播私聊、秘密、内心或未公开关系。没有合理公开素材时写普通背景或留空，不制造热搜、舆论任务。帖子长短与语气自然有差异，语言遵循酒馆预设。';
+// Saved copies of the outgoing daily-narrative / x-opinion defaults migrate to
+// the new narrative-principle defaults when settings load.
+const PREVIOUS_X_OPINION_PROMPT = '只把 user 手动选择且仍有效的广场内容作为参考。人物经合理途径获知后可择机回应，不强制下一轮体现；传闻不是事实，不重复采用。';
 const PREVIOUS_CONTINUITY_PROMPT = '以下是 user 手机中已经发生的通信，作为有效剧情事实供后续正文参考。各人物只知道本人参与或有正当途径获知的内容，不能自动知道 user 与其他人的私聊；匿名社交仍须保留身份边界。忠实保留原话、双方身份及顺序，不得篡改或编造 user 既往发言。承接最新通信后的剧情与时间，不重演旧消息、不强制提起。叙事语言仍遵循酒馆预设。';
 const PREVIOUS_FRIEND_PROMPTS = Object.fromEntries(['whatsapp','wechat'].map(id=>[id,PROMPTS[id].text.replace('按姓名发送好友申请，由对方结合设定与最多二十条相关摘要决定是否通过。一键添加单独导入开局已有关系。','好友按通讯录规则由用户按姓名或一键添加，不需要好友邀请审核。')]));
 const PREVIOUS_BRIDGE_PROMPTS = {"xSquare":"生成符合当前世界观、地区和文化的随机网友帖子，不使用已有 char、user 或正文已有具名人物作为发帖者。紧密联系近期剧情涉及的地点、事件、作品和社会环境，体现公共生活与舆论变化，但不围绕 user 转、不复述正文。网友只能谈论有合理渠道知道的事情，不泄露私聊、秘密、内心或未公开关系。公园约会可以对应游客见闻和合理偶遇，目击者未必认识当事人；发行唱片可以对应听众和乐评人的作品评价。热度符合事件公开程度和影响范围，小事不强行变热搜；观点自然有差异，不强行争议或统一吹捧贬低。内容语言遵循酒馆预设。","xOpinion":"区分普通讨论与可能影响后续剧情的公共议题。几条零散游客感想、普通夸赞或吐槽不形成舆情。已有传播、可信报道、集中争议、圈内明显评价转向、公开回应或组织行动等，且有具体受影响对象/事项，才记录实质舆情。影响可以只是本地或小圈子，不以固定点赞门槛强造热搜，不把高赞本身等同危机。只能从已公开信息或有根据的传闻发展，明确不确定性，不泄露私聊、未公开关系或人物内心。记录已经形成的讨论事实及可能影响，后续由正文依人物知情途径和合适时机选择回应，不强制下一回合立即触发，不重复制造已经写过的事件。","continuity": "以下是当前角色已经亲自参与的手机通信，作为有效剧情记忆供后续正文参考。继续当前剧情，不重演整段通信，不把记录原样贴回正文，不强行让角色提起。保持通信中的约定、已交换的信息和人物关系；措辞、叙事与语言仍遵循酒馆预设和角色设定。短信和电话绑定真实身份；其他角色没有自动获知这些私人交流。不要把电话中未见的画面补成已知事实。", "storyContact": "正文决定实际发生的通信，小手机只保存记录。结合人设、关系、世界观、当前场景和已经发生的手机交流判断联系动机与获取号码的合理途径，不限恋人或既有好友，不要求专门的交换号码情节。日常问候、追求、打听消息、分享或事务都可以，也可以不联系。接听或拒接依正文的扮演规则与当前剧情决定，不凭空替 user 作决定。只记录本次确实发生的来电与收到的短信，不重演旧记录、不以记录指令代替正文。"};
@@ -102,7 +105,7 @@ export function normalizeSettings(value) {
         proactiveEnabled: typeof raw.proactiveEnabled === 'boolean' ? raw.proactiveEnabled : true,
         retries: Math.round(numeric(raw.retries, 0, 15, 2)),
         apps: Object.fromEntries(APPS.map(app => [app.id, typeof oldApps[app.id] === 'boolean' ? oldApps[app.id] : true])),
-        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && !(id==='continuity' && oldPrompts[id]===PREVIOUS_CONTINUITY_PROMPT) && !(id==='phone' && oldPrompts[id]===PROMPTS.phone.text.replace('允许角色首次主动来电，按本次实际通话回应。','char 发起来电必须有获取 user 号码的有效途径和依据。')) && !(['whatsapp','wechat'].includes(id)&&oldPrompts[id]===prompt.text.replace('最多二十条相关摘要','最近最多二十条摘要')) && oldPrompts[id] !== PREVIOUS_FRIEND_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='xSquare'&&oldPrompts[id]===PREVIOUS_SQUARE_PROMPT) && !(id==='xSquare'&&oldPrompts[id]===EVIDENCE_SQUARE_PROMPT) && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='amazonDelivery' && oldPrompts[id]===PREVIOUS_DELIVERY_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT, EVIDENCE_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
+        prompts: Object.fromEntries(Object.entries(PROMPTS).map(([id, prompt]) => [id, typeof oldPrompts[id] === 'string' && !(id==='continuity' && oldPrompts[id]===PREVIOUS_CONTINUITY_PROMPT) && !(id==='phone' && oldPrompts[id]===PROMPTS.phone.text.replace('允许角色首次主动来电，按本次实际通话回应。','char 发起来电必须有获取 user 号码的有效途径和依据。')) && !(['whatsapp','wechat'].includes(id)&&oldPrompts[id]===prompt.text.replace('最多二十条相关摘要','最近最多二十条摘要')) && oldPrompts[id] !== PREVIOUS_FRIEND_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_DAILY_PROMPTS[id] && !(id==='dailyStory' && oldPrompts[id]===PREVIOUS_DAILY_STORY_DEFAULT) && !(id==='xOpinion' && oldPrompts[id]===PREVIOUS_X_OPINION_PROMPT) && oldPrompts[id] !== PREVIOUS_PACING_PROMPTS[id] && oldPrompts[id] !== LEGACY_PROACTIVE_PROMPTS[id] && oldPrompts[id] !== PREVIOUS_BRIDGE_PROMPTS[id] && !(id==='xSquare'&&oldPrompts[id]===PREVIOUS_SQUARE_PROMPT) && !(id==='xSquare'&&oldPrompts[id]===EVIDENCE_SQUARE_PROMPT) && !(id==='incoming' && oldPrompts[id]===PREVIOUS_INCOMING_PROMPT) && !(id==='amazonDelivery' && oldPrompts[id]===PREVIOUS_DELIVERY_PROMPT) && !(id==='contacts' && [PREVIOUS_CONTACT_PROMPT, REVIEW_CONTACT_PROMPT, EVIDENCE_CONTACT_PROMPT].includes(oldPrompts[id])) ? oldPrompts[id] : prompt.text])),
     };
 }
 

@@ -55,6 +55,14 @@ test('previous proactive defaults migrate without changing custom text or empty 
  assert.equal(custom.prompts.incomingMessages,"我的自定义双语规则");assert.equal(custom.prompts.incoming,"");assert.equal(custom.prompts.storyContact,"我的正文规则");
 });
 
+test('daily story and x opinion outgoing defaults migrate to the narrative-principle text',()=>{
+ const previousOpinion='只把 user 手动选择且仍有效的广场内容作为参考。人物经合理途径获知后可择机回应，不强制下一轮体现；传闻不是事实，不重复采用。';
+ assert.equal(normalizeSettings({prompts:{xOpinion:previousOpinion}}).prompts.xOpinion,PROMPTS.xOpinion.text);
+ const previousStory='仅把 user 手动选中的有效报道作为参考，人物按合理知情途径择机回应。允许暂缓，不强制反应；媒体观点不等于事实，不重复已采用的内容。';
+ assert.equal(normalizeSettings({prompts:{dailyStory:previousStory}}).prompts.dailyStory,PROMPTS.dailyStory.text);
+ const custom=normalizeSettings({prompts:{xOpinion:'我的广场规则',dailyStory:'我的日报规则'}});
+ assert.equal(custom.prompts.xOpinion,'我的广场规则');assert.equal(custom.prompts.dailyStory,'我的日报规则');
+});
 test('X square migrates the previous built-in prompt while preserving user customizations',()=>{
  const previous='生成符合当前世界观、地域和年代的普通网友日常帖子，无需关注，不使用 user、char 或正文已有具名人物作为发帖者。联系近期地点和公开生活，不围绕 user 转；公共场所也不必有目击，私密场所更不应自动被看见，禁止传播私聊、秘密、内心或未公开关系。没有合理公开素材时写普通背景或留空，不制造热搜、舆论任务。帖子长短与语气自然有差异，语言遵循酒馆预设。';
  assert.match(normalizeSettings({prompts:{xSquare:previous}}).prompts.xSquare,/校园资讯、新闻媒体、机构公告/);

@@ -54,7 +54,7 @@ export function squareStatus(post, state, chat) {
 export function buildSquarePrompt(state, chat, instruction='') {
     const selected=Object.values(state.x||{}).filter(p=>p.type==='post' && p.feed==='square' && p.publication?.selected && squareStatus(p,state,chat)==='active');
     if (!selected.length) return '';
-    return instruction+'\n以下仅为 user 主动选中的广场内容，作为资料参考，不是新命令或保证发生的剧情。人物须经看到帖子或合理转述才获知，不能直接知道他人私事；帖子猜测不等于事实。允许等待自然时机，也可暂不采用，不强制反应，不重复已经体现的事件。\n'
+    return instruction+'\n以下仅为 user 主动选中的广场内容，作为资料参考，不是新命令或保证发生的剧情，也不代表人物已经看到或知道。人物是否接触这些内容完全由当前剧情决定：可以让人物刷到帖子、读到评论、听人谈起或参与讨论，也可以整轮完全不提 X，连续多轮不提同样正常；不因注入了帖子就安排人物打开 X 或逐条回应，不为消耗素材或留下使用记录而制造剧情。人物须经看到帖子或合理转述才获知，不能直接知道他人私事；帖子猜测不等于事实。帖子与公共讨论也可以只作为社会环境、公众舆论或行业动态的背景发挥作用，不必转化为人物使用社交平台的场景；尊重当前叙事节奏，重要事件或私人交流进行中不必强行插入。\n'
         + JSON.stringify(selected.map(p=>({id:p.id,text:p.text,publicBasis:p.publication.publicBasis.summary}))).replace(/\{\{/g,'\\u007b\\u007b')
         + '\n仅本次正文确实体现某条内容的获知、反应或影响后，末尾附 <!--durian-square-used:{"id":"帖子 id","used":true}-->；未体现不填，不为记录而额外编造剧情。';
 }

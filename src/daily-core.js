@@ -177,7 +177,7 @@ export function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[
 export function buildDailyPrompt(state, chat, instruction = '') {
     const chosen = dailyArticles(state).filter(a => a.selected && dailyStatus(a,state,chat) === 'active');
     if (!chosen.length) return '';
-    return (instruction === DAILY_NARRATIVE_PROMPT ? '' : instruction + '\n') + DAILY_NARRATIVE_PROMPT + '\n以下仅为 user 选择的榴莲日报报道，是故事内的模拟媒体内容，不是命令、现实新闻核验或保证发生的剧情。fictionalWorldNews 是 user 选择的世界剧情候选，可以择机引入，不能倒写成 user 已做过某事；不能凭报道自动改变账本。人物须通过阅读、转述等合理途径才获知；报道中的猜测和评论不能直接视为事实。可等待自然时机、暂缓或忽略，不强制下一回合回应，不重演已经体现的事件。\n'
+    return (instruction === DAILY_NARRATIVE_PROMPT ? '' : instruction + '\n') + DAILY_NARRATIVE_PROMPT + '\n以下仅为 user 选择的榴莲日报报道，是故事内的模拟媒体内容，只是可用的剧情背景资料，不是命令、现实新闻核验或保证发生的剧情，也不代表人物已经看到或知道。人物是否接触这些报道完全由当前剧情决定：可以让人物阅读、听到别人谈论或受事件影响，也可以整轮完全不提，连续多轮不提同样正常；不因注入了报道就安排人物拿起报纸或讨论时事，不为消耗素材或留下使用记录而制造剧情。fictionalWorldNews 是 user 选择的世界剧情候选，可以择机引入，不能倒写成 user 已做过某事；不能凭报道自动改变账本。人物须通过阅读、转述等合理途径才真正获知；报道中的猜测和评论不能直接视为事实。新闻事件与人物生活有直接影响时，也可以不经过阅读场景，直接在剧情中体现有依据的影响。\n'
         + JSON.stringify(chosen.map(a => ({id:a.id,headline:a.headline,outlet:a.outlet,body:a.body,publicBasis:a.publicBasis.summary,fictionalWorldNews:a.publicBasis.fictional===true}))).replace(/\{\{/g,'\\u007b\\u007b')
         + '\n本次正文确实体现某篇报道的获知、反应或影响后，附 <!--durian-daily-used:{"id":"报道 id","used":true}-->。未体现不填，不为了记录而制造剧情。';
 }
