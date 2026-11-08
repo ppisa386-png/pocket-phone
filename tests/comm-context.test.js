@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { appendChange, replayJournal, reconcileJournal, revisionsFor, messageSignatures, JOURNAL_KEY } from '../src/journal.js';
 import { syncCommContext, commEntries, commExpired, commMeta, commKey, commReplyClassification, commRecordPatch, commClassificationPlan, commClassificationChanges, commRecordExists, commExcerpt, inferShown, COMM_PLATFORMS } from '../src/comm-context.js';
-import { importStoryPhone } from '../src/story-phone.js';
+import { importStoryPhone, buildStoryPhonePrompt } from '../src/story-phone.js';
 import { buildContinuityPrompt } from '../src/continuity.js';
 import { xStoryPrompt } from '../src/x-story.js';
 import { xTriggerCandidates } from '../src/outreach.js';
@@ -277,3 +277,71 @@ test('expired posts stop serving as re-outreach catalysts',async()=>{
 function buildCandidates(state,now){
     return xTriggerCandidates(state,'Sam',now);
 }
+
+test('an X DM actually sent in narrative is imported as shown, not re-presented two floors later',async()=>{
+    const context={name1:'Sam',name2:'Alex',chatId:'x-narrative',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[],chatMetadata:{}};
+    const recipient='黑胶浪潮唱片行',content='Tuesday at 4:15 PM works. Photos at the listening corner, $150 cash after the post goes live. '+('Confirmed details. '.repeat(8));
+    const marker={platform:'x',action:'sent',sender:'user',recipient,kind:'text',text:content,category:'B',shown:true};
+    context.chat.push({mes:'2024-10-07 15:00 Sam 在 X 私信里发给黑胶浪潮唱片行：'+content+'<!--durian-message:'+JSON.stringify(marker)+'-->'});
+    let rev=await revisionsFor(messageSignatures(context.chat)),journal=importStoryPhone(undefined,rev,context.chat,context).journal;
+    let state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
+    const msgs=Object.values(state.x).filter(r=>r.type==='message');
+    assert.equal(msgs.length,1);
+    assert.equal(msgs[0].role,'user');assert.equal(msgs[0].status,'sent');assert.equal(msgs[0].text,content);
+    assert.equal(msgs[0].origin,'narrative');
+    assert.equal(state.x[msgs[0].accountId].dmAccepted,true,'narrative outgoing channel can receive follow-up');
+    assert.equal(state.x[msgs[0].accountId].identityKnown,false,'anonymous user not disclosed to shop');
+    assert.equal(commMeta(state,'x',msgs[0].id).shown,true);
+    assert.equal(commMeta(state,'x',msgs[0].id).category,'B');
+    context.chat.push({mes:'2024-10-07 15:15 角色回忆已有的周二预约，没有新的私信。'});
+    context.chat.push({mes:'2024-10-07 15:30 继续走路。'});
+    rev=await revisionsFor(messageSignatures(context.chat));
+    journal=importStoryPhone(journal,rev,context.chat,context).journal;
+    state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
+    assert.equal(Object.values(state.x).filter(r=>r.type==='message').length,1,'later floors do not re-import old prose');
+    const prompt=buildContinuityPrompt(state,speaker,{instruction:'延续既有交流',allParticipants:true,userName:'Sam',currentStoryTime:stamp('2024-10-07','15:30'),budget:40000});
+    const record=JSON.parse(prompt.split('\n').at(-2)).records.find(r=>r.channel==='X 私信');
+    assert.equal(record.shown,true);
+    assert.equal(record.speaker,'匿名账号');
+    assert.ok(record.text.length<content.length,'shown X DM contributes only an excerpt');
+    assert.doesNotMatch(prompt,/首次发送同一私信/);
+    assert.match(prompt,/不得再次作为新消息/);
+    const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,0)).journal);
+    assert.equal(Object.values(rolled.x).filter(r=>r.type==='message').length,0,'message rolls back with source floor');
+});
+
+test('X narrative replies are shown, while app-only X replies remain unshown',async()=>{
+    const context={name1:'Sam',name2:'Alex',chatId:'x-reply',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[],chatMetadata:{}};
+    context.chat.push({mes:'2024-10-07 15:00 商家通过 X 私信回复 Sam：周二见。<!--durian-message:'+JSON.stringify({
+        platform:'x',action:'received',sender:'唱片行',recipient:'user',kind:'text',text:'周二见。',category:'B'})+'-->'});
+    let rev=await revisionsFor(messageSignatures(context.chat));
+    const journal=importStoryPhone(undefined,rev,context.chat,context).journal;
+    const state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
+    const message=Object.values(state.x).find(x=>x.type==='message');
+    assert.equal(message.role,'assistant');
+    assert.equal(commMeta(state,'x',message.id).shown,true);
+    assert.equal(commMeta(state,'x',message.id).category,'B');
+    const unshown={id:'app-only',type:'message',accountId:message.accountId,role:'assistant',text:'Later followup',createdAt:50};
+    state.x[unshown.id]=unshown;
+    assert.equal(inferShown({platform:'x',id:unshown.id,record:unshown}),false);
+    const entryPrompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),context.chat);
+    assert.match(entryPrompt,/X 私信与其他通信使用同一已展示\/未展示记录机制/);
+    assert.match(entryPrompt,/"platform":"x"/);
+});
+
+test('X narrative import rejects drafts, third-party chats and disabled X',async()=>{
+    const context={name1:'Sam',name2:'Alex',chatId:'x-ignore',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[],chatMetadata:{}};
+    const tags=[
+        {platform:'x',action:'sent',sender:'user',recipient:'唱片行',kind:'text',text:'还没发出去',evidence:'Sam 打算发送私信。'},
+        {platform:'x',action:'sent',sender:'Alex',recipient:'唱片行',kind:'text',text:'第三方消息'},
+        {platform:'x',action:'received',sender:'唱片行',recipient:'user',kind:'image',text:'图片（X正文暂不导入图片）'}
+    ];
+    context.chat.push({mes:'2024-10-07 15:00 Sam 打算发送私信。'+tags.map(x=>'<!--durian-message:'+JSON.stringify(x)+'-->').join('')});
+    let rev=await revisionsFor(messageSignatures(context.chat)),journal=importStoryPhone(undefined,rev,context.chat,context).journal;
+    assert.equal(Object.values(replayJournal(journal).x).filter(x=>x.type==='message').length,0);
+    context.extensionSettings={personal_pocket_phone:{apps:{x:false}}};
+    context.chat.push({mes:'2024-10-07 16:00 Sam 发了一条 X 私信：hello<!--durian-message:'+JSON.stringify({platform:'x',action:'sent',sender:'user',recipient:'唱片行',kind:'text',text:'hello'})+'-->'});
+    rev=await revisionsFor(messageSignatures(context.chat));
+    journal=importStoryPhone(journal,rev,context.chat,context).journal;
+    assert.equal(Object.values(replayJournal(journal).x).filter(x=>x.type==='message').length,0);
+});
