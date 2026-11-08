@@ -11,8 +11,8 @@ import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay, dayDate } from '../src/story-clock.js';
-import { createWeatherPanel, themeFor, nextThemeChange } from '../src/weather-view.js';
-import { sceneBackdrop } from '../src/weather-art.js';
+import { createWeatherPanel, themeFor, nextThemeChange, themeForStory, upcomingHours } from '../src/weather-view.js';
+import { sceneBackdrop, weatherPhoto } from '../src/weather-art.js';
 
 // Simple deterministic LCG so statistical assertions never flake between runs.
 let lcg = 0x2f6e2b1;
@@ -391,7 +391,7 @@ test('the weather panel renders the report and refresh reports success', async (
         assert.match(html, /pp-weather-metrics/); // 四指标连续横栏
         assert.match(html, /pp-weather-hourly-card/); // 逐小时单面板
         assert.match(html, /pp-weather-week/); // 七天连续列表
-        assert.match(html, /data:image\/webp/); // 本地 WebP 天空素材
+        assert.match(html, /assets\/weather\/(?:day|dusk|night|rain)\.webp/); // 随插件打包的真实照片
         assert.doesNotMatch(html, /剧情时间/); // 界面不显示内部系统信息
         assert.doesNotMatch(html, /pp-weather-refresh/); // 底部大号刷新按钮已移除
         await panel.action('refresh');
@@ -630,85 +630,96 @@ test('day-night themes switch exactly at 06:00, 16:00 and 20:00 local time', () 
     assert.deepEqual(nextThemeChange(at(3, 0)), at(6, 0));
     assert.deepEqual(nextThemeChange(at(15, 59)), at(16, 0));
 });
-test('the redesigned panel carries the theme attribute, new layout blocks and unchanged data across themes', async () => {
-    const f = setup(); try {
-        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
-        await f.memory.read();
-        await f.weather.refresh();
-        const current = await f.state();
-        const make = now => createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, busy: false }), redraw() {}, notice() {}, now: () => now });
-        const morning = make(new Date(2026, 4, 1, 9, 0)).html();
-        const dusk = make(new Date(2026, 4, 1, 17, 0)).html();
-        const night = make(new Date(2026, 4, 1, 22, 0)).html();
-        assert.match(morning, /data-wtheme="mist"/);
-        assert.match(dusk, /data-wtheme="apricot"/);
-        assert.match(night, /data-wtheme="night"/);
-        // 主题只换氛围：城市、天气与数据块在三个主题下一致
-        for (const page of [morning, dusk, night]) {
-            assert.match(page, /<b>上海<\/b>/);
-            assert.match(page, /pp-weather-hero-copy/);
-            assert.match(page, /体感温度/);
-            assert.match(page, /pp-weather-hours/);
-            assert.match(page, /pp-weather-week/);
-            assert.match(page, /pp-weather-day-now/);
-            assert.match(page, /pp-weather-day-date/);
-            assert.match(page, /aria-label="刷新天气"/);
-            assert.doesNotMatch(page, /剧情时间/); // 三个主题都不显示内部系统信息
-        }
-        // 视图重绘不调用模型：adapter 无生成入口，纯渲染
-        const noLocation = createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, location: null, busy: false }), redraw() {}, notice() {}, now: () => new Date(2026, 4, 1, 9, 0) }).html();
-        assert.match(noLocation, /尚未标记位置/);
-        assert.match(noLocation, /data-weather-action="refresh"/); // 特殊状态保留刷新入口
-        assert.match(noLocation, /pp-weather-hero/); // 占位与正常页共用同一视觉语言
-    } finally { f.close(); }
+
+test('weather theme follows the story hour when known and falls back to local time only if unknown',()=>{
+    const at=(h)=>new Date(2026,4,1,h,0);
+    assert.equal(themeForStory({hour:9},at(23)),'mist');
+    assert.equal(themeForStory({hour:17},at(9)),'apricot');
+    assert.equal(themeForStory({hour:22},at(9)),'night');
+    assert.equal(themeForStory({hour:null},at(17)),'apricot');
+    assert.equal(themeForStory(null,at(23)),'night');
+    for(const [type,theme,expected] of [
+        ['sunny','mist','day'],['sunny','apricot','dusk'],['sunny','night','night'],
+        ['rain','mist','rain'],['drizzle','night','rain'],['storm','apricot','rain'],
+        ['snow','night','night']]){
+        assert.equal(weatherPhoto(type,theme),expected);
+        assert.match(sceneBackdrop(type,theme),new RegExp(expected+'\\.webp'));
+    }
 });
-test('the redesigned surface carries the webp sky backdrop, flat hero, inline metrics and E-theme curve', async () => {
-    const f = setup(); try {
-        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
-        await f.memory.read();
-        await f.weather.refresh();
-        const current = await f.state();
-        const make = (now, type) => {
-            const view = { ...current, busy: false };
-            if (type) view.weather['上海'] = { ...view.weather['上海'], state: { ...view.weather['上海'].state, type } };
-            return createWeatherPanel({ adapter: { weather: f.weather }, getView: () => view, redraw() {}, notice() {}, now: () => now });
-        };
-        const mist = make(new Date(2026, 4, 1, 9, 0)).html();
-        const dusk = make(new Date(2026, 4, 1, 17, 0)).html();
-        const night = make(new Date(2026, 4, 1, 22, 0)).html();
-        // 素材层：三主题各挂一张不同的内嵌 WebP 天空图；抬头只保留照片背景，不再渲染独立插画层
-        for (const page of [mist, dusk, night]) {
-            assert.match(page, /pp-weather-backdrop/);
-            assert.match(page, /pp-weather-backdrop-art/);
-            assert.match(page, /data:image\/webp;base64,/);
-            assert.doesNotMatch(page, /pp-weather-art-main/); // 与照片重复的独立天气插画已移除
-            assert.match(page, /pp-weather-metrics/);
-            assert.match(page, /pp-weather-hourly-card/);
-            assert.match(page, /pp-weather-hour-now/);
-            assert.match(page, /pp-weather-week/);
-            assert.doesNotMatch(page, /剧情时间/);       // 不显示内部系统信息
-            assert.doesNotMatch(page, /pp-weather-refresh/); // 无底部大号刷新按钮
+
+test('all four weather photographs are bundled real WebP files, not embedded previews or remote images',async()=>{
+    const {readFileSync,statSync}=await import('node:fs');
+    for(const name of ['day','dusk','night','rain']){
+        const file=new URL('../assets/weather/'+name+'.webp',import.meta.url);
+        assert.ok(statSync(file).size>45000,'photo '+name+' must be a sizeable WebP derivative');
+        const header=readFileSync(file).subarray(0,12);
+        assert.equal(header.subarray(0,4).toString('ascii'),'RIFF');
+        assert.equal(header.subarray(8,12).toString('ascii'),'WEBP');
+    }
+    const credit=readFileSync(new URL('../assets/weather/SOURCES.md',import.meta.url),'utf8');
+    assert.match(credit,/2916 × 5184/);
+    assert.match(credit,/4608 × 3072/);
+    assert.match(credit,/4000 × 6000/);
+    assert.doesNotMatch(sceneBackdrop('sunny','mist'),/data:image\/webp|images\.pexels|images\.unsplash/);
+});
+
+test('24 real forecast hours continue across midnight and seven-day ranges use saved model-free data',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await f.memory.read();await f.weather.refresh();
+        const info=f.weather.report(await f.state()),clock=info.clock;
+        assert.equal(info.forecast.days.length,7);
+        const hours=upcomingHours(info.forecast,23);
+        assert.equal(hours.length,24);
+        assert.equal(hours[0].hour,23);
+        assert.equal(hours[1].hour,0);
+        assert.equal(hours[23].hour,22);
+        assert.equal(hours[0].isNow,true);
+        assert.equal(hours[1].isNow,false);
+    }finally{f.close();}
+});
+
+test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour and seven-day forecast with four photo cases',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await f.memory.read();await f.weather.refresh();
+        const state=await f.state();
+        const base=f.weather.report(state);
+        const make=(hour,type)=>createWeatherPanel({
+            adapter:{weather:{report:()=>({...base,clock:{...base.clock,hour},report:{...base.report,type}})}},
+            getView:()=>({...state,busy:false}),redraw(){},notice(){},now:()=>new Date(2026,4,1,12),
+            assetBase:'https://example.invalid/pocket-phone/assets/weather/'
+        });
+        for(const [hour,type,theme,photo] of [
+            [9,'sunny','mist','day'],[17,'sunny','apricot','dusk'],
+            [23,'sunny','night','night'],[13,'rain','mist','rain']
+        ]){
+            const panel=make(hour,type),html=panel.html();
+            assert.match(html,new RegExp('data-wtheme="'+theme+'"'));
+            assert.match(html,new RegExp('data-photo="'+photo+'"'));
+            assert.match(html,new RegExp('assets/weather/'+photo+'\\.webp'));
+            assert.match(html,/<b>上海<\/b>/);
+            assert.match(html,/pp-weather-hero-copy/);
+            assert.match(html,/pp-weather-highlow/);
+            assert.match(html,/24小时天气/);
+            assert.match(html,/未来7天天气预报/);
+            assert.match(html,/pp-weather-hours/);
+            assert.match(html,/pp-weather-hour-now/);
+            assert.match(html,/pp-weather-week/);
+            assert.match(html,/pp-weather-tempbar/);
+            assert.match(html,/pp-weather-day-now/);
+            assert.match(html,/pp-weather-metrics/);
+            for(const label of ['体感温度','降水情况','风力','湿度'])assert.match(html,new RegExp(label));
+            assert.match(html,/data-press="weather-location"/);
+            assert.match(html,/aria-label="刷新天气"/);
+            assert.doesNotMatch(html,/剧情时间|pp-weather-refresh|pp-weather-art-main/);
+            assert.deepEqual(panel.press({dataset:{press:'weather-location'}}).map(a=>a.icon),['edit']);
         }
-        assert.equal(new Set(['mist', 'apricot', 'night'].map(t => sceneBackdrop('rain', t))).size, 3, 'three distinct local sky images');
-        for (const theme of ['mist', 'apricot', 'night'])
-            assert.match(sceneBackdrop('rain', theme), /^<img class="pp-weather-backdrop-art" src="data:image\/webp;base64,/);
-        // 抬头一体：照片层是 hero 的第一个背景子层，城市导航与主视觉同处 hero
-        const heroAt = dusk.indexOf('class="pp-weather-hero"');
-        const backdropAt = dusk.indexOf('class="pp-weather-backdrop"');
-        const topAt = dusk.indexOf('class="pp-weather-top"');
-        const copyAt = dusk.indexOf('class="pp-weather-hero-copy"');
-        assert.ok(heroAt >= 0 && heroAt < backdropAt && backdropAt < topAt && topAt < copyAt, 'sky photo backs the whole hero with the city header inside it');
-        // E 杏桃主题画温度曲线；B 雾紫 / D 深蓝保持干净的逐小时排列
-        assert.doesNotMatch(mist, /pp-weather-band/);
-        assert.match(dusk, /pp-weather-band/);
-        assert.doesNotMatch(night, /pp-weather-band/);
-        // 逐小时/七天使用彩色场景图标
-        assert.match(dusk, /pp-weather-day-icon/);
-        // 切主题不触碰数据：两次渲染城市与温度一致，仅 data-wtheme 不同
-        assert.match(mist, /data-wtheme="mist"/); assert.match(night, /data-wtheme="night"/);
-        assert.ok(mist.includes('<strong>') && mist.includes('<b>上海</b>'));
-        assert.ok(night.includes('<strong>') && night.includes('<b>上海</b>'));
-    } finally { f.close(); }
+        assert.equal(sceneBackdrop('rain','night').includes('rain.webp'),true);
+        const unavailable=createWeatherPanel({adapter:{weather:f.weather},getView:()=>({...state,location:null,busy:false}),redraw(){},now:()=>new Date(2026,4,1,9)});
+        assert.match(unavailable.html(),/尚未标记位置/);
+        assert.match(unavailable.html(),/data-weather-action="refresh"/);
+    }finally{f.close();}
 });
 
 test('common Los Angeles labels stay real and use one climate profile',()=>{

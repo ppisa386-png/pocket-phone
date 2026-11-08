@@ -1,5 +1,13 @@
 # 榴莲手机开发进度
 
+## v1.2.12 · 天气 App 苹果天气风格及四张高清摄影背景（2026-11-09；基线 3b5b244）
+**用户确认**：依照 j-labbe/weather-app-clone 的 Apple Weather 排版与已确认的四季场景效果图，仅修改现有天气页 UI，不引入英文或 WeatherAPI。四张照片：晴天白天（Pexels Abeer H 16459932）、日落（Unsplash Hannah Reding vrhEQC0CC5Q）、夜晚（Unsplash Nacho Rochon CG7YwmRDGvI）、雨天（Pexels Betül Batmaz 27378397）。
+**真实素材**：GitHub Actions 已从官方原图下载地址取回 2916×5184、3024×4028、4608×3072、4000×6000 的原图，按 1000×1780 竖屏裁剪，Pillow WebP quality=89、method=6；输出 day/dusk/night/rain.webp 分别为 68,092/153,156/287,324/184,830 B，随仓库打包，不从 Unsplash/Pexels 运行时加载，出处见 assets/weather/SOURCES.md。下载/转码操作记录：https://github.com/ppisa386-png/pocket-phone/actions/runs/42504117366 。
+**界面**：中文大城市/温度/当前天气/最高最低抬头，24 小时水平可滚动真实逐小时预测、7 天每日低高温渐变范围条、磨砂玻璃预报卡、现有四项指标卡。场景选图：实际雨雪分类中以当前降雨种类覆盖昼夜；其他天气以剧情小时 06–15 / 16–19 / 20–05 切换白天/傍晚/夜晚，剧情时间未知才使用本地手机时间。保留天气数据是本地模型而非联网天气 API，不编造空气质量、紫外线、10 日天气等未有数据。
+**保持**：地点长按手动修改、刷新、天气预报/极端天气判定、剧情同步/回退、手机窗口适配、其他 App 均不变。照片只用于天气 App；移动端 Shell 使用完整背景绝对资源 URL，修复 Shadow DOM 内 style URL 相对酒馆地址的问题。版本/缓存统一为 1.2.12。
+**验证**：新增四种背景切换、剧情时间、24 小时跨日及真实 WebP RIFF/大小测试；完整 npm test 和 build:preview 以 v1.2.12 main 的 GitHub Actions 结果为准。真实 Termux 手机上玻璃透明度、位置及照片裁切仍待实机确认。
+
+
 ## v1.2.11 · 修复 X 私信在正文已展示后重复概述（2026-11-09；基线 db325310）
 **实际定位**：`src/comm-context.js` 已将 X message 纳入与短信、WhatsApp、微信等相同的 `shown` sidecar，`src/continuity.js` 也给 X 私信提供 `shown` 字段及已展示梗概。缺口在 `src/story-phone.js`：故事正文里的 `durian-message` 导入条件原先只允许 WhatsApp，普通 X 私信即使已在正文实际发送／收到，也不能通过这条路径生成带准确 ID 的手机记录，后续正文缺少可用的已展示标记。
 **修复**：正文真实发送或收到的 X 文字私信现在复用现有 `durian-message` 事件导入，按正确 sender/recipient 进入同一手机 X 私信，保存 `origin:narrative` 并令 `shown:true`；同楼重复、非 user 的第三方私信、草稿、回忆、X 关闭或不支持的媒体过滤。X 网名匿名、私信状态与账号匹配沿用现有实现；user 实际发起会话后允许该会话的后续回复。WhatsApp 原有 `shown:false` 显式值不受影响。X 匿名账号即使没有其他主动联系渠道也注入正文私信标记规则。未改商家翻车、支付或已有手机数据，未新增模型请求。
