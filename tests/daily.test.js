@@ -234,7 +234,7 @@ test('editorial context labels adopted, selected pending and unselected; followu
   f.c.chat.push({mes:'2003-07-25'});await f.memory.read();
   const history=dailyEditorialHistory(f.state(),f.c.chat);assert.deepEqual(history[0].articles.map(a=>a.adoption),['adopted','selected_pending','unselected','unselected']);
   f.reply({articles:[article('音乐节新进展')]});ok(await f.daily.update());
-  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.previousEditions[0].articles[0].adoption,'adopted');assert.match(f.prompt(),/不为连续性编造调查结果/);assert.match(f.prompt(),/不要求每期延续/);assert.match(f.prompt(),/报道语言遵循当前预设/);
+  const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.previousEditions[0].articles[0].adoption,'adopted');assert.match(f.prompt(),/无新进展不换标题重报，也不编造调查结果或人物行动/);assert.match(f.prompt(),/新旧选题比例由新闻价值决定/);assert.match(f.prompt(),/报道语言遵循当前预设/);
   assert.equal(first(f).selected,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
   ok(await f.daily.toggle(first(f).id));const prompt=buildDailyPrompt(f.state(),f.c.chat);assert.match(prompt,/音乐节新进展/);assert.doesNotMatch(prompt,/其他栏目/);assert.match(prompt,/未经证实的指控/);
   f.c.chat.pop();await f.memory.read();assert.equal(dailyEditorialHistory(f.state(),f.c.chat)[0].articles[0].adoption,'adopted');
@@ -359,7 +359,7 @@ test('the editorial prompt carries the historical-material contract, columns and
   assert.match(f.prompt(),/重大政治事件、总统选举、战争、国际冲突、金融危机、重大体育赛事、自然灾害等均属于正常新闻选题/);
   assert.match(f.prompt(),/不设重大事件的数量上限、占比上限或连续刊登限制/);
   assert.match(f.prompt(),/允许连续多期报道/);
-  assert.match(f.prompt(),/选题按以下优先级综合判断，这是参考顺序而不是必须逐项填充的配额/);
+  assert.match(f.prompt(),/事件候选按以下优先级综合判断，这是新闻价值参考顺序，不是按栏目或题材逐项填充的配额/);
   assert.match(f.prompt(),/第一，当期具有新闻价值的重大事件/);
   assert.match(f.prompt(),/第四，普通地方新闻与生活资讯/);
   assert.match(f.prompt(),/历史素材的广度仅用于避免反复使用同一批熟知事件凑数，不得用于压低真实重大事件的报道地位/);
