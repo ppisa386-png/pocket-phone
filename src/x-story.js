@@ -3,6 +3,7 @@ import { readStoryClock, storyTime } from './story-clock.js?v=1.1.29';
 import { xComments, xCommentKey } from './x-comments.js?v=1.1.29';
 import {xFeedArea} from './x-feed.js?v=1.1.29';
 import { xAudience } from './x-audience.js?v=1.1.29';
+import { commRecordPatch } from './comm-context.js?v=1.1.29';
 
 export function xStoryPrompt(state) {
     const allPosts = Object.values(state.x || {}).filter(p => p.type === 'post');
@@ -17,7 +18,7 @@ export function xStoryPrompt(state) {
     return '\nX 正文同步：仅当本楼明确写出 user 已在 X/Twitter 发布新推文，在正文末尾按顺序每帖附一条隐藏 HTML 注释，不用代码块：' +
         '<!--durian-x:{"action":"published","author":"user","text":"推文逐字原文","imageDescription":"正文写明的配图描述原文","replies":[{"name":"实际回复者的姓名或网名","text":"公开回复逐字原文"}]}-->。' +
         '分别抄录文字和配图，不补写；纯图片帖 text 可为空，无配图省略 imageDescription。发布或回复若明确写出时刻，可附 time（HH:mm）；否则沿用本楼剧情时间。回复只收录正文已经写出的他人公开回复，保留顺序，无回复省略 replies。' +
-        '若本楼只新增对既有 user 推文的回复，每条附 <!--durian-x:{"action":"reply","postId":"对应已有帖子ID","name":"实际回复者","text":"回复原文"}-->。' +
+        '若本楼只新增对既有 user 推文的回复，每条附 <!--durian-x:{"action":"reply","postId":"对应已有帖子ID","name":"实际回复者","text":"回复原文","category":"可选A或B：日常闲聊为A，约定/持续事件为B","shown":true}-->。' +
         '正文明确写出既有 user 或 NPC 推文的累计互动数时，另附 <!--durian-x:{"action":"metrics","postId":"准确的已保存帖子ID","postText":"复制目标表中该帖文字片段；纯图片帖用配图描述。广场必须由本楼提供原帖内容","metrics":{"replies":{"value":4000}}}-->。' +
         'metrics 仅填正文明确提供的 likes、reposts、replies；每项各含 value 非负整数，未提及的项省略。达到4236填4236，突破四千或四千多填4000，点赞破两万填20000，不把下限推成虚构精确值。已经发布的新帖标记也可附同样 metrics。' +
         '根据原帖内容、作者、发布时间和本楼指代确认目标，postId 和 postText 必须对应同一帖，不能只凭作者选最新一条；指代有歧义就不记。数字不能来自预期、假设、草稿、他帖或旧数的回忆，不因同步数字编写可见评论或粉丝变化。' +
@@ -84,6 +85,8 @@ export function xStoryChanges(state, rows, chat, index, eventId, context) {
         if (replies.has(key)) return;
         replies.add(key);
         save({id,type:'comment',postId,author:account.id,replyTo:null,text:reply.text,read:false,createdAt:now,...eventAnchor(reply)});
+        // The narrative presented this public reply; the marker may classify it.
+        changes.push(...commRecordPatch('x', id, null, reply.category, reply.shown, state));
     }
     for (const [n,row] of rows.entries()) {
         const id = eventId+':'+n;

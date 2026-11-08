@@ -4,6 +4,7 @@ import { parseModelObject } from './model-json.js?v=1.1.29';
 import { requireCash, moneyMinor } from './assets-core.js?v=1.1.29';
 import { readStoryClock } from './story-clock.js?v=1.1.29';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.29';
+import { smsCategory, commReplyClassification } from './comm-context.js?v=1.1.29';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
@@ -78,16 +79,20 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
         if(data.status==='reply'&&(!messages.length||messages.some(m=>!m.text)))throw new Error('回复没有文字内容。');
         if(messages.some(m=>m.text.length>600))throw new Error('回复过长，请分成简短消息。');
         if(data.transfer){snapAmount(data.transfer.amount,data.transfer.currency);if(currency && data.transfer.currency!==currency)throw Error('转账请使用账本币种 '+currency+'。');}
-        return {status:data.status,messages:data.status==='reply'?messages:[],transfer:data.transfer};
+        return {status:data.status,messages:data.status==='reply'?messages:[],transfer:data.transfer,category:smsCategory(data.category)};
     }
     async function answerMessage(state,account,message,request,current,commit) {
         const batch=message.batchId?threadFor(state,account.id).filter(m=>m.role==='user'&&m.batchId===message.batchId):[message];
         const result=await ask(state,account,request,current,'当前任务：'+appName+' 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
             '\n本次 user 消息：'+JSON.stringify(batch.map(m=>({kind:m.kind,text:m.text})))+
-            '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null}。语言和翻译要求遵守预设。转账币种：'+(walletCurrency(state)||'按 user 常住地区确定；依据不足不发送转账')+'。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"当地三位货币代码","memo":"附言"}；仅为待收款邀请，不自动收款。',data=>replyData(data,walletCurrency(state)));
+            '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null,"category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B"}。语言和翻译要求遵守预设。转账币种：'+(walletCurrency(state)||'按 user 常住地区确定；依据不足不发送转账')+'。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"当地三位货币代码","memo":"附言"}；仅为待收款邀请，不自动收款。',data=>replyData(data,walletCurrency(state)));
         const changes=batch.map(m=>setSnap({...m,status:result.status==='reply'?'answered':'no_reply'}));
         const time=Math.max(Date.now(),...threadFor(state,account.id).map(m=>m.createdAt+1));
-        result.messages.forEach((m,i)=>changes.push(setSnap({id:'reply:'+message.id+(i?':'+i:''),type:'message',accountId:account.id,role:'assistant',kind:m.kind,text:m.text,replyTo:message.id,createdAt:time+i/1000,read:false})));
+        result.messages.forEach((m,i)=>{
+            const id='reply:'+message.id+(i?':'+i:'');
+            changes.push(setSnap({id,type:'message',accountId:account.id,role:'assistant',kind:m.kind,text:m.text,replyTo:message.id,createdAt:time+i/1000,read:false}));
+            if(result.category)changes.push(...commReplyClassification(app,id,account.id,result.category));
+        });
         if(result.transfer)changes.push(setSnap({id:'transfer:'+message.id,type:'transfer',accountId:account.id,direction:'incoming',status:'pending',amountMinor:snapAmount(result.transfer.amount,result.transfer.currency),currency:currencyOf(result.transfer.currency),memo:text(result.transfer.memo,300),createdAt:time}));
         await commit(changes);
     }
@@ -175,9 +180,12 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             if(!callId&&snapItems(state,'call').some(c=>c.status==='connected'))throw new Error('请先挂断当前通话。');
             const old=callId?state[app][callId]:null;if(callId&&(old?.type!=='call'||old.accountId!==id||old.status!=='connected'))throw new Error('通话已结束。');
             const turns=old?[...old.turns,{role:'user',text:required(value,'通话内容')}]:[];
-            const data=await ask(state,a,request,current,'当前任务：'+appName+' '+(mode==='voice'?'语音通话，只允许听觉内容。':'视频通话，可描述镜头内画面与声音，不写镜头外或内心。')+(old?'通话已接通，回应 user。':'user 拨出，决定接听或未接。')+'记录：'+JSON.stringify(turns)+'\n输出 {"status":"answered 或 no_answer","text":"对方回复"}。',d=>{if(!['answered','no_answer'].includes(d.status)||d.status==='answered'&&!text(d.text))throw new Error('通话回复格式不正确。');return d;});
+            const data=await ask(state,a,request,current,'当前任务：'+appName+' '+(mode==='voice'?'语音通话，只允许听觉内容。':'视频通话，可描述镜头内画面与声音，不写镜头外或内心。')+(old?'通话已接通，回应 user。':'user 拨出，决定接听或未接。')+'记录：'+JSON.stringify(turns)+'\n输出 {"status":"answered 或 no_answer","text":"对方回复","category":"可选A或B：日常闲聊为A，约定/持续事项为B"}。',d=>{if(!['answered','no_answer'].includes(d.status)||d.status==='answered'&&!text(d.text))throw new Error('通话回复格式不正确。');return d;});
             if(data.status==='answered')turns.push({role:'assistant',text:text(data.text)});
-            await commit([setSnap({...(old||newRecord('call',{})),accountId:id,mode,status:data.status==='answered'?'connected':'no_answer',turns})]);
+            const record={...(old||newRecord('call',{})),accountId:id,mode,status:data.status==='answered'?'connected':'no_answer',turns};
+            const changes=[setSnap(record)];
+            if(data.category)changes.push(...commReplyClassification(app,record.id,id,data.category,state));
+            await commit(changes);
         });},
         hangup(id){return run(async(state,_c,_r,commit)=>{const call=state[app][id];if(call?.type==='call')await commit([setSnap({...call,status:'ended'})]);});},
         publish(kind,value){return run(async(state,_c,_r,commit)=>{if(!['image','video'].includes(kind))throw new Error('故事请选择照片或视频。');await commit([setSnap(newRecord('story',{author:'user',name:profile(state).alias,kind,text:required(value,'故事内容'),comments:[],liked:false}))]);});},
@@ -191,7 +199,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
             const spec=tab==='stories'?(reactionsOnly?'本回合好友故事已刷新，只检查下列新发布的 user 故事的好友互动，items 必须为空数组，不再生成好友故事。':'只为给定好友生成已发布的照片/视频故事。每项 {accountId,kind:"image/video",text}。')+
                 '\n同时按每位好友的关系、性格、当前处境以及是否有条件看到/回应，自行决定是否给下列故事点赞或简短回复；可以只有点赞，也可以无人互动，不要求每人回应，不为凑数互动。只允许列表中已添加且未拉黑的好友。各账号认知独立，identityKnown 为 false 时不能依据后台人设或私人剧情认出 user；不得把某人私下知道的事变成所有好友都知道，不虚构 user 发言。回复语言遵循当前预设的对白与翻译规则。'+
                 '\n待检查的 user 故事（只可针对这些ID互动）：'+JSON.stringify(pending.map(({id,kind,text})=>({id,kind,text})))+publicationScenePrompt(getContext(),pending)+
-                '\n输出 {"items":[],"reactions":[{"storyId":"给定故事ID","accountId":"好友ID","liked":true,"text":"回复或空字符串"}]}。同一好友对同一故事最多一项，无互动返回 reactions:[]。'
+                '\n输出 {"items":[],"reactions":[{"storyId":"给定故事ID","accountId":"好友ID","liked":true,"text":"回复或空字符串","category":"可选A或B：闲聊回应为A，约定或持续事项为B"}]}。同一好友对同一故事最多一项，无互动返回 reactions:[]。'
                 :tab==='spotlight'?'生成陌生人/创作者公开短视频。每项 {name,text}，text 是视频画面、声音与字幕的文字描述。':'生成好友明确共享的位置或世界各地公开动态。每项 {accountId:null 或给定好友ID,name,place,text,shared:true}；不得泄漏不分享位置的好友。';
             const data=await ask(state,null,request,current,'当前任务：'+appName+' '+tab+' 刷新。'+spec+'好友列表：'+JSON.stringify(friends)+'\n'+(tab==='stories'?'items 最多 5 条。':'输出 {"items": [...]}，最多 5 条。')+'不替 user 发布内容。',d=>{
                 if(!Array.isArray(d.items)||d.items.length>5||reactionsOnly&&d.items.length)throw new Error('动态内容格式不正确。');
@@ -204,7 +212,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
                     if(!r||!pending.some(s=>s.id===r.storyId)||!friends.some(a=>a.id===r.accountId)||seen.has(key)||typeof r.liked!=='boolean'||typeof r.text!=='string'||r.text.length>2000||!r.liked&&!r.text.trim())throw new Error('故事互动包含无效好友、故事或重复内容。');
                     seen.add(key);
                 }
-                return {items:d.items,reactions};
+                return {items:d.items,reactions:reactions.map(r=>({...r,category:smsCategory(r.category)}))};
             },tab==='stories'?friends.map(a=>state[app][a.id]):[]);
             const items=data.items;
             const changes=[];
@@ -218,6 +226,9 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
                     const likes=[...new Set([...(story.friendLikes||[]),...reactions.filter(r=>r.liked).map(r=>r.accountId)])];
                     const comments=[...(story.comments||[]),...reactions.filter(r=>r.text.trim()).map(r=>({accountId:r.accountId,name:friends.find(a=>a.id===r.accountId).name,text:r.text.trim(),createdAt:Date.now()}))];
                     changes.push(setSnap({...story,reactionsChecked:true,reactionsCheckedAt:Date.now(),friendLikes:likes,comments}));
+                    // Story replies are timing entries too; likes default to A locally.
+                    for(const r of reactions)if(r.text.trim()&&r.category)
+                        changes.push(...commReplyClassification(app,story.id+'#comment:'+r.accountId,r.accountId,r.category,state));
                 }
                 changes.push(setSnap({id:'storyRefresh',type:'story_refresh',revision:revision??'root'}));
             }

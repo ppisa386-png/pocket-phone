@@ -13,6 +13,8 @@ import { normalizeSettings } from '../src/config.js';
 
 const stamp = (date,time='12:00') => ({date,time,precision:'exact'});
 const set = (collection,key,value) => ({collection,key,value});
+// SMS timing rows live in the unified per-channel sidecar under 'sms:'+id.
+const commRow = (state,id) => state.commContext?.['sms:'+id];
 const speaker = { name:'Alex',avatar:'alex.png',nameIsUnique:true };
 const message = (id,contactId='card:alex.png') => ({id,contactId,name:contactId==='card:alex.png'?'Alex':'Bea',role:'assistant',text:'TEXT_'+id,createdAt:1,read:false});
 const retention = (category,date='2026-10-01',time='12:00') => ({version:1,category,anchor:stamp(date,time),expired:false});
@@ -41,7 +43,7 @@ test('missing/fuzzy story time is not device time or invented elapsed duration',
 });
 
 test('both AI history builders filter identically while every original bubble remains visible', () => {
-    const state={contacts:{'card:alex.png':{id:'card:alex.png',name:'Alex'}},messages:{a:message('a'),b:message('b'),other:message('other','card:bea.png')},smsContext:{a:retention('A'),b:retention('B'),other:retention('A')},calls:{},profiles:{}};
+    const state={contacts:{'card:alex.png':{id:'card:alex.png',name:'Alex'}},messages:{a:message('a'),b:message('b'),other:message('other','card:bea.png')},commContext:{'sms:a':retention('A'),'sms:b':retention('B'),'sms:other':retention('A')},calls:{},profiles:{}};
     const now=stamp('2026-10-03');
     assert.deepEqual(smsForAI(state,'card:alex.png',now).map(m=>m.id),['b']);
     const prompt=buildContinuityPrompt(state,speaker,{instruction:'continue',currentStoryTime:now});
@@ -62,40 +64,40 @@ test('migration recovers source-floor clock without rewriting text, original tim
     const migrated=syncSMSContext(journal,revisions,chat);journal=migrated.journal;
     const state=replayJournal(journal);
     assert.deepEqual(state.messages,before);
-    assert.deepEqual(state.smsContext.a.anchor,stamp('2026-10-01'));
-    assert.equal(state.smsContext.a.expired,true);
-    assert.equal(state.smsContext.b.classification,'pending');
-    assert.equal(state.smsContext.b.expired,false);
+    assert.deepEqual(commRow(state,'a').anchor,stamp('2026-10-01'));
+    assert.equal(commRow(state,'a').expired,true);
+    assert.equal(commRow(state,'b').classification,'pending');
+    assert.equal(commRow(state,'b').expired,false);
     assert.equal(syncSMSContext(journal,revisions,chat).changed,false,'migration is idempotent');
     journal=appendChange(journal,revisions,[set('messages','a',{...state.messages.a,text:'Edited old text',read:true})]);
-    assert.equal(replayJournal(syncSMSContext(journal,revisions,chat).journal).smsContext.a.expired,true);
+    assert.equal(commRow(replayJournal(syncSMSContext(journal,revisions,chat).journal),'a').expired,true);
     const rollback=syncSMSContext(reconcileJournal(journal,['first']).journal,['first'],chat.slice(0,1));
-    assert.equal(replayJournal(rollback.journal).smsContext.a.expired,false,'rollback restores the earlier story state');
-    assert.equal(smsExpired(replayJournal(rollback.journal).smsContext.a,stamp('2026-10-01')),false);
+    assert.equal(commRow(replayJournal(rollback.journal),'a').expired,false,'rollback restores the earlier story state');
+    assert.equal(smsExpired(commRow(replayJournal(rollback.journal),'a'),stamp('2026-10-01')),false);
 });
 
 test('classification validates exact IDs/categories and isolates contacts; retries never reclassify successes', () => {
-    const state={messages:{a:message('a'),b:message('b'),c:message('c'),done:message('done'),expired:message('expired'),other:message('other','card:bea.png')},smsContext:{done:retention('B'),expired:{...retention('A'),expired:true}}};
+    const state={messages:{a:message('a'),b:message('b'),c:message('c'),done:message('done'),expired:message('expired'),other:message('other','card:bea.png')},commContext:{'sms:done':retention('B'),'sms:expired':{...retention('A'),expired:true}}};
     const plan=smsClassificationPlan(state,'card:alex.png',stamp('2026-10-01'));
     assert.deepEqual(plan.ids,['a','b','c']);
     assert.doesNotMatch(plan.prompt,/TEXT_other|TEXT_expired/);
     const rows=[{id:'a',category:'B'},{id:'b',category:'A'},{id:'b',category:'B'},{id:'c',category:'longterm'},{id:'done',category:'A'},{id:'other',category:'B'},{id:'invented',category:'A'}];
     const changes=smsClassificationChanges({sms_classifications:rows},plan,state);
-    assert.deepEqual(changes.map(c=>c.key),['a']);
-    for(const change of changes) state.smsContext[change.key]=change.value;
+    assert.deepEqual(changes.map(c=>c.key),['sms:a']);
+    for(const change of changes) state.commContext[change.key]=change.value;
     assert.deepEqual(smsClassificationPlan(state,'card:alex.png',null).ids,['b','c']);
     assert.deepEqual(smsClassificationChanges({},plan,state),[]);
-    assert.equal(state.smsContext.done.category,'B');
+    assert.equal(commRow(state,'done').category,'B');
     assert.equal(state.messages.a.text,'TEXT_a');
 });
 
 test('legacy batches drain oldest pending IDs without starving new messages or resending classified text for classification', () => {
-    const state={messages:{},smsContext:{}};
+    const state={messages:{},commContext:{}};
     for(let i=0;i<100;i++)state.messages['m'+i]=message('m'+i);
     const first=smsClassificationPlan(state,'card:alex.png',null);
     assert.equal(first.ids.length,48);assert.ok(first.ids.includes('m0'));assert.ok(first.ids.includes('m99'));
     const changes=smsClassificationChanges({sms_classifications:first.ids.map(id=>({id,category:'B'}))},first,state);
-    for(const change of changes)state.smsContext[change.key]=change.value;
+    for(const change of changes)state.commContext[change.key]=change.value;
     const next=smsClassificationPlan(state,'card:alex.png',null);
     assert.ok(next.ids.includes('m40'));assert.ok(next.ids.every(id=>!first.ids.includes(id)));
 });
@@ -128,8 +130,8 @@ for(const independent of [false,true])test(`real SMS request and saved classific
         assert.equal(sent.ok,true);assert.equal(f.prompts.length,1);
         let state=(await f.memory.read()).state;
         const user=Object.values(state.messages).find(m=>m.text==='NEW_USER');
-        assert.equal(state.smsContext[user.id].category,'B');assert.equal(state.smsContext['reply:'+user.id].category,'B');
-        assert.equal(state.smsContext.a.expired,true);
+        assert.equal(commRow(state,user.id).category,'B');assert.equal(commRow(state,'reply:'+user.id).category,'B');
+        assert.equal(commRow(state,'a').expired,true);
         assert.equal(state.messages.a.text,'TEXT_a');
         await f.advance('2026-10-08 12:00');
         state=(await f.memory.read()).state;
@@ -140,9 +142,9 @@ for(const independent of [false,true])test(`real SMS request and saved classific
         await f.service.sendMessage('card:alex.png','UNCLASSIFIED_NEW');
         state=(await f.memory.read()).state;
         const pending=Object.values(state.messages).find(m=>m.text==='UNCLASSIFIED_NEW');
-        assert.equal(state.smsContext[pending.id].classification,'pending');
+        assert.equal(commRow(state,pending.id).classification,'pending');
         assert.equal(f.prompts.length,2,'missing category does not cause retries');
-        assert.equal(state.smsContext.a.expired,true);
+        assert.equal(commRow(state,'a').expired,true);
         assert.ok(JSON.parse(serialized)[JOURNAL_KEY].events.length);
     }finally{f.close();}
 });
@@ -170,14 +172,14 @@ test('queued drafts acquire their retention clock when sent, not when typed',asy
     try{
         await f.service.queueMessage('card:alex.png','DRAFT');
         const draft=Object.values(f.service.snapshot().messages).find(m=>m.text==='DRAFT');
-        assert.equal(f.service.snapshot().smsContext[draft.id],undefined);
+        assert.equal(commRow(f.service.snapshot(),draft.id),undefined);
         await f.advance('2026-10-10 12:00');
         f.respond(()=>({status:'no_reply',text:'',sms_classifications:[{id:draft.id,category:'A'}]}));
         await f.service.flushMessages('card:alex.png');
-        const meta=f.service.snapshot().smsContext[draft.id];
+        const meta=commRow(f.service.snapshot(),draft.id);
         assert.deepEqual(meta.anchor,stamp('2026-10-10'));assert.equal(meta.expired,false);
-        await f.advance('2026-10-11 12:00');assert.equal(f.service.snapshot().smsContext[draft.id].expired,false);
-        await f.advance('2026-10-11 12:01');assert.equal(f.service.snapshot().smsContext[draft.id].expired,true);
+        await f.advance('2026-10-11 12:00');assert.equal(commRow(f.service.snapshot(),draft.id).expired,false);
+        await f.advance('2026-10-11 12:01');assert.equal(commRow(f.service.snapshot(),draft.id).expired,true);
     }finally{f.close();}
 });
 
@@ -187,12 +189,12 @@ test('historical unknown timestamp stays unknown after new dated prose; classifi
     let journal=appendChange(undefined,rev.slice(0,1),[set('messages','old',{...message('old'),storyTime:{date:'',time:''},createdAt:1})]);
     journal=syncSMSContext(journal,rev,chat).journal;
     let state=replayJournal(journal);
-    assert.equal(state.smsContext.old.anchor.date,'');
+    assert.equal(commRow(state,'old').anchor.date,'');
     const plan=smsClassificationPlan(state,'card:alex.png',stamp('2026-10-10'));
     journal=appendChange(journal,rev,smsClassificationChanges({sms_classifications:[{id:'old',category:'A'}]},plan,state));
     state=replayJournal(syncSMSContext(journal,rev,chat).journal);
-    assert.equal(state.smsContext.old.category,'A');assert.equal(state.smsContext.old.expired,false);
-    assert.equal(state.messages.old.createdAt,1);assert.equal(state.smsContext.old.anchor.date,'');
+    assert.equal(commRow(state,'old').category,'A');assert.equal(commRow(state,'old').expired,false);
+    assert.equal(state.messages.old.createdAt,1);assert.equal(commRow(state,'old').anchor.date,'');
 });
 
 test('invalid classification leaves pending without retries; next request repairs it once and reload keeps the result',async()=>{
@@ -204,16 +206,16 @@ test('invalid classification leaves pending without retries; next request repair
   await f.service.sendMessage('card:alex.png','PENDING_USER');
   assert.equal(f.prompts.length,1);
   let state=f.service.snapshot();const pending=Object.values(state.messages).filter(m=>['PENDING_USER','UNCLASSIFIED_REPLY'].includes(m.text));
-  assert.equal(pending.length,2);for(const m of pending)assert.equal(state.smsContext[m.id].classification,'pending');
+  assert.equal(pending.length,2);for(const m of pending)assert.equal(commRow(state,m.id).classification,'pending');
   await f.advance('2026-10-06 12:00');
   f.respond(()=>({status:'no_reply',text:'',sms_classifications:smsClassificationPlan(f.service.snapshot(),'card:alex.png',stamp('2026-10-06')).ids.map(id=>({id,category:'A'}))}));
   await f.service.sendMessage('card:alex.png','NEW_TRIGGER');
   assert.equal(f.prompts.length,2);
-  state=f.service.snapshot();for(const m of pending){assert.equal(state.smsContext[m.id].category,'A');assert.equal(state.smsContext[m.id].expired,true);assert.equal(state.messages[m.id].text,m.text);}
+  state=f.service.snapshot();for(const m of pending){assert.equal(commRow(state,m.id).category,'A');assert.equal(commRow(state,m.id).expired,true);assert.equal(state.messages[m.id].text,m.text);}
   const saved=JSON.parse(JSON.stringify(f.context.chatMetadata));const context={...f.context,chatMetadata:saved,eventSource:null};
   const reloaded=createPhoneMemory({getContext:()=>context});try{
    const after=(await reloaded.read()).state;
-   for(const m of pending){assert.equal(after.smsContext[m.id].expired,true);assert.equal(after.messages[m.id].text,m.text);}
+   for(const m of pending){assert.equal(commRow(after,m.id).expired,true);assert.equal(after.messages[m.id].text,m.text);}
    assert.deepEqual(smsClassificationPlan(after,'card:alex.png',stamp('2026-10-06')).ids,[]);
   }finally{reloaded.destroy();}
  }finally{f.close();}
@@ -225,13 +227,13 @@ test('expired manual retry/reroll cannot send old raw text; local editing cannot
   assert.equal((await f.service.rerollMessage('a')).ok,false);
   assert.equal(f.prompts.length,before);
   await f.service.editMessage('a','MANUALLY_EDITED_OLD');
-  assert.equal(f.service.snapshot().smsContext.a.expired,true);
+  assert.equal(commRow(f.service.snapshot(),'a').expired,true);
   const stale={id:'failed',contactId:'card:alex.png',role:'user',text:'OLD_FAILED',replyStatus:'failed',createdAt:1};
   await f.memory.commit(await f.memory.begin(),[set('messages','failed',stale),set('smsContext','failed',{category:'A',anchor:stamp('2026-10-01'),expired:true})]);
   await f.service.retryMessage('failed');assert.equal(f.prompts.length,before);
   assert.equal(f.service.snapshot().messages.failed.text,'OLD_FAILED');
   await f.service.deleteMessage('a');
-  assert.equal(f.service.snapshot().messages.a,undefined);assert.equal(f.service.snapshot().smsContext.a,undefined);
+  assert.equal(f.service.snapshot().messages.a,undefined);assert.equal(commRow(f.service.snapshot(),'a'),undefined);
  }finally{f.close();}
 });
 
@@ -240,11 +242,11 @@ test('narrative incoming/outgoing annotations classify actual SMS without extra 
   const evidence='Alex sent Sam a message.',reply='Sam sent Alex a message: ORIGINAL_OUTGOING';
   await f.advance('2026-10-02 12:00\n'+evidence+'<!--durian-contact:'+JSON.stringify({kind:'sms',name:'Alex',sender:'Alex',recipient:'user',evidence,text:'IMPORTED_INCOMING',sms_category:'B'})+'-->\n'+reply+'<!--durian-contact:'+JSON.stringify({kind:'sms',name:'Alex',sender:'user',recipient:'Alex',evidence:reply,text:'ORIGINAL_OUTGOING',sms_category:'A'})+'-->');
   let state=f.service.snapshot();const inbound=Object.values(state.messages).find(m=>m.text==='IMPORTED_INCOMING'),outbound=Object.values(state.messages).find(m=>m.text==='ORIGINAL_OUTGOING');
-  assert.equal(state.smsContext[inbound.id].category,'B');assert.equal(state.smsContext[outbound.id].category,'A');assert.equal(f.prompts.length,0);
+  assert.equal(commRow(state,inbound.id).category,'B');assert.equal(commRow(state,outbound.id).category,'A');assert.equal(f.prompts.length,0);
   await f.advance('2026-10-04 12:00');state=f.service.snapshot();
-  assert.equal(state.smsContext[inbound.id].expired,false);assert.equal(state.smsContext[outbound.id].expired,true);
+  assert.equal(commRow(state,inbound.id).expired,false);assert.equal(commRow(state,outbound.id).expired,true);
   assert.equal(state.messages[inbound.id].text,'IMPORTED_INCOMING');
   f.context.chat.pop();f.context.chat.pop();await f.memory.read();
-  assert.equal(f.service.snapshot().messages[inbound.id],undefined);assert.equal(f.service.snapshot().smsContext[inbound.id],undefined);
+  assert.equal(f.service.snapshot().messages[inbound.id],undefined);assert.equal(commRow(f.service.snapshot(),inbound.id),undefined);
  }finally{f.close();}
 });

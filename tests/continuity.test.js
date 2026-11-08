@@ -227,7 +227,7 @@ test('actual narrative payload expires SMS by story time before persistence and 
   assert.doesNotMatch(JSON.stringify(payload),/A_PRIVATE_MEETING/);
   assert.match(JSON.stringify(payload),/B_PRIVATE_PLAN/);
   await f.bus.emit('GENERATION_ENDED');await f.memory.read();
-  assert.equal((await f.memory.read()).state.smsContext.a.expired,true);
+  assert.equal((await f.memory.read()).state.commContext['sms:a'].expired,true);
   f.context.chat.push({mes:'2026-10-04 12:01',name:'Alex',is_user:false});
   await f.generate();
   const next={type:'normal',messages:[{role:'user',content:'Continue'}]};
@@ -236,7 +236,7 @@ test('actual narrative payload expires SMS by story time before persistence and 
   assert.match(JSON.stringify(next),/A_CALL_PROMISE/);
   await f.bus.emit('GENERATION_ENDED');
   const state=(await f.memory.read()).state;
-  assert.equal(state.smsContext.b.expired,true);
+  assert.equal(state.commContext['sms:b'].expired,true);
   assert.equal(state.messages.a.text,'A_PRIVATE_MEETING');assert.equal(state.messages.b.text,'B_PRIVATE_PLAN');
  }finally{f.close();}
 });
@@ -262,10 +262,10 @@ test('one SMS stays optional before and after a narrative reaction, and its age 
 
 test('missing dates never use wall time; valid stored SMS dates and sidecar dates are preserved',()=>{
  const message={id:'s',contactId:'name:A',role:'assistant',text:'hello',createdAt:Date.now()};
- const state={messages:{s:message},smsContext:{},contacts:{'name:A':{id:'name:A',name:'A'}},calls:{}};
+ const state={messages:{s:message},commContext:{},contacts:{'name:A':{id:'name:A',name:'A'}},calls:{}};
  const get=now=>JSON.parse(buildContinuityPrompt(state,{name:'A',nameIsUnique:true},{instruction:'参考',currentStoryTime:now}).split('\n').at(-2)).records[0];
  assert.equal(get({date:'2026-11-01'}).storyTime,null);assert.equal(get({date:'2026-11-01'}).storyDaysAgo,undefined);
- state.smsContext.s={anchor:{date:'2026-10-30',time:''}};
+ state.commContext['sms:s']={anchor:{date:'2026-10-30',time:''}};
  assert.equal(get(null).storyTime.date,'2026-10-30');assert.equal(get(null).storyDaysAgo,undefined);
  message.storyTime={date:'2026-10-29',time:'20:10'};
  assert.equal(get({date:'2026-11-01'}).storyDaysAgo,3);

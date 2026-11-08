@@ -5,7 +5,8 @@ import {normalizeSettings,MODULE_KEY} from './config.js?v=1.1.29';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.1.29';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.1.29';
 import { smsReplyClassification } from './sms-context.js?v=1.1.29';
-import { storyTime } from './story-clock.js?v=1.1.29';
+import { COMM_PLATFORMS, commKey, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.1.29';
+import { storyTime, exactStoryTime } from './story-clock.js?v=1.1.29';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.1.29';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.1.29';
 import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=1.1.29';
@@ -48,6 +49,23 @@ export function storyAnnotations(message,tag){
     }
     return result;
 }
+// Narrative presentation markers for records that already exist on the phone.
+// The prose summarized or mentioned an existing conversation entry; the marker
+// only flips its shown flag. Hallucinated or cross-platform ids are ignored.
+function shownAnnotations(message){
+    if(message?.is_user||(message?.is_system&&!isMemoryHidden(message)))return [];
+    const text=String(message?.mes||'').replace(/```[\s\S]*?```/g,'').replace(/<(think|thinking|analysis|script|style)[^>]*>[\s\S]*?<\/\1>/gi,'');
+    const rows=[];
+    for(const m of text.matchAll(/<!--\s*durian-message-shown\s*:\s*([\s\S]*?)-->/g)){
+        try{
+            const row=JSON.parse(m[1]);
+            const platform=COMM_PLATFORMS.includes(row?.platform)?row.platform:null;
+            const id=typeof row?.id==='string'&&row.id.trim()&&row.id.trim().length<=200?row.id.trim():null;
+            if(platform&&id)rows.push({platform,id});
+        }catch{/* Incomplete narrative metadata never creates an event. */}
+    }
+    return rows;
+}
 // Called only after a complete, stable narrative revision. Source-floor events
 // are replayed alongside normal phone changes; no model call or prose rewrite.
 export function importStoryPhone(raw,revisions,chat,context){
@@ -69,6 +87,12 @@ export function importStoryPhone(raw,revisions,chat,context){
             }
             if(allowed&&typeof row.text==='string'&&row.text.trim())changes=socialContact(state,row,id,storyTime(chat.slice(0,index+1)),(Date.parse(chat[index].send_date)||Date.now())+n,context.name1);
             if(!changes.length)changes=[set('profiles','ignored:'+id,{ignored:true})];
+            else{
+                // Outreach records were presented by this narrative floor; the
+                // marker may carry an A/B category and an explicit shown flag.
+                const message=changes.map(change=>change.value).find(value=>value?.type==='message');
+                if(message)changes.push(...commRecordPatch(row.channel.startsWith('x_')?'x':row.channel,message.id,message.accountId,row.category,row.shown));
+            }
             journal=appendChange(journal,revisions.slice(0,index+1),changes,id);state=replayJournal(journal);changed=true;
         }
         const xRows=storyAnnotations(chat[index],'durian-x');
@@ -86,14 +110,16 @@ export function importStoryPhone(raw,revisions,chat,context){
             const out=user(row.sender),other=out?row.recipient:row.sender;
             if(row.platform!=='whatsapp'||!effectiveReply(chat[index])||!!out===!!user(row.recipient)||typeof other!=='string'||!other.trim()||
                 row.action!==(out?'sent':'received')||!['text','image','video','voice'].includes(row.kind)||typeof row.text!=='string'||!row.text.trim())continue;
-            const body=evidenceText(row.text);
-            if(out&&(!body||!evidenceText(row.prose).includes(body)))continue;
-            // Reject a quotation of an earlier exchange or an unsent draft, even if
-            // annotated. Only archival markers carry evidence; new ones are trusted
-            // after the grounding check above.
+            // The prose may quote the message verbatim or faithfully summarize
+            // it; the marker's text carries the complete content either way.
+            // User boundaries stay: archival markers (with evidence) keep the
+            // strict quote check and the recall/draft rejection, and no marker
+            // may invent a message the narrative never described at all.
             if(typeof row.evidence==='string'){
                 const actionText=row.evidence.replace(row.text,'');
                 if(/回忆起|回想起|想起.{0,12}(?:昨天|先前|以前)|重读|引用旧|存为草稿|没有发送|还没发|准备发送|打算发送|想象着|\b(?:draft|unsent|recalled|reread|remembered|about to send)\b/i.test(actionText))continue;
+                const body=evidenceText(row.text);
+                if(!body||!evidenceText(row.prose).includes(body))continue;
             }
             const key=JSON.stringify([!!out,norm(other),row.text,row.evidence||'']);
             const duplicate=seenNormal.has(key)||(!out&&Object.values(state.whatsapp||{}).some(m=>m.type==='message'&&m.id?.startsWith('outreach:'+revisions[index]+':')&&m.text===row.text&&sameNamedPerson(state.whatsapp[m.accountId],{name:other})));
@@ -102,7 +128,10 @@ export function importStoryPhone(raw,revisions,chat,context){
             if(settings.apps.whatsapp&&!duplicate){
                 const payload={...row,channel:'whatsapp',sender:other.trim(),media:row.kind};
                 changes=socialContact(state,payload,id,storyTime(chat.slice(0,index+1)),(Date.parse(chat[index].send_date)||Date.now())+n,context.name1,out?'user':'assistant');
-                if(changes.length)changes.at(-1).value.kind=row.kind;
+                if(changes.length){
+                    changes.at(-1).value.kind=row.kind;
+                    changes.push(...commRecordPatch('whatsapp',id,changes.at(-1).value.accountId,row.category,row.shown));
+                }
             }
             journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+id,{ignored:true})],id);
             state=replayJournal(journal);changed=true;
@@ -132,7 +161,16 @@ export function importStoryPhone(raw,revisions,chat,context){
             // tags may omit sender; newly generated tags always include both.
             const endpoint=outgoing?row.recipient:row.sender;
             if(endpoint&& !sameNamedPerson({name:endpoint},row))continue;
-            if(outgoing&&row.kind==='sms'&&(typeof row.text!=='string'||!evidenceText(row.prose).includes(evidenceText(row.text))))continue;
+            // The complete text comes from the marker; the prose may present it
+            // verbatim or as a faithful summary. Archival markers keep the
+            // strict quote check; new markers stay bound to real narrative sends.
+            if(outgoing&&row.kind==='sms'){
+                if(typeof row.text!=='string'||!row.text.trim())continue;
+                if(typeof row.evidence==='string'){
+                    const body=evidenceText(row.text);
+                    if(!body||!evidenceText(row.prose).includes(body))continue;
+                }
+            }
             const identity=localizedPerson(row,context,Object.values(state.contacts));
             const matches=(context.characters||[]).map((c,i)=>({c,i})).filter(({c})=>sameNamedPerson(c,identity));
             if(matches.length>1)continue;
@@ -149,7 +187,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                 // the complete message twice. The valid contact tag carries it.
                 if(typeof row.text!=='string'||!row.text.trim()||row.text.length>6000)continue;
                 changes.push(set('messages',recordId,{id:recordId,contactId:id,participant,name:participant.name,role:outgoing?'user':'assistant',text:row.text.trim(),proactive:incoming,replyable:row.replyable!==false,origin:'narrative',createdAt:now,storyTime:clock,read:outgoing||row.read===true,...(outgoing?{replyStatus:'sent'}:{}),acquisition}));
-                changes.push(...smsReplyClassification(recordId,id,row.sms_category));
+                changes.push(...commRecordPatch('sms',recordId,id,row.category||row.sms_category,row.shown));
             }else{
                 if(!['ringing','missed','declined','connected','ended'].includes(row.status))continue;
                 const previous=row.call_id?state.calls[row.call_id]:null;
@@ -157,11 +195,24 @@ export function importStoryPhone(raw,revisions,chat,context){
                 const callId=previous?.id||recordId;
                 const turns=(Array.isArray(row.turns)?row.turns:[]).filter(t=>['user','assistant'].includes(t.role)&&typeof t.text==='string'&&t.text.trim()&&row.prose.includes(t.text.trim())).slice(0,30).map(t=>({role:t.role,text:t.text.trim().slice(0,6000),storyTime:clock}));
                 changes.push(set('calls',callId,{...(previous||{}),id:callId,contactId:id,participant,name:participant.name,number,direction:previous?.direction||(outgoing?'outgoing':'incoming'),storyTime:previous?.storyTime||clock,status:row.status,turns:[...(previous?.turns||[]),...(['connected','ended'].includes(row.status)?turns:[])],createdAt:previous?.createdAt||now,read:row.status==='connected'||row.status==='ended'||row.status==='declined',origin:'narrative',revision:revisions[index],acquisition}));
+                changes.push(...commRecordPatch('call',callId,id,row.category,row.shown));
             }
             // Actual user-involved communication permits a normal return call/reply.
             // Withheld caller ID is recorded but does not grant return access.
             if(!state.contacts[id]&&row.replyable!==false)changes.unshift(set('contacts',id,{...participant,number,sourceKind:outgoing?'sent':'received',sourceIndex:index,evidence:row.evidence}));
             journal=appendChange(journal,revisions.slice(0,index+1),changes,eventId);state=replayJournal(journal);changed=true;
+        }
+        // Presentation markers for records the prose just summarized or mentioned.
+        // Bound to this floor's revision: edits and rollbacks restore the flag.
+        for(const [n,shown] of shownAnnotations(chat[index]).entries()){
+            const eventId='story-shown:'+revisions[index]+':'+n;
+            if(journal?.events.some(e=>e.id===eventId))continue;
+            if(!commRecordExists(state,shown.platform,shown.id)){
+                journal=appendChange(journal,revisions.slice(0,index+1),[set('profiles','ignored:'+eventId,{ignored:true})],eventId);state=replayJournal(journal);changed=true;continue;
+            }
+            const change=commShownChange(state,shown.platform,shown.id);
+            if(!change)continue; // Already shown; a repeated marker stays silent.
+            journal=appendChange(journal,revisions.slice(0,index+1),[change],eventId);state=replayJournal(journal);changed=true;
         }
     }
     const business=importBusiness(journal,revisions,chat,settings,storyAnnotations);
@@ -181,11 +232,12 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const group=context.groups?.find(g=>String(g.id)===String(context.groupId));
     const actors=(context.characters||[]).filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
     const calls=recentPerConversation(Object.values(state.calls).filter(c=>['ringing','connected'].includes(c.status)).sort((a,b)=>a.createdAt-b.createdAt),c=>c.contactId).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
-    const whatsapp=settings.apps.whatsapp?'\nWhatsApp普通正文通信只记录实际发生的新发送或接收，不必制造剧情或回应。无论第几楼、是否开启主动联系，按本楼发生顺序逐条附 <!--durian-message:{"platform":"whatsapp","action":"sent或received（相对user）","sender":"user或对方姓名","recipient":"对方姓名或user","accountId":"已知账号ID，未知省略","kind":"text/image/video/voice","text":"完整已发送内容或实际媒体描述"}-->。user发出的内容必须已在本楼正文逐字写出；不代写。回忆、引用、输入中、打算发送、手机里已有的消息都不重记。主动邀约已用durian-outreach标记的同一条消息不再标记。记录不触发自动回复。':'';
-    return x+whatsapp+(business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due)+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
-        '\n这是 user 个人的手机。短信与电话标签只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。user 发出的短信必须在正文已经逐字写出并实际发送，不能借记录补写 user 发言。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
+    const whatsapp=settings.apps.whatsapp?'\nWhatsApp普通正文通信只记录实际发生的新发送或接收，不必制造剧情或回应。无论第几楼、是否开启主动联系，按本楼发生顺序逐条附 <!--durian-message:{"platform":"whatsapp","action":"sent或received（相对user）","sender":"user或对方姓名","recipient":"对方姓名或user","accountId":"已知账号ID，未知省略","kind":"text/image/video/voice","text":"完整已发送内容或实际媒体描述","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B","shown":true}-->。正文可完整写出消息，也可自然概述其内容，标记的 text 保存完整内容；概述不得偏离实际通信事实。user发出的内容必须是user实际发出的消息，不能借标记补写user没发过的消息。回忆、引用、输入中、打算发送、手机里已有的消息都不重记。主动邀约已用durian-outreach标记的同一条消息不再标记。记录不触发自动回复。':'';
+    return x+whatsapp+(business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due,exactStoryTime(chat))+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
+        '\n这是 user 个人的手机。短信与电话标签只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。user 发出的短信必须实际发送且正文已写出（完整原文或忠实概述），标记的 text 保存该消息完整内容，不能借标记补写 user 没发过的消息。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,calls})+
-        '\n按本轮实际通信发生顺序，每条短信及通话状态在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms 或 call","text":"仅 sms：实际发送或收到的完整短信原文，不得改写；收到时正文可只描写通知，发出时必须已在正文逐字写明","read":false,"status":"仅 call：ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"replyable":true}-->。短信附 sms_category（A=日常问候/闲聊/生活分享/即时状态，B=待办/约定/持续请求/情感纠纷；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断）。短信一条一注释，不抄回旧记录。隐藏号码不可回拨时 replyable:false。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。'+(scene?'\n'+scene:'')+COMMUNICATION_LANGUAGE_RULE;
+        '\n按本轮实际通信发生顺序，每条短信及通话状态在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms 或 call","text":"仅 sms：实际发送或收到的完整短信原文，不得改写；正文可完整写出也可自然概述，标记保存完整内容","read":false,"status":"仅 call：ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"replyable":true}-->。短信与通话可附 category（旧写法 sms_category 仍可用）：A=日常问候/闲聊/生活分享/即时状态，B=约定/待办/持续请求/情感纠纷或仍在发展的具体事件；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断。本楼正文实际展示了这条通信时附 "shown":true（省略视为已展示）。短信一条一注释，不抄回旧记录。隐藏号码不可回拨时 replyable:false。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。'+
+        '\n正文概述或提及手机里已有的某条通信（短信、电话、WhatsApp、微信、Snapchat、X 私信/评论/公开互动）后，在本楼末尾附 <!--durian-message-shown:{"platform":"渠道代码 sms/call/whatsapp/wechat/snapchat/x","id":"通信历史资料中给出的准确记录ID"}-->，每条一条。这仅登记展示状态，不修改任何消息；不确定记录ID就省略，不要编造ID。已展示过的记录不重复标记。'+(scene?'\n'+scene:'')+COMMUNICATION_LANGUAGE_RULE;
 }
 export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
     const first=getContext(),bus=first?.eventSource,types=first?.event_types??first?.eventTypes??{},hooks=[];

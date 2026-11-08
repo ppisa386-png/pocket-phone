@@ -1,5 +1,6 @@
 import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.1.29';
-import { smsForAI, smsAIRecords, smsExpired, smsEventForAI, smsClassificationPlan, smsClassificationChanges, smsReplyClassification } from './sms-context.js?v=1.1.29';
+import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.1.29';
+import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.1.29';
 import { exactStoryTime } from './story-clock.js?v=1.1.29';
 import { isMemoryHidden } from './journal.js?v=1.1.29';
 import { CHINESE_NAME_RULE } from './names.js?v=1.1.29';
@@ -95,10 +96,15 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 prompt+=xMemoryPrompt(options.summarySnapshot||latestMemory(context,getSettings()),app);
             }
         }
-        const smsPlan = contact?.id && ['phone','messages','incoming'].includes(app) && !options.skipSMSClassification
-            ? smsClassificationPlan(state,contact.id,exactStoryTime(context.chat)) : null;
-        const smsTicket = smsPlan ? await memory.begin() : null;
-        if (smsPlan) prompt += smsPlan.prompt;
+        // Unified A/B timing classification piggybacks on every conversation
+        // request: phone tasks classify SMS records, chat apps classify their
+        // own pending thread entries. No extra model call is ever made.
+        const planPlatform = ['phone','messages','incoming'].includes(app) ? 'sms'
+            : ['snapchat','whatsapp','wechat','x'].includes(app) ? app : null;
+        const commPlan = contact?.id && planPlatform && !options.skipSMSClassification
+            ? commClassificationPlan(state, planPlatform, contact.id, exactStoryTime(context.chat)) : null;
+        const commTicket = commPlan ? await memory.begin() : null;
+        if (commPlan) prompt += commPlan.prompt;
         if (options.outputContract) prompt += '\n' + options.outputContract;
         if (['phone','messages','incoming'].includes(app)) prompt += COMMUNICATION_LANGUAGE_RULE;
         if (social && !options.establishedImport) prompt += SOCIAL_LANGUAGE_RULE;
@@ -119,10 +125,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const data = (options.parseResponse || parseJSON)(text);
                 stage = '校验业务数据';
                 const result = validate(data);
-                if (smsPlan && isCurrent()) {
-                    const changes = smsClassificationChanges(data,smsPlan,state);
+                if (commPlan && isCurrent()) {
+                    const changes = commClassificationChanges(data,commPlan,state);
                     if (changes.length) {
-                        try { await memory.commit(smsTicket,changes); }
+                        try { await memory.commit(commTicket,changes); }
                         catch (failure) { failure.retryable=false; throw failure; }
                     }
                     if (result) result.sms_reply_category = data.sms_reply_category;
@@ -216,7 +222,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         updated.status = reply.status === 'answered' ? 'connected' : reply.status;
         if (reply.status === 'answered') updated.turns.push({ role: 'assistant', text: reply.text });
         else updated.endedAt = Date.now();
-        await memory.commit(ticket, [set('calls', call.id, updated), ...replyEventChanges(reply, contact, call.turns.at(-1)?.role === 'user' ? call.turns.at(-1).text : null)]);
+        await memory.commit(ticket, [set('calls', call.id, updated), ...replyEventChanges(reply, contact, call.turns.at(-1)?.role === 'user' ? call.turns.at(-1).text : null),
+            ...commReplyClassification('call', call.id, call.contactId, reply.category, state)]);
     }
     async function smsResponse(message, current) {
         const ticket = await memory.begin();
@@ -227,7 +234,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         if (isBlocked(state, contact.id, 'messages')) throw new Error('请先取消此人的短信拉黑。');
         const settings = getSettings();
         const batch=message.batchId?threadMessages(state.messages,message.contactId).filter(m=>m.role==='user'&&m.batchId===message.batchId):[message];
-        if(batch.some(m=>smsExpired(state.smsContext?.[m.id],exactStoryTime(getContext().chat)))) throw new Error('这组历史短信已不能用于生成回复，请发送新短信。');
+        if(batch.some(m=>commExpired(commMeta(state,'sms',m.id),exactStoryTime(getContext().chat)))) throw new Error('这组历史短信已不能用于生成回复，请发送新短信。');
         const batchText=batch.map(m=>m.text).join('\n');
         const prompt = settings.prompts.general + '\n' + settings.prompts.messages +
             '\n当前渠道：短信。收件人真实姓名：' + JSON.stringify(contact.name) +
@@ -505,7 +512,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if(m?.role!=='assistant')throw new Error('只能重新生成对方的短信。');
                 const contact=messageParticipants(view.state)[m.contactId];
                 if(!contact||isBlocked(view.state,m.contactId,'messages'))throw new Error('此联系人暂不可用。');
-                if(smsExpired(view.state.smsContext?.[m.id],exactStoryTime(getContext().chat)))throw new Error('这条历史短信已不能用于重新生成，可以手动编辑。');
+                if(commExpired(commMeta(view.state,'sms',m.id),exactStoryTime(getContext().chat)))throw new Error('这条历史短信已不能用于重新生成，可以手动编辑。');
                 const ticket=await memory.begin(),thread=smsForAI(view.state,m.contactId,exactStoryTime(getContext().chat));
                 const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.messages+'\n当前渠道：短信。仅重写选中的一条 char 短信，保持其他消息不变，不产生新的主动联系事件。对方真实姓名：'+JSON.stringify(contact.name)+'；此前短信：'+JSON.stringify(thread.slice(0,thread.findIndex(x=>x.id===m.id)).map(({role,text})=>({role,text})))+'；选中的短信：'+JSON.stringify(m.text)+'\n仅基于此前交流重写，不预知后续。只输出 {"text":"这一条短信的新内容"}。';
                 const result=await request(prompt,d=>{if(typeof d.text!=='string'||!d.text.trim()||d.text.length>6000)throw new Error('短信格式不正确。');return {text:d.text.trim()};},current,contact,{skipSMSClassification:true,memoryTopic:m.text});

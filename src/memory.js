@@ -2,7 +2,7 @@ import {timedAudienceChanges} from './x-influence.js?v=1.1.29';
 import {privilegeRows} from './x-privilege.js?v=1.1.29';
 import { reservedCash } from './assets-core.js?v=1.1.29';
 import { migrateDailyArchives } from './daily-archive.js?v=1.1.29';
-import { syncSMSContext } from './sms-context.js?v=1.1.29';
+import { syncCommContext, COMM_RECORD_COLLECTIONS } from './comm-context.js?v=1.1.29';
 import { storyTime,readStoryClock } from './story-clock.js?v=1.1.29';
 import { importStoryAssets } from './assets-story.js?v=1.1.29';
 import { importStorySquare } from './x-opinion.js?v=1.1.29';
@@ -115,14 +115,14 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const square=importStorySquare(located.journal,snapshot.revisions,current.chat,current);
         const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
         const archive=migrateDailyArchives(finances.journal,snapshot.revisions);
-        const sms=syncSMSContext(archive.journal,snapshot.revisions,current.chat);
-        let journal=sms.journal;
+        const comm=syncCommContext(archive.journal,snapshot.revisions,current.chat);
+        let journal=comm.journal;
         const state=replayJournal(journal),day=readStoryClock(current.chat).day;
         const timed=timedAudienceChanges(state,current.chat,day);
         for(const r of privilegeRows(state))if(r.status==='active'&&day!==null&&day>r.end)
             timed.push({collection:'x',key:r.id,value:{...r,status:'expired'}});
         if(timed.length)journal=appendChange(journal,snapshot.revisions,timed);
-        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || located.changed || square.changed || finances.changed || archive.changed || sms.changed) await save(snapshot, journal);
+        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || located.changed || square.changed || finances.changed || archive.changed || comm.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
@@ -205,7 +205,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                     basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
                 if (!replayJournal(snapshot.journal)[collection]?.[recordId]) throw new Error('这条记录已不存在。');
                 let next = eraseRecordFromJournal(snapshot.journal, collection, recordId);
-                if (collection === 'messages') next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
+                if (COMM_RECORD_COLLECTIONS.includes(collection)) next = syncCommContext(next,snapshot.revisions,snapshot.context.chat).journal;
                 await save(snapshot, next);
                 tickets.delete(ticket); generation++;
                 await bus?.emit?.('durian-phone-records-erased');
@@ -250,7 +250,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                     });
                     next = appendChange(next, snapshot.revisions.slice(0, index + 1), changes, batch.id);
                 }
-                next = syncSMSContext(next,snapshot.revisions,snapshot.context.chat).journal;
+                next = syncCommContext(next,snapshot.revisions,snapshot.context.chat).journal;
                 await save(snapshot, next);
                 tickets.delete(ticket);
                 if (sameChat(snapshot)) { active = { ...snapshot, journal: next }; notify(); }

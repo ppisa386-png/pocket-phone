@@ -1,6 +1,6 @@
 // Small, chat-local event journal. It stores phone changes, never a copy of prose.
 export const JOURNAL_KEY = 'durian_phone_history';
-export const COLLECTIONS = ['profiles', 'contacts', 'calls', 'messages', 'snapchat', 'whatsapp', 'wechat', 'x', 'orders', 'assets', 'daily', 'smsContext', 'business', 'location', 'weather'];
+export const COLLECTIONS = ['profiles', 'contacts', 'calls', 'messages', 'snapchat', 'whatsapp', 'wechat', 'x', 'orders', 'assets', 'daily', 'smsContext', 'commContext', 'business', 'location', 'weather'];
 const SCHEMA = 1;
 const EMPTY_REVISION = 'root';
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -106,11 +106,14 @@ export function replayJournal(journal) {
 
 // A manual erase is permanent for this phone history, unlike a story action.
 // Keep event IDs/source anchors with null changes so imports cannot resurrect it.
+// Unified timing/shown sidecar rows follow their record: deleting the record
+// also erases `commContext` rows keyed to it, including element entries.
 export function eraseMessageFromJournal(raw, messageId) {
     const journal = readJournal(raw);
     for (const event of journal.events) for (const change of event.changes) {
         if (['messages','smsContext'].includes(change.collection) && change.key === messageId) change.value = null;
         else if (change.collection === 'messages' && change.value?.replyTo === messageId) delete change.value.replyTo;
+        else if (change.collection === 'commContext' && change.key === 'sms:' + messageId) change.value = null;
     }
     return journal;
 }
@@ -118,8 +121,11 @@ export function eraseMessageFromJournal(raw, messageId) {
 export function eraseRecordFromJournal(raw, collection, recordId) {
     if (collection === 'messages') return eraseMessageFromJournal(raw, recordId);
     const journal = readJournal(raw);
+    const sidecar = collection + ':' + recordId;
     for (const event of journal.events) for (const change of event.changes) {
         if (change.collection === collection && change.key === recordId) change.value = null;
+        else if (change.collection === 'commContext' &&
+            (change.key === sidecar || change.key.startsWith(sidecar + '#'))) change.value = null;
     }
     return journal;
 }
