@@ -8,7 +8,11 @@ import {dateDay,dayDate,readStoryClock} from './story-clock.js?v=1.2';
 
 const write=(key,value)=>({collection:'business',key,value});
 const projects=state=>Object.values(state.business||{}).filter(p=>p.id);
-const publicPlan=({id,brand,project,terms,status,investigated})=>({id,brand,project,terms,status,investigated});
+const publicPlan=({id,brand,project,terms,status,investigated,riskRate,mitigations})=>({
+    id,brand,project,terms,status,investigated,
+    ...(investigated&&Number.isInteger(riskRate)?{riskRate}:{}),
+    ...(mitigations?.length?{mitigations:mitigations.slice(-5)}:{})
+});
 const word=s=>typeof s==='string'?s.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' '):'';
 const projectKey=(brand,project)=>'plan:'+JSON.stringify([word(brand),word(project)]);
 function windowFor(day){
@@ -17,19 +21,49 @@ function windowFor(day){
     const last=dateDay(year+date.slice(4))??dateDay(year+'-02-28');
     return {first:day+3,last};
 }
-export function dealDecision(p,kind,turn,day,risky,terms){
+// A shop's initial risk flag is private and stable across narrative rollback.
+// Investigation reveals it; effective countermeasures can lower it before the
+// deal formally starts. A second fixed draw decides whether risk enters the
+// existing delayed-incident pipeline, never on each attempt to regenerate.
+const legacyRoll=id=>{
+    let hash=2166136261;
+    for(const char of id){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}
+    return (hash>>>0)%65536;
+};
+const validRate=n=>Number.isInteger(n)&&n>=0&&n<=100;
+export function dealDecision(p,kind,turn,day,risky,terms,details={},roll=null){
     if(!p||p.status!=='invited')return [];
-    if(kind==='investigate')return [write(p.id,{...p,investigated:true})];
+    const baseline=risky===true?100:0;
+    if(kind==='investigate')return p.investigated?[]:[
+        write(p.id,{...p,investigated:true,riskRate:baseline,
+            ...(typeof details.findings==='string'&&details.findings.trim()?{findings:details.findings.trim().slice(0,1200)}:{})})
+    ];
+    if(kind==='mitigate'){
+        if(!p.investigated||baseline===0)return [];
+        const previous=validRate(p.riskRate)?p.riskRate:baseline;
+        const measure=typeof details.measure==='string'?details.measure.trim().slice(0,500):'';
+        const existing=p.mitigations||[];
+        if(!measure||previous===0||existing.some(m=>word(m.measure)===word(measure)))return [];
+        const next=validRate(details.riskRate)&&details.riskRate<previous?details.riskRate:
+            Number.isInteger(details.reduction)&&details.reduction>0&&details.reduction<=100?
+                Math.max(0,previous-details.reduction):null;
+        if(next===null||next>=previous)return [];
+        return [write(p.id,{...p,riskRate:next,
+            mitigations:[...existing,{measure,reduction:previous-next,riskRate:next}]})];
+    }
     if(kind==='reject')return [write(p.id,{...p,status:'declined'})];
     if(kind!=='accept')return [];
+    const rate=validRate(p.riskRate)&&p.investigated?p.riskRate:baseline;
+    const ticket=Number.isInteger(roll)&&roll>=0&&roll<65536?roll:legacyRoll(p.id);
+    const selected=ticket<rate*65536/100;
     return [write(p.id,{...p,status:'active',terms:typeof terms==='string'&&terms.trim()?terms.trim():p.terms,
-        startTurn:turn,startDay:day,risk:risky&&!p.investigated?'tracking':null})];
+        startTurn:turn,startDay:day,decisionRate:rate,risk:selected?'tracking':null})];
 }
 export function dmDealTask(state,id){
     const plans=projects(state).filter(p=>p.accountId===id&&p.status==='invited').map(publicPlan);
     return plans.length?'\n本账号的合作邀约：'+JSON.stringify(plans)+'。若本条user私信明确同意并实际成立合作或明确拒绝，在JSON加 deal:{id,kind:"accept或reject",terms:"实际约定"}。询价、意向、回复和接受私信请求不等于合作。':'';
 }
-export function businessPrompt(state,settings,chat,user){
+export function businessPrompt(state,settings,chat,user,privateDraws={}){
     if(!settings.apps.x)return '';
     const counter=state.business?.counter||{eligible:0,turn:0},followers=state.x?.audience?.followers||0;
     const plans=projects(state),profile=state.x?.profile||{alias:user},parts=[];
@@ -40,7 +74,10 @@ export function businessPrompt(state,settings,chat,user){
         parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文"}。只用商业标签。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
     }
     const open=plans.filter(p=>p.status==='invited');
-    if(open.length)parts.push('已有商业邀约 '+JSON.stringify(open.map(publicPlan))+'。仅对本楼实际发生的事实按顺序附<!--durian-business:{"kind":"investigate/accept/reject","id":"对应企划ID","terms":"成立时的约定"}。调查须已实际查证背景、产品或信誉（含委托完成）；浏览主页、询价不算。接受须明确达成合作，不替user决定。报价、签约及索赔均不等于资金收付，仅实际付款或已满足的结算条件沿用现有财务规则。');
+    if(open.length)parts.push('隐藏商业背调事实（仅供本次正文模型在user实际完成背调时写出结果，绝不可在背调前向角色泄漏或自动替user调查）：'+JSON.stringify(open.map(p=>({id:p.id,problematic:privateDraws?.[p.id]===true})))+'。problematic=true 的商家经真实完成的背调会查出与合作相关的实质隐患，后台翻车率为100%；problematic=false 的后台预设翻车率为0%。此处只决定故事内合作风险，不代表现实品牌的经核实事实。调查完成后正文应自然呈现实际发现，不要把后台随机机制写入正文，文尾按规则记录。');
+    if(open.length){
+        parts.push('已有商业邀约 '+JSON.stringify(open.map(publicPlan))+'。只有user实际完成调查、打听或委托背调并获得有依据的结果，才在本楼末尾附<!--durian-business:{"kind":"investigate","id":"企划ID","findings":"实际查出的情况","riskRate":100}-->（示例数字须按后台风险旗标为100或0）；只表达打算调查、浏览主页、询价或尚未拿到结果不算背调。对实际成功落实的风险防范措施，单独附<!--durian-business:{"kind":"mitigate","id":"企划ID","measure":"已成功落实的具体措施","reduction":20,"riskRate":80}-->；降低多少由本轮实际措施的效果决定，可逐次降低，未生效、仅建议或计划中的措施不能标记。仅在合作正式开始前允许降风险。正式签约/合作开始才附<!--durian-business:{"kind":"accept","id":"企划ID","terms":"实际成立的约定"}-->；仅表示兴趣、询价或接受私信请求不算成立；拒绝时附kind=reject。程序在正式开始时按剩余风险进行一次随机判定，判中后沿用现有成立满三剧情日以后的翻车流程；本轮标记不得预先宣布后续事故。报价、签约及索赔不等于实际资金收付，财务按原规则。');
+    }
     const undated=plans.filter(p=>p.status==='active'&&p.startDay===null);
     if(undated.length)parts.push('这些合作的成立日期尚未明确：'+JSON.stringify(undated.map(publicPlan))+'。若本楼明确提及实际签约日期，可附<!--durian-business:{"kind":"date","id":"企划ID","date":"YYYY-MM-DD"}，不得推测或改用设备时间。');
     const day=readStoryClock(chat).day;
@@ -88,6 +125,8 @@ export function importBusiness(raw,revisions,chat,settings,annotations){
                     if(!state.x[account.id])account.identityKnown=false;
                     const draws=journal.businessDraws??={};
                     if(!Object.hasOwn(draws,id))draws[id]=crypto.getRandomValues(new Uint8Array(1))[0]<128;
+                    const rolls=journal.businessRolls??={};
+                    if(!Object.hasOwn(rolls,id))rolls[id]=crypto.getRandomValues(new Uint16Array(1))[0];
                     add(delivery);add([write(id,{id,brand:row.brand,project:row.project,terms:row.terms,accountId:account.id,status:'invited',investigated:false})]);
                     offered=true;continue;
                 }
@@ -99,7 +138,7 @@ export function importBusiness(raw,revisions,chat,settings,annotations){
                         add([write(p.id,{...p,startDay:day,risk:p.risk==='tracking'&&clock.day>windowFor(day).last?'expired':p.risk})]);
                     continue;
                 }
-                if(row.kind!=='incident'){add(dealDecision(p,row.kind,counter.turn,clock.day,journal.businessDraws?.[p.id],row.terms));continue;}
+                if(row.kind!=='incident'){add(dealDecision(p,row.kind,counter.turn,clock.day,journal.businessDraws?.[p.id],row.terms,row,journal.businessRolls?.[p.id]));continue;}
                 const w=windowFor(p.startDay);
                 if(p.risk!=='tracking'||!w||clock.day===null||clock.day<w.first||clock.day>w.last||counter.turn-p.startTurn<10||!Number.isSafeInteger(row.loss)||row.loss<0)continue;
                 const a=state.x.audience,loss=Math.min(a.followers,row.loss);
