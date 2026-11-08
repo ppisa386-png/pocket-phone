@@ -86,7 +86,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span></div>' +
         '<header class="pp-header"><button type="button" data-action="back" class="pp-icon-button" aria-label="返回">' + icon('back') + '</button><span class="pp-title"></span><button type="button" data-action="close" class="pp-icon-button" aria-label="收起手机">' + icon('close') + '</button></header>' +
         '<main class="pp-content"></main><div class="pp-toast" role="status" aria-live="polite" hidden></div>' +
-        '<footer class="pp-footer"><button type="button" data-action="home" aria-label="回到桌面"><span></span></button></footer></section>';
+        '<footer class="pp-footer"><button type="button" data-action="home" aria-label="回到桌面"><span></span></button></footer>' +
+        '<button type="button" class="pp-resize" aria-label="调整窗口大小" title="拖动调整窗口大小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 14l-6 6M20 8 8 20"/></svg></button></section>';
     shadow.append(layer);
     container.append(host);
     if (topLayerAvailable) {
@@ -282,6 +283,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         layer.dataset.wallpaper = settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
+        layer.style.setProperty('--pp-phone-height', settings.phoneHeight + 'px');
         launcher.hidden = !settings.enabled || !settings.launcherVisible;
         const badge = launcher.querySelector('.pp-launcher-badge');
         badge.hidden = !settings.apps.phone || !unreadCalls();
@@ -328,7 +330,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             selectField('theme', '主题', [['dark', '深色'], ['light', '浅色']], settings.theme) +
             '<div class="pp-field pp-wallpaper-field"><span>壁纸</span><div class="pp-swatches">' + [['violet', '暮紫'], ['ocean', '海蓝'], ['sand', '暖砂'], ['graphite', '石墨']].map(([value, name]) => '<button type="button" class="pp-swatch" data-wallpaper="' + value + '" aria-label="' + name + '壁纸" aria-pressed="' + (settings.wallpaper === value) + '"><span></span><small>' + name + '</small></button>').join('') + '</div></div>' +
             '<label class="pp-field"><span>字号 <output data-output="fontSize">' + settings.fontSize + '</output></span><input type="range" min="14" max="20" step="1" data-setting="fontSize" value="' + settings.fontSize + '"></label>' +
-            '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="420" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度。</p></div>';
+            '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="640" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度；拖动手机右下角手柄可像小窗一样调整大小。</p></div>';
     }
 
     function renderErrors() {
@@ -743,7 +745,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const point = {x:Math.max(4,Math.min(x,Math.max(4,window.innerWidth-rect.width-4))),
             y:Math.max(4,Math.min(y,Math.max(4,window.innerHeight-rect.height-4)))};
         // Keep dragged windows responsive when a keyboard opens and closes.
-        phone.style.height = window.innerWidth <= 480 ? 'calc(100dvh - 20px)' : 'min(740px, calc(100dvh - 24px))';
+        phone.style.height = window.innerWidth <= 480 ? 'calc(100dvh - 20px)' : 'min(' + settings.phoneHeight + 'px, calc(100dvh - 24px))';
         phone.style.bottom = 'auto'; phone.style.right = 'auto';
         phone.style.left = point.x + 'px'; phone.style.top = point.y + 'px';
         windowPosition = point;
@@ -765,6 +767,40 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(phoneHandle.hasPointerCapture(event.pointerId))phoneHandle.releasePointerCapture(event.pointerId);
     }
     for(const event of ['pointerup','pointercancel','lostpointercapture'])phoneHandle.addEventListener(event,finishWindowDrag,{signal:lifetime.signal});
+    // Floating-window resize: drag the corner grip like a small-window app.
+    const resizeGrip = shadow.querySelector('.pp-resize');
+    let windowResize = null;
+    resizeGrip.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.isPrimary === false) return;
+        const rect = phone.getBoundingClientRect();
+        if (!windowPosition) {
+            // First resize anchors the window top-left so it grows right/down.
+            phone.style.height = ''; phone.style.bottom = 'auto'; phone.style.right = 'auto';
+            phone.style.left = rect.left + 'px'; phone.style.top = rect.top + 'px';
+            windowPosition = { x: rect.left, y: rect.top };
+        }
+        windowResize = { id: event.pointerId, x: event.clientX, y: event.clientY, width: rect.width, height: rect.height };
+        try { resizeGrip.setPointerCapture(event.pointerId); } catch { /* Embedded browser fallback. */ }
+        event.preventDefault(); event.stopPropagation();
+    }, { signal: lifetime.signal });
+    resizeGrip.addEventListener('pointermove', event => {
+        if (!windowResize || windowResize.id !== event.pointerId) return;
+        const view = viewport();
+        const width = Math.round(Math.max(280, Math.min(windowResize.width + event.clientX - windowResize.x, view.width - 16)));
+        const height = Math.round(Math.max(460, Math.min(windowResize.height + event.clientY - windowResize.y, view.height - 16)));
+        phone.style.width = width + 'px'; phone.style.height = height + 'px';
+    }, { signal: lifetime.signal });
+    function finishWindowResize(event) {
+        if (!windowResize || windowResize.id !== event.pointerId) return;
+        windowResize = null;
+        if (resizeGrip.hasPointerCapture(event.pointerId)) resizeGrip.releasePointerCapture(event.pointerId);
+        const rect = phone.getBoundingClientRect(), view = viewport();
+        const width = Math.round(Math.max(280, Math.min(rect.width, view.width - 16)));
+        const height = Math.round(Math.max(460, Math.min(rect.height, view.height - 16)));
+        persist({ phoneWidth: width, phoneHeight: height });
+        phone.style.width = ''; phone.style.height = '';
+    }
+    for (const event of ['pointerup', 'pointercancel']) resizeGrip.addEventListener(event, finishWindowResize, { signal: lifetime.signal });
     window.addEventListener('resize', () => {
         placeLauncher();
         if(windowPosition){

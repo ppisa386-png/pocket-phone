@@ -64,6 +64,7 @@ test('菜单校验拒绝数量、品类、重复名称与价格问题',()=>{
  const cats=structuredClone(good);for(const dish of cats.shops[4].menu)dish.category='主食';assert.throws(()=>validateShops(cats),/5 个有区别的品类/);
  const dup=structuredClone(good);dup.shops[3].menu[5].name=dup.shops[3].menu[4].name;assert.throws(()=>validateShops(dup),/重复菜品/);
  assert.throws(()=>validateShops({...good,currency:'XXY'}),/币种/);
+ assert.throws(()=>validateShops(shopsPayload('EUR'),'USD'),/菜单币种与账本不一致/); // 返回币种必须与账本一致
  const bad=structuredClone(good);bad.shops[1].menu[0].price='0';assert.throws(()=>validateShops(bad));
  const neg=structuredClone(good);neg.shops[1].menu[0].price='-3';assert.throws(()=>validateShops(neg));
  const unnamed=structuredClone(good);unnamed.shops[1].menu[0].name='  ';assert.throws(()=>validateShops(unnamed));
@@ -110,7 +111,7 @@ test('余额不足不创建订单不扣款；未建账与待结算支出沿用�
   assert.equal(foodItems(f.state(),'foodOrder').length,0);
   await seedWallet(f,100); // $1.00，不够一份 3.50 起的菜
   const failed=await f.food.checkout(shop.id);
-  assert.equal(failed.ok,false);assert.equal(failed.error,'支付失败：小榴莲余额不足。');
+  assert.equal(failed.ok,false);assert.equal(failed.error,'支付失败，余额不足。');
   assert.equal(foodItems(f.state(),'foodOrder').length,0);
   assert.equal(assetRows(f.state(),'cash_transaction').length,0);
   assert.equal(f.state().orders.foodCart.items.length,1); // 已选保留，可充值后再买
@@ -160,6 +161,29 @@ test('新搜索替换店铺与菜单并清空已选，但不影响已有订单�
   assert.equal(f.count(),2);
  }finally{f.close();}
 });
+test('未建账时按剧情货币浏览，结算前必须建账并重新搜索；账本币种不一致同样拒绝',async()=>{
+ const f=setup();try{
+  f.reply(shopsPayload('SGD'));
+  ok(await f.food.search('外卖')); // 未建账：允许按剧情货币生成菜单
+  assert.equal(f.state().orders.foodSearch.currency,'SGD');
+  const shops=foodItems(f.state(),'foodShop');
+  ok(await f.food.add(shops[0].id,shops[0].menu[0].id,2));
+  const blocked=await f.food.checkout(shops[0].id);
+  assert.equal(blocked.ok,false);assert.match(blocked.error,/建立账本/);assert.match(blocked.error,/重新搜索/);
+  assert.equal(foodItems(f.state(),'foodOrder').length,0);
+  await seedWallet(f); // 建账后账本币种为 USD，与 SGD 菜单不一致，仍不能结算
+  const mismatch=await f.food.checkout(shops[0].id);
+  assert.equal(mismatch.ok,false);assert.match(mismatch.error,/菜单币种与账本不一致/);
+  assert.equal(assetRows(f.state(),'cash_transaction').length,0);
+  f.reply(shopsPayload('USD'));
+  ok(await f.food.search('外卖')); // 重新搜索后菜单币种与账本一致
+  assert.equal(f.state().orders.foodSearch.currency,'USD');
+  const fresh=foodItems(f.state(),'foodShop');
+  ok(await f.food.add(fresh[0].id,fresh[0].menu[0].id));
+  ok(await f.food.checkout(fresh[0].id));
+  assert.equal(foodItems(f.state(),'foodOrder').length,1);
+ }finally{f.close();}
+});
 test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
  const OriginalFormData=globalThis.FormData;
  let fields=new Map();
@@ -180,7 +204,7 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
     return {ok:true};},
    async search(...args){calls.push(['search',...args]);return {ok:true};},
    async checkout(shopId,recipient,name){calls.push(['checkout',shopId,recipient,name]);
-    if(checkoutFail)return {ok:false,error:'支付失败：小榴莲余额不足。'};
+    if(checkoutFail)return {ok:false,error:'支付失败，余额不足。'};
     cartLines=cartLines.filter(i=>i.shopId!==shopId);return {ok:true,id:'o1'};}}};
  const state=()=>({busy:false,error:'',errorKind:null,orders:{foodSearch:{query:'pasta'},'foodShop:0':shopRecord,foodCart:{id:'foodCart',type:'foodCart',items:cartLines}}});
  const panel=createFoodPanel({adapter,getView:state,redraw(){},notice:m=>{throw Error('不应出现提示：'+m);}});
@@ -233,7 +257,7 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
   cartLines=[{dishId:'foodShop:0#0',shopId:'foodShop:0',shopName:shopRecord.name,name:'Carbonara',category:'主食',priceMinor:1250,currency:'USD',quantity:1}];
   await panel.action('buy');await panel.action('gift-self');
   page=panel.html();
-  assert.match(page,/支付失败：小榴莲余额不足/);assert.match(page,/aria-label="选择收件人"/);
+  assert.match(page,/支付失败，余额不足/);assert.match(page,/aria-label="选择收件人"/);
   checkoutFail=false;
   await panel.action('gift-self');
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);

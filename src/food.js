@@ -12,10 +12,15 @@ const dishPrice=(value,currency)=>{
 };
 // One search returns every shop with its full menu; the program only checks
 // counts, prices and obvious padding — variety itself stays a prompt contract.
+// The ledger currency is the single settlement currency: with a ledger, the
+// API must echo exactly that currency; without one, any story currency is
+// allowed but checkout waits for a ledger and a fresh search.
 export function validateShops(data,ledgerCurrency=null){
     const shops=data?.shops;
     if(!Array.isArray(shops)||shops.length!==FOOD_SHOP_COUNT)throw Error(`需要一次返回 ${FOOD_SHOP_COUNT} 家店铺，请重新搜索。`);
-    const currency=ledgerCurrency||foodText(data?.currency,20);
+    const returned=foodText(data?.currency,20);
+    if(ledgerCurrency&&returned!==ledgerCurrency)throw Error('菜单币种与账本不一致，请重新搜索。');
+    const currency=ledgerCurrency||returned;
     if(!validCurrency(currency))throw Error('菜单币种无效，请重新搜索。');
     return shops.map((shop,index)=>{
         const name=foodText(shop?.name,100),cuisine=foodText(shop?.cuisine,60),description=foodText(shop?.description,200);
@@ -67,7 +72,7 @@ export function createFood({memory,phone,getContext,getSettings}){
             const currency=walletCurrency(state);
             const economy={currency,persona:!currency?getContext().powerUserSettings?.persona_description:undefined};
             const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.food+'\n'+getSettings().prompts.foodShopping+
-                '\n当前任务：榴莲外卖店铺搜索。'+(currency?'所有菜品按 '+currency+' 定价。':'尚未建立账本，请按剧情所在地和人物背景确定一个合理币种，写入返回结果的 currency 字段。')+'想吃的东西：'+JSON.stringify(q)+'。当前资料：'+JSON.stringify(economy)+'。'+
+                '\n当前任务：榴莲外卖店铺搜索。'+(currency?'返回结果的 currency 字段必须是 '+currency+'，所有菜品一律按 '+currency+' 定价，不做汇率换算。':'尚未建立账本，请按剧情所在地和人物背景确定一个合理币种，写入返回结果的 currency 字段；结算前需要先建立账本并重新搜索。')+'想吃的东西：'+JSON.stringify(q)+'。当前资料：'+JSON.stringify(economy)+'。'+
                 '\n一次性返回 '+FOOD_SHOP_COUNT+' 家符合当前世界观、地域、年代的店铺，每家 '+FOOD_MENU_MIN+'—'+FOOD_MENU_MAX+' 道独立菜品，每家覆盖至少 '+FOOD_CATEGORY_MIN+' 个有实际区别的品类；不能用同一种菜的口味、配料或烹饪变化凑数量；同一家店内菜品名称不得重复。每家店有各自的经营特色、菜系和价格档次，符合人物消费水平。菜单描述保持简短，不写买家评价。'+
                 '\n只输出 JSON：{"currency":"三位货币代码","shops":[{"name":"店铺名称","cuisine":"菜系","description":"一句话简介","menu":[{"name":"菜品名称","category":"品类","description":"简短介绍","price":"数字价格"}]}]}。输出必须完整包含全部店铺和菜单，不要省略任何一家。不返回 user 已下单或付款等结论，不替 user 决定。';
             const shops=await request(prompt,data=>validateShops(data,currency),current,null,{retries:0,maxTokens:32768});
@@ -80,6 +85,9 @@ export function createFood({memory,phone,getContext,getSettings}){
         checkout(shopId,recipient='self',name=''){return run(async(state,_c,_r,commit)=>{
             const lines=(state.orders.foodCart?.items||[]).filter(i=>i.shopId===shopId);
             if(!lines.length)throw Error('还没有选择菜品，先挑几样想吃的吧。');
+            const currency=walletCurrency(state);
+            if(!currency)throw Error('请先在小榴莲点击「一键更新」建立账本，再重新搜索外卖。');
+            if(state.orders.foodSearch?.currency!==currency)throw Error('菜单币种与账本不一致，请先重新搜索外卖再结算。');
             const context=getContext(),clock=readStoryClock(context.chat);
             if(clock.day===null)throw Error('无法确定当前剧情日期，请先在正文中写明日期再下单。');
             const self=recipient!=='other';
@@ -88,12 +96,11 @@ export function createFood({memory,phone,getContext,getSettings}){
             const totals=Object.create(null);
             for(const i of lines)totals[i.currency]=(totals[i.currency]||0)+i.priceMinor*i.quantity;
             if(Object.values(totals).some(n=>!Number.isSafeInteger(n)))throw Error('订单金额过大，请减少数量。');
-            const currency=walletCurrency(state);
-            if(currency&&Object.keys(totals).some(c=>c!==currency))throw Error('菜单币种与账本不同，请重新搜索 '+currency+' 外卖。');
+            if(Object.keys(totals).some(c=>c!==currency))throw Error('菜单币种与账本不一致，请先重新搜索外卖再结算。');
             const total=totals[currency];
             try{requireCash(state,total,currency);}
             catch(error){
-                if(/余额不足/.test(error.message))throw Error('支付失败：小榴莲余额不足。');
+                if(/余额不足/.test(error.message))throw Error('支付失败，余额不足。');
                 throw error;
             }
             const id=crypto.randomUUID(),shop=state.orders[shopId];

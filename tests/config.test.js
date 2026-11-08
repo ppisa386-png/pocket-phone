@@ -6,10 +6,12 @@ test('malformed or old saved settings do not prevent startup', () => {
     for (const value of [null, undefined, [], 'bad', 3]) {
         assert.equal(normalizeSettings(value).launcherVisible, true);
     }
-    const config = normalizeSettings({ retries: Infinity, fontSize: -40, phoneWidth: 9999, apps: null, prompts: [], position: { x: 9, y: -3 } });
+    const config = normalizeSettings({ retries: Infinity, fontSize: -40, phoneWidth: 9999, phoneHeight: -5, apps: null, prompts: [], position: { x: 9, y: -3 } });
     assert.equal(config.retries, 2);
     assert.equal(config.fontSize, 14);
-    assert.equal(config.phoneWidth, 420);
+    assert.equal(config.phoneWidth, 640);
+    assert.equal(config.phoneHeight, 460);
+    assert.equal(normalizeSettings({}).phoneHeight, 740);
     assert.deepEqual(config.position, { x: 1, y: 0 });
     assert.equal(config.prompts.phone, PROMPTS.phone.text);
 });
