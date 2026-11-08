@@ -250,7 +250,8 @@ test('archive trash removes exactly one stored edition, preserves the other issu
   assert.equal(f.state().daily['archive:'+target.editionId],undefined);
   assert.equal(f.state().daily.archiveSchema.sectionLog.some(e=>e.editionId===target.editionId),false);
   assert.equal(dailyEditorialHistory(f.state(),f.c.chat).some(e=>e.editionId===target.editionId),false);
-  assert.equal(f.state().daily.edition.editionId,'not-the-current'?'' : f.state().daily.edition.editionId);
+  assert.equal(f.state().daily.edition.day,dateDay('2003-07-27'));
+  assert.match(first(f).headline,/第27日/);
   assert.equal(f.calls(),count);
   const copy=setup();try{
    copy.c.chat=structuredClone(f.c.chat);copy.c.chatMetadata=structuredClone(f.c.chatMetadata);
