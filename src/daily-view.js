@@ -13,7 +13,7 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
         const state=getView(),chat=adapter.storyChat?.()||[],archives=dailyArchives(state,chat),busy=working||state.busy;
         const archived=folder&&archiveId?archives.find(e=>e.editionId===archiveId):null;
         if(folder&&!archived) return '<section class="pp-daily pp-daily-folder"><header class="pp-daily-masthead"><small>THE PRESS · 历史收藏</small><h2>过往报纸夹</h2></header><div class="pp-daily-toolbar"><button type="button" data-daily-action="archive-back">‹ 返回本期</button><span>最近三份过期报纸</span></div>'+
-            (archives.length?'<div class="pp-daily-archive-list">'+archives.map(e=>'<button type="button" data-daily-action="archive-edition" data-daily-id="'+dailyEscape(e.editionId)+'"><small>'+dailyEscape(e.printDate||dayDate(e.day))+' · 已过期</small><strong>'+dailyEscape(e.publication||e.articles[0]?.outlet||'往期报刊')+'</strong><span>'+e.articles.length+' 篇报道 · 阅读全文</span></button>').join('')+'</div>':'<div class="pp-daily-empty"><p>暂无过期报纸</p></div>')+'</section>';
+            (archives.length?'<div class="pp-daily-archive-list">'+archives.map(e=>'<button type="button" data-daily-action="archive-edition" data-press="daily-archive" title="长按删除这期报纸" data-daily-id="'+dailyEscape(e.editionId)+'"><small>'+dailyEscape(e.printDate||dayDate(e.day))+' · 已过期</small><strong>'+dailyEscape(e.publication||e.articles[0]?.outlet||'往期报刊')+'</strong><span>'+e.articles.length+' 篇报道 · 阅读全文</span></button>').join('')+'</div>':'<div class="pp-daily-empty"><p>暂无过期报纸</p></div>')+'</section>';
         const edition=archived||state.daily?.edition,expiry=dailyExpiry(edition,chat);
         const articles=archived?[...archived.articles]:dailyArticles(state),order=new Map((edition?.articleIds||[]).map((id,i)=>[id,i]));articles.sort((a,b)=>order.get(a.id)-order.get(b.id));
         const publication=edition?.publication||articles[0]?.outlet||'今日报刊';
@@ -33,8 +33,16 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
             const state=getView(),chat=adapter.storyChat?.()||[],archives=dailyArchives(state,chat);
             const archived=folder&&archiveId?archives.find(e=>e.editionId===archiveId):null;
             const edition=archived||state.daily?.edition;
-            if(!edition)return [];
             const busy=!!(working||state.busy);
+            if(element.dataset.press==='daily-archive'){
+                const id=element.dataset.dailyId;
+                if(!folder||!archives.some(e=>e.editionId===id))return [];
+                return [{icon:'delete',label:'删除这期报纸',danger:true,disabled:busy,run:()=>{
+                    if(!window.confirm('确定删除这期过往报纸吗？删除后将从报纸夹中移除。'))return;
+                    return api.action('delete-archive',id);
+                }}];
+            }
+            if(!edition)return [];
             if(element.dataset.dailyField){
                 const field=element.dataset.dailyField;
                 const label={publication:'报头',date:'刊登日期',location:'地区'}[field]||'报纸信息';
@@ -54,6 +62,20 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
         if(action==='archive-back'){back();return;}
         if(action==='archive-edition'){if(dailyArchives(getView(),adapter.storyChat?.()||[]).some(e=>e.editionId===id)){folder=true;archiveId=id;expanded.clear();redraw();}return;}
         if(action==='read'){if(expanded.has(id))expanded.delete(id);else expanded.add(id);redraw();return;}
+        if(action==='delete-archive'){
+            if(!folder||working||getView().busy)return;
+            if(!adapter.daily?.deleteArchive){notice('请在酒馆中管理报纸夹。');return;}
+            const token=epoch;working=true;status='';redraw();
+            try{
+                const result=await adapter.daily.deleteArchive(id);
+                if(token===epoch){
+                    if(result?.ok){archiveId=null;expanded.clear();status='这期报纸已删除';}
+                    else status=result?.error||'删除失败，请重试。';
+                }
+            }catch(error){if(token===epoch)status=error.message;}
+            finally{if(token===epoch){working=false;redraw();}}
+            return;
+        }
         if(folder||!['update','inject'].includes(action)||working||getView().busy)return;
         if(!adapter.daily){notice('请在酒馆中取阅日报。');return;}
         const token=epoch;working=true;status='';redraw();
