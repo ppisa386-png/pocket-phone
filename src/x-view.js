@@ -1,12 +1,12 @@
-import {visibleXComments,X_COMMENT_LIMIT} from './x-comments.js?v=1.1.29';
-import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.1.29';
-import {pageFields,objectFields} from './x-edit.js?v=1.1.29';
-import {refreshFloor} from './x-influence.js?v=1.1.29';
-import { icon } from './icons.js?v=1.1.29';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.1.29';
-import { displayStoryTime } from './story-clock.js?v=1.1.29';
-import { xItems, xProfile, xCounts } from './x.js?v=1.1.29';
-import { xAudience } from './x-audience.js?v=1.1.29';
+import {visibleXComments,X_COMMENT_LIMIT} from './x-comments.js?v=1.2';
+import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.2';
+import {pageFields,objectFields} from './x-edit.js?v=1.2';
+import {refreshFloor} from './x-influence.js?v=1.2';
+import { icon } from './icons.js?v=1.2';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.2';
+import { displayStoryTime } from './story-clock.js?v=1.2';
+import { xItems, xProfile, xCounts } from './x.js?v=1.2';
+import { xAudience } from './x-audience.js?v=1.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;

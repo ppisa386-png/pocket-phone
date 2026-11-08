@@ -1,16 +1,16 @@
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.1.29';
-import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.1.29';
-import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.1.29';
-import { exactStoryTime } from './story-clock.js?v=1.1.29';
-import { isMemoryHidden } from './journal.js?v=1.1.29';
-import { CHINESE_NAME_RULE } from './names.js?v=1.1.29';
-import { phoneQuietOptions } from './api-context.js?v=1.1.29';
-import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.1.29';
-export { validateContacts } from './contacts.js?v=1.1.29';
-import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.1.29';
-import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.1.29';
-import { narrativeTurn } from './contact-policy.js?v=1.1.29';
-import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.1.29';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.2';
+import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2';
+import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2';
+import { exactStoryTime } from './story-clock.js?v=1.2';
+import { isMemoryHidden } from './journal.js?v=1.2';
+import { CHINESE_NAME_RULE } from './names.js?v=1.2';
+import { phoneQuietOptions } from './api-context.js?v=1.2';
+import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
+export { validateContacts } from './contacts.js?v=1.2';
+import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2';
+import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.2';
+import { narrativeTurn } from './contact-policy.js?v=1.2';
+import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.

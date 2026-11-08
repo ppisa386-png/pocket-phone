@@ -1,9 +1,9 @@
-import { localizedPerson, sameNamedPerson } from './names.js?v=1.1.29';
-import { readStoryClock, storyTime } from './story-clock.js?v=1.1.29';
-import { xComments, xCommentKey } from './x-comments.js?v=1.1.29';
-import {xFeedArea} from './x-feed.js?v=1.1.29';
-import { xAudience } from './x-audience.js?v=1.1.29';
-import { commRecordPatch, commExpired, commExcerpt, commMetaOrInfer } from './comm-context.js?v=1.1.29';
+import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';
+import { readStoryClock, storyTime } from './story-clock.js?v=1.2';
+import { xComments, xCommentKey } from './x-comments.js?v=1.2';
+import {xFeedArea} from './x-feed.js?v=1.2';
+import { xAudience } from './x-audience.js?v=1.2';
+import { commRecordPatch, commExpired, commExcerpt, commMetaOrInfer } from './comm-context.js?v=1.2';
 
 export function xStoryPrompt(state, now = null) {
     const allPosts = Object.values(state.x || {}).filter(p => p.type === 'post');

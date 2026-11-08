@@ -1,4 +1,4 @@
-import {dayDate} from './story-clock.js?v=1.1.29';
+import {dayDate} from './story-clock.js?v=1.2';
 
 const strength={
     low:{praise:'在目标原有受众和相关圈层形成一波明显的好评、推荐或新客。',attack:'部分网友集中批评、嘲讽、差评或抵制，影响超出熟人范围。'},

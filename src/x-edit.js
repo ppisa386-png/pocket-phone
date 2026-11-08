@@ -1,4 +1,4 @@
-import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.1.29';
+import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.2';
 // A page exposes only editable display fields. IDs, private state and ownership
 // stay in the journal. Each field retains its original value for stale-edit checks.
 export function pageFields(state,scope){

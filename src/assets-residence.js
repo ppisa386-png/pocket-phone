@@ -1,4 +1,4 @@
-import { resolveResidence, RESIDENCE_RULE } from './currency.js?v=1.1.29';
+import { resolveResidence, RESIDENCE_RULE } from './currency.js?v=1.2';
 
 
 export const hasResidence = wallet => !!(wallet?.region && wallet?.currency);

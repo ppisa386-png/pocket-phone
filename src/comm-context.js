@@ -3,9 +3,9 @@
 // stores per-record classification (A/B), the story-time anchor of the floor
 // where the record first appeared, expiry and the shown/unshown state.
 // Records themselves, read states and business status are never touched here.
-import { dateDay, exactStoryTime } from './story-clock.js?v=1.1.29';
-import { appendChange, replayJournal } from './journal.js?v=1.1.29';
-import { xFeedArea } from './x-feed.js?v=1.1.29';
+import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
+import { appendChange, replayJournal } from './journal.js?v=1.2';
+import { xFeedArea } from './x-feed.js?v=1.2';
 
 export const COMM_PLATFORMS = ['sms', 'call', 'whatsapp', 'wechat', 'snapchat', 'x'];
 // Journal collections that hold communcation records the sidecar can attach to.

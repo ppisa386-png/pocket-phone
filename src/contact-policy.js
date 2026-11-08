@@ -1,4 +1,4 @@
-import { isMemoryHidden } from './journal.js?v=1.1.29';
+import { isMemoryHidden } from './journal.js?v=1.2';
 // Count narrative replies for the shared outreach opportunity.
 export function effectiveReply(message) {
     if (!message || message.is_user || message.isPhoneMessage || message.isGaigaiPrompt || message.isGaigaiData ||

@@ -1,12 +1,12 @@
-import {recentPerConversation} from './proactive-pacing.js?v=1.1.29';
-import { majorAmount } from './currency.js?v=1.1.29';
-import {xFeedArea} from './x-feed.js?v=1.1.29';
-import { xComments } from './x-comments.js?v=1.1.29';
-import { smsForAI } from './sms-context.js?v=1.1.29';
-import { syncCommContext, commExpired, commExcerpt, commMetaOrInfer } from './comm-context.js?v=1.1.29';
-import { dateDay, exactStoryTime } from './story-clock.js?v=1.1.29';
-import { nameAliases } from './names.js?v=1.1.29';
-import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.1.29';
+import {recentPerConversation} from './proactive-pacing.js?v=1.2';
+import { majorAmount } from './currency.js?v=1.2';
+import {xFeedArea} from './x-feed.js?v=1.2';
+import { xComments } from './x-comments.js?v=1.2';
+import { smsForAI } from './sms-context.js?v=1.2';
+import { syncCommContext, commExpired, commExcerpt, commMetaOrInfer } from './comm-context.js?v=1.2';
+import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
+import { nameAliases } from './names.js?v=1.2';
+import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.2';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';
 const normalized = value => String(value ?? '').normalize('NFKC').trim().toLowerCase();
