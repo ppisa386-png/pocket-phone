@@ -1,5 +1,5 @@
 import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2';
-import {businessPrompt,importBusiness} from './x-business.js?v=1.2';
+import {businessPrompt,importBusiness} from './x-business.js?v=1.2.4';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2';
 import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2';
