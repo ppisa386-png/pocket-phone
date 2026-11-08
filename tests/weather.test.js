@@ -12,7 +12,7 @@ import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay, dayDate } from '../src/story-clock.js';
 import { createWeatherPanel, themeFor, nextThemeChange } from '../src/weather-view.js';
-import { sceneBackdrop, weatherArt } from '../src/weather-art.js';
+import { sceneBackdrop } from '../src/weather-art.js';
 
 // Simple deterministic LCG so statistical assertions never flake between runs.
 let lcg = 0x2f6e2b1;
@@ -614,12 +614,12 @@ test('the redesigned surface carries the webp sky backdrop, flat hero, inline me
         const mist = make(new Date(2026, 4, 1, 9, 0)).html();
         const dusk = make(new Date(2026, 4, 1, 17, 0)).html();
         const night = make(new Date(2026, 4, 1, 22, 0)).html();
-        // 素材层：三主题各挂一张不同的内嵌 WebP 天空图，主视觉与指标横栏共用
+        // 素材层：三主题各挂一张不同的内嵌 WebP 天空图；抬头只保留照片背景，不再渲染独立插画层
         for (const page of [mist, dusk, night]) {
             assert.match(page, /pp-weather-backdrop/);
             assert.match(page, /pp-weather-backdrop-art/);
             assert.match(page, /data:image\/webp;base64,/);
-            assert.match(page, /pp-weather-art-main/);
+            assert.doesNotMatch(page, /pp-weather-art-main/); // 与照片重复的独立天气插画已移除
             assert.match(page, /pp-weather-metrics/);
             assert.match(page, /pp-weather-hourly-card/);
             assert.match(page, /pp-weather-hour-now/);
@@ -630,7 +630,7 @@ test('the redesigned surface carries the webp sky backdrop, flat hero, inline me
         assert.equal(new Set(['mist', 'apricot', 'night'].map(t => sceneBackdrop('rain', t))).size, 3, 'three distinct local sky images');
         for (const theme of ['mist', 'apricot', 'night'])
             assert.match(sceneBackdrop('rain', theme), /^<img class="pp-weather-backdrop-art" src="data:image\/webp;base64,/);
-        // 抬头一体：城市导航与主视觉同处 hero，照片层是 hero 的第一个背景子层
+        // 抬头一体：照片层是 hero 的第一个背景子层，城市导航与主视觉同处 hero
         const heroAt = dusk.indexOf('class="pp-weather-hero"');
         const backdropAt = dusk.indexOf('class="pp-weather-backdrop"');
         const topAt = dusk.indexOf('class="pp-weather-top"');
@@ -640,15 +640,8 @@ test('the redesigned surface carries the webp sky backdrop, flat hero, inline me
         assert.doesNotMatch(mist, /pp-weather-band/);
         assert.match(dusk, /pp-weather-band/);
         assert.doesNotMatch(night, /pp-weather-band/);
-        // 雨天主视觉带雨滴效果叠层；逐小时/七天使用彩色场景图标
-        const rain = make(new Date(2026, 4, 1, 9, 0), 'rain').html();
-        assert.match(rain, /#70B6E8/); // weatherArt 雨滴叠层
+        // 逐小时/七天使用彩色场景图标
         assert.match(dusk, /pp-weather-day-icon/);
-        // 晴与少云主视觉只保留天空照片，无第二层图形
-        assert.equal(weatherArt('sunny'), '');
-        assert.equal(weatherArt('partly'), '');
-        for (const [type, family] of [['rain', '#70B6E8'], ['blizzard', '#F5FBFF'], ['windy', '#E4F1F9'], ['typhoon', '#D8EAF8'], ['hail', '#FFD26A']])
-            assert.ok(weatherArt(type).includes(family), type + ' effect overlay');
         // 切主题不触碰数据：两次渲染城市与温度一致，仅 data-wtheme 不同
         assert.match(mist, /data-wtheme="mist"/); assert.match(night, /data-wtheme="night"/);
         assert.ok(mist.includes('<strong>') && mist.includes('<b>上海</b>'));

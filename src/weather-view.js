@@ -1,5 +1,5 @@
 import { weatherScene, weatherType, weatherExtreme } from './weather.js?v=1.2';
-import { sceneIcon, weatherArt, sceneBackdrop, metricIcon } from './weather-art.js?v=1.2';
+import { sceneIcon, sceneBackdrop, metricIcon } from './weather-art.js?v=1.2';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -73,8 +73,8 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
         const feels = w?.feels == null ? (w?.temp == null ? '—' : Math.round(w.temp)) : Math.round(w.feels);
         const extreme = !!(w?.extreme || weatherExtreme(type));
         const alert = extreme ? '<span class="pp-weather-alert">' + escapeHtml(label) + '</span>' : '';
-        // 抬头一体：天气照片是整个 hero 的背景层（inset:0 全铺，随容器圆角裁切），
-        // 城市导航、温度与天气信息直接叠加在照片之上，不再有独立的图片块。
+        // 抬头一体：天气照片作为 hero 的背景层（inset:0 全铺），城市导航、温度与天气信息
+        // 直接叠加在照片之上；照片底部经渐变融入页面背景顶色（--w-scene-merge），分界线不可见。
         return '<section class="pp-weather-hero">' +
             '<div class="pp-weather-backdrop" aria-hidden="true">' + sceneBackdrop(type, theme) + '</div>' +
             top(city, busy) +
@@ -83,7 +83,6 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
             '<b class="pp-weather-desc">' + escapeHtml(label) + '</b>' +
             (w?.temp == null ? '<small class="pp-weather-hero-note">' + escapeHtml(emptyNote) + '</small>' : '<small class="pp-weather-hero-note">体感 ' + feels + '</small>') +
             '</div>' +
-            '<div class="pp-weather-art-main" aria-hidden="true">' + weatherArt(type) + '</div>' +
             '</section>';
     }
 
