@@ -1,5 +1,15 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 天气 App 视觉还原：WebP 天空照片素材＋参考图结构对齐（1.2 之上）
+基线为 2915f72（天气素材感整改之上，636/636）。用户提供《天气App视觉还原包》（reference-target.png 为设计目标），按包内 README.md 与 GLM-INTEGRATION.md 完成集成：`src/weather-view.js`、`src/weather-art.js` 整文件替换；`style.css` 天气区块（原 362–435 行）整体换为包内 `style-weather.css`。天气引擎 weather.js、ui.js 接线（定时主题切换/前后台重判/滚动保持）、刷新与数据链路零改动；`themeFor`/`nextThemeChange`/`createWeatherPanel({adapter,getView,redraw,notice,now})` 接口、`data-weather-action="refresh"` 事件接口、`{html,action,reset}` 返回结构全部保持。本节取代上一轮"整页单卡＋SVG 云层场景层"实现（REQUIREMENTS.md 已同步改写）。
+
+**素材（src/weather-art.js，包内原文件）**：三张 WebP 天空照片以 data URI 内嵌（mist 20KB/apricot 14KB/night 19KB，已验证 RIFF…WEBP 头完整、三主题互不相同），`sceneBackdrop(type,theme)` 按主题输出 `<img class="pp-weather-backdrop-art">`；`sceneIcon` 改彩色场景图标（viewBox 124×100：太阳/白云/雨云/雪云/风/台风/警示三角）；`weatherArt(type)` 只画与照片互补的效果叠层（雨滴 #70B6E8/雪花/风线/台风螺旋/闪电警示，晴与多云返回空串、容器 :empty 隐藏）；`metricIcon` 沿用四指标线性图标。
+**视图（src/weather-view.js，包内原文件）**：hero 内嵌照片层（右侧 76% 宽＋左侧渐隐遮罩＋底部渐变融入页面色）；顶部城市区只保留定位标识＋城市名＋迷你刷新图标——删除剧情时间小字、删除底部大号刷新按钮；主视觉扁平（温度 68px 细字重＋描述＋「体感 N」小字 hero-note）；四指标一块连续横栏（竖向分隔线＋玻璃底）；逐小时单面板六小时——`upcomingHours` 从当前剧情小时起、跨午夜自动接入次日小时，「现在」高亮；E 杏桃主题附 `temperatureCurve` 温度曲线（--w-curve 折线＋圆点，B/D 主题 display:none）；七天连续列表（行式 pp-weather-day＋极端红色警示条/「!」标记/预计时段文案）；刷新成功文案改「天气已更新」；空态/无位置/待刷新共用同一 hero＋照片语言（无位置文案「还不知道你在哪里，点击右上角试试。」）。
+**CSS（style.css 天气块整体替换）**：三主题渐变底色＋玻璃面板变量（--w-panel/--w-line/--w-accent/--w-curve/--w-now/--w-shadow），night 保持 backdrop-filter 玻璃卡；新增 `.pp-phone[data-active-app="weather"]` 外壳协调——顶栏/标题栏/底部手势区经 :has 随 data-wtheme 换色；320px/330px 断点收窄字号与栏宽；prefers-reduced-motion 保留；作用域仍限 `.pp-weather` 与 weather 外壳选择器，其他 App 零影响（已 diff 验证区块边界前后内容一致）。
+**测试（tests/weather.test.js，仅改视图断言，业务测试全部保留）**：面板契约测试改为——`data:image/webp` 内嵌素材、三主题三张不同天空图、pp-weather-metrics/hourly-card/week/backdrop-art、E 主题 band 曲线存在而 B/D 无、雨滴叠层 #70B6E8、weatherArt('sunny'/'partly') 为空串、界面不含「剧情时间」、不含 pp-weather-refresh（底部大按钮）；刷新成功文案断言改「天气已更新」；主题契约测试删除 pp-weather-range、改查 pp-weather-day-date；新增 import sceneBackdrop/weatherArt 直测。天气引擎/预报/注入/探测/回退等业务测试一字未动。
+验证：天气专项 31/31；完整 npm test 636/636；npm run build:preview 通过（包内 3 张 WebP、关键类名齐全）。内置 Chromium 实测（临时 harness 直挂真实 weather 引擎＋真实 weather-view＋正式 style.css，标记上海、零网络请求）：B 雾紫/E 杏桃/D 深蓝 390px 首页对照 reference-target.png 逐项核对——天空照片大小位置比例、温度与描述排版、四指标连续横栏、逐小时横向布局、七天列表结构一致；E 温度曲线正常；极端预警红条＋「预计20时至22时：暴雨（强烈）」文案正常；手机外壳随主题换色；320/360/390×三主题 9 组合横向溢出（weather/scroll/body）全 0；照片层 pointer-events:none 不遮挡文字与刷新入口；真实点击迷你刷新按钮→真实 weather.refresh()→状态「天气已更新」且城市保持；DOM 断言无「剧情时间」、无底部大按钮。截图（B/E/D 390 首页、E 雨天叠层、三主题 320 窄屏）已交付用户。
+未完成：真实手机触屏最终确认待用户验收；参考图文案细节（如「体感 22°C · 今天天气舒适」）以代码包实际文案为准（「体感 22」），未逐字复刻参考图；版本参数保持 1.2 待发布统一；本轮已本地提交、未推送远端（等待用户指示）。
+
 ## 本地待发布 · 天气 App 素材感整改：大面积场景层＋光感＋扁平主视觉（1.2 之上）
 基线为本地工作区（19e4c17 天气重设计之上，635/635）。用户对照参考设计图反馈：上一轮仍是"普通卡片+小图标"，缺主视觉/素材感/光感。本轮按参考图构图整改：**整页一张主题渐变大卡**（信息直接浮在背景上，不再分离卡片堆叠），右上铺**大面积写实质感云层场景层**，温度直接落在渐变上。
 

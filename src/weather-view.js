@@ -3,15 +3,11 @@ import { sceneIcon, weatherArt, sceneBackdrop, metricIcon } from './weather-art.
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-const monthDay = date => { const m = /-(\d{2})-(\d{2})$/.exec(String(date || '')); return m ? +m[1] + '/' + +m[2] : ''; };
-
-// 昼夜主题：只看手机本地时间，不看剧情时间；打开与重绘时现算，不保存。
-// 06:00–15:59 B 雾紫晴空；16:00–19:59 E 杏桃晴日；其余（20:00–05:59）D 深蓝玻璃。
+// 主题只根据手机本地时间计算；不写入天气数据或存档。
 export function themeFor(date = new Date()) {
     const hour = date.getHours();
     return hour >= 6 && hour < 16 ? 'mist' : hour >= 16 && hour < 20 ? 'apricot' : 'night';
 }
-// 下一次主题边界（本地时间 06:00 / 16:00 / 20:00），供界面定时重绘对齐。
 export function nextThemeChange(from = new Date()) {
     for (const hour of [6, 16, 20]) {
         const boundary = new Date(from);
@@ -24,107 +20,165 @@ export function nextThemeChange(from = new Date()) {
     return boundary;
 }
 
-const PIN = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>';
-const MINI_REFRESH = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.9 15M20 5v6h-6"/></svg>';
-const metricCard = (cls, iconName, label, value) => '<div class="pp-weather-metric ' + cls + '"><span class="pp-weather-metric-icon" aria-hidden="true">' + metricIcon(iconName) + '</span><small>' + label + '</small><b>' + value + '</b></div>';
+const PIN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const MINI_REFRESH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.9 15M20 5v6h-6"/></svg>';
+const ARROW = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>';
+
+const metric = (name, label, value) =>
+    '<div class="pp-weather-metric pp-weather-metric-' + name + '">' +
+    '<span class="pp-weather-metric-icon" aria-hidden="true">' + metricIcon(name) + '</span>' +
+    '<small>' + label + '</small><b>' + escapeHtml(value) + '</b></div>';
+
+function upcomingHours(forecast, nowHour) {
+    const days = forecast?.days || [];
+    const today = days[0]?.hours || [];
+    const tomorrow = days[1]?.hours || [];
+    if (nowHour == null) return today.slice(0, 6).map((h, i) => ({ ...h, isNow: false }));
+    const index = today.findIndex(h => Number(h.hour) === nowHour);
+    if (index < 0) return today.slice(0, 6).map(h => ({ ...h, isNow: false }));
+    return [...today.slice(index), ...tomorrow].slice(0, 6).map((h, i) => ({ ...h, isNow: i === 0 }));
+}
+
+function temperatureCurve(hours) {
+    if (!hours || hours.length < 2) return '';
+    const values = hours.map(h => Number(h.temp) || 0);
+    const low = Math.min(...values), high = Math.max(...values), span = Math.max(1, high - low);
+    const points = values.map((v, i) => {
+        const x = 12 + i * (276 / (values.length - 1));
+        const y = 25 - ((v - low) / span) * 15;
+        return [x, y];
+    });
+    const path = points.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');
+    return '<svg class="pp-weather-band" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true">' +
+        '<path d="' + path + '" fill="none" stroke="var(--w-curve)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        points.map(([x, y]) => '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.7" fill="var(--w-curve)"/>').join('') +
+        '</svg>';
+}
 
 export function createWeatherPanel({ adapter, getView, redraw, notice, now = () => new Date() }) {
     let working = false, status = '', epoch = 0;
 
-    function top(cityName, cityNote, busy) {
-        return '<header class="pp-weather-top"><div class="pp-weather-loc"><span class="pp-weather-pin" aria-hidden="true">' + PIN + '</span><div class="pp-weather-loc-text"><b>' + escapeHtml(cityName) + '</b><small>' + cityNote + '</small></div></div>' +
-            '<button type="button" class="pp-weather-mini-refresh" data-weather-action="refresh" aria-label="刷新天气"' + (busy ? ' disabled' : '') + '>' + MINI_REFRESH + '</button></header>';
+    function top(cityName, busy) {
+        return '<header class="pp-weather-top">' +
+            '<div class="pp-weather-loc"><span class="pp-weather-pin" aria-hidden="true">' + PIN + '</span>' +
+            '<b>' + escapeHtml(cityName) + '</b><span class="pp-weather-loc-chevron" aria-hidden="true">⌄</span></div>' +
+            '<button type="button" class="pp-weather-mini-refresh' + (busy ? ' is-busy' : '') + '" data-weather-action="refresh" aria-label="刷新天气" title="刷新天气"' + (busy ? ' disabled' : '') + '>' + MINI_REFRESH + '</button>' +
+            '</header>';
     }
-    function refreshButton(busy) {
-        return '<button type="button" class="pp-weather-refresh" data-weather-action="refresh"' + (busy ? ' disabled' : '') + '>' + (busy ? '正在刷新…' : '刷新天气') + '</button>';
+
+    function hero(w, theme, emptyText = '', emptyNote = '') {
+        const type = w?.type || 'partly';
+        const temp = w?.temp == null ? '—' : Math.round(w.temp);
+        const label = w?.label || (w?.type ? weatherType(w.type) : emptyText || '天气待更新');
+        const feels = w?.feels == null ? (w?.temp == null ? '—' : Math.round(w.temp)) : Math.round(w.feels);
+        const extreme = !!(w?.extreme || weatherExtreme(type));
+        const alert = extreme ? '<span class="pp-weather-alert">' + escapeHtml(label) + '</span>' : '';
+        return '<section class="pp-weather-hero">' +
+            '<div class="pp-weather-backdrop" aria-hidden="true">' + sceneBackdrop(type, theme) + '</div>' +
+            '<div class="pp-weather-hero-copy">' + alert +
+            '<strong><span>' + temp + '</span><i>°C</i></strong>' +
+            '<b class="pp-weather-desc">' + escapeHtml(label) + '</b>' +
+            (w?.temp == null ? '<small class="pp-weather-hero-note">' + escapeHtml(emptyNote) + '</small>' : '<small class="pp-weather-hero-note">体感 ' + feels + '</small>') +
+            '</div>' +
+            '<div class="pp-weather-art-main" aria-hidden="true">' + weatherArt(type) + '</div>' +
+            '</section>';
     }
-    function foot(statusText, busy) {
-        return '<footer class="pp-weather-foot"><p class="pp-weather-status" role="status">' + escapeHtml(statusText) + '</p>' + refreshButton(busy) + '</footer>';
+
+    function statusMarkup() {
+        return status ? '<p class="pp-weather-status" role="status">' + escapeHtml(status) + '</p>' : '';
+    }
+
+    function emptyPage(theme, city, busy, title, note) {
+        return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud">' +
+            '<div class="pp-weather-scroll">' +
+            '<div class="pp-weather-scene">' + top(city, busy) + hero(null, theme, title, note) + '</div>' +
+            statusMarkup() +
+            '</div></section>';
     }
 
     function html() {
-        const view = getView(), state = view || {};
-        const busy = working || view.busy;
-        const info = adapter.weather?.report(state);
+        const view = getView() || {};
+        const busy = working || !!view.busy;
+        const info = adapter.weather?.report(view);
         const theme = themeFor(now());
-        const backdrop = '<div class="pp-weather-backdrop" aria-hidden="true">' + sceneBackdrop(info?.report?.type || (info?.status === 'pending' ? 'partly' : 'cloud'), theme) + '</div>';
-        if (!info) return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud">' + backdrop + '<div class="pp-weather-scroll"><div class="pp-weather-hero-copy pp-weather-hero-flat"><strong>—</strong><span class="pp-weather-desc">天气待刷新</span></div></div>' + foot('', busy) + '</section>';
-        if (info.status === 'no-location') {
-            return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud">' + backdrop +
-                '<div class="pp-weather-scroll">' + top('尚未标记位置', '天气会跟随剧情所在的城市', busy) +
-                '<div class="pp-weather-hero-copy"><strong>—</strong><span class="pp-weather-desc">等待你的位置</span><small>让正文提到所在城市，或点击刷新自动判断</small></div>' +
-                '<div class="pp-weather-card pp-weather-hint-card"><p>标记位置后，这里会展示当前天气、逐小时和七天预报。</p></div></div>' +
-                foot(status, busy) + '</section>';
-        }
-        const city = escapeHtml(info.city || '');
-        if (info.status === 'pending') {
-            return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud">' + backdrop +
-                '<div class="pp-weather-scroll">' + top(city, '天气待刷新', busy) +
-                '<div class="pp-weather-hero-copy"><strong>—</strong><span class="pp-weather-desc">天气待刷新</span><small>点击下方按钮，为' + city + '抽取当前天气</small></div></div>' +
-                foot(status, busy) + '</section>';
-        }
-        const w = info.report || {};
-        const scene = weatherScene(w.type);
-        const clockHour = info.clock?.hour;
-        const nowHour = clockHour == null ? null : Math.floor(clockHour);
-        const feelsNote = '体感 ' + (w.feels == null ? '—' : Math.round(w.feels) + '°C');
-        const timeNote = info.status === 'unknown-time'
-            ? '剧情时间不明确 · 显示 ' + escapeHtml(info.date || '') + ' 刷新时的天气'
-            : '剧情时间 ' + escapeHtml((w.date || '') + ' ' + (w.time || ''));
-        const metrics = '<div class="pp-weather-metrics">' +
-            metricCard('pp-weather-metric-lav', 'feels', '体感温度', w.feels == null ? '—' : Math.round(w.feels) + '°C') +
-            metricCard('pp-weather-metric-apri', 'precip', '降水情况', w.precip == null || w.precip === 0 ? '暂无降水' : w.precip + ' mm/h') +
-            metricCard('pp-weather-metric-sage', 'wind', '风力', w.wind == null ? '—' : w.wind + ' 级') +
-            metricCard('pp-weather-metric-butter', 'humidity', '湿度', w.humidity == null ? '—' : Math.round(w.humidity) + '%') + '</div>';
-        const hours = (info.forecast?.days?.[0]?.hours || []).map(h =>
-            '<div class="pp-weather-hour' + (nowHour === h.hour ? ' pp-weather-hour-now' : '') + '"><i>' + (nowHour === h.hour ? '现在' : String(h.hour).padStart(2, '0') + '时') + '</i><span aria-hidden="true">' + sceneIcon(weatherScene(h.type), 20) + '</span><b>' + Math.round(h.temp) + '°</b></div>').join('');
-        const hoursBand = hours ? '<div class="pp-weather-band" aria-hidden="true"></div>' : '';
-        const forecast = info.forecast;
-        let week = '';
-        if (forecast?.days?.length) {
-            const weekHi = Math.max(...forecast.days.map(d => d.hi)), weekLo = Math.min(...forecast.days.map(d => d.lo)), span = Math.max(1, weekHi - weekLo);
-            week = forecast.days.map(d => {
-                const left = Math.round((d.lo - weekLo) / span * 100), width = Math.round((d.hi - d.lo) / span * 100);
+
+        if (!info) return emptyPage(theme, '天气', busy, '天气待更新', '暂时无法读取天气。');
+        if (info.status === 'no-location') return emptyPage(theme, '尚未标记位置', busy, '等待定位', '还不知道你在哪里，点击右上角试试。');
+
+        const city = info.city || '';
+        if (info.status === 'pending') return emptyPage(theme, info.city || '天气', busy, '天气待更新', '为 ' + (info.city || '当前位置') + ' 更新天气。');
+
+        const w = info.report || info.weather || {};
+        const type = w.type || 'partly';
+        const family = weatherScene(type);
+        const feels = w.feels == null ? (w.temp == null ? '—' : Math.round(w.temp) + '°C') : Math.round(w.feels) + '°C';
+        const precip = w.precip == null ? '—' : Number(w.precip).toFixed(1).replace(/\.0$/, '') + ' mm/h';
+        const wind = w.wind == null ? '—' : w.wind + ' 级';
+        const humidity = w.humidity == null ? '—' : Math.round(w.humidity) + '%';
+
+        const metrics = '<section class="pp-weather-metrics" aria-label="天气指标">' +
+            metric('feels', '体感温度', feels) +
+            metric('precip', '降水情况', precip) +
+            metric('wind', '风力', wind) +
+            metric('humidity', '湿度', humidity) +
+            '</section>';
+
+        const nowHour = info.clock?.hour == null ? null : Math.floor(info.clock.hour);
+        const hours = upcomingHours(info.forecast, nowHour);
+        const hourly = hours.length ? '<section class="pp-weather-hourly">' +
+            '<h3 class="pp-weather-heading">逐小时预报</h3>' +
+            '<div class="pp-weather-hourly-card">' +
+            '<div class="pp-weather-hours">' + hours.map(h =>
+                '<div class="pp-weather-hour' + (h.isNow ? ' pp-weather-hour-now' : '') + '">' +
+                '<i>' + (h.isNow ? '现在' : String(h.hour).padStart(2, '0') + '时') + '</i>' +
+                '<span aria-hidden="true">' + sceneIcon(weatherScene(h.type), 25) + '</span>' +
+                '<b>' + Math.round(h.temp) + '°</b></div>'
+            ).join('') + '</div>' +
+            (theme === 'apricot' ? temperatureCurve(hours) : '') +
+            '</div></section>' : '';
+
+        const days = info.forecast?.days || [];
+        const week = days.length ? '<section class="pp-weather-week-section">' +
+            '<h3 class="pp-weather-heading">未来几天</h3>' +
+            '<div class="pp-weather-week">' + days.map(d => {
+                const weekday = d.today ? '今天' : String(d.weekday || '').replace('星期', '周');
+                const label = d.label || weatherType(d.type);
                 return '<article class="pp-weather-day' + (d.today ? ' pp-weather-day-now' : '') + (d.extreme ? ' pp-weather-day-extreme' : '') + '">' +
-                    '<header><span class="pp-weather-day-date"><b>' + (d.today ? '今天' : monthDay(d.date)) + '</b><i>' + escapeHtml(d.weekday) + '</i></span>' +
-                    '<span class="pp-weather-day-icon" aria-hidden="true">' + sceneIcon(d.scene, 20) + '</span>' +
-                    '<span class="pp-weather-day-desc">' + (d.extreme ? '<em title="极端天气">⚠</em>' : '') + escapeHtml(d.label) + '</span>' +
-                    '<span class="pp-weather-day-temp"><b>' + Math.round(d.hi) + '°</b><i>' + Math.round(d.lo) + '°</i></span></header>' +
-                    '<div class="pp-weather-day-meta"><span class="pp-weather-range" aria-hidden="true"><i style="left:' + left + '%;width:' + Math.max(8, width) + '%"></i></span>' +
-                    '<small>降水 ' + d.precip + '% · 风 ' + d.wind + ' 级</small></div>' +
-                    (d.extreme ? '<p class="pp-weather-day-warn">预计' + escapeHtml(d.extremeSpan || '全天') + '出现' + escapeHtml(d.extremeLabel || '') + '（' + escapeHtml(d.extremeStrength || '') + '）</p>' : '') +
+                    '<span class="pp-weather-day-date">' + escapeHtml(weekday) + '</span>' +
+                    '<span class="pp-weather-day-icon" aria-hidden="true">' + sceneIcon(d.scene || weatherScene(d.type), 24) + '</span>' +
+                    '<span class="pp-weather-day-desc">' + (d.extreme ? '<em aria-label="极端天气">!</em>' : '') + escapeHtml(label) + '</span>' +
+                    '<span class="pp-weather-day-temp"><b>' + Math.round(d.hi) + '°</b><i>' + Math.round(d.lo) + '°</i></span>' +
+                    (d.extreme ? '<small class="pp-weather-day-warn">预计' + escapeHtml(d.extremeSpan || '全天') + '：' + escapeHtml(d.extremeLabel || label) + '（' + escapeHtml(d.extremeStrength || '显著') + '）</small>' : '') +
                     '</article>';
-            }).join('');
-        }
-        const alert = w.extreme ? '<span class="pp-weather-alert">' + escapeHtml(w.label || '') + ' · 请留意天气变化</span>' : '';
-        const section = '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + scene + '">' + backdrop +
+            }).join('') + '</div></section>' : '';
+
+        return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '">' +
             '<div class="pp-weather-scroll">' +
-            top(city, info.status === 'unknown-time' ? '剧情时间不明确' : timeNote, busy) +
-            '<div class="pp-weather-hero-copy">' + alert +
-            '<strong>' + (w.temp == null ? '—' : Math.round(w.temp) + '°') + '</strong>' +
-            '<span class="pp-weather-desc">' + escapeHtml(w.label || weatherType(w.type)) + '</span>' +
-            '<small>' + feelsNote + ' · ' + timeNote + '</small></div>' +
-            '<div class="pp-weather-art-main" aria-hidden="true">' + weatherArt(w.type) + '</div>' +
-            metrics +
-            (hours ? '<h3 class="pp-weather-heading">逐小时预报</h3><div class="pp-weather-hours">' + hours + '</div>' + hoursBand : '') +
-            (week ? '<h3 class="pp-weather-heading">七天预报</h3><div class="pp-weather-card pp-weather-week">' + week + '</div>' : '') +
-            '</div>' + foot(status, busy) + '</section>';
-        return section;
+            '<div class="pp-weather-scene">' +
+            top(city, busy) +
+            hero(w, theme) +
+            '</div>' +
+            statusMarkup() + metrics + hourly + week +
+            '</div></section>';
     }
 
     async function action(name) {
-        if (name !== 'refresh' || working || getView().busy) return;
-        if (!adapter.weather) { status = '请在酒馆中使用天气。'; redraw(); return; }
-        const token = epoch; working = true; status = ''; redraw();
+        if (name !== 'refresh' || working || getView()?.busy) return;
+        if (!adapter.weather) { status = '暂时无法更新天气。'; redraw(); return; }
+        const token = epoch;
+        working = true;
+        status = '';
+        redraw();
         try {
             const result = await adapter.weather.refresh();
-            if (token === epoch) status = result?.ok ? '已为当前位置抽取天气。' : (result?.error || '本次未能刷新，请重试。');
-        } catch (e) {
-            if (token === epoch) status = e.message;
+            if (token === epoch) status = result?.ok ? '天气已更新' : (result?.error || '天气暂时无法更新，请重试。');
+        } catch (error) {
+            if (token === epoch) status = error?.message || '天气暂时无法更新，请重试。';
         } finally {
             if (token === epoch) working = false;
             redraw();
         }
     }
+
     return { html, action, reset() { epoch++; working = false; status = ''; } };
 }

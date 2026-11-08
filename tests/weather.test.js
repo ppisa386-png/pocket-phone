@@ -12,6 +12,7 @@ import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay, dayDate } from '../src/story-clock.js';
 import { createWeatherPanel, themeFor, nextThemeChange } from '../src/weather-view.js';
+import { sceneBackdrop, weatherArt } from '../src/weather-art.js';
 
 // Simple deterministic LCG so statistical assertions never flake between runs.
 let lcg = 0x2f6e2b1;
@@ -325,10 +326,15 @@ test('the weather panel renders the report and refresh reports success', async (
         assert.match(html, /刷新天气/);
         assert.match(html, /体感温度/);assert.match(html, /降水情况/);assert.match(html, /风力/);assert.match(html, /湿度/);
         assert.match(html, /pp-weather-hour-now/); // 当前小时突出
-        assert.match(html, /pp-weather-range/); // 七天温度区间视觉
+        assert.match(html, /pp-weather-metrics/); // 四指标连续横栏
+        assert.match(html, /pp-weather-hourly-card/); // 逐小时单面板
+        assert.match(html, /pp-weather-week/); // 七天连续列表
+        assert.match(html, /data:image\/webp/); // 本地 WebP 天空素材
+        assert.doesNotMatch(html, /剧情时间/); // 界面不显示内部系统信息
+        assert.doesNotMatch(html, /pp-weather-refresh/); // 底部大号刷新按钮已移除
         await panel.action('refresh');
         current = await f.state();
-        assert.match(panel.html(), /已为当前位置抽取天气。/);
+        assert.match(panel.html(), /天气已更新/);
         assert.ok(redraws >= 2);
         for (const [type, family] of [['sunny', 'clear'], ['fog', 'cloud'], ['storm', 'rain'], ['blizzard', 'snow'], ['windy', 'wind'], ['typhoon', 'typhoon'], ['heat', 'extreme']])
             assert.equal(weatherScene(type), family);
@@ -583,8 +589,9 @@ test('the redesigned panel carries the theme attribute, new layout blocks and un
             assert.match(page, /pp-weather-hours/);
             assert.match(page, /pp-weather-week/);
             assert.match(page, /pp-weather-day-now/);
-            assert.match(page, /pp-weather-range/);
+            assert.match(page, /pp-weather-day-date/);
             assert.match(page, /aria-label="刷新天气"/);
+            assert.doesNotMatch(page, /剧情时间/); // 三个主题都不显示内部系统信息
         }
         // 视图重绘不调用模型：adapter 无生成入口，纯渲染
         const noLocation = createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, location: null, busy: false }), redraw() {}, notice() {}, now: () => new Date(2026, 4, 1, 9, 0) }).html();
@@ -593,7 +600,7 @@ test('the redesigned panel carries the theme attribute, new layout blocks and un
         assert.match(noLocation, /pp-weather-hero/); // 占位与正常页共用同一视觉语言
     } finally { f.close(); }
 });
-test('the redesigned surface carries the backdrop art layer, flat hero, inline metrics and hourly band', async () => {
+test('the redesigned surface carries the webp sky backdrop, flat hero, inline metrics and E-theme curve', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
         await f.memory.read();
@@ -604,24 +611,39 @@ test('the redesigned surface carries the backdrop art layer, flat hero, inline m
             if (type) view.weather['上海'] = { ...view.weather['上海'], state: { ...view.weather['上海'].state, type } };
             return createWeatherPanel({ adapter: { weather: f.weather }, getView: () => view, redraw() {}, notice() {}, now: () => now });
         };
-        const page = make(new Date(2026, 4, 1, 9, 0)).html();
-        // 素材层：大面积场景 SVG + 主视觉插画 + 指标横排 + 逐小时色带
-        assert.match(page, /pp-weather-backdrop/);
-        assert.match(page, /pp-weather-backdrop-art/);
-        assert.match(page, /pp-weather-art-main/);
-        assert.match(page, /pp-weather-band/);
-        assert.match(page, /pp-weather-hour-now/);
-        // 雨天场景层带雨丝
-        const rain = make(new Date(2026, 4, 1, 9, 0), 'rain').html();
-        assert.match(rain, /M150 152l-6 22/); // 场景层雨丝路径
-        // 不同天气类型挂不同场景图形
-        for (const [type, art] of [['sunny', 'M48 13v8.5'], ['thunder', 'M50 72 40 88'], ['snow', 'circle cx="36" cy="80"'], ['windy', 'M14 38h44'], ['typhoon', 'M74 30A30 30 0 1 0 78 48']]) {
-            const typed = make(new Date(2026, 4, 1, 9, 0), type).html();
-            assert.ok(typed.includes(art), type + ' scene art');
-        }
-        // 切主题不触碰数据：两次渲染城市与温度一致，仅 data-wtheme 不同
         const mist = make(new Date(2026, 4, 1, 9, 0)).html();
+        const dusk = make(new Date(2026, 4, 1, 17, 0)).html();
         const night = make(new Date(2026, 4, 1, 22, 0)).html();
+        // 素材层：三主题各挂一张不同的内嵌 WebP 天空图，主视觉与指标横栏共用
+        for (const page of [mist, dusk, night]) {
+            assert.match(page, /pp-weather-backdrop/);
+            assert.match(page, /pp-weather-backdrop-art/);
+            assert.match(page, /data:image\/webp;base64,/);
+            assert.match(page, /pp-weather-art-main/);
+            assert.match(page, /pp-weather-metrics/);
+            assert.match(page, /pp-weather-hourly-card/);
+            assert.match(page, /pp-weather-hour-now/);
+            assert.match(page, /pp-weather-week/);
+            assert.doesNotMatch(page, /剧情时间/);       // 不显示内部系统信息
+            assert.doesNotMatch(page, /pp-weather-refresh/); // 无底部大号刷新按钮
+        }
+        assert.equal(new Set(['mist', 'apricot', 'night'].map(t => sceneBackdrop('rain', t))).size, 3, 'three distinct local sky images');
+        for (const theme of ['mist', 'apricot', 'night'])
+            assert.match(sceneBackdrop('rain', theme), /^<img class="pp-weather-backdrop-art" src="data:image\/webp;base64,/);
+        // E 杏桃主题画温度曲线；B 雾紫 / D 深蓝保持干净的逐小时排列
+        assert.doesNotMatch(mist, /pp-weather-band/);
+        assert.match(dusk, /pp-weather-band/);
+        assert.doesNotMatch(night, /pp-weather-band/);
+        // 雨天主视觉带雨滴效果叠层；逐小时/七天使用彩色场景图标
+        const rain = make(new Date(2026, 4, 1, 9, 0), 'rain').html();
+        assert.match(rain, /#70B6E8/); // weatherArt 雨滴叠层
+        assert.match(dusk, /pp-weather-day-icon/);
+        // 晴与少云主视觉只保留天空照片，无第二层图形
+        assert.equal(weatherArt('sunny'), '');
+        assert.equal(weatherArt('partly'), '');
+        for (const [type, family] of [['rain', '#70B6E8'], ['blizzard', '#F5FBFF'], ['windy', '#E4F1F9'], ['typhoon', '#D8EAF8'], ['hail', '#FFD26A']])
+            assert.ok(weatherArt(type).includes(family), type + ' effect overlay');
+        // 切主题不触碰数据：两次渲染城市与温度一致，仅 data-wtheme 不同
         assert.match(mist, /data-wtheme="mist"/); assert.match(night, /data-wtheme="night"/);
         assert.ok(mist.includes('<strong>') && mist.includes('<b>上海</b>'));
         assert.ok(night.includes('<strong>') && night.includes('<b>上海</b>'));
