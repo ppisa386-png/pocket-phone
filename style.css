@@ -529,7 +529,9 @@ h2, p { margin: 0; }
 .pp-weather-day-icon svg{width:25px;height:23px;}
 .pp-weather-day-desc{min-width:0;font-size:11.5px;line-height:1.35;color:var(--w-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pp-weather-day-desc em{font-style:normal;color:#d66e52;font-weight:800;margin-right:4px;}
-.pp-weather-day-temp{display:flex;align-items:baseline;gap:7px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+/* 最高温/最低温固定双列（34px+30px），各列统一右对齐：无论 5°、10°、-25°，
+   两列的右边缘位置都不随位数漂移；tabular-nums 保证数字等宽。 */
+.pp-weather-day-temp{display:grid;grid-template-columns:34px 30px;justify-items:end;align-items:baseline;white-space:nowrap;font-variant-numeric:tabular-nums;}
 .pp-weather-day-temp b{font-size:12.5px;font-weight:750;color:var(--w-ink);}
 .pp-weather-day-temp i{font-size:11.5px;font-style:normal;color:var(--w-muted);}
 .pp-weather-day-warn{grid-column:2/-1;margin:-1px 0 4px;font-size:10px;line-height:1.4;color:#d66e52;}
@@ -568,7 +570,7 @@ h2, p { margin: 0; }
     .pp-weather-metric small{font-size:9px;}
     .pp-weather-metric b{font-size:11.5px;}
     .pp-weather-day{grid-template-columns:40px 25px minmax(0,1fr) auto;gap:6px;}
-    .pp-weather-day-temp{gap:5px;}
+    .pp-weather-day-temp{grid-template-columns:30px 27px;}
 }
 @media(max-width:330px){
     .pp-weather-hero-copy{max-width:88%;}
