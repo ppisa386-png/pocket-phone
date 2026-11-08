@@ -113,6 +113,68 @@ test('an existing marker path stays model-free: refresh with a location makes no
     } finally { f.close(); }
 });
 
+test('weather location can be edited from the shared location record without a model call',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\\nSam has arrived in Shanghai.','上海'));
+        await f.memory.read();
+        assert.equal((await f.weather.refresh()).ok,true);
+        const oldWeather=(await f.state()).weather['上海'],beforeCalls=f.calls();
+        const result=await f.weather.editLocation('  洛杉矶  ','上海');
+        assert.equal(result.ok,true,result.error);
+        const state=await f.state();
+        assert.equal(state.location.current.city,'洛杉矶');
+        assert.equal(state.location.current.manual,true);
+        assert.equal(state.weather['上海'].seed,oldWeather.seed,'the previous city's weather stays intact');
+        assert.equal(state.weather['洛杉矶'].kind,'real');
+        assert.equal(state.weather['洛杉矶'].climate.archetype,'csa');
+        assert.equal(f.weather.report(state).city,'洛杉矶');
+        assert.equal(f.weather.report(state).status,'ok');
+        assert.equal(f.calls(),beforeCalls,'editing and locally sampling weather makes no model request');
+        const panel=createWeatherPanel({adapter:{weather:f.weather},getView:()=>({...state,busy:false}),redraw(){},editLocation(){}});
+        assert.match(panel.html(),/data-press="weather-location"/);
+        assert.deepEqual(panel.press({dataset:{press:'weather-location'}}).map(a=>a.icon),['edit']);
+        assert.equal(panel.press({dataset:{press:'weather-location'}})[0].label,'修改地点');
+        const reloaded=createPhoneMemory({getContext:()=>f.c});
+        try{assert.equal((await reloaded.read()).state.location.current.city,'洛杉矶');}
+        finally{reloaded.destroy();}
+        const same=await f.weather.editLocation('洛杉矶','洛杉矶');
+        assert.equal(same.ok,true);
+        assert.equal(same.value.unchanged,true);
+        assert.equal(f.calls(),beforeCalls);
+    }finally{f.close();}
+});
+
+test('editing the location rejects stale names, invalid inputs and rolls back when the story floor is removed',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\\nSam has arrived in Shanghai.','上海'));
+        await f.memory.read();
+        assert.equal((await f.weather.editLocation('北京','上海')).ok,true);
+        const bad=await f.weather.editLocation('<fake>','北京');
+        assert.equal(bad.ok,false);
+        const stale=await f.weather.editLocation('东京','上海');
+        assert.equal(stale.ok,false);
+        assert.equal((await f.state()).location.current.city,'北京');
+        f.c.chat.pop();
+        f.c.eventSource.emit('MESSAGE_DELETED');
+        await f.memory.read();
+        assert.equal((await f.state()).location?.current,undefined);
+        assert.equal((await f.state()).weather?.['北京'],undefined);
+        assert.equal(f.calls(),0);
+    }finally{f.close();}
+});
+
+test('manual weather location is available when no city marker or story time exists',async()=>{
+    const f=setup([{mes:'没有明确剧情日期。',is_user:false}]);try{
+        const result=await f.weather.editLocation('伦敦','');
+        assert.equal(result.ok,true,result.error);
+        assert.equal((await f.state()).location.current.city,'伦敦');
+        assert.equal(f.weather.report(await f.state()).status,'pending');
+        assert.equal(f.calls(),0);
+        const panel=createWeatherPanel({adapter:{weather:f.weather},getView:()=>({...f.phone.snapshot(),busy:false}),redraw(){},editLocation(){}});
+        assert.match(panel.html(),/data-press="weather-location"/);
+    }finally{f.close();}
+});
+
 test('real cities adapt to their climate table and the southern hemisphere reads the shifted season', () => {
     assert.deepEqual(climateFor('北京'), { archetype: 'dwa', offset: 0, south: false });
     assert.deepEqual(climateFor('上海'), { archetype: 'cfa', offset: 1, south: false });
