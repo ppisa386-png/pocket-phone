@@ -35,7 +35,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         friends.sort(tab==='contacts'?(a,b)=>a.name.localeCompare(b.name,'zh'):(a,b)=>(threadItems(b.id).at(-1)?.createdAt||0)-(threadItems(a.id).at(-1)?.createdAt||0));
         const search='<label class="pp-chat-search">'+icon('search')+'<input data-chat-field="filter" aria-label="搜索好友" placeholder="搜索" value="'+chatEsc(value('filter'))+'"></label>';
         const actions=wc?'<div class="pp-chat-add-actions pp-wx-quick-actions"><div class="pp-wx-quick-item">'+button('add','添加好友','','plus')+'<span>添加好友</span></div><div class="pp-wx-quick-item">'+button('bulk','一键添加好友','','people',disabled())+'<span>一键添加好友</span></div></div>':'<div class="pp-wa-shortcuts"><span>'+(tab==='contacts'?'好友列表':'最近聊天')+'</span><button type="button" class="pp-wa-bulk" data-chat-action="bulk"'+disabled()+'>'+icon('people')+'一键添加</button></div>';
-        const rows=friends.length?friends.map(a=>row(a,tab==='contacts')).join(''):empty(q?'没有找到好友':'与朋友开始聊天',q?'试试其他姓名。':'点击右上角 + 添加好友，或使用一键添加。');
+        const rows=friends.length?friends.map(a=>row(a,tab==='contacts')).join(''):empty(q?'没有找到好友':'与朋友开始聊天',q?'试试其他姓名。':wc?'点击上方 + 按姓名添加，或一键添加已有好友。':'点击右上角 + 添加好友，或使用一键添加。');
         return search+actions+(wc?rows:'<div class="pp-wa-list">'+rows+'</div>');
     }
     function callsHTML() {
@@ -99,7 +99,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     function html() {
         if(accountId&&!account()){accountId=null;page='';editingId=null;}
         const a=account(),p=profile(),thread=!!a&&!page;
-        const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?'联系人':tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'聊天');
+        const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?(wc?'通讯录':'联系人'):tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'聊天');
         let body='';
         if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名')+(wc?'':'<small>添加多个好友可以用、间隔名字</small>'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
         else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!wc&&!a.blocked&&a.friend==='friends'?button('cash','转账',a.id,'',disabled()):'')+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
