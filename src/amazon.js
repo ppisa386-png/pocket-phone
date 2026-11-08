@@ -1,6 +1,7 @@
 import { walletCurrency, majorAmount, formatMoney, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.2';
 import { dateDay, readStoryClock } from './story-clock.js?v=1.2';
+import { shopImageKey, AMAZON_IMAGE_KEYS } from './amazon-art.js?v=1.2.14';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>formatMoney(minor,currency)+' '+currency;
@@ -57,7 +58,7 @@ export function validateProducts(data,currency = null) {
         const amount=String(p.price??'');if(!validCurrency(p.currency)||p.currency!==(currency||data.products[0]?.currency))throw Error('商品币种与当地账本不一致。');
         if(!shopText(p.name,150)||!shopText(p.currency,20)||!/^\d{1,10}(\.\d{1,4})?$/.test(amount)||Number(amount)<=0)throw Error('商品价格或名称不完整，请重新搜索。');
         if(p.luxury===true&&!shopText(p.brand,100))throw Error('品牌信息不完整，请重新搜索。');
-        return {id:crypto.randomUUID(),type:'product',name:shopText(p.name,150),brand:shopText(p.brand,100),luxury:p.luxury===true,description:shopText(p.description),
+        return {id:crypto.randomUUID(),type:'product',name:shopText(p.name,150),brand:shopText(p.brand,100),luxury:p.luxury===true,description:shopText(p.description),image:shopImageKey(p.image,[p.name,p.brand].join(' ')),
             priceMinor:moneyMinor(amount,false,p.currency),currency:shopText(p.currency,20),variants:(Array.isArray(p.variants)?p.variants:[]).map(v=>shopText(v,100)).filter(Boolean).slice(0,12),
             reviews:(Array.isArray(p.reviews)?p.reviews:[]).slice(0,4).map(r=>({name:shopText(r.name,80),text:shopText(r.text,500),rating:Math.max(1,Math.min(5,Math.round(Number(r.rating)||4)))}))};
     });
@@ -80,7 +81,7 @@ export function createAmazon({memory,phone,getContext,getSettings,paymentRequest
                 jobs:assetRows(state,'job').filter(j=>j.endDay==null).map(({name,monthlyMinor})=>({name,monthlySalary:monthlyMinor==null||!currency?null:majorAmount(monthlyMinor,currency)}))};
             const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.amazon+'\n'+getSettings().prompts.amazonShopping+
                 '\n当前任务：Amazon 商品搜索。商品按 '+(currency||'user 人设和正文的常住地当地币种（不依据语言或旅行地点）')+' 定价。购物需求：'+JSON.stringify(q)+'。当前经济资料：'+JSON.stringify(economy)+'。余额为 null 表示尚未建账，不能当成零或臆造已知余额；推荐档次结合人设、已有财产和可用资金，用户明确预算/偏好优先。'+
-                '\n给出 4—6 件可选择的具体商品，不需要生成图片。输出 {"products":[{"name":"款式/系列与品名","brand":"品牌名；无品牌商品可空","luxury":false,"description":"材质、特点与商品说明","price":"单件价格数字，按币种精度","currency":"符合剧情的货币","variants":["规格/颜色/尺寸，可选项均为同一价格"],"reviews":[{"name":"买家网名","rating":5,"text":"简短买家评价"}]}]}。不返回 user 已购买、付款、收货或新增资产等结论，不替 user 决定。';
+                '\n给出 4—6 件可选择的具体商品。image 只能从 '+AMAZON_IMAGE_KEYS.join('、')+' 中选一个最接近商品类别的彩色图标编号，不生成图像或图片网址。输出 {"products":[{"name":"款式/系列与品名","brand":"品牌名；无品牌商品可空","luxury":false,"description":"材质、特点与商品说明","image":"headphone","price":"单件价格数字，按币种精度","currency":"符合剧情的货币","variants":["规格/颜色/尺寸，可选项均为同一价格"],"reviews":[{"name":"买家网名","rating":5,"text":"简短买家评价"}]}]}。不返回 user 已购买、付款、收货或新增资产等结论，不替 user 决定。';
             const products=await request(prompt,data=>validateProducts(data,currency),current);
             const changes=shopItems(state,'product').map(p=>({collection:'orders',key:p.id,value:null}));
             changes.push(...products.map(shopSet),shopSet({id:'catalog',type:'catalog',query:q}));await commit(changes);
