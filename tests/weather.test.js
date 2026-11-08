@@ -648,3 +648,11 @@ test('the redesigned surface carries the webp sky backdrop, flat hero, inline me
         assert.ok(night.includes('<strong>') && night.includes('<b>上海</b>'));
     } finally { f.close(); }
 });
+
+test('common Los Angeles labels stay real and use one climate profile',()=>{
+ for(const label of ['洛杉矶','洛杉磯市','美国洛杉矶','洛杉矶（加州）','Los Angeles','Los Ángeles, CA','Los Angeles, California, USA']){
+  assert.equal(locationKind(label,{}),'real',label);
+  assert.equal(climateFor(label,null,'real').archetype,'csa',label);
+ }
+ assert.equal(locationKind('新洛杉矶城',{}),'unconfirmed');
+});
