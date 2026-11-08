@@ -43,6 +43,7 @@ const paths = {
     block: '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
     unblock: '<circle cx="12" cy="12" r="9"/><path d="m7.7 12.2 2.8 2.8 5.8-6"/>',
     weather: '<circle cx="8" cy="8" r="3.2"/><path d="M8 2.2v1.6M8 12.2v1.6M2.2 8h1.6M12.2 8h1.6M4 4l1.1 1.1M10.9 10.9 12 12M12 4l-1.1 1.1M5.1 10.9 4 12"/><path d="M7 17.5h9a3.5 3.5 0 1 0-1-6.86A5 5 0 0 0 5.4 13 2.6 2.6 0 0 0 7 17.5Z"/>',
+    food: '<path d="M3.5 13h17"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M9.5 20.5h5"/><path d="M9 11.5 19.5 2.5"/><path d="M12.5 11.8 21 5"/>',
 };
 // Press-menu action aliases: regenerating uses the retry circle arrows and
 // deleting uses the trash glyph. Unknown names would otherwise all fall back

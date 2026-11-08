@@ -187,6 +187,14 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             finally { if (preparation === tail) preparation = null; }
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
             const payload = independentPayload(prepared, config);
+            // A task may need a larger one-shot output than the saved preset
+            // provides. This is a per-request ceiling only: saved API settings
+            // and the host preset are never rewritten.
+            if (Number.isInteger(options.maxTokens) && options.maxTokens >= 128 && options.maxTokens <= 32768) {
+                const limit = options.maxTokens;
+                if (payload.max_completion_tokens !== undefined) payload.max_completion_tokens = limit;
+                else payload.max_tokens = limit;
+            }
             // Only the caller's task contract is appended, after preset hooks.
             // Keep all roleplay context and portable settings intact.
             if (typeof options.finalOutputContract === 'string' && options.finalOutputContract.trim()) {

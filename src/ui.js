@@ -5,6 +5,7 @@ import { createWeatherPanel } from './weather-view.js?v=1.2';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2';
+import { createFoodPanel } from './food-view.js?v=1.2';
 import { bindComposerKeys } from './composer.js?v=1.2';
 import { createXPanel } from './x-view.js?v=1.2';
 import { xUnread } from './x.js?v=1.2';
@@ -235,6 +236,21 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const next=field?Array.from(content.querySelectorAll('[data-shop-field]')).find(el=>el.dataset.shopField===field):null;
         if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
     }
+    const foodScroll=new Map();
+    const foodPanel=createFoodPanel({adapter,getView:()=>viewFor('food'),redraw:()=>{if(!destroyed&&opened&&route==='app:food')renderFood();},notice});
+    function renderFood(){
+        const active=shadow.activeElement,field=active?.dataset.foodField;
+        const selection=field&&active.type==='text'?[active.selectionStart,active.selectionEnd]:null;
+        const old=content.querySelector('.pp-food-body');
+        if(old)foodScroll.set(old.dataset.foodPage,old.scrollTop);
+        const oldMenu=content.querySelector('.pp-food-menu');
+        if(oldMenu)foodScroll.set(oldMenu.dataset.foodMenu,oldMenu.scrollTop);
+        content.innerHTML=foodPanel.html();
+        const body=content.querySelector('.pp-food-body');if(body)body.scrollTop=foodScroll.get(body.dataset.foodPage)||0;
+        const menu=content.querySelector('.pp-food-menu');if(menu)menu.scrollTop=foodScroll.get(menu.dataset.foodMenu)||0;
+        const next=field?Array.from(content.querySelectorAll('[data-food-field]')).find(el=>el.dataset.foodField===field):null;
+        if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
+    }
 
     function notice(message) {
         noticeElement.textContent = message;
@@ -439,6 +455,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (app?.id === 'weather') renderWeather();
         else if (app?.id === 'assets') renderAssets();
         else if (app?.id === 'amazon') renderAmazon();
+        else if (app?.id === 'food') renderFood();
         else if (app) renderEmptyApp(app.id);
         content.scrollTop = route === 'app:messages' && selectedSMSContactId ? content.scrollHeight : 0;
         updateClock();
@@ -457,6 +474,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (next === 'app:weather' && adapter.weather) phoneAction(() => adapter.weather.open());
         if (next === 'app:assets' && adapter.assets) phoneAction(() => adapter.assets.open());
         if (next === 'app:amazon' && adapter.amazon) phoneAction(() => adapter.amazon.open());
+        if (next === 'app:food' && adapter.food) phoneAction(() => adapter.food.open());
         if (next === 'app:x' && adapter.x) phoneAction(() => adapter.x.open());
         if (chatPanels[next.slice(4)] && adapter[next.slice(4)]) phoneAction(()=>adapter[next.slice(4)].open());
         if (next === 'app:snapchat' && adapter.snapchat) phoneAction(() => adapter.snapchat.open());
@@ -511,6 +529,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(target.dataset.weatherAction){void weatherPanel.action(target.dataset.weatherAction);return;}
         if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
+        if(target.dataset.foodAction){void foodPanel.action(target.dataset.foodAction,target.dataset.foodId);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }
         if (target.dataset.chatAction) { void currentChat()?.action(target.dataset.chatAction,target.dataset.chatId); return; }
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
@@ -531,6 +550,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             else if(route==='app:x'&&xPanel.back()){return;}
             else if(route==='app:daily'&&dailyPanel.back()){return;}
             else if(route==='app:amazon'&&shopPanel.back()){return;}
+            else if(route==='app:food'&&foodPanel.back()){return;}
             else if(route==='app:phone'&&selectedCallId){selectedCallId=null;phoneTab='history';renderPhone();}
             else {route = history.pop() || 'home'; render();}
         }
@@ -593,6 +613,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             phoneAction(async()=>{const result=await adapter.phone.editMessage(edit.id,edit.text);if(result?.ok){smsEditing=null;renderMessages();}});return;
         }
         if(event.target.dataset.shopForm){event.preventDefault();void shopPanel.submit(event.target);return;}
+        if(event.target.dataset.foodForm){event.preventDefault();void foodPanel.submit(event.target);return;}
         if(event.target.dataset.xForm){event.preventDefault();void xPanel.submit(event.target);return;}
         if(event.target.dataset.chatForm){event.preventDefault();void currentChat()?.submit(event.target);return;}
         if(event.target.dataset.snapForm){event.preventDefault();void snapPanel.submit(event.target);return;}
@@ -617,6 +638,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const target = event.target;
         if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
+        if(target.dataset.foodField){foodPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
         if(target.dataset.chatField){currentChat()?.input(target);return;}
         if(target.dataset.snapField||target.dataset.snapSelect){snapPanel.input(target);return;}
@@ -647,6 +669,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(event.target.hasAttribute('data-contact-query')){contactQuery=event.target.value;return;}
         if(event.target.hasAttribute('data-sms-edit-text')){if(smsEditing)smsEditing.text=event.target.value;return;}
         if(event.target.dataset.shopField){shopPanel.input(event.target);return;}
+        if(event.target.dataset.foodField){foodPanel.input(event.target);return;}
         if(event.target.dataset.xField){xPanel.input(event.target);return;}
         if(event.target.dataset.chatField){currentChat()?.input(event.target);return;}
         if(event.target.dataset.snapField){snapPanel.input(event.target);return;}
@@ -763,7 +786,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             Object.values(chatPanels).forEach(panel=>panel.reset());
-            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();assetPanel.reset();dailyPanel.reset();weatherPanel.reset();
+            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();foodScroll.clear();foodPanel.reset();assetPanel.reset();dailyPanel.reset();weatherPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }
@@ -787,6 +810,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened && route === 'app:weather') renderWeather();
         if (opened && route === 'app:assets') renderAssets();
         if (opened && route === 'app:amazon') renderAmazon();
+        if (opened && route === 'app:food') renderFood();
         if (opened && route === 'home') renderHome();
         updateClock();
     });
