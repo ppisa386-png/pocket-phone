@@ -273,31 +273,54 @@ h2, p { margin: 0; }
 .pp-assets .pp-snap-status{min-height:0;margin:6px 0;padding:0;color:var(--as-muted);font-size:12px;overflow-wrap:anywhere}
 .pp-assets .pp-snap-status:empty{display:none}
 .pp-asset-note{font-size:12px;color:var(--as-muted);line-height:1.65;margin:6px 0;overflow-wrap:anywhere}
-.pp-asset-balance{position:relative;overflow:hidden;background:linear-gradient(135deg,#ECE6F7 0%,#E3DAF3 45%,#D6CAEC 100%);color:var(--as-ink);border-radius:24px;padding:18px;display:grid;gap:10px;margin:8px 0 4px;box-shadow:0 12px 26px #8b7fb833}
-.pp-asset-balance::before{content:"";position:absolute;top:-72px;right:-52px;width:190px;height:190px;border-radius:50%;background:#ffffff59}
-.pp-asset-balance::after{content:"";position:absolute;bottom:-88px;right:34px;width:150px;height:150px;border-radius:50%;background:#c9bce94d}
+.pp-phone[data-active-app="assets"]{background:#F8F7F2;color:#424A44}
+.pp-phone[data-active-app="assets"] .pp-topline,
+.pp-phone[data-active-app="assets"] .pp-header,
+.pp-phone[data-active-app="assets"] .pp-footer{background:transparent;color:#424A44;border-color:transparent}
+.pp-phone[data-active-app="assets"] .pp-header .pp-icon-button{color:#424A44}
+.pp-phone[data-active-app="assets"] .pp-content{background:transparent}
+.pp-phone[data-active-app="assets"] .pp-footer span{background:#424A44;opacity:.3}
+/* 余额主卡：淡紫渐变＋左上柔光＋右下氛围光＋流动曲线与钱包插画（本地 SVG），金额第一视觉。 */
+.pp-asset-balance{position:relative;overflow:hidden;background:linear-gradient(135deg,#F0EBF9 0%,#E8E2F3 38%,#DCD2EF 78%,#D5C8EC 100%);color:var(--as-ink);border-radius:22px;padding:18px 18px 20px;display:grid;gap:8px;margin:10px 0 6px;box-shadow:0 14px 30px #8b7fb82e,inset 0 1px 0 #ffffff8c}
+.pp-asset-balance::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 8% 0%,#ffffffb8 0%,#ffffff33 34%,transparent 62%),radial-gradient(90% 70% at 96% 108%,#b9a7e05e 0%,transparent 58%);pointer-events:none}
+.pp-asset-balance::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 -22px 34px #a394d22e;pointer-events:none}
 .pp-asset-balance>*{position:relative;z-index:1}
+.pp-asset-balance-art{position:absolute;z-index:0;right:2px;bottom:-2px;width:76%;height:auto;pointer-events:none}
 .pp-asset-balance-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.pp-asset-balance-head small{font-size:12px;letter-spacing:.5px;opacity:.78}
-.pp-asset-chip{flex-shrink:0;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--as-chip);letter-spacing:.5px;overflow-wrap:anywhere}
-.pp-asset-balance strong{font-size:clamp(27px,8.5vw,38px);line-height:1.22;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;letter-spacing:-.5px}
-.pp-asset-hold{display:flex;flex-wrap:wrap;gap:4px 16px;padding-top:10px;border-top:1px dashed #424A4426;font-size:12px}
-.pp-asset-hold b{font-variant-numeric:tabular-nums;font-weight:600}
-.pp-asset-overview{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
-.pp-asset-stat{border-radius:18px;padding:12px;display:grid;gap:3px;min-width:0;align-content:start}
-.pp-asset-stat-income{background:var(--as-income-card);color:var(--as-income-ink)}
-.pp-asset-stat-expense{background:var(--as-expense-card);color:var(--as-expense-ink)}
-.pp-asset-stat-icon{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;background:#FFFFFFB0;margin-bottom:2px}
-.pp-asset-stat-icon svg{width:15px;height:15px}
-.pp-asset-stat small{font-size:11px;opacity:.85}
-.pp-asset-stat b{font-size:17px;line-height:1.3;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.pp-asset-stat i{font-style:normal;font-size:10px;opacity:.7;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pp-asset-balance-head small{font-size:12px;font-weight:550;letter-spacing:.4px;color:#6D648D}
+.pp-asset-chip{flex-shrink:0;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;background:#FFFFFFD2;color:#6D648D;letter-spacing:.5px;overflow-wrap:anywhere;box-shadow:0 1px 4px #8b7fb826}
+.pp-asset-balance strong{font-size:clamp(30px,9vw,40px);line-height:1.15;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;letter-spacing:-.6px;color:#3A3552;text-shadow:0 1px 0 #ffffffa8}
+.pp-asset-hold{display:flex;flex-wrap:wrap;gap:4px 16px;padding-top:10px;border-top:1px dashed #424A4429;font-size:12px;color:#6D648D}
+.pp-asset-hold b{font-variant-numeric:tabular-nums;font-weight:600;color:var(--as-ink)}
+.pp-asset-period{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:14px 2px 6px}
+.pp-asset-period span{font-size:12px;font-weight:600;letter-spacing:.6px;color:var(--as-muted)}
+.pp-asset-period i{font-style:normal;font-size:11px;color:var(--as-muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pp-asset-overview{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pp-asset-stat{display:flex;align-items:center;gap:9px;min-width:0;border-radius:16px;padding:10px 12px}
+.pp-asset-stat-income{background:var(--as-income-card);color:var(--as-income-ink);box-shadow:inset 0 1px 0 #ffffffb3}
+.pp-asset-stat-expense{background:var(--as-expense-card);color:var(--as-expense-ink);box-shadow:inset 0 1px 0 #ffffffb3}
+.pp-asset-stat-icon{flex-shrink:0;width:30px;height:30px;border-radius:11px;display:grid;place-items:center;background:#FFFFFFC4}
+.pp-asset-stat-icon svg{width:16px;height:16px}
+.pp-asset-stat-text{display:grid;gap:1px;min-width:0}
+.pp-asset-stat-text small{font-size:10.5px;opacity:.85;overflow-wrap:anywhere}
+.pp-asset-stat-text b{font-size:15.5px;line-height:1.25;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pp-asset-recent-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:16px 2px 6px}
+.pp-asset-recent-head .pp-asset-heading{margin:0}
+.pp-asset-recent-toggle{border:0;background:transparent;font:inherit;font-size:11.5px;font-weight:600;color:var(--pp-accent);display:inline-flex;align-items:center;gap:3px;cursor:pointer;padding:2px 0}
 .pp-asset-heading{font-size:12px;font-weight:600;letter-spacing:1px;color:var(--as-muted);margin:16px 2px 6px}
 .pp-asset-card{background:var(--as-card);border:1px solid var(--as-line);border-radius:18px;padding:2px 14px;margin:8px 0;box-shadow:0 2px 10px #6b65560d}
 .pp-asset-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--as-line)}
 .pp-asset-row:last-of-type{border-bottom:0}
 .pp-asset-row span{min-width:0;overflow-wrap:anywhere;color:var(--as-ink)}
 .pp-asset-row b{flex-shrink:0;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;color:var(--as-ink);font-weight:600}
+.pp-asset-flow .pp-asset-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 0}
+.pp-asset-flow .pp-asset-row b{flex-shrink:initial}
+.pp-asset-flow-icon{width:30px;height:30px;border-radius:11px;display:grid;place-items:center;background:#F3F1EA;color:var(--as-muted)}
+.pp-asset-flow-icon svg{width:15px;height:15px}
+.pp-asset-flow-icon.is-income{background:#EAF2EC;color:var(--as-income-ink)}
+.pp-asset-flow-icon.is-expense{background:#F8E9DF;color:var(--as-expense-ink)}
+.pp-asset-memo{display:grid;gap:1px;font-size:13px}
+.pp-asset-memo small{font-size:10.5px;color:var(--as-muted)}
 .pp-asset-row-total{border-top:1px solid var(--as-line)}
 .pp-asset-row-total span,.pp-asset-row-total b{font-weight:700}
 .pp-asset-job{display:grid;gap:2px}
@@ -318,9 +341,11 @@ h2, p { margin: 0; }
 .pp-asset-convert button{justify-self:start;border:0;border-radius:999px;padding:9px 16px;background:var(--as-lavender);color:var(--as-ink);font-size:12px;font-weight:600}
 .pp-assets .pp-snap-empty{padding:20px 6px;text-align:center;color:var(--as-muted);font-size:12px;line-height:1.6}
 .pp-assets button:disabled{opacity:.45;cursor:default}
-.pp-asset-tabs{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#FFFFFF;border-top:1px solid var(--as-line)}
-.pp-asset-tabs button{border:0;background:transparent;border-radius:999px;padding:9px 4px;font-size:12px;font-weight:500;color:var(--as-muted)}
-.pp-asset-tabs button[aria-pressed="true"]{background:var(--as-lavender);color:var(--as-ink);font-weight:600}
+/* 底部导航：图标＋文字纵排，选中态淡紫圆角胶囊。 */
+.pp-asset-tabs{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:#FFFFFF;border-top:1px solid var(--as-line)}
+.pp-asset-tabs button{border:0;background:transparent;border-radius:14px;padding:7px 4px 6px;display:grid;justify-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--as-muted);cursor:pointer}
+.pp-asset-tabs button svg{width:17px;height:17px}
+.pp-asset-tabs button[aria-pressed="true"]{background:var(--as-lavender);color:var(--as-ink);font-weight:650;box-shadow:inset 0 1px 0 #ffffff91}.pp-asset-tabs button[aria-pressed="true"]{background:var(--as-lavender);color:var(--as-ink);font-weight:600}
 
 .pp-square-edition{display:flex;justify-content:flex-end;margin:8px 0 14px;font-size:12px;opacity:.85}.pp-square-expired{color:#db4444;border:2px solid currentColor;border-radius:4px;padding:3px 10px;font-weight:800;transform:rotate(-5deg)}.pp-square-inject{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;margin:2px 0 7px}.pp-square-inject[aria-pressed="true"]{color:#81ad54;background:#81ad5414}.pp-square-inject:disabled{opacity:.45;cursor:default}
 /* Daily newspaper: warm paper, ink rules and compact icon controls. */

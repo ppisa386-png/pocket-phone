@@ -4,26 +4,41 @@ import { assetRows, cashBalance, reservedCash, recentCash } from './assets-core.
 import { dayDate } from './story-clock.js?v=1.2';
 import { icon } from './icons.js?v=1.2';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// 底部导航图标：与 icons.js 相同的线性风格（1.65 描边、圆角端点），本地定义避免动共享文件。
+const TAB_ICONS = {
+    cash: '<rect x="3" y="6.5" width="18" height="12" rx="3"/><path d="M15.8 12.5h2.6"/><path d="M3 9.5V7.6A1.6 1.6 0 0 1 4.6 6H15"/>',
+    fixed: '<path d="m3 11 9-8 9 8"/><path d="M5 9.8V20h14V9.8"/><path d="M10 20v-5.5h4V20"/>',
+    luxury: '<path d="m7.5 4 4-1.5 5 1.5L21 9l-9 12L3 9l4.5-5Z"/><path d="M3 9h18M9.5 9 12 20.5 14.5 9M9.5 9 12 4l2.5 5"/>',
+    investment: '<path d="M4 20V4M4 20h16"/><path d="m7 14 4-4.5 3.5 3L19 7"/><path d="M15.6 7H19v3.4"/>',
+};
+const tabIcon = key => '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + TAB_ICONS[key] + '</svg>';
+// 余额卡装饰：流动曲线与钱包插画（本地 SVG，纯装饰，不承载交互）。
+const BALANCE_ART = '<svg class="pp-asset-balance-art" viewBox="0 0 320 150" preserveAspectRatio="xMaxYMax meet" aria-hidden="true">'
+    + '<path d="M-12 106 C 58 76, 128 116, 188 92 S 296 58, 342 82" fill="none" stroke="#ffffff" stroke-opacity=".55" stroke-width="2"/>'
+    + '<path d="M-12 128 C 68 100, 148 138, 218 112 S 306 84, 344 104" fill="none" stroke="#ffffff" stroke-opacity=".3" stroke-width="2"/>'
+    + '<g><rect x="246" y="64" width="66" height="48" rx="11" fill="#FFFFFFE9"/><rect x="246" y="64" width="66" height="15" rx="7.5" fill="#D9CFEE"/><path d="M246 79h66" stroke="#C4B4E6" stroke-width="1"/><rect x="236" y="76" width="27" height="20" rx="7" fill="#E8E2F3" stroke="#B9A7E0"/><circle cx="247" cy="86" r="3.2" fill="#8A79C9"/></g></svg>';
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
-    let tab = 'cash', working = false, status = '', epoch = 0, proposal = null, ledgerOpen = false;
+    let tab = 'cash', working = false, status = '', epoch = 0, proposal = null, ledgerOpen = false, recentAll = false;
     const labels = { cash: '余额', fixed: '固定资产', luxury: '奢侈品', investment: '投资' };
     function html() {
         const state = getView(), wallet = state.assets?.wallet, balance = cashBalance(state), hold = reservedCash(state);
         const code=walletCurrency(state), money=n=>formatMoney(n,code);
         const locked = !!wallet?.region && wallet.revision === state.revision && !needsOwnershipRecovery(wallet) && !adapter.assets?.needsResidenceCheck?.(wallet);
         const pending = assetRows(state, 'story_event').filter(e => !e.processed).length;
-        const flowRow = t => '<article class="pp-asset-row"><span class="pp-asset-memo">' + assetEscape(t.memo || (t.source === 'snapcash' ? 'Snapchat 转账' : '收支')) + '</span><b class="' + (t.deltaMinor > 0 ? 'pp-asset-income' : 'pp-asset-expense') + '">' + (t.deltaMinor > 0 ? '+' : '−') + formatMoney(Math.abs(t.deltaMinor),t.currency) + (t.currency!==code?' <i>'+assetEscape(t.currency)+'</i>':'') + '</b></article>';
+        const flowRow = t => '<article class="pp-asset-row"><span class="pp-asset-flow-icon ' + (t.deltaMinor > 0 ? 'is-income' : 'is-expense') + '" aria-hidden="true">' + icon(t.deltaMinor > 0 ? 'cash' : 'cart') + '</span><span class="pp-asset-memo">' + assetEscape(t.memo || (t.source === 'snapcash' ? 'Snapchat 转账' : '收支')) + (t.source === 'snapcash' && t.memo ? '<small>Snapchat 转账</small>' : '') + '</span><b class="' + (t.deltaMinor > 0 ? 'pp-asset-income' : 'pp-asset-expense') + '">' + (t.deltaMinor > 0 ? '+' : '−') + formatMoney(Math.abs(t.deltaMinor),t.currency) + (t.currency!==code?' <i>'+assetEscape(t.currency)+'</i>':'') + '</b></article>';
         let body;
         if (tab === 'cash') {
-            body = '<section class="pp-asset-balance"><div class="pp-asset-balance-head"><small>可支配资金</small><span class="pp-asset-chip">' + assetEscape(code || '待定币种') + '</span></div>' +
+            body = '<section class="pp-asset-balance">' + BALANCE_ART + '<div class="pp-asset-balance-head"><small>可支配资金</small><span class="pp-asset-chip">' + assetEscape(code || '待定币种') + '</span></div>' +
                 '<strong>' + (balance === null ? '—' : assetEscape(money(balance))) + '</strong>' +
                 (hold ? '<div class="pp-asset-hold"><span>转账待收款占用 <b>' + money(hold) + '</b></span><span>可用 <b>' + money(balance === null ? 0 : balance - hold) + '</b></span></div>' : '') + '</section>';
             const summary = wallet?.settlement;
-            if (summary) body += '<div class="pp-asset-overview">' +
-                '<div class="pp-asset-stat pp-asset-stat-income"><span class="pp-asset-stat-icon" aria-hidden="true">' + icon('cash') + '</span><small>上次结算收入</small><b>+' + money(summary.incomeAddedMinor) + '</b><i>' + dayDate(summary.fromDay) + ' – ' + dayDate(summary.toDay) + '</i></div>' +
-                '<div class="pp-asset-stat pp-asset-stat-expense"><span class="pp-asset-stat-icon" aria-hidden="true">' + icon('cart') + '</span><small>上次结算支出</small><b>−' + money(summary.expenseAddedMinor) + '</b><i>' + dayDate(summary.fromDay) + ' – ' + dayDate(summary.toDay) + '</i></div>' +
+            if (summary) body += '<div class="pp-asset-period"><span>上次结算</span><i>' + dayDate(summary.fromDay) + ' – ' + dayDate(summary.toDay) + '</i></div>' +
+                '<div class="pp-asset-overview">' +
+                '<div class="pp-asset-stat pp-asset-stat-income"><span class="pp-asset-stat-icon" aria-hidden="true">' + icon('cash') + '</span><span class="pp-asset-stat-text"><small>上次结算收入</small><b>+' + money(summary.incomeAddedMinor) + '</b></span></div>' +
+                '<div class="pp-asset-stat pp-asset-stat-expense"><span class="pp-asset-stat-icon" aria-hidden="true">' + icon('cart') + '</span><span class="pp-asset-stat-text"><small>上次结算支出</small><b>−' + money(summary.expenseAddedMinor) + '</b></span></div>' +
                 '</div>';
-            body += '<h3 class="pp-asset-heading">最近收支</h3><div class="pp-asset-card pp-asset-flow">' + (recentCash(state).map(flowRow).join('') || '<p class="pp-snap-empty">暂无收支</p>') + '</div>';
+            const flows = recentCash(state);
+            body += '<div class="pp-asset-recent-head"><h3 class="pp-asset-heading">最近收支</h3>' + (flows.length > 4 ? '<button type="button" class="pp-asset-recent-toggle" data-asset-action="recent">' + (recentAll ? '收起' : '查看全部') + '</button>' : '') + '</div><div class="pp-asset-card pp-asset-flow">' + (flows.slice(0, recentAll ? flows.length : 4).map(flowRow).join('') || '<p class="pp-snap-empty">暂无收支</p>') + '</div>';
             const jobs = assetRows(state, 'job').filter(j => j.endDay == null);
             body += '<h3 class="pp-asset-heading">工作与收入</h3><div class="pp-asset-card">' + (jobs.map(j => '<article class="pp-asset-row"><span class="pp-asset-job"><strong>' + assetEscape(j.name) + '</strong><small>每月 15 日发薪</small></span><b>' + (j.monthlyMinor == null ? '待评估' : money(j.monthlyMinor) + '/月') + '</b></article>').join('') || '<p class="pp-snap-empty">暂无工作记录</p>') + '</div>';
             if (summary) {
@@ -43,12 +58,13 @@ export function createAssetPanel({ adapter, getView, redraw, notice }) {
             (wallet?.skippedUnverified ? '<p class="pp-asset-note">上次更新跳过 ' + wallet.skippedUnverified + ' 条无法核对正文依据的新增收支，未入账。</p>' : '') +
             '<p class="pp-snap-status" role="status">' + assetEscape(working ? '正在更新…' : status || (locked ? '已更新' : '')) + '</p>' + (proposal?'<div class="pp-asset-convert"><p class="pp-asset-note">常住地区使用 '+proposal.switchTo+'。旧账仍为 '+proposal.switchFrom+'。请输入剧情换算比例：1 '+proposal.switchFrom+' 等于多少 '+proposal.switchTo+'？</p><input data-asset-rate type="text" inputmode="decimal" aria-label="换算比例"><button type="button" data-asset-action="convert">按此比例换算旧账</button></div>':'') + body +
             '</div>' +
-            '<nav class="pp-asset-tabs" aria-label="小榴莲分类">' + Object.entries(labels).map(([key, label]) => '<button type="button" data-asset-action="tab" data-asset-tab="' + key + '" aria-pressed="' + (tab === key) + '">' + label + '</button>').join('') + '</nav></div>';
+            '<nav class="pp-asset-tabs" aria-label="小榴莲分类">' + Object.entries(labels).map(([key, label]) => '<button type="button" data-asset-action="tab" data-asset-tab="' + key + '" aria-pressed="' + (tab === key) + '">' + tabIcon(key) + '<span>' + label + '</span></button>').join('') + '</nav></div>';
     }
-    return { html, reset() { epoch++; proposal=null; tab = 'cash'; status = ''; working = false; ledgerOpen = false; },
+    return { html, reset() { epoch++; proposal=null; tab = 'cash'; status = ''; working = false; ledgerOpen = false; recentAll = false; },
         async action(action, nextTab, rate) {
             if (action === 'tab') { if (labels[nextTab]) tab = nextTab; redraw(); return; }
             if (action === 'ledger') { ledgerOpen = !ledgerOpen; redraw(); return; }
+            if (action === 'recent') { recentAll = !recentAll; redraw(); return; }
             if (!['update','convert'].includes(action) || working || getView().busy) return;
             if (!adapter.assets) { notice('请在酒馆中点击一键更新建立账本。'); return; }
             const token = epoch; working = true; redraw();
