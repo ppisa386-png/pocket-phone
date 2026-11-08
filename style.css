@@ -1737,3 +1737,116 @@ h2, p { margin: 0; }
 .pp-x .pp-x-time{font-size:10px}
 .pp-x .pp-x-profile-cover{height:88px}
 }
+
+
+/* v1.2.9 · RNWeChat-inspired WeChat UI. Visual recreation only; no RN code/assets. */
+.pp-phone[data-active-app="wechat"]{--pp-bg:#ebebeb;--pp-text:#191919;--pp-accent:#19ad17;--pp-line:#dadada;background:#ebebeb;color:#191919;color-scheme:light}
+.pp-phone[data-active-app="wechat"] .pp-topline,.pp-phone[data-active-app="wechat"] .pp-header{background:#393a3e;color:#fff;border-bottom-color:#303136}
+.pp-phone[data-active-app="wechat"] .pp-footer{background:#f8f8f8;color:#333;border-top:1px solid #ddd}
+.pp-wechat{--chat-accent:#19ad17;--chat-soft:#eaf7e8;--chat-line:#e6e6e6;background:#ebebeb;color:#191919;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;line-height:1.5}
+.pp-wechat .pp-chat-top{min-height:51px;padding:7px 9px 7px 12px;gap:5px;background:#393a3e;border-bottom:1px solid #303136}
+.pp-wechat .pp-chat-top h2,.pp-wechat.is-thread .pp-chat-top h2{margin:0;min-width:0;color:#fff;text-align:left;font-size:17px;font-weight:550;line-height:1.4;letter-spacing:0}
+.pp-wechat:not(.is-thread) .pp-chat-top h2{padding-left:0}
+.pp-wechat .pp-chat-top>div{min-width:38px;gap:2px;justify-content:flex-end}
+.pp-wechat .pp-chat-top .pp-chat-button{color:#fff!important;border-radius:5px}
+.pp-wechat .pp-chat-top .pp-chat-button.is-icon{width:35px;min-width:35px;height:37px;min-height:37px;padding:7px}
+.pp-wechat .pp-chat-top .pp-chat-button.is-icon svg{width:22px;height:22px;stroke-width:2}
+.pp-wechat .pp-chat-top .pp-chat-button:active{background:#ffffff24}
+.pp-wechat .pp-chat-scroll{background:#fff;scrollbar-color:#cfcfcf transparent}
+.pp-wechat[data-chat-tab="me"] .pp-chat-scroll{background:#ebebeb}
+.pp-wechat .pp-chat-status{background:#edf7ed;color:#326b35;border-bottom:1px solid #dbeadc;padding:7px 12px;font-size:12px}
+.pp-wechat .pp-chat-search{margin:10px 11px 11px;padding:8px 12px;min-height:36px;background:#f2f2f2;border:1px solid #ebebeb;border-radius:7px;color:#929292}
+.pp-wechat .pp-chat-search svg{width:17px;height:17px;stroke-width:1.9}
+.pp-wechat .pp-chat-search input{font-size:13px;color:#333;line-height:21px}
+.pp-wechat .pp-chat-search input::placeholder{color:#999;opacity:1}
+.pp-wechat .pp-wx-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;align-items:stretch;padding:0;background:#fff;border-top:1px solid #f0f0f0;border-bottom:8px solid #ebebeb}
+.pp-wechat .pp-wx-quick-item{display:flex;align-items:center;min-width:0;min-height:60px;padding:9px 9px 9px 13px;gap:9px}
+.pp-wechat .pp-wx-quick-item+.pp-wx-quick-item{border-left:1px solid #ededed}
+.pp-wechat .pp-wx-quick-item>.pp-chat-button{display:grid;place-items:center;flex:0 0 38px;width:38px;min-width:38px;height:38px;min-height:38px;margin:0;padding:7px;border-radius:8px;background:#43b543;color:#fff!important}
+.pp-wechat .pp-wx-quick-item:nth-child(2)>.pp-chat-button{background:#6495ba}
+.pp-wechat .pp-wx-quick-item>.pp-chat-button svg{width:22px;height:22px}
+.pp-wechat .pp-wx-quick-item>span{font-size:12px;font-weight:500;line-height:1.35;color:#303030;overflow-wrap:anywhere}
+.pp-wechat[data-chat-tab="calls"] .pp-chat-add-actions{padding:10px 13px;min-height:64px;gap:11px;background:#fff;border-bottom:8px solid #ebebeb}
+.pp-wechat[data-chat-tab="calls"] .pp-chat-add-actions .pp-chat-button{background:#43b543;color:#fff!important;width:39px;height:39px;min-width:39px;border-radius:8px}
+.pp-wechat[data-chat-tab="calls"] .pp-chat-add-actions>span{color:#454545;font-size:13px}
+.pp-wechat .pp-chat-row{position:relative;display:flex;align-items:center;min-height:73px;padding:11px 13px;gap:11px;background:#fff;border:0;overflow:hidden}
+.pp-wechat .pp-chat-row::after{content:"";position:absolute;bottom:0;left:68px;right:0;height:1px;background:#ededed}
+.pp-wechat .pp-chat-row:active{background:#ededed}
+.pp-wechat .pp-chat-row .pp-chat-avatar{flex:0 0 45px;width:45px;min-width:45px;height:45px;border:1px solid #0000000a;border-radius:7px;background:linear-gradient(145deg,#7397b2,#567a9b);color:#fff;font-size:19px;font-weight:600}
+.pp-wechat .pp-chat-row:nth-of-type(4n+2) .pp-chat-avatar{background:linear-gradient(145deg,#82af96,#548873)}
+.pp-wechat .pp-chat-row:nth-of-type(4n+3) .pp-chat-avatar{background:linear-gradient(145deg,#b5a0ca,#8b79aa)}
+.pp-wechat .pp-chat-row:nth-of-type(4n+4) .pp-chat-avatar{background:linear-gradient(145deg,#d8b48c,#ba946a)}
+.pp-wechat .pp-chat-row-copy{gap:4px;overflow:hidden}
+.pp-wechat .pp-chat-row-copy strong{font-size:15px;font-weight:550;line-height:1.35;color:#202020}
+.pp-wechat .pp-chat-row-copy>span{color:#999;font-size:12px;line-height:1.5}
+.pp-wechat .pp-chat-row-meta{align-self:stretch;justify-content:flex-start;align-items:flex-end;gap:6px;padding-top:2px;max-width:82px;min-width:0;color:#aaa}
+.pp-wechat .pp-chat-row-meta time{color:#aaa;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pp-wechat .pp-chat-badge{min-width:18px;height:18px;line-height:18px;padding:0 5px;background:#f34c4c;color:#fff;border-radius:11px;font-size:10px;font-weight:600}
+.pp-wechat .pp-chat-tabs{min-height:64px;padding:7px 3px max(5px,env(safe-area-inset-bottom,0px));gap:0;background:#f8f8f8;border-top:1px solid #dcdcdc}
+.pp-wechat .pp-chat-tabs button{justify-content:center;gap:3px;min-height:46px;padding:2px 1px;color:#777;font-size:10.5px;line-height:1.25;font-weight:400}
+.pp-wechat .pp-chat-tabs svg{width:25px;height:25px;padding:0;background:none;border:0;border-radius:0;stroke-width:1.8}
+.pp-wechat .pp-chat-tabs button[aria-pressed="true"]{color:#19ad17;font-weight:500}
+.pp-wechat .pp-chat-tabs button[aria-pressed="true"] svg{background:transparent;stroke-width:2.25}
+.pp-wechat .pp-chat-tabs button:active{background:#ededed}
+.pp-wechat .pp-chat-empty{padding:46px 20px;gap:11px;color:#9b9b9b}
+.pp-wechat .pp-chat-empty>svg{width:39px;height:39px;opacity:.48}
+.pp-wechat .pp-chat-empty strong{font-size:14px;font-weight:550;color:#666}
+.pp-wechat .pp-chat-empty p{font-size:12px;line-height:1.7;color:#999}
+.pp-wechat .pp-chat-settings{padding:17px 0 24px;background:#ebebeb;min-height:100%}
+.pp-wechat .pp-chat-settings .pp-chat-profile{display:grid;grid-template-columns:66px minmax(0,1fr);grid-template-rows:auto auto;column-gap:13px;align-items:center;min-height:94px;padding:14px 16px 16px;text-align:left;background:#fff;margin:0 0 19px}
+.pp-wechat .pp-chat-settings .pp-chat-profile .pp-chat-avatar{grid-column:1;grid-row:1/span 2;width:64px;min-width:64px;height:64px;border-radius:8px;background:linear-gradient(145deg,#84ac98,#5e907d);color:#fff;font-size:27px}
+.pp-wechat .pp-chat-settings .pp-chat-profile h2{grid-column:2;grid-row:1;align-self:end;margin:0 0 3px;font-size:18px;font-weight:600;color:#191919;overflow-wrap:anywhere}
+.pp-wechat .pp-chat-settings .pp-chat-profile>p,.pp-wechat .pp-chat-settings .pp-chat-profile>span{grid-column:2;grid-row:2;align-self:start;margin:0;color:#999;font-size:12px}
+.pp-wechat .pp-chat-settings>.pp-chat-form{gap:12px;padding:14px 15px 17px;margin:0 0 14px;background:#fff}
+.pp-wechat .pp-chat-field{gap:6px;color:#777;font-size:12px;margin:0}
+.pp-wechat .pp-chat-field input,.pp-wechat .pp-chat-form textarea{border:1px solid #e1e1e1;border-radius:5px;background:#fff;color:#222;font-size:14px;padding:10px}
+.pp-wechat .pp-chat-primary{background:#19ad17;color:#fff!important;border-radius:5px;min-height:39px;padding:9px 16px;font-size:13px;font-weight:550}
+.pp-wechat .pp-chat-settings .pp-chat-primary{align-self:stretch}
+.pp-wechat .pp-chat-settings>.pp-chat-button{display:flex;align-items:center;justify-content:center;width:100%;min-height:45px;margin:0 0 1px;background:#fff;border-radius:0;color:#333!important;font-size:13px}
+.pp-wechat.is-thread .pp-chat-scroll{background:#ebebeb;padding:17px 11px 12px}
+.pp-wechat .pp-chat-message{gap:8px;margin:0 0 18px;max-width:100%;align-items:flex-start}
+.pp-wechat .pp-chat-message .pp-chat-avatar{flex:0 0 36px;width:36px;min-width:36px;height:36px;border-radius:6px;background:#83a3a0;color:#fff;font-size:16px;font-weight:600}
+.pp-wechat .pp-chat-message.is-user .pp-chat-avatar{background:#83b98a}
+.pp-wechat .pp-chat-bubble{max-width:calc(100% - 88px);min-width:58px;overflow:visible;padding:9px 10px 6px;border:1px solid #dedede;border-radius:5px;background:#fff;box-shadow:0 1px 1px #00000009}
+.pp-wechat .pp-chat-message.is-user .pp-chat-bubble{border:1px solid #94d56a;border-radius:5px;background:#a9e978}
+.pp-wechat .pp-chat-bubble::before{top:12px;left:-6px;border-right-color:#fff}
+.pp-wechat .pp-chat-message.is-user .pp-chat-bubble::before{left:auto;right:-6px;border-left-color:#a9e978}
+.pp-wechat .pp-chat-bubble>p{margin:0;color:#202020;font-size:14px;line-height:1.62;word-break:break-word}
+.pp-wechat .pp-chat-message-meta{margin-top:5px;gap:5px;color:#808a7b;font-size:9px;line-height:1.35}
+.pp-wechat .pp-chat-kind{color:#6b746a;font-size:11px}
+.pp-wechat .pp-chat-call{margin:10px 0 16px;padding:12px 13px;border:1px solid #e1e1e1;border-radius:6px;background:#f9f9f9;color:#515151}
+.pp-wechat .pp-chat-composer{padding:8px 9px 4px;background:#f5f5f5;border-top:1px solid #d6d6d6}
+.pp-wechat .pp-chat-composer .pp-chat-form{gap:7px;align-items:flex-end}
+.pp-wechat .pp-chat-compose-input{min-height:41px;padding:0 4px 0 7px;border:1px solid #e1e1e1;border-radius:5px;background:#fff}
+.pp-wechat .pp-chat-compose-input select{width:54px;padding:7px 3px;border:0;border-right:1px solid #eee;font-size:11px;color:#666;background:#fff;outline:none}
+.pp-wechat .pp-chat-compose-input textarea{width:100%;min-height:39px;max-height:105px;padding:9px 8px;line-height:1.55;border:0;border-radius:0;background:transparent;resize:none;outline:none;font-size:13px}
+.pp-wechat .pp-chat-compose-input:focus-within{border-color:#84c98b}
+.pp-wechat .pp-chat-compose-input textarea:focus-visible{outline:none}
+.pp-wechat .pp-chat-composer .pp-chat-primary{flex:0 0 auto;min-height:41px;padding:9px 14px;border-radius:5px}
+.pp-wechat .pp-chat-compose-extra{height:30px;gap:8px;color:#999}
+.pp-wechat .pp-chat-compose-extra .pp-chat-button{display:flex;align-items:center;gap:5px;height:27px;min-height:27px;padding:4px 5px;color:#a16b2d!important;background:transparent}
+.pp-wechat .pp-chat-compose-extra .pp-chat-button svg{width:17px;height:17px}
+.pp-wechat .pp-chat-compose-extra small{font-size:10px;color:#888}
+.pp-wechat .pp-chat-transfer{max-width:calc(100% - 52px);padding:13px 14px 10px;margin:8px 0 17px;border-radius:6px;background:#f3a450;color:#fff;box-shadow:0 1px 1px #00000012}
+.pp-wechat .pp-chat-transfer>svg{color:#fff;width:22px;height:22px}
+.pp-wechat .pp-chat-transfer strong{font-size:18px;font-weight:600}
+.pp-wechat .pp-chat-transfer p{margin:6px 0 10px;color:#fff;font-size:12px;opacity:.92}
+.pp-wechat .pp-chat-transfer small{color:#fff;font-size:11px}
+.pp-wechat .pp-chat-transfer>div{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;padding-top:9px;border-top:1px solid #ffffff70}
+.pp-wechat .pp-chat-transfer .pp-chat-button{padding:6px 8px;min-height:30px;background:#ffffffd9;border-radius:4px;color:#9a631d!important;font-size:11px}
+.pp-wechat .pp-chat-button:focus-visible,.pp-wechat .pp-chat-tabs button:focus-visible,.pp-wechat .pp-chat-row:focus-visible{outline:2px solid #19ad17;outline-offset:-2px}
+@container pp-phone (max-width:330px){
+ .pp-wechat .pp-chat-top{padding-left:8px;padding-right:5px}
+ .pp-wechat .pp-chat-top .pp-chat-button.is-icon{width:31px;min-width:31px;padding:5px}
+ .pp-wechat .pp-chat-row{gap:9px;padding:10px 9px;min-height:68px}
+ .pp-wechat .pp-chat-row .pp-chat-avatar{flex-basis:40px;width:40px;min-width:40px;height:40px}
+ .pp-wechat .pp-chat-row::after{left:57px}
+ .pp-wechat .pp-chat-row-copy strong{font-size:14px}
+ .pp-wechat .pp-chat-row-meta{max-width:68px}
+ .pp-wechat .pp-wx-quick-item{padding:7px;gap:6px}
+ .pp-wechat .pp-wx-quick-item>.pp-chat-button{flex-basis:34px;width:34px;min-width:34px;height:36px;min-height:36px;padding:6px}
+ .pp-wechat .pp-wx-quick-item>span{font-size:11px}
+ .pp-wechat .pp-chat-composer .pp-chat-primary{padding:9px 10px}
+ .pp-wechat .pp-chat-compose-input select{width:46px;font-size:10px}
+ .pp-wechat .pp-chat-bubble{max-width:calc(100% - 79px)}
+}
