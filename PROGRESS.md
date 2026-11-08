@@ -1,5 +1,9 @@
 # 榴莲手机开发进度
 
+## 文档规范 · GitHub 参考项目登记（2026-11-09；纯文档更新）
+新增根目录 `RESOURCE_SOURCES.md`，登记此前实际用于 X、WhatsApp、微信、Amazon 和天气 App 的 GitHub 参考项目及素材仓库；用户点名的 Twitter Clone、Amazon Clone HTML/CSS、Weather App Clone 均已登记。同步更新 `AGENTS.md` 与 `REQUIREMENTS.md`：AI 开始 App 视觉修改前先查来源清单；二次美化默认沿用该 App 配套的 SVG、图标和插画，只有用户明确要求更换时才调整；新增 GitHub 参考项目时补录完整仓库地址。仅修改文档，不升插件版本，不改运行代码。
+
+
 ## v1.2.12 · 天气 App 苹果天气风格及四张高清摄影背景（2026-11-09；基线 3b5b244）
 **用户确认**：依照 j-labbe/weather-app-clone 的 Apple Weather 排版与已确认的四季场景效果图，仅修改现有天气页 UI，不引入英文或 WeatherAPI。四张照片：晴天白天（Pexels Abeer H 16459932）、日落（Unsplash Hannah Reding vrhEQC0CC5Q）、夜晚（Unsplash Nacho Rochon CG7YwmRDGvI）、雨天（Pexels Betül Batmaz 27378397）。
 **真实素材**：GitHub Actions 已从官方原图下载地址取回 2916×5184、3024×4028、4608×3072、4000×6000 的原图，按 1000×1780 竖屏裁剪，Pillow WebP quality=89、method=6；输出 day/dusk/night/rain.webp 分别为 68,092/153,156/287,324/184,830 B，随仓库打包，不从 Unsplash/Pexels 运行时加载，出处见 assets/weather/SOURCES.md。下载/转码操作记录：https://github.com/ppisa386-png/pocket-phone/actions/runs/42504117366 。
