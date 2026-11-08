@@ -83,10 +83,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     layer.style.setProperty('--pp-launcher-size', LAUNCHER_SIZE + 'px');
     layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + '<span class="pp-launcher-badge" hidden></span></button>' +
         '<section class="pp-phone" role="dialog" aria-label="榴莲手机" hidden>' +
+        '<div class="pp-phone-scale">' +
         '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span></div>' +
         '<header class="pp-header"><button type="button" data-action="back" class="pp-icon-button" aria-label="返回">' + icon('back') + '</button><span class="pp-title"></span><button type="button" data-action="close" class="pp-icon-button" aria-label="收起手机">' + icon('close') + '</button></header>' +
         '<main class="pp-content"></main><div class="pp-toast" role="status" aria-live="polite" hidden></div>' +
         '<footer class="pp-footer"><button type="button" data-action="home" aria-label="回到桌面"><span></span></button></footer>' +
+        '</div>' +
         '<button type="button" class="pp-resize" aria-label="调整窗口大小" title="拖动调整窗口大小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 14l-6 6M20 8 8 20"/></svg></button></section>';
     shadow.append(layer);
     container.append(host);
@@ -191,6 +193,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         };
         shadow.append(dialog);
         dialog.showModal();
+        dialog.style.transform = 'scale(var(--pp-phone-scale,1))';
     }
     function renderDaily(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
     // 昼夜主题定时切换：只在天气页打开时挂载，对齐下一个 06:00/16:00/20:00
@@ -293,12 +296,22 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         return true;
     }
 
+    // 真实调试小窗模式：内容按设计基准 390px 排版，整体等比缩放适配窗口。
+    const PHONE_BASE_WIDTH = 390;
+    function syncPhoneScale() {
+        if (!phone || !phone.isConnected || phone.clientWidth === 0) return; // 窗口隐藏时不测量，保留上次缩放
+        const scale = Math.min(2.2, Math.max(0.4, phone.clientWidth / PHONE_BASE_WIDTH));
+        const rounded = Math.round(scale * 10000) / 10000;
+        layer.style.setProperty('--pp-phone-scale', String(rounded));
+        layer.style.setProperty('--pp-phone-logical-height', Math.round(phone.clientHeight / rounded) + 'px');
+    }
     function applyAppearance() {
         layer.dataset.theme = settings.theme;
         layer.dataset.wallpaper = settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
         layer.style.setProperty('--pp-phone-height', settings.phoneHeight + 'px');
+        syncPhoneScale();
         launcher.hidden = !settings.enabled || !settings.launcherVisible;
         const badge = launcher.querySelector('.pp-launcher-badge');
         badge.hidden = !settings.apps.phone || !unreadCalls();
@@ -504,6 +517,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         opened = true;
         route = 'home'; history = []; selectedSMSContactId = null; pickingSMSContact = false; smsEditing = null; contactSearchOpen = false;
         phone.hidden = false;
+        syncPhoneScale(); // 取消隐藏后测量真实窗口尺寸（挂载时 clientWidth 为 0 无法同步）
         if(windowPosition){const point={...windowPosition};phone.style.height='';phone.style.bottom='';phone.style.top='';movePhone(point.x,point.y);}
         launcher.setAttribute('aria-expanded', 'true');
         launcher.setAttribute('aria-label', '收起榴莲手机');
@@ -790,6 +804,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     for(const event of ['pointerup','pointercancel','lostpointercapture'])phoneHandle.addEventListener(event,finishWindowDrag,{signal:lifetime.signal});
     // Floating-window resize: drag the corner grip like a small-window app.
     const resizeGrip = shadow.querySelector('.pp-resize');
+    if (typeof ResizeObserver === 'function' && phone) {
+        const scaleObserver = new ResizeObserver(() => syncPhoneScale());
+        scaleObserver.observe(phone);
+    }
+    window.addEventListener('resize', () => syncPhoneScale());
     let windowResize = null;
     resizeGrip.addEventListener('pointerdown', event => {
         if (event.button !== 0 || event.isPrimary === false) return;

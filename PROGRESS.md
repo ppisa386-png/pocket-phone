@@ -1,5 +1,13 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 小手机窗口内容等比缩放（真实调试小窗模式）（1.2 之上）
+基线为 8b20285（资产手动编辑删除之上，642/642）。用户报告：窗口缩放只是外框变化、内容未同比例缩放；要求像真实手机调试小窗一样内容自适配。实现：**内容按设计基准 390px 排版，经 transform 整体等比缩放适配窗口**。
+**实现（src/ui.js + style.css + src/press-menu.js）**：①ui.js 手机模板将顶栏/标题栏/内容/Toast/底部手势区包进新 `.pp-phone-scale` 包裹层（缩放手柄留在窗口层不随缩放）；②新增 `syncPhoneScale()`——以 `phone.clientWidth / 390` 计算缩放（钳制 0.4–2.2），写 `--pp-phone-scale` 与 `--pp-phone-logical-height`（= clientHeight/scale）；由 applyAppearance（设置变化）、open()（取消隐藏后测量——挂载时 clientWidth 为 0 无法测量，守卫跳过）、ResizeObserver(phone)（手柄拖拽/视口钳制）与 window resize 四路触发；③CSS：`.pp-phone` 保持窗口职责（尺寸/圆角/裁切），`.pp-phone-scale` 以 390px 逻辑宽排版并 `transform: scale(var(--pp-phone-scale))`（origin top-left，精确填满窗口）；④press-menu 气泡按 `--pp-phone-scale` 同步缩放（定位用缩放后 rect ✓）；⑤`<dialog>` 编辑窗口（showModal 顶层不受祖先 transform 影响）自行 `transform: scale(var(--pp-phone-scale))`。
+**兼容**：窗口尺寸/持久化/手柄/拖动移动/键盘适配逻辑全部不变；内容逻辑宽恒为 390px——窗口 <390px 时内容按比例缩小（不重排错位），>390px 时放大；既有视口断点仅在真实手机浏览器视口下生效；缩放手柄与 press 菜单、对话框视觉一致。
+**调试记录**：初版验证发现三处 harness/实现问题并修正——①mountPhone harness 未传 styles（手机无样式导致全部测量失真，已传入真实 style.css）；②挂载时手机隐藏 clientWidth=0，syncPhoneScale 守卫跳过且 ResizeObserver 未触发补测 → open() 增加显式同步；③press-menu 打开菜单后 900ms 幽灵点击抑制窗口不影响真实用户（脚本化点击过快所致）。
+验证：npm test 642/642；npm run build:preview 通过。内置 Chromium 实测（真实 mountPhone＋模拟 adapter）：①基准 360×740 窗口 scale=0.9205（=clientWidth 359/390），包裹层精确填满窗口；②手柄拖宽至 510 → scale=1.3051、内容等比放大（时钟高度随比例增长）、设置持久化；③手柄缩窄至 320 → scale=0.8179、内容等比缩小（时钟 137→112.1，恰为 0.8179×137，比例精确）；④应用页面（App 内容同包裹层）与桌面均缩放、横向溢出 0；⑤窗口拖动移动与手柄交互正常；⑥无页面错误。截图（基准/加宽/缩窄）已交付用户。
+未完成：真实手机触屏与跨视口场景最终确认待用户验收；版本参数保持 1.2 待发布统一；本轮已本地提交、未推送远端（等待用户指示）。
+
 ## 本地待发布 · 小榴莲固定资产/奢侈品/投资手动编辑与删除（1.2 之上）
 基线为 02609aa（小榴莲视觉二次整改之上，642→642）。按用户规格为三个资产栏目增加长按/右键菜单与手动编辑、删除；余额栏目保持无此功能。财务计算零改动。
 

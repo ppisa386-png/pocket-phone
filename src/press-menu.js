@@ -82,6 +82,12 @@ export function createPressMenu({ shadow, root, phone, getActions }) {
             '</div><span class="pp-press-tail" aria-hidden="true"></span>';
         bubble = node;
         menuState = { actions };
+        // 气泡覆盖在等比缩放的内容上：跟随手机内容的缩放系数，保持视觉一致。
+        const scale = parseFloat(getComputedStyle(phone).getPropertyValue('--pp-phone-scale')) || 1;
+        if (scale !== 1) {
+            node.style.transform = 'scale(' + scale + ')';
+            node.style.transformOrigin = 'top left';
+        }
         node.style.visibility = 'hidden';
         root.append(node);
         position(node, target);

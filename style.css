@@ -28,6 +28,9 @@ h2, p { margin: 0; }
 .pp-icon-button { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; }
 .pp-icon-button:hover { background: #8882; }
 .pp-icon-button svg { width: 21px; height: 21px; }
+/* 真实调试小窗模式：内容按设计基准 390px 排版，经 transform 等比缩放适配窗口；
+   .pp-phone 只负责窗口尺寸与裁切，缩放手柄留在窗口层不随缩放。 */
+.pp-phone-scale { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: var(--pp-phone-base-width, 390px); height: var(--pp-phone-logical-height, calc(var(--pp-phone-height, 740px) / var(--pp-phone-scale, 1))); transform: scale(var(--pp-phone-scale, 1)); transform-origin: top left; }
 .pp-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #8885 transparent; }
 .pp-home { min-height: 100%; display: flex; flex-direction: column; padding: 0 23px 8px; }
 .pp-home-clock { text-align: center; padding: 10px 0 32px; }
