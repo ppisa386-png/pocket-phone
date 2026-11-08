@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {appendChange,replayJournal,reconcileJournal} from '../src/journal.js';
 import {storyAnnotations,buildStoryPhonePrompt} from '../src/story-phone.js';
 import {normalizeSettings} from '../src/config.js';
-import {businessPrompt,importBusiness,dmDealTask,dealDecision} from '../src/x-business.js';
+import {businessPrompt,importBusiness,dmDealTask,dealDecision,initialHighRiskForRoll} from '../src/x-business.js';
 
 const settings=normalizeSettings({proactiveEnabled:false}),off={...settings,apps:{...settings.apps,x:false}};
 const offer={kind:'offer',brand:'Green Tea',project:'Spring tasting',terms:'一条体验推文，200元',text:'您好，想邀请您体验春茶并发一条推文，报酬200元。'};
@@ -134,4 +134,12 @@ test('clean merchants retain 1% risk, while high-risk mitigation uses its precis
  assert.equal(improved.riskRate,75);
  assert.equal(dealDecision(improved,'accept',15,120,true,null,{},49151)[0].value.risk,'tracking');
  assert.equal(dealDecision(improved,'accept',15,120,true,null,{},49152)[0].value.risk,null);
+});
+
+test('initial advertiser flag is drawn at 30% and does not silently revert to 50%',()=>{
+ const cutoff=30*65536/100;
+ assert.equal(initialHighRiskForRoll(Math.ceil(cutoff)-1),true);
+ assert.equal(initialHighRiskForRoll(Math.ceil(cutoff)),false);
+ const riskyCount=Array.from({length:65536},(_,i)=>i).filter(initialHighRiskForRoll).length;
+ assert.ok(Math.abs(riskyCount/65536-0.30)<1/65536,'Uint16 outcomes map to 30%');
 });
