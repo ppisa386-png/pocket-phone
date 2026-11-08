@@ -1,7 +1,7 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2';
-import {dmDealTask,dealDecision} from './x-business.js?v=1.2';
+import {dmDealTask,dealDecision} from './x-business.js?v=1.2.4';
 import {JOURNAL_KEY} from './journal.js?v=1.2';
 import {readStoryClock} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
