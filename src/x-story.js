@@ -3,7 +3,7 @@ import { readStoryClock, storyTime } from './story-clock.js?v=1.2';
 import { xComments, xCommentKey } from './x-comments.js?v=1.2';
 import {xFeedArea} from './x-feed.js?v=1.2';
 import { xAudience } from './x-audience.js?v=1.2';
-import { commRecordPatch, commExpired, commExcerpt, commMetaOrInfer } from './comm-context.js?v=1.2';
+import { commRecordPatch, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2';
 
 export function xStoryPrompt(state, now = null) {
     const allPosts = Object.values(state.x || {}).filter(p => p.type === 'post');
@@ -14,12 +14,12 @@ export function xStoryPrompt(state, now = null) {
             if(xFeedArea(state,p)==='square')return reference;
             // The full catalog stays available for locating posts, but the content
             // the phone hands to the narrative obeys the unified rules: expired
-            // posts degrade to a bare reference, shown posts appear as summaries.
+            // posts degrade to a bare reference, shown posts omit content entirely.
             if(now){
                 const meta=commMetaOrInfer(state,'x',p.id,p);
                 if(commExpired(meta,now))return reference;
                 if(meta.shown===true)return {...reference,name:p.author==='user'?state.x.profile?.alias:state.x[p.author]?.name,
-                    text:commExcerpt(p.text),imageDescription:commExcerpt(p.imageDescription),metrics:p.metrics,shown:true};
+                    metrics:p.metrics,shown:true};
             }
             return {...reference,name:p.author==='user'?state.x.profile?.alias:state.x[p.author]?.name,
                 text:p.text?.slice(0,160),imageDescription:p.imageDescription?.slice(0,160),metrics:p.metrics};
@@ -28,9 +28,9 @@ export function xStoryPrompt(state, now = null) {
         '<!--durian-x:{"action":"published","author":"user","text":"推文逐字原文","imageDescription":"正文写明的配图描述原文","replies":[{"name":"实际回复者的姓名或网名","text":"公开回复逐字原文"}],"category":"可选A或B：日常闲聊为A，约定/仍在发展的具体事件为B","shown":true}-->。' +
         '分别抄录文字和配图，不补写；纯图片帖 text 可为空，无配图省略 imageDescription。发布或回复若明确写出时刻，可附 time（HH:mm）；否则沿用本楼剧情时间。回复只收录正文已经写出的他人公开回复，保留顺序，无回复省略 replies。' +
         '若本楼只新增对既有 user 推文的回复，每条附 <!--durian-x:{"action":"reply","postId":"对应已有帖子ID","name":"实际回复者","text":"回复原文","category":"可选A或B：日常闲聊为A，约定/持续事件为B","shown":true}-->。' +
-        '正文明确写出既有 user 或 NPC 推文的累计互动数时，另附 <!--durian-x:{"action":"metrics","postId":"准确的已保存帖子ID","postText":"复制目标表中该帖文字片段；纯图片帖用配图描述。广场必须由本楼提供原帖内容","metrics":{"replies":{"value":4000}}}-->。' +
+        '正文明确写出既有 user 或 NPC 推文的累计互动数时，另附 <!--durian-x:{"action":"metrics","postId":"准确的已保存帖子ID","postText":"未展示的帖子填目录文字片段或配图描述，已展示的帖子可省略。广场必须由本楼提供原帖内容","metrics":{"replies":{"value":4000}}}-->。' +
         'metrics 仅填正文明确提供的 likes、reposts、replies；每项各含 value 非负整数，未提及的项省略。达到4236填4236，突破四千或四千多填4000，点赞破两万填20000，不把下限推成虚构精确值。已经发布的新帖标记也可附同样 metrics。' +
-        '目录中 shown 为 true 的帖子已在正文展示过，只提供梗概，不得再次作为新发布内容出现，仍可作历史事实引用；没有 text 的条目是已过时效的旧帖，仅作定位引用，不提供内容、不再同步其互动数，也不得把内容当作当前可引用的帖子。' +
+        '目录中 shown 为 true 的帖子已在正文展示过，只保留定位与互动元数据，不再注入正文或配图内容，也不得再次作为新发布内容出现；没有 text 且未标记 shown 的条目是已过时效的旧帖，仅作定位引用，不再同步其互动数。' +
         '根据原帖内容、作者、发布时间和本楼指代确认目标，postId 和 postText 必须对应同一帖，不能只凭作者选最新一条；指代有歧义就不记。数字不能来自预期、假设、草稿、他帖或旧数的回忆，不因同步数字编写可见评论或粉丝变化。' +
         '回忆、转述旧帖、草稿、打算发布、转发他人帖子、私信均不记。没有发生就不输出，不为标记安排发帖或回复。已保存帖子（reply只用于user帖，metrics可用于user及NPC帖）：' +
         JSON.stringify(targets).replace(/\{\{/g,'\\u007b\\u007b') + '\n';
@@ -60,8 +60,13 @@ export function xStoryChanges(state, rows, chat, index, eventId, context) {
         const post=updatedPosts.get(postId)||state.x[postId];
         if(post?.type!=='post'||!row.metrics||typeof row.metrics!=='object')return;
         const original=post.text||post.imageDescription;
-        if(row.action==='metrics'&&(typeof row.postText!=='string'||!row.postText.trim()||
-            (row.postText!==original&&row.postText!==original?.slice(0,160))))return;
+        if(row.action==='metrics'){
+            const hasPostText=typeof row.postText==='string'&&!!row.postText.trim();
+            // Shown posts no longer provide text to quote; their exact ID can
+            // still identify cumulative engagement updates.
+            if((!hasPostText&&commMetaOrInfer(state,'x',postId,post).shown!==true)||
+                (hasPostText&&row.postText!==original&&row.postText!==original?.slice(0,160)))return;
+        }
         const metrics={...post.metrics};
         let changed=false,includesReplies=false;
         for(const key of ['likes','reposts','replies']){
