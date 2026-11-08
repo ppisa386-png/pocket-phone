@@ -17,28 +17,37 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
     const key=name=>[tab,accountId||'',page,name].join(':');
     const value=(name,fallback='')=>drafts[key(name)]??fallback;
     const disabled=()=>getView().busy||posting?' disabled':'';
-    const avatar=name=>'<span class="pp-chat-avatar" aria-hidden="true">'+chatEsc(Array.from(name||'?')[0])+'</span>';
+    const avatar=name=>'<span class="pp-chat-avatar'+(wc?'':' pp-wa-avatar-tone-'+([...String(name||'')].reduce((sum,char)=>sum+char.codePointAt(0),0)%5))+'" aria-hidden="true">'+chatEsc(Array.from(name||'?')[0])+'</span>';
     const button=(action,title,id='',glyph='',extra='')=>'<button type="button" class="pp-chat-button '+(glyph?'is-icon':'')+'" data-chat-action="'+action+'" data-chat-id="'+chatEsc(id)+'" aria-label="'+chatEsc(title)+'" title="'+chatEsc(title)+'"'+extra+'>'+ (glyph?icon(glyph):chatEsc(title))+'</button>';
     const field=(name,title,fallback='',type='text')=>'<label class="pp-chat-field"><span>'+title+'</span><input data-chat-field="'+name+'" name="'+name+'" type="'+type+'" value="'+chatEsc(value(name,fallback))+'" maxlength="'+(name==='name'&&!wc?6000:100)+'"'+(type==='number'?' min="0" step="'+(1/unitScale(walletCurrency(getView())||'USD'))+'"':'')+'></label>';
     const textarea=(name,title)=>'<textarea name="'+name+'" data-chat-field="'+name+'" aria-label="'+title+'" placeholder="'+title+'" rows="2" maxlength="6000" enterkeyhint="enter">'+chatEsc(value(name))+'</textarea>';
-    const form=(name,body,title)=>'<form class="pp-chat-form" data-chat-form="'+name+'">'+body+'<button class="pp-chat-primary" type="submit"'+disabled()+'>'+title+'</button></form>';
+    const form=(name,body,title,sendIcon=false)=>'<form class="pp-chat-form" data-chat-form="'+name+'">'+body+'<button class="pp-chat-primary'+(sendIcon?' pp-wa-send':'')+'" type="submit"'+(sendIcon?' aria-label="'+chatEsc(title)+'"':'')+disabled()+'>'+(sendIcon?icon('send'):title)+'</button></form>';
     const empty=(title,copy)=>'<div class="pp-chat-empty">'+icon('messages')+'<strong>'+title+'</strong><p>'+copy+'</p></div>';
     const threadItems=id=>Object.values(getView()[app]||{}).filter(i=>i.accountId===id&&['message','call','transfer'].includes(i.type)).sort((a,b)=>a.createdAt-b.createdAt);
     const preview=i=>!i?'点击开始聊天':i.type==='call'?'['+chatKinds[i.mode]+'通话] '+(chatCallLabels[i.status]||''):i.type==='transfer'?'[转账] '+i.currency+' '+majorAmount(i.amountMinor,i.currency):(i.status==='queued'?'[未发送] ':'')+(i.kind!=='text'?'['+chatKinds[i.kind]+'] ':'')+i.text;
     function row(a,contacts=false) {
         const latest=threadItems(a.id).at(-1),unread=records('message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
-        return '<button type="button" class="pp-chat-row" data-chat-action="thread" data-chat-id="'+chatEsc(a.id)+'">'+avatar(a.name)+'<span class="pp-chat-row-copy"><strong>'+chatEsc(a.name)+'</strong><span>'+chatEsc(a.blocked?'已拉黑':contacts?(a.number||'好友'):preview(latest))+'</span></span><span class="pp-chat-row-meta"><time>'+chatEsc(latest?displayStoryTime(latest):'')+'</time>'+(unread?'<b class="pp-chat-badge">'+(unread>99?'99+':unread)+'</b>':'')+'</span></button>';
+        return '<button type="button" class="pp-chat-row'+(wc?'':' pp-wa-conversation')+'" data-chat-action="thread" data-chat-id="'+chatEsc(a.id)+'">'+avatar(a.name)+'<span class="pp-chat-row-copy"><strong>'+chatEsc(a.name)+'</strong><span>'+chatEsc(a.blocked?'已拉黑':contacts?(a.number||'好友'):preview(latest))+'</span></span><span class="pp-chat-row-meta"><time>'+chatEsc(latest?displayStoryTime(latest):'')+'</time>'+(unread?'<b class="pp-chat-badge">'+(unread>99?'99+':unread)+'</b>':'')+'</span></button>';
     }
     function listHTML() {
         const q=value('filter').trim().toLocaleLowerCase();
         let friends=records('account').filter(a=>(a.friend==='friends'||tab==='chats'&&['incoming','unsaved'].includes(a.friend))&&(!q||[a.name,...(a.aliases||[]),a.number].some(n=>String(n||'').toLocaleLowerCase().includes(q))));
         friends.sort(tab==='contacts'?(a,b)=>a.name.localeCompare(b.name,'zh'):(a,b)=>(threadItems(b.id).at(-1)?.createdAt||0)-(threadItems(a.id).at(-1)?.createdAt||0));
         const search='<label class="pp-chat-search">'+icon('search')+'<input data-chat-field="filter" aria-label="搜索好友" placeholder="搜索" value="'+chatEsc(value('filter'))+'"></label>';
-        const actions=wc?'<div class="pp-chat-add-actions pp-wx-quick-actions"><div class="pp-wx-quick-item">'+button('add','添加好友','','plus')+'<span>添加好友</span></div><div class="pp-wx-quick-item">'+button('bulk','一键添加好友','','people',disabled())+'<span>一键添加好友</span></div></div>':'<div class="pp-chat-add-actions">'+button('add','添加好友','','plus')+button('bulk','一键添加好友','','people',disabled())+'<span>添加好友 · 一键添加</span></div>';
-        return search+actions+(friends.length?friends.map(a=>row(a,tab==='contacts')).join(''):empty(q?'没有找到好友':'与朋友开始聊天',q?'试试其他姓名。':'点击上方 + 按姓名添加，或一键添加已有好友。'));
+        const actions=wc?'<div class="pp-chat-add-actions pp-wx-quick-actions"><div class="pp-wx-quick-item">'+button('add','添加好友','','plus')+'<span>添加好友</span></div><div class="pp-wx-quick-item">'+button('bulk','一键添加好友','','people',disabled())+'<span>一键添加好友</span></div></div>':'<div class="pp-wa-shortcuts"><span>'+(tab==='contacts'?'好友列表':'最近聊天')+'</span><button type="button" class="pp-wa-bulk" data-chat-action="bulk"'+disabled()+'>'+icon('people')+'一键添加</button></div>';
+        const rows=friends.length?friends.map(a=>row(a,tab==='contacts')).join(''):empty(q?'没有找到好友':'与朋友开始聊天',q?'试试其他姓名。':'点击右上角 + 添加好友，或使用一键添加。');
+        return search+actions+(wc?rows:'<div class="pp-wa-list">'+rows+'</div>');
     }
     function callsHTML() {
         const calls=records('call').slice().reverse();
+        if(!wc){
+            const start='<div class="pp-wa-shortcuts"><span>最近通话</span>'+button('contacts','发起通话','','phone')+'</div>';
+            const rows=calls.map(c=>{
+                const a=getView()[app]?.[c.accountId];if(!a)return '';
+                return '<button type="button" class="pp-chat-row pp-wa-call-row" data-chat-action="thread" data-chat-id="'+chatEsc(a.id)+'">'+avatar(a.name)+'<span class="pp-chat-row-copy"><strong>'+chatEsc(a.name)+'</strong><span>'+icon(c.mode==='video'?'video':'phone')+chatKinds[c.mode]+' · '+chatCallLabels[c.status]+'</span></span><time class="pp-wa-call-time">'+chatEsc(displayStoryTime(c))+'</time></button>';
+            }).join('');
+            return start+'<div class="pp-wa-list">'+(rows||empty('暂无通话','打开好友聊天，点击顶部的语音或视频按钮。'))+'</div>';
+        }
         return '<div class="pp-chat-add-actions">'+button('contacts','发起通话','','phone')+'<span>选择好友，语音或视频通话</span></div>'+(calls.length?calls.map(c=>{const a=getView()[app]?.[c.accountId];return a?'<button type="button" class="pp-chat-row" data-chat-action="thread" data-chat-id="'+chatEsc(a.id)+'">'+avatar(a.name)+'<span class="pp-chat-row-copy"><strong>'+chatEsc(a.name)+'</strong><span>'+chatKinds[c.mode]+' · '+chatCallLabels[c.status]+'</span></span>'+icon(c.mode==='video'?'video':'phone')+'</button>':'';}).join(''):empty('暂无通话','打开好友聊天，点击顶部的电话或视频图标。'));
     }
     function transferHTML(t,blocked) {
@@ -79,12 +88,18 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         if(a.friend==='incoming')return button('accept-request','接受联系人',a.id)+button('later-request','暂不处理',a.id)+button('decline-request','拒绝',a.id)+button('block','拉黑',a.id);
         const call=threadItems(a.id).find(i=>i.type==='call'&&i.status==='connected');
         if(call)return '<div class="pp-chat-composer">'+form('call',textarea('call','通话内容'),'说话')+button('hangup','挂断',call.id,'',disabled())+'</div>';
+        if(!wc){
+            const selectedKind=value('kind','text');
+            const kindGlyph={text:'plus',voice:'voice',image:'image',video:'video',transfer:'cash'}[selectedKind]||'plus';
+            const picker='<span class="pp-wa-kind-picker">'+icon(kindGlyph)+'<select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries({...chatKinds,transfer:'转账'}).map(([id,title])=>'<option value="'+id+'"'+(selectedKind===id?' selected':'')+'>'+title+'</option>').join('')+'</select></span>';
+            return '<div class="pp-chat-composer pp-wa-composer">'+form('message','<div class="pp-chat-compose-input">'+picker+textarea('message','消息')+'</div>','发送',true)+'</div>';
+        }
         return '<div class="pp-chat-composer">'+form('message','<div class="pp-chat-compose-input"><select name="kind" data-chat-field="kind" aria-label="消息类型">'+Object.entries(wc?chatKinds:{...chatKinds,transfer:'转账'}).map(([id,title])=>'<option value="'+id+'"'+(value('kind','text')===id?' selected':'')+'>'+title+'</option>').join('')+'</select>'+textarea('message','发送消息')+'</div>','发送')+(wc?'<div class="pp-chat-compose-extra">'+button('cash','转账',a.id,'cash',disabled())+'<small>换行暂存 · 点击发送</small></div>':'')+'</div>';
     }
     function html() {
         if(accountId&&!account()){accountId=null;page='';editingId=null;}
         const a=account(),p=profile(),thread=!!a&&!page;
-        const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?'通讯录':tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'WhatsApp');
+        const title=a?a.name:page==='add'?'添加好友':tab==='contacts'?'联系人':tab==='calls'?'通话':tab==='me'?(wc?'我':'设置'):(wc?'微信':'聊天');
         let body='';
         if(page==='add')body='<div class="pp-chat-settings">'+form('add',field('name','好友姓名')+(wc?'':'<small>添加多个好友可以用、间隔名字</small>'),'发送好友申请')+button('bulk','一键添加好友','','',disabled())+'</div>';
         else if(a&&page==='info')body='<div class="pp-chat-settings"><div class="pp-chat-profile">'+avatar(a.name)+'<h2>'+chatEsc(a.name)+'</h2>'+(a.number?'<p>'+chatEsc(a.number)+'</p>':'')+'</div>'+(!wc&&!a.blocked&&a.friend==='friends'?button('cash','转账',a.id,'',disabled()):'')+(!a.identityKnown?button('reveal','自我介绍',a.id,'',disabled()):'')+button(a.blocked?'unblock':'block',a.blocked?'解除拉黑':'加入黑名单',a.id,'',disabled())+'</div>';
@@ -94,7 +109,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         else body=tab==='calls'?callsHTML():listHTML();
         const message=getView().busy?'正在处理…':getView().errorKind===app&&getView().error?getView().error:status;
         const tabs=[['chats',wc?'微信':'聊天',wc?'wechat':'messages'],['contacts','通讯录','people'],['calls','通话','phone'],['me',wc?'我':'设置',wc?'person':'settings']];
-        return '<section class="pp-chat-app pp-'+app+(thread?' is-thread':'')+'" data-chat-tab="'+chatEsc(tab)+'"><header class="pp-chat-top">'+(a||page?button('back','返回','','back'):'')+(!wc&&a?avatar(a.name):'')+'<h2>'+chatEsc(title)+'</h2><div>'+(thread?button('voice','语音通话',a.id,'phone',disabled())+button('video','视频通话',a.id,'video',disabled())+button('info','聊天信息',a.id,'more'):!a&&!page?button('add','添加好友','','plus'):'')+'</div></header>'+(message?'<p class="pp-chat-status" role="status">'+chatEsc(message)+'</p>':'')+'<div class="pp-chat-scroll" data-chat-page="'+chatEsc([app,tab,accountId||'',page].join(':'))+'" data-chat-count="'+(a?threadItems(a.id).length:0)+'">'+body+'</div>'+(thread?composerHTML(a):'')+(!a&&!page?'<nav class="pp-chat-tabs" aria-label="'+label+' 页面">'+tabs.map(([id,text,glyph])=>'<button type="button" data-chat-action="tab" data-chat-id="'+id+'" aria-pressed="'+(tab===id)+'">'+icon(glyph)+'<span>'+text+'</span></button>').join('')+'</nav>':'')+'</section>';
+        return '<section class="pp-chat-app pp-'+app+(thread?' is-thread':'')+'" data-chat-tab="'+chatEsc(tab)+'" data-chat-screen="'+(thread?'thread':page?'subpage':a?'subpage':'root')+'"><header class="pp-chat-top">'+(a||page?button('back','返回','','back'):'')+(!wc&&a?avatar(a.name):'')+'<h2>'+chatEsc(title)+'</h2><div>'+(thread?button('voice','语音通话',a.id,'phone',disabled())+button('video','视频通话',a.id,'video',disabled())+button('info','聊天信息',a.id,'more'):!a&&!page?button('add','添加好友','','plus'):'')+'</div></header>'+(message?'<p class="pp-chat-status" role="status">'+chatEsc(message)+'</p>':'')+'<div class="pp-chat-scroll" data-chat-page="'+chatEsc([app,tab,accountId||'',page].join(':'))+'" data-chat-count="'+(a?threadItems(a.id).length:0)+'">'+body+'</div>'+(thread?composerHTML(a):'')+(!a&&!page?'<nav class="pp-chat-tabs" aria-label="'+label+' 页面">'+tabs.map(([id,text,glyph])=>'<button type="button" data-chat-action="tab" data-chat-id="'+id+'" aria-pressed="'+(tab===id)+'">'+icon(glyph)+'<span>'+text+'</span></button>').join('')+'</nav>':'')+'</section>';
     }
     async function perform(method,args=[],message='') {
         if(!adapter[app]){notice('请在酒馆内使用'+label+'。');return null;}
@@ -122,7 +137,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice}) {
         reset(){epoch++;posting=false;reading=false;tab='chats';accountId=null;page='';editingId=null;status='';drafts=Object.create(null);},
         input(target){const name=target.dataset.chatField;if(name){const changed=value(name)!==target.value;drafts[key(name)]=target.value;
             if(name==='kind'&&!wc&&target.value==='transfer'&&accountId){drafts[key(name)]='text';page='cash';editingId=null;redraw();return;}
-            if(name==='filter'&&changed)redraw();}},
+            if((name==='filter'||name==='kind'&&!wc)&&changed)redraw();}},
         async readVisible(){if(reading||posting||getView().busy||page||!accountId||!adapter[app]||!records('message').some(m=>m.accountId===accountId&&m.role==='assistant'&&!m.read))return;const token=epoch;reading=true;try{await adapter[app].markRead(accountId);}finally{if(token===epoch)reading=false;}},
         async action(action,id){
             if(action==='back'){back();return;}
