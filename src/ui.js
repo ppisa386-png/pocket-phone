@@ -230,7 +230,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             return actions;
         }
         if(kind==='asset-row')return assetPanel.press(target);
-        if(kind==='daily-article'||kind==='daily-meta')return dailyPanel.press(target);
+        if(kind==='daily-article'||kind==='daily-meta'||kind==='daily-archive')return dailyPanel.press(target);
         if(String(kind).startsWith('x-'))return xPanel.press(target);
         return [];
     }
