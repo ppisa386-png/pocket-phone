@@ -97,7 +97,17 @@ try{
  await p.evaluate(()=>{window.response.articles=window.response.articles.map(a=>({...a,headline:'新一期 '+a.headline}));});await p.getByRole('button',{name:'看看新闻',exact:true}).tap();await p.getByText('新一期 城市音乐节公布周末演出阵容',{exact:true}).waitFor();
  await p.getByRole('button',{name:'过往报纸夹',exact:true}).tap();assert.equal(await p.locator('[data-daily-action="archive-edition"]').count(),1);assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await p.screenshot({path:resolve(root,'../qa-results/daily-folder-320.png')});
  await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();await p.getByRole('button',{name:'过往报纸夹',exact:true}).tap();await p.locator('[data-daily-action="archive-edition"]').tap();await p.getByText('城市音乐节公布周末演出阵容',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),0);assert.equal(await p.evaluate(()=>window.prepare()),'');
- await p.locator('[data-action="back"]').tap();await p.locator('[data-action="back"]').tap();
+ await p.locator('[data-action="back"]').tap();
+ await p.evaluate(()=>{window.confirm=()=>true;});
+ await longPress(p.locator('[data-daily-action="archive-edition"]').first());
+ assert.equal(await p.locator('.pp-press-action[data-kind="delete"][data-danger="true"]').getAttribute('aria-label'),'删除这期报纸');
+ await p.locator('.pp-press-action[data-kind="delete"]').tap();
+ await p.getByText('暂无过期报纸',{exact:true}).waitFor();
+ assert.equal(await p.evaluate(()=>window.calls),0);
+ await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();
+ await p.getByRole('button',{name:'过往报纸夹',exact:true}).tap();
+ await p.getByText('暂无过期报纸',{exact:true}).waitFor();
+ await p.locator('[data-action="back"]').tap();
  await p.evaluate(async()=>{const c=SillyTavern.getContext();c.chatId='another';c.chatMetadata={};c.chat=[{mes:'2003-07-25'}];await c.eventSource.emit('CHAT_CHANGED');});await p.locator('[data-app="daily"]').tap();await p.getByText('今天的世界，有什么新鲜事？',{exact:true}).waitFor();assert.equal(await p.locator('.pp-daily-article').count(),0);
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log('PASS daily mobile: 390/320px, editorial hierarchy, open/read/select zero API, actual request, adoption, reload, midnight expiry, rollback, one-attempt failure, app switch and chat isolation; no external requests or script errors');
 }finally{await browser.close();server.close();}
