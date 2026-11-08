@@ -347,14 +347,30 @@ test('the editorial prompt carries the historical-material contract, columns and
   assert.match(f.prompt(),/不要求与剧情日期同一天/);
   assert.match(f.prompt(),/允许根据历史事件的类型、背景和发展模式进行创作/);
   assert.match(f.prompt(),/按文章实际内容归入最合适的正式栏目/);
-  assert.match(f.prompt(),/历史素材参考新闻1～3篇/);
-  assert.match(f.prompt(),/奥运会、世界大战、美国总统选举、知名国际冲突、全球金融危机/);
+  assert.doesNotMatch(f.prompt(),/历史素材参考新闻1～3篇/);
+  assert.doesNotMatch(f.prompt(),/奥运会、世界大战、美国总统选举、知名国际冲突、全球金融危机/);
   assert.match(f.prompt(),/所在城市及周边、所在国家或地区、邻近国家和地区/);
   assert.match(f.prompt(),/剧情日期之后发生的事件绝不能提前报道/);
   assert.match(f.prompt(),/不得虚构一个/);
   assert.match(f.prompt(),/section 必须从这14个栏目中选最贴切的一个/);
-  assert.match(f.prompt(),/优先补充出现最少的栏目/);
+  assert.doesNotMatch(f.prompt(),/优先补充出现最少的栏目/);
   assert.match(f.prompt(),/其他年份同月或相近年份的事件仅作历史参考或创作原型，不得冒充当前剧情年份的真实新闻/);
+  assert.match(f.prompt(),/重大政治事件、总统选举、战争、国际冲突、金融危机、重大体育赛事、自然灾害等均属于正常新闻选题/);
+  assert.match(f.prompt(),/不设重大事件的数量上限、占比上限或连续刊登限制/);
+  assert.match(f.prompt(),/允许连续多期报道/);
+  assert.match(f.prompt(),/选题按以下优先级综合判断，这是参考顺序而不是必须逐项填充的配额/);
+  assert.match(f.prompt(),/第一，当期具有新闻价值的重大事件/);
+  assert.match(f.prompt(),/第四，普通地方新闻与生活资讯/);
+  assert.match(f.prompt(),/历史素材的广度仅用于避免反复使用同一批熟知事件凑数，不得用于压低真实重大事件的报道地位/);
+  assert.match(f.prompt(),/不得为了满足比例强行混入普通机构公告/);
+  assert.match(f.prompt(),/地域优先不等于地域封锁/);
+  assert.match(f.prompt(),/选题以当期新闻价值为准/);
+  assert.match(f.prompt(),/机构日常业务调整（启动工作、完善机制、优化流程、调整审核标准、推进规范管理、开展专项整治等）只在具备相应新闻价值时刊登/);
+  assert.match(f.prompt(),/不用抽象的部门工作内容填补没有实际选题的栏目/);
+  assert.match(f.prompt(),/头条必须是本期最有报道价值的事件/);
+  assert.match(f.prompt(),/新闻价值优先，栏目多样性辅助/);
+  assert.match(f.prompt(),/不为补齐冷门栏目制造低价值报道/);
+  assert.match(f.prompt(),/不是整份报纸必须围绕的中心/);
  }finally{f.close();}
 });
 
@@ -374,6 +390,9 @@ test('fictional worlds switch the editorial contract and carry the world setting
   assert.match(f.prompt(),/不得将现实世界的具体国家、城市、政府或媒体当作架空世界的实际地理与政治实体/);
   assert.match(f.prompt(),/不得冒充架空世界真实发生过的事件/);
   assert.doesNotMatch(f.prompt(),/所在城市及周边、所在国家或地区、邻近国家和地区/);
+  assert.match(f.prompt(),/架空世界同样按当期新闻价值编排/);
+  assert.match(f.prompt(),/选举、外交危机、战争、重大案件、体育联赛、文化娱乐事件、企业危机、自然灾害等均可正常出现/);
+  assert.match(f.prompt(),/不受栏目轮换或题材比例限制/);
  }finally{f.close();}
 });
 test('real locations keep the real-history editorial contract',async()=>{
