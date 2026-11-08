@@ -66,15 +66,18 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
             '</header>';
     }
 
-    function hero(w, theme, emptyText = '', emptyNote = '') {
+    function hero(w, theme, city, busy, emptyText = '', emptyNote = '') {
         const type = w?.type || 'partly';
         const temp = w?.temp == null ? '—' : Math.round(w.temp);
         const label = w?.label || (w?.type ? weatherType(w.type) : emptyText || '天气待更新');
         const feels = w?.feels == null ? (w?.temp == null ? '—' : Math.round(w.temp)) : Math.round(w.feels);
         const extreme = !!(w?.extreme || weatherExtreme(type));
         const alert = extreme ? '<span class="pp-weather-alert">' + escapeHtml(label) + '</span>' : '';
+        // 抬头一体：天气照片是整个 hero 的背景层（inset:0 全铺，随容器圆角裁切），
+        // 城市导航、温度与天气信息直接叠加在照片之上，不再有独立的图片块。
         return '<section class="pp-weather-hero">' +
             '<div class="pp-weather-backdrop" aria-hidden="true">' + sceneBackdrop(type, theme) + '</div>' +
+            top(city, busy) +
             '<div class="pp-weather-hero-copy">' + alert +
             '<strong><span>' + temp + '</span><i>°C</i></strong>' +
             '<b class="pp-weather-desc">' + escapeHtml(label) + '</b>' +
@@ -91,7 +94,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
     function emptyPage(theme, city, busy, title, note) {
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud">' +
             '<div class="pp-weather-scroll">' +
-            '<div class="pp-weather-scene">' + top(city, busy) + hero(null, theme, title, note) + '</div>' +
+            '<div class="pp-weather-scene">' + hero(null, theme, city, busy, title, note) + '</div>' +
             statusMarkup() +
             '</div></section>';
     }
@@ -155,8 +158,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '">' +
             '<div class="pp-weather-scroll">' +
             '<div class="pp-weather-scene">' +
-            top(city, busy) +
-            hero(w, theme) +
+            hero(w, theme, city, busy) +
             '</div>' +
             statusMarkup() + metrics + hourly + week +
             '</div></section>';

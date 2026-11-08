@@ -630,6 +630,12 @@ test('the redesigned surface carries the webp sky backdrop, flat hero, inline me
         assert.equal(new Set(['mist', 'apricot', 'night'].map(t => sceneBackdrop('rain', t))).size, 3, 'three distinct local sky images');
         for (const theme of ['mist', 'apricot', 'night'])
             assert.match(sceneBackdrop('rain', theme), /^<img class="pp-weather-backdrop-art" src="data:image\/webp;base64,/);
+        // 抬头一体：城市导航与主视觉同处 hero，照片层是 hero 的第一个背景子层
+        const heroAt = dusk.indexOf('class="pp-weather-hero"');
+        const backdropAt = dusk.indexOf('class="pp-weather-backdrop"');
+        const topAt = dusk.indexOf('class="pp-weather-top"');
+        const copyAt = dusk.indexOf('class="pp-weather-hero-copy"');
+        assert.ok(heroAt >= 0 && heroAt < backdropAt && backdropAt < topAt && topAt < copyAt, 'sky photo backs the whole hero with the city header inside it');
         // E 杏桃主题画温度曲线；B 雾紫 / D 深蓝保持干净的逐小时排列
         assert.doesNotMatch(mist, /pp-weather-band/);
         assert.match(dusk, /pp-weather-band/);

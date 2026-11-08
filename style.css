@@ -367,6 +367,7 @@ h2, p { margin: 0; }
     --w-panel:rgba(255,255,255,.68);--w-panel-strong:rgba(255,255,255,.84);
     --w-line:rgba(75,82,145,.12);--w-accent:#777bdc;--w-now:rgba(132,129,228,.16);
     --w-curve:#e9a0a0;--w-shadow:0 9px 24px rgba(55,58,112,.10);
+    --w-hero-veil:linear-gradient(100deg,rgba(46,52,105,.36) 0%,rgba(46,52,105,.14) 46%,rgba(46,52,105,0) 72%);
     display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;
     color:var(--w-ink);background:var(--w-page);font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
     overflow-wrap:anywhere;transition:background .45s ease,color .35s ease;
@@ -377,6 +378,7 @@ h2, p { margin: 0; }
     --w-panel:rgba(255,255,255,.68);--w-panel-strong:rgba(255,255,255,.86);
     --w-line:rgba(69,77,145,.12);--w-accent:#6f75d6;--w-now:rgba(115,116,218,.17);
     --w-curve:#dc999e;--w-shadow:0 9px 24px rgba(54,61,132,.11);
+    --w-hero-veil:linear-gradient(100deg,rgba(46,52,105,.36) 0%,rgba(46,52,105,.14) 46%,rgba(46,52,105,0) 72%);
 }
 .pp-weather[data-wtheme="apricot"]{
     --w-page:linear-gradient(180deg,#f3d9ce 0%,#f7e7dd 35%,#fbf5ef 72%,#f8eee6 100%);
@@ -384,6 +386,7 @@ h2, p { margin: 0; }
     --w-panel:rgba(255,255,255,.64);--w-panel-strong:rgba(255,255,255,.82);
     --w-line:rgba(137,96,71,.13);--w-accent:#c9855e;--w-now:rgba(224,155,112,.18);
     --w-curve:#e89570;--w-shadow:0 9px 24px rgba(126,83,57,.09);
+    --w-hero-veil:linear-gradient(100deg,rgba(251,243,234,.56) 0%,rgba(251,243,234,.24) 46%,rgba(251,243,234,0) 72%);
 }
 .pp-weather[data-wtheme="night"]{
     --w-page:linear-gradient(180deg,#0b2b4d 0%,#12436f 46%,#173f69 76%,#0e3155 100%);
@@ -391,6 +394,7 @@ h2, p { margin: 0; }
     --w-panel:rgba(220,237,255,.12);--w-panel-strong:rgba(220,237,255,.17);
     --w-line:rgba(224,239,255,.18);--w-accent:#c2dcf5;--w-now:rgba(195,220,247,.18);
     --w-curve:#9ec9f3;--w-shadow:0 10px 28px rgba(0,12,31,.20);
+    --w-hero-veil:linear-gradient(100deg,rgba(4,16,34,.42) 0%,rgba(4,16,34,.16) 48%,rgba(4,16,34,0) 74%);
 }
 .pp-weather-scroll{
     flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
@@ -416,22 +420,25 @@ h2, p { margin: 0; }
 .pp-weather-mini-refresh.is-busy svg{animation:pp-weather-spin 1s linear infinite;}
 @keyframes pp-weather-spin{to{transform:rotate(360deg)}}
 .pp-weather-hero{
-    position:relative;isolation:isolate;min-height:190px;margin:0 -2px 0;overflow:hidden;
+    position:relative;isolation:isolate;min-height:208px;margin:0 -2px 0;overflow:hidden;border-radius:22px;
 }
+/* 天气照片是整个抬头的背景层：inset:0 全铺、随容器圆角裁切；图片自身无独立背景/边距/阴影/边框，
+   文字可读性与自然融合由主题雾层蒙版（::before）与底部渐隐（::after）完成。 */
 .pp-weather-backdrop{
-    position:absolute;z-index:0;top:-2px;right:-18px;width:76%;height:194px;overflow:hidden;
-    pointer-events:none;opacity:.98;
-    -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 17%,#000 100%);
-    mask-image:linear-gradient(90deg,transparent 0%,#000 17%,#000 100%);
+    position:absolute;z-index:0;inset:0;overflow:hidden;pointer-events:none;
+}
+.pp-weather-backdrop::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:var(--w-hero-veil,linear-gradient(100deg,rgba(46,52,105,.36) 0%,rgba(46,52,105,.14) 46%,rgba(46,52,105,0) 72%));
 }
 .pp-weather-backdrop::after{
     content:"";position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(180deg,transparent 58%,var(--w-page-bottom) 100%);
+    background:linear-gradient(180deg,transparent 56%,var(--w-page-bottom) 100%);
 }
 .pp-weather-backdrop-art{display:block;width:100%;height:100%;object-fit:cover;object-position:center center;border:0;}
 .pp-weather-hero-copy{
     position:relative;z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:3px;
-    width:60%;min-height:184px;padding:25px 0 12px;color:var(--w-hero-ink);
+    width:60%;min-height:152px;padding:12px 0 14px;color:var(--w-hero-ink);
 }
 .pp-weather-hero-copy>strong{
     display:flex;align-items:flex-start;gap:2px;margin:0;font-size:0;font-weight:300;line-height:.96;
@@ -512,7 +519,7 @@ h2, p { margin: 0; }
 .pp-weather-day-warn{grid-column:2/-1;margin:-1px 0 4px;font-size:10px;line-height:1.4;color:#d66e52;}
 .pp-weather-status{margin:12px 4px 0;text-align:center;font-size:11px;line-height:1.5;color:var(--w-muted);overflow-wrap:anywhere;}
 .pp-weather-empty-note{margin:3px 2px 16px;font-size:11.5px;line-height:1.6;color:var(--w-muted);}
-.pp-weather-hero:has(.pp-weather-hero-copy strong span:first-child:empty){min-height:150px;}
+.pp-weather-hero:has(.pp-weather-hero-copy strong span:first-child:empty){min-height:196px;}
 .pp-weather-hero-copy .pp-weather-alert{align-self:flex-start;}
 .pp-weather-hero-copy:has(.pp-weather-alert){padding-top:14px;}
 .pp-weather-hint-card{margin:12px 0 4px;padding:13px 15px;border-radius:16px;background:var(--w-panel);border:1px solid var(--w-line);}
@@ -541,7 +548,6 @@ h2, p { margin: 0; }
     .pp-weather-scene{margin-left:-13px;margin-right:-13px;padding-left:15px;padding-right:15px;}
     .pp-weather-hero-copy{width:62%;}
     .pp-weather-hero-copy>strong>span{font-size:62px;}
-    .pp-weather-backdrop{width:73%;right:-16px;}
     .pp-weather-metrics{padding-left:1px;padding-right:1px;}
     .pp-weather-metric small{font-size:9px;}
     .pp-weather-metric b{font-size:11.5px;}

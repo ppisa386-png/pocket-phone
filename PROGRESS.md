@@ -1,5 +1,14 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 天气抬头整改：照片全铺 hero 背景层＋一体圆角边界（1.2 之上）
+基线为 b801051（天气视觉还原之上，636/636）。用户验收后指出抬头问题："天气图片像一张单独的卡片悬浮在背景上，而不是抬头本身的一部分"，并给出七条目标（full-bleed 铺满抬头、共用同一圆角边界、温度/城市/信息叠加在图片上、雾层蒙版融合、无独立背景/边距/阴影/边框、整体像完整 hero banner）。逐条核查确认上一轮未达标（图片只占 hero 右侧 76%、hero 无统一圆角、城市行在 hero 外、温度落在页面渐变上），本轮整改。
+
+**视图（src/weather-view.js）**：`hero()` 签名扩展为 `hero(w, theme, city, busy, emptyText, emptyNote)`——城市导航行 `top()` 移入 hero section 内部（照片层之后、文案之前），城市/刷新与温度/描述全部叠加在照片上；emptyPage 与正常页同一结构；其余接口与事件契约不变。
+**CSS（style.css 天气块内调整）**：`.pp-weather-backdrop` 由 `top:-2px;right:-18px;width:76%` 矩形块改为 **`inset:0` 全铺**（object-fit:cover 等效 background-size:cover），删除左侧 mask 与 opacity；`.pp-weather-hero` 增 `border-radius:22px`＋`overflow:hidden`——图片层与容器共用同一圆角裁切区域；新增 `--w-hero-veil` 主题雾层蒙版（`.pp-weather-backdrop::before`，mist 蓝紫暗纱 .36→0 / apricot 奶油亮纱 .56→0 / night 深海暗纱 .42→0，100° 渐变左强右无）保证文字可读；保留 `::after` 底部渐隐融入页面色；删除 360px 断点中 backdrop 独立定位覆写；hero min-height 208px、hero-copy min-height 152px（header 48px 移入后重新配平）；`:has` 空温度兜底 150→196px。图片自身无独立背景/内边距/外边距/阴影/边框（仅 border:0 的 img）。
+**测试（tests/weather.test.js）**：新增抬头一体结构断言——hero 内子层顺序 `hero → backdrop → top → hero-copy`（照片是 hero 第一个背景子层、城市行在 hero 内）；既有 31 项全保留。
+验证：天气专项 31/31；完整 npm test 636/636；npm run build:preview 通过。内置 Chromium 实测（真实引擎＋真实视图）：B/E/D 三主题 390px——照片铺满整个抬头、城市行与温度/描述叠加其上、统一 22px 圆角边界、无"外层背景＋内层矩形图"分层；程序化断言 9 组合（三主题×320/360/390）`backdropCoversHero=true（矩形全等）`、header/copy 均在 hero 内、主题 veil 生效、weather/scroll/body 横向溢出全 0；真实点击 hero 内迷你刷新→「天气已更新」。截图（B/E/D 390＋E 320）已交付用户。
+未完成：真实手机触屏最终确认待用户验收；版本参数保持 1.2 待发布统一；本轮已本地提交、未推送远端（等待用户指示）。
+
 ## 本地待发布 · 天气 App 视觉还原：WebP 天空照片素材＋参考图结构对齐（1.2 之上）
 基线为 2915f72（天气素材感整改之上，636/636）。用户提供《天气App视觉还原包》（reference-target.png 为设计目标），按包内 README.md 与 GLM-INTEGRATION.md 完成集成：`src/weather-view.js`、`src/weather-art.js` 整文件替换；`style.css` 天气区块（原 362–435 行）整体换为包内 `style-weather.css`。天气引擎 weather.js、ui.js 接线（定时主题切换/前后台重判/滚动保持）、刷新与数据链路零改动；`themeFor`/`nextThemeChange`/`createWeatherPanel({adapter,getView,redraw,notice,now})` 接口、`data-weather-action="refresh"` 事件接口、`{html,action,reset}` 返回结构全部保持。本节取代上一轮"整页单卡＋SVG 云层场景层"实现（REQUIREMENTS.md 已同步改写）。
 
