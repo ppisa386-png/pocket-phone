@@ -238,8 +238,8 @@ export function createX({memory,phone,getContext,getSettings}) {
         }
         const deal=result.deal,p=state.business?.[deal?.id];
         if(p?.accountId===a.id&&['accept','reject'].includes(deal?.kind)){
-            const context=getContext(),draw=context.chatMetadata?.[JOURNAL_KEY]?.businessDraws?.[p.id];
-            changes.push(...dealDecision(p,deal.kind,state.business.counter.turn,readStoryClock(context.chat).day,draw,deal.terms));
+            const context=getContext(),journal=context.chatMetadata?.[JOURNAL_KEY],draw=journal?.businessDraws?.[p.id];
+            changes.push(...dealDecision(p,deal.kind,state.business.counter.turn,readStoryClock(context.chat).day,draw,deal.terms,deal,journal?.businessRolls?.[p.id]));
         }
         await commit(changes);
     }
