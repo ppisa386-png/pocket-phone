@@ -55,12 +55,12 @@ function temperatureCurve(hours) {
         '</svg>';
 }
 
-export function createWeatherPanel({ adapter, getView, redraw, notice, now = () => new Date() }) {
+export function createWeatherPanel({ adapter, getView, redraw, notice, editLocation, now = () => new Date() }) {
     let working = false, status = '', epoch = 0;
 
     function top(cityName, busy) {
         return '<header class="pp-weather-top">' +
-            '<div class="pp-weather-loc"><span class="pp-weather-pin" aria-hidden="true">' + PIN + '</span>' +
+            '<div class="pp-weather-loc" data-press="weather-location" tabindex="0" title="长按修改地点"><span class="pp-weather-pin" aria-hidden="true">' + PIN + '</span>' +
             '<b>' + escapeHtml(cityName) + '</b><span class="pp-weather-loc-chevron" aria-hidden="true">⌄</span></div>' +
             '<button type="button" class="pp-weather-mini-refresh' + (busy ? ' is-busy' : '') + '" data-weather-action="refresh" aria-label="刷新天气" title="刷新天气"' + (busy ? ' disabled' : '') + '>' + MINI_REFRESH + '</button>' +
             '</header>';
@@ -163,6 +163,13 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
             '</div></section>';
     }
 
+    function press(target) {
+        if(target?.dataset?.press!=='weather-location')return [];
+        const view=getView(),busy=working||!!view?.busy;
+        const city=view?.location?.current?.city||'';
+        return [{icon:'edit',label:'修改地点',disabled:busy,run:()=>editLocation?.(city)}];
+    }
+
     async function action(name) {
         if (name !== 'refresh' || working || getView()?.busy) return;
         if (!adapter.weather) { status = '暂时无法更新天气。'; redraw(); return; }
@@ -181,5 +188,5 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, now = () 
         }
     }
 
-    return { html, action, reset() { epoch++; working = false; status = ''; } };
+    return { html, action, press, reset() { epoch++; working = false; status = ''; } };
 }
