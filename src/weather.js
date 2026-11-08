@@ -10,13 +10,26 @@ export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市
 const norm = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
 export const normCity = city => norm(city);
 
+ // Common Los Angeles labels need one shared real-city classification for
+ // weather and newspaper history, without accepting arbitrary partial matches.
+const knownCityKey = value => {
+    const raw = String(value ?? '').normalize('NFKC').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const latin = raw.replace(/[,，.()（）]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (/^(?:city of )?los angeles(?:(?: city| ca| california| usa| us| united states| of america))*$/.test(latin))
+        return normCity('los angeles');
+    const chinese = raw.replace(/[\s,，()（）]/g, '');
+    if (/^(?:(?:美国|美國)(?:加州|加利福尼亚州|加利福尼亞州)?)?(?:洛杉矶|洛杉磯)(?:(?:市|加州|加利福尼亚州|加利福尼亞州|美国|美國))*$/.test(chinese))
+        return normCity('洛杉矶');
+    return normCity(value);
+};
+
 // The marker carries only a city name, so the location kind is decided locally:
 // a known real city is real unless the world declares itself fictional (an
 // explicit fictional marker beside the city name or a world-level declaration),
 // a city named in the world setting is fictional, and anything else stays
 // unconfirmed — never silently borrowing a same-named real city's climate.
 export function locationKind(city, context) {
-    const name = normCity(city);
+    const name = knownCityKey(city);
     if (!name) return 'unconfirmed';
     const material = typeof context === 'object' && context ? worldMaterial(context) : [];
     if (CITY_TABLE[name]) {
@@ -210,7 +223,7 @@ city(['墨西哥城', 'mexicocity', 'mexico city'], { archetype: 'h', offset: 3 
 // setting, then a stable locally derived profile saved with the first refresh.
 export function climateFor(cityName, cached = null, kind = 'real', context = null) {
     if (cached && ARCHETYPES[cached.archetype]) return cached;
-    const key = normCity(cityName);
+    const key = kind === 'real' ? knownCityKey(cityName) : normCity(cityName);
     if (kind !== 'real') {
         const world = worldClimate(cityName, context);
         if (world) return world;
