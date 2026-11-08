@@ -168,6 +168,33 @@ test('X opens locally; account search deduplicates and never imports phone or Sn
  const before=f.count();ok(await f.x.follow(id,true));ok(await f.x.publish('Hello world'));const p=xItems(f.state(),'post')[0];ok(await f.x.react(p.id,'liked'));ok(await f.x.react(p.id,'reposted'));assert.equal(f.count(),before);assert.equal(f.state().x[p.id].reposted,true);f.close();
 });
 
+
+test('X private messages show pending and failure as text without retry buttons',async()=>{
+ const f=setup();
+ try{
+  const id=await account(f,'open');
+  const state=structuredClone(f.state());
+  for(const [n,status] of ['pending','failed','request','no_reply'].entries()){
+   const mid='status-'+status;
+   state.x[mid]={id:mid,type:'message',role:'user',accountId:id,text:'Message '+status,status,createdAt:n+1,read:true};
+  }
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>state,redraw(){},notice(){}});
+  await panel.action('thread',id);
+  const html=panel.html();
+  for(const [status,label] of [['pending','等待回复…'],['failed','回复失败']]){
+   const article=html.split('data-x-id="status-'+status+'"')[1]?.split('</article>')[0];
+   assert.ok(article,status+' bubble exists');
+   assert.ok(article.includes(label),status+' status text is visible');
+   assert.ok(!article.includes('<button'),status+' does not render a retry control');
+  }
+  assert.ok(!html.includes('>重试</button>'));
+  assert.match(html,/消息请求已发送/);
+  assert.match(html,/查看回应/);
+  assert.match(html,/已发送/);
+ }finally{f.close();}
+});
+
 test('X anonymous private replies stay scoped; failed messages retry once; rename preserves disclosure',async()=>{
  const f=setup(),id=await account(f,'open');f.reply(()=>{throw Error('offline');});assert.equal((await f.x.send(id,'Hi')).ok,false);let m=xItems(f.state(),'message')[0];assert.equal(m.status,'failed');
  f.reply({status:'reply',text:'Hello Moon'});ok(await f.x.retryMessage(m.id));assert.equal(xItems(f.state(),'message').length,2);assert.match(f.prompt(),/不知道此网名是谁/);assert.equal(xUnread(f.state()),1);
