@@ -2229,3 +2229,297 @@ h2, p { margin: 0; }
  .pp-whatsapp.is-thread .pp-chat-top h2{font-size:12px}
  .pp-whatsapp .pp-wa-composer .pp-wa-send{width:35px;min-width:35px;flex-basis:35px;height:35px;min-height:35px}
 }
+
+/* Amazon mobile storefront — HTML/CSS Amazon Clone × Flutterzon; SVG art is local. */
+.pp-phone[data-active-app="amazon"]{
+  --pp-bg:#f2f4f5;--pp-card:#fff;--pp-text:#17212a;
+  --pp-muted:#64737a;--pp-line:#e5e9e9;--pp-accent:#007185;
+  --pp-input:#fff;background:#f2f4f5;color:#17212a;color-scheme:light
+}
+.pp-phone[data-active-app="amazon"] .pp-topline,
+.pp-phone[data-active-app="amazon"] .pp-header{background:#131d2b;color:#fff}
+.pp-phone[data-active-app="amazon"] .pp-header{border-bottom:1px solid #ffffff13}
+.pp-phone[data-active-app="amazon"] .pp-footer{background:#fff;color:#18232d}
+.pp-shop{
+  --shop-navy:#131d2b;--shop-teal:#007185;--shop-yellow:#ffd814;
+  --shop-line:#e7ebed;--shop-ink:#17212a;--shop-muted:#6a747a;
+  display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;
+  background:#f2f4f5;color:var(--shop-ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:13px;text-align:left
+}
+.pp-shop *{box-sizing:border-box}
+.pp-shop .pp-shop-masthead{
+  min-height:55px;padding:11px 15px 13px;background:#131d2b;
+  align-items:center;color:#fff;border-bottom:1px solid #ffffff1b
+}
+.pp-shop .pp-shop-masthead>b{font-size:26px;letter-spacing:-1.8px;line-height:1;font-weight:760}
+.pp-shop .pp-shop-masthead>b>span{
+  bottom:-3px;left:17px;width:55px;height:11px;border-bottom:3px solid #ff9e28
+}
+.pp-shop .pp-shop-masthead>span{
+  font-size:10px;letter-spacing:.4px;font-weight:560;color:#b7c9d6;
+  background:#ffffff13;border:1px solid #ffffff1a;border-radius:20px;padding:5px 9px
+}
+.pp-shop .pp-shop-body{
+  padding:0 12px 21px;background:#f2f4f5;scrollbar-width:thin;
+  scrollbar-color:#cdd5d7 transparent;overscroll-behavior:contain
+}
+.pp-shop .pp-snap-status{
+  margin:0 -12px;padding:9px 12px;background:#e8f4f3;color:#096e75;
+  border-radius:0;font-size:11px;line-height:1.5
+}
+.pp-shop .pp-snap-status:empty{display:none}
+.pp-shop .pp-shop-search{
+  margin:0 -12px 17px;padding:12px 13px 16px;border-radius:0 0 17px 17px;
+  background:linear-gradient(115deg,#a4e0dc,#c2ebe4 62%,#d6f0e8)
+}
+.pp-shop .pp-shop-search .pp-snap-form{
+  display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:0;
+  margin:0;padding:0;min-height:45px;background:#fff;
+  border:1px solid #7eb7b6;border-radius:11px;
+  box-shadow:0 2px 7px #12544f15;overflow:hidden
+}
+.pp-shop .pp-shop-search .pp-field{min-width:0}
+.pp-shop .pp-shop-search input{
+  width:100%;height:44px;min-height:44px;padding:0 12px!important;
+  border:0!important;border-radius:0!important;background:#fff!important;
+  box-shadow:none!important;font-size:13px
+}
+.pp-shop .pp-shop-search input::placeholder{color:#899396;opacity:1}
+.pp-shop .pp-shop-search .pp-snap-primary{
+  display:grid;place-items:center;border:0;border-radius:0;
+  min-height:44px;width:46px;padding:0;
+  background:#febd69;color:#1d2529;box-shadow:none
+}
+.pp-shop .pp-shop-search .pp-snap-primary>svg{width:21px;height:21px}
+.pp-shop .pp-shop-search .pp-snap-primary:active{background:#f4ab4b}
+.pp-shop .pp-shop-section-eyebrow{
+  margin:14px 2px 3px;color:#638083;font-size:10px;font-weight:740;
+  letter-spacing:1.1px;text-transform:uppercase
+}
+.pp-shop .pp-shop-heading{
+  display:flex;align-items:baseline;justify-content:flex-start;gap:7px;
+  margin:2px 2px 13px;font-size:20px;line-height:1.3;
+  font-weight:770;letter-spacing:-.55px;color:#17212a
+}
+.pp-shop .pp-shop-heading>span{font-size:11px;font-weight:500;color:#737e83;letter-spacing:0}
+.pp-shop .pp-shop-discover{padding-bottom:5px}
+.pp-shop .pp-shop-results{display:grid;gap:9px}
+.pp-shop .pp-shop-product{
+  display:grid;grid-template-columns:107px minmax(0,1fr);gap:11px;
+  align-items:stretch;min-height:158px;margin:0;padding:11px;
+  background:#fff;border:1px solid #e8ebeb;border-radius:15px;
+  box-shadow:0 2px 9px #14242d08;overflow:hidden
+}
+.pp-shop .pp-shop-art{
+  display:grid;place-items:center;flex-shrink:0;
+  width:100%;min-width:0;aspect-ratio:1;
+  border-radius:12px;background:linear-gradient(145deg,#f6f1e9,#e9e5df);
+  overflow:hidden;isolation:isolate
+}
+.pp-shop .pp-shop-art img{
+  display:block;width:70%;height:70%;object-fit:contain;
+  filter:drop-shadow(0 4px 6px #25334312)
+}
+.pp-shop .pp-shop-art-mobile,.pp-shop .pp-shop-art-laptop,.pp-shop .pp-shop-art-headphone,
+.pp-shop .pp-shop-art-camera,.pp-shop .pp-shop-art-game{
+  background:linear-gradient(145deg,#edf5fa,#e3eef8)
+}
+.pp-shop .pp-shop-art-lipstick,.pp-shop .pp-shop-art-handbag,.pp-shop .pp-shop-art-dress,
+.pp-shop .pp-shop-art-sunglasses{
+  background:linear-gradient(145deg,#fff0f2,#f8e7ed)
+}
+.pp-shop .pp-shop-art-shirt,.pp-shop .pp-shop-art-backpack,.pp-shop .pp-shop-art-books{
+  background:linear-gradient(145deg,#f4f0e7,#ebe8f8)
+}
+.pp-shop .pp-shop-art-plant{background:linear-gradient(145deg,#eaf6ec,#dcefe9)}
+.pp-shop .pp-shop-art-shopping{background:linear-gradient(145deg,#fff2d7,#fce4c8)}
+.pp-shop .pp-shop-art-list{width:107px;height:126px;aspect-ratio:auto}
+.pp-shop .pp-shop-art-list img{width:77%;height:70%}
+.pp-shop .pp-shop-product-info{
+  min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;
+  gap:5px
+}
+.pp-shop .pp-shop-brand{
+  color:#006b80;font-size:10.5px;font-weight:720;line-height:1.25;
+  letter-spacing:.1px
+}
+.pp-shop .pp-shop-product h3{
+  margin:0;font-size:13.5px;line-height:1.42;font-weight:640;
+  letter-spacing:-.15px;color:#202a31;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden
+}
+.pp-shop .pp-shop-rating{
+  display:inline-flex;align-items:center;gap:3px;
+  max-width:100%;font-size:11.5px;font-weight:730;line-height:1.3;
+  white-space:nowrap;color:#243a48
+}
+.pp-shop .pp-shop-rating>span{color:#e99b1c;font-size:15px}
+.pp-shop .pp-shop-rating>small{min-width:0;font-size:10px;color:#737e84;font-weight:480}
+.pp-shop .pp-shop-price{
+  color:#15202a;font-weight:750;font-size:19px;line-height:1.22;
+  letter-spacing:-.35px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere
+}
+.pp-shop .pp-shop-product-info .pp-shop-price{margin-top:auto}
+.pp-shop .pp-shop-product .pp-snap-button{
+  margin-top:2px;padding:2px 0 1px;min-height:24px;border:0;
+  border-radius:0;background:transparent;color:#007185;
+  font-size:11.5px;font-weight:700
+}
+.pp-shop .pp-shop-product .pp-snap-button:active{color:#004854}
+.pp-shop .pp-shop-welcome{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:20px 17px 28px;min-height:245px;border-radius:16px;
+  background:#fff;border:1px solid #e8ebeb;box-shadow:0 2px 9px #14242d08;
+  text-align:center
+}
+.pp-shop .pp-shop-welcome-visual{width:115px;margin:0 auto 11px}
+.pp-shop .pp-shop-art-welcome{width:115px;height:115px;border-radius:26px}
+.pp-shop .pp-shop-art-welcome img{width:73%;height:73%}
+.pp-shop .pp-shop-welcome .pp-shop-section-eyebrow{margin:6px 0 7px}
+.pp-shop .pp-shop-welcome h3{
+  color:#212a31;font-size:19px;font-weight:760;letter-spacing:-.3px;margin:0 0 8px
+}
+.pp-shop .pp-shop-welcome p{color:#69767d;font-size:12px;line-height:1.75;margin:0;max-width:240px}
+.pp-shop .pp-shop-detail,.pp-shop .pp-shop-reviews,.pp-shop .pp-shop-checkout{
+  margin:10px 0 0;padding:0;border-radius:15px;background:#fff;
+  border:1px solid #e8ebeb;box-shadow:0 2px 9px #14242d08;overflow:hidden
+}
+.pp-shop .pp-shop-detail>[data-shop-action="back"]{
+  display:block;min-height:38px;margin:0;padding:12px 15px 5px;
+  color:#007185;font-size:12px;font-weight:690;background:transparent;border:0;text-align:left
+}
+.pp-shop .pp-shop-detail-visual{
+  display:grid;place-items:center;min-height:188px;padding:0 20px 15px;background:#fff
+}
+.pp-shop .pp-shop-art-large{
+  width:min(100%,190px);height:178px;aspect-ratio:auto;border-radius:20px
+}
+.pp-shop .pp-shop-art-large img{width:68%;height:75%}
+.pp-shop .pp-shop-detail-copy{padding:15px;border-top:1px solid #eff1f2}
+.pp-shop .pp-shop-detail-copy>h3{
+  font-size:18px;line-height:1.45;font-weight:700;letter-spacing:-.4px;
+  color:#17212a;margin:7px 0 9px
+}
+.pp-shop .pp-shop-detail-price{
+  display:flex;flex-direction:column;gap:3px;padding:12px 0;
+  margin:11px 0 0;border-top:1px solid #edf0f0
+}
+.pp-shop .pp-shop-detail-price>small{font-size:10px;color:#707b82}
+.pp-shop .pp-shop-detail-price .pp-shop-price{font-size:26px}
+.pp-shop .pp-shop-detail-copy>.pp-snap-copy{
+  margin:0;padding:0 0 12px;border:0;line-height:1.65;font-size:12.5px;color:#56666e
+}
+.pp-shop .pp-shop-detail .pp-snap-form{
+  display:grid;grid-template-columns:1fr 92px;gap:10px 9px;
+  align-items:end;margin:0;padding:15px 0 0;border-top:1px solid #edf0f0
+}
+.pp-shop .pp-shop-detail .pp-snap-form .pp-field:first-child:nth-last-child(2){grid-column:1}
+.pp-shop .pp-shop-detail .pp-snap-form .pp-field:nth-last-child(2){grid-column:auto}
+.pp-shop .pp-shop-detail .pp-snap-form .pp-snap-primary{grid-column:1/-1}
+.pp-shop .pp-field>span{color:#4c5a62;font-size:11px;font-weight:640}
+.pp-shop input:not([type="checkbox"]),.pp-shop select{
+  width:100%;min-width:0;max-width:100%;
+  color:#202a30;background:#fff;border:1px solid #cfd7d9;
+  border-radius:9px;min-height:41px;padding:9px 10px;font-size:13px
+}
+.pp-shop input:focus,.pp-shop select:focus{outline:2px solid #0d8190;outline-offset:1px}
+.pp-shop .pp-snap-primary{
+  min-height:43px;padding:10px 15px;border-radius:23px;
+  color:#17212a;background:#ffd814;border:1px solid #efc80d;
+  box-shadow:0 2px 4px #1a202814;font-weight:720;font-size:12.5px
+}
+.pp-shop .pp-snap-primary:active{background:#f5c900}
+.pp-shop .pp-snap-button{
+  min-height:33px;padding:7px 11px;border-radius:9px;
+  border:1px solid #dbe2e5;background:#fff;color:#007185;
+  font-size:11.5px;font-weight:630
+}
+.pp-shop .pp-shop-reviews{padding:16px 15px}
+.pp-shop .pp-shop-reviews>h3{display:flex;align-items:baseline;gap:8px;margin:0 0 8px;font-size:16px}
+.pp-shop .pp-shop-reviews>h3 small{font-size:11px;color:#8a9296;font-weight:480}
+.pp-shop .pp-shop-review{padding:12px 0;border-top:1px solid #eef1f2}
+.pp-shop .pp-shop-review-avatar{background:#e5f0f1;color:#31717b}
+.pp-shop .pp-shop-review .pp-snap-copy{color:#59676e}
+.pp-shop .pp-shop-stars{color:#df950f}
+.pp-shop .pp-shop-cart-item{
+  margin:0 0 9px;padding:12px;border:1px solid #e8ebeb;
+  border-radius:15px;background:#fff;box-shadow:0 2px 9px #14242d08
+}
+.pp-shop .pp-shop-item{display:flex;align-items:flex-start;gap:11px;margin:0}
+.pp-shop .pp-shop-art-inline{width:78px;height:89px;aspect-ratio:auto;border-radius:10px}
+.pp-shop .pp-shop-art-inline img{width:76%;height:75%}
+.pp-shop .pp-shop-item>div{min-width:0;flex:1;line-height:1.48}
+.pp-shop .pp-shop-item>div>strong{display:block;color:#1e2b32;font-size:12.5px;font-weight:670}
+.pp-shop .pp-shop-item p{margin:5px 0;color:#7a858a;font-size:11px}
+.pp-shop .pp-shop-item .pp-shop-price{font-size:16px}
+.pp-shop .pp-shop-cart-item>.pp-snap-button{
+  display:block;margin:10px 0 0 auto;padding:6px 12px;
+  min-height:31px;border-radius:8px;border:1px solid #e7e9e9;
+  color:#66767c;font-size:11px
+}
+.pp-shop .pp-shop-checkout{padding:16px;margin:12px 0 4px}
+.pp-shop .pp-shop-checkout>h3{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  font-size:14px;line-height:1.45;margin:0 0 9px
+}
+.pp-shop .pp-shop-checkout>h3>.pp-shop-price{font-size:20px;text-align:right}
+.pp-shop .pp-shop-checkout .pp-snap-form{padding:7px 0 0;gap:11px}
+.pp-shop .pp-shop-date-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pp-shop .pp-shop-date-fields input{font-size:12px;padding:8px 5px}
+.pp-shop .pp-shop-bubble{
+  margin:13px 0 3px;padding:13px;border:1px solid #d6dfe0;
+  border-radius:13px;box-shadow:0 8px 21px #132b3320
+}
+.pp-shop .pp-shop-bubble-option{border-color:#e2e8e9;border-radius:10px;line-height:1.5}
+.pp-shop .pp-shop-bubble-confirm{background:#ffd814;border-color:#efc80d}
+.pp-shop .pp-shop-bubble-quiet{border-color:#dce3e5;color:#007185}
+.pp-shop .pp-shop-order{
+  margin:0 0 11px;border:1px solid #e8ebeb;border-radius:15px;
+  background:#fff;box-shadow:0 2px 9px #14242d08
+}
+.pp-shop .pp-shop-order>header{padding:12px 13px;background:#eaf5f0;border-bottom:1px solid #dfebe5}
+.pp-shop .pp-shop-order>header>strong{font-size:13px;font-weight:730;color:#226c50}
+.pp-shop .pp-shop-order>header small{color:#586b68}
+.pp-shop .pp-shop-order-body{padding:10px 13px 13px}
+.pp-shop .pp-shop-order-body>p{color:#66747a;font-size:11.5px}
+.pp-shop .pp-shop-order-total{margin:12px 0 0;border-top:1px solid #edf0f1}
+.pp-shop .pp-shop-order-total b{color:#17212a}
+.pp-shop .pp-shop-tabs{
+  position:static;flex:0 0 auto;margin:0;min-height:61px;padding:5px 6px 4px;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  background:#fff;border-top:1px solid #e7ebec
+}
+.pp-shop .pp-shop-tabs button{min-width:0;min-height:48px;padding:5px 2px 4px;color:#65747a;font-size:10px;gap:4px}
+.pp-shop .pp-shop-tabs button[aria-pressed="true"]{
+  color:#007185;background:#eaf7f7;border-radius:10px;font-weight:720
+}
+.pp-shop .pp-shop-tabs button[aria-pressed="true"]:before{display:none}
+.pp-shop .pp-shop-tab-icon{height:21px}
+.pp-shop .pp-shop-tab-icon>svg{width:21px;height:21px}
+.pp-shop .pp-shop-tab-icon>b{background:#f9a33b;color:#111b22}
+@container pp-phone (max-width:360px){
+ .pp-shop .pp-shop-product{grid-template-columns:93px minmax(0,1fr);min-height:145px;gap:9px;padding:9px}
+ .pp-shop .pp-shop-art-list{width:93px;height:119px}
+ .pp-shop .pp-shop-product h3{font-size:12.5px}
+ .pp-shop .pp-shop-price{font-size:17px}
+ .pp-shop .pp-shop-product-info{gap:4px}
+ .pp-shop .pp-shop-detail-visual{min-height:160px}
+ .pp-shop .pp-shop-art-large{height:148px}
+ .pp-shop .pp-shop-detail-copy{padding:13px}
+ .pp-shop .pp-shop-detail-copy>h3{font-size:16.5px}
+ .pp-shop .pp-shop-date-fields{grid-template-columns:1fr}
+}
+@container pp-phone (max-width:300px){
+ .pp-shop .pp-shop-product{grid-template-columns:79px minmax(0,1fr);gap:8px}
+ .pp-shop .pp-shop-art-list{width:79px;height:110px}
+ .pp-shop .pp-shop-product h3{font-size:12px}
+ .pp-shop .pp-shop-rating{font-size:10px}
+ .pp-shop .pp-shop-rating>small{font-size:9px}
+ .pp-shop .pp-shop-product .pp-shop-price{font-size:15px}
+ .pp-shop .pp-shop-product .pp-snap-button{font-size:11px}
+ .pp-shop .pp-shop-masthead>span{font-size:9px}
+ .pp-shop .pp-shop-art-inline{width:62px;height:72px}
+ .pp-shop .pp-shop-detail .pp-snap-form{grid-template-columns:1fr}
+}
