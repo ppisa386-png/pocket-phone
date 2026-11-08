@@ -306,6 +306,7 @@ test('an X DM actually sent in narrative is imported as shown, not re-presented 
     assert.ok(record.text.length<content.length,'shown X DM contributes only an excerpt');
     assert.doesNotMatch(prompt,/首次发送同一私信/);
     assert.match(prompt,/不得再次作为新消息/);
+    assert.match(prompt,/不得仅因出现在手机历史里/);
     const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,0)).journal);
     assert.equal(Object.values(rolled.x).filter(r=>r.type==='message').length,0,'message rolls back with source floor');
 });
@@ -344,4 +345,13 @@ test('X narrative import rejects drafts, third-party chats and disabled X',async
     rev=await revisionsFor(messageSignatures(context.chat));
     journal=importStoryPhone(journal,rev,context.chat,context).journal;
     assert.equal(Object.values(replayJournal(journal).x).filter(x=>x.type==='message').length,0);
+});
+
+test('anonymous X retains narrative DM markers even with no other outgoing channels',()=>{
+ const settings=normalizeSettings({apps:{phone:false,messages:false,whatsapp:false,wechat:false,snapchat:false,x:true,daily:false,assets:false,amazon:false,food:false}});
+ const state=channelState();state.x.profile={id:'profile',type:'profile',alias:'Moon'};
+ const prompt=buildStoryPhonePrompt(state,{name1:'Sam',characters:[],characterId:0},settings,[{mes:'2024-10-07 15:00'}]);
+ assert.match(prompt,/X 私信与其他通信使用同一已展示\/未展示记录机制/);
+ assert.match(prompt,/商业邀约已经用durian-business offer/);
+ assert.match(prompt,/"platform":"x"/);
 });
