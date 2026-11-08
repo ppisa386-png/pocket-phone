@@ -25,16 +25,18 @@ const engineRngAt = (seed, key, hour) => mulberry32(hash32(seed + '|' + key + '|
 
 function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。', is_user: false }]) {
     const bus = new EventEmitter();
+    let response = { city: null }, calls = 0, prompt = '';
     const c = { chatId: 'weather', name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
         chat: [...chat], chatMetadata: {}, saveMetadata: async () => {}, onlineStatus: 'connected', extensionPrompts: {},
         setExtensionPrompt(k, v) { this.extensionPrompts[k] = v; },
-        eventSource: bus, event_types: Object.fromEntries(['CHAT_CHANGED', 'GENERATION_STARTED', 'GENERATION_ENDED', 'MESSAGE_EDITED', 'MESSAGE_DELETED'].map(n => [n, n])) };
+        eventSource: bus, event_types: Object.fromEntries(['CHAT_CHANGED', 'GENERATION_STARTED', 'GENERATION_ENDED', 'MESSAGE_EDITED', 'MESSAGE_DELETED'].map(n => [n, n])),
+        generateQuietPrompt: async o => { calls++; prompt = o.quietPrompt; return JSON.stringify(typeof response === 'function' ? response() : response); } };
     const settings = normalizeSettings({ retries: 0 });
     const memory = createPhoneMemory({ getContext: () => c });
     const phone = createPhoneService({ memory, getContext: () => c, getSettings: () => settings });
-    const weather = createWeather({ memory, phone, getContext: () => c });
+    const weather = createWeather({ memory, phone, getContext: () => c, getSettings: () => settings });
     const state = async () => (await memory.read()).state;
-    return { c, settings, memory, phone, weather, state, close() { phone.destroy(); memory.destroy(); } };
+    return { c, settings, memory, phone, weather, state, reply: r => response = r, calls: () => calls, prompt: () => prompt, close() { phone.destroy(); memory.destroy(); } };
 }
 const marker = (prose, city) => ({ mes: prose + `<!--durian-location:{"city":"${city}"}-->`, is_user: false });
 
@@ -43,7 +45,11 @@ test('manual refresh samples the first weather locally for the marked city with 
         assert.equal(f.weather.report(await f.state()).status, 'no-location');
         const refused = await f.weather.refresh();
         assert.equal(refused.ok, false);
-        assert.match(refused.error, /尚未标记当前位置/);
+        assert.match(refused.error, /找不到 user 所在的城市/); // 无标记先探测，探测无果才失败
+        assert.equal(f.calls(), 1);
+        assert.match(f.prompt(), /判断 user 此刻身处哪座城市/);
+        assert.match(f.prompt(), /"city":null/);
+        assert.equal(f.state().location?.current, undefined); // 探测无果不写地点
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
         await f.memory.read();
         const pending = f.weather.report(await f.state());
@@ -65,6 +71,44 @@ test('manual refresh samples the first weather locally for the marked city with 
         assert.equal(info.report.temp, record.state.temp);
         assert.ok(info.report.wind >= 0 && info.report.wind <= 12);
         assert.ok(info.report.humidity >= 12 && info.report.humidity <= 99);
+    } finally { f.close(); }
+});
+
+test('refresh without a marker probes the recent prose and status bars, saves the found city and rolls back with its floor', async () => {
+    const f = setup([
+        { mes: '2026-01-01 10:00\n【状态栏】位置：东京·新宿 ｜ 时间 10:00\n开场。', is_user: false },
+        { mes: '2026-01-02 09:00\nSam 提到计划下周去大阪旅行。', is_user: false },
+    ]); try {
+        f.reply({ city: '东京' });
+        const result = await f.weather.refresh();
+        assert.equal(result.ok, true, result.error);
+        assert.equal(f.calls(), 1); // 一次探测请求；天气采样仍是本地随机
+        assert.match(f.prompt(), /判断 user 此刻身处哪座城市/);
+        assert.match(f.prompt(), /状态栏明确给出位置时优先采用/);
+        assert.match(f.prompt(), /user 的名字："Sam"/);
+        assert.match(f.prompt(), /位置：东京·新宿/); // 历史正文与状态栏进入探测上下文
+        assert.match(f.prompt(), /计划下周去大阪/); // 干扰项也在上下文里，由提示词排除
+        assert.match(f.prompt(), /{"city":"城市名称"}/);
+        const state = await f.state();
+        assert.equal(state.location.current.city, '东京'); // 与标记路径写同一条位置记录
+        assert.equal(state.location.current.sourceIndex, 1);
+        assert.equal(state.weather['东京'].city, '东京'); // 同一次提交顺带完成天气采样
+        assert.equal(f.weather.report(state).status, 'ok');
+        // 探测到的地点锚定在当时的最新楼层，删除楼层随剧情回退
+        f.c.chat.pop(); f.c.eventSource.emit('MESSAGE_DELETED'); await f.memory.read();
+        const rolled = await f.state();
+        assert.equal(rolled.location?.current, undefined);
+        assert.equal(rolled.weather?.['东京'], undefined);
+    } finally { f.close(); }
+});
+test('an existing marker path stays model-free: refresh with a location makes no request', async () => {
+    const f = setup(); try {
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await f.memory.read();
+        const result = await f.weather.refresh();
+        assert.equal(result.ok, true, result.error);
+        assert.equal(f.calls(), 0); // 标记路径保持不动，零模型请求
+        assert.equal((await f.state()).location.current.city, '上海');
     } finally { f.close(); }
 });
 

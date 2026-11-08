@@ -30,7 +30,7 @@ export function createWeatherPanel({ adapter, getView, redraw }) {
         const city = escapeHtml(info.city || '');
         if (info.status === 'no-location') {
             return '<section class="pp-weather" data-weather="cloud"><header class="pp-weather-city"><small>当前位置</small><h2>尚未标记</h2></header>' +
-                '<div class="pp-weather-pending"><span>☁</span><p>正文尚未明确当前城市。<br>等待剧情标记位置后可刷新天气。</p></div>' +
+                '<div class="pp-weather-pending"><span>☁</span><p>正文尚未标记当前城市。<br>点击刷新，自动从最近剧情与状态栏判断所在地。</p></div>' +
                 actions(busy) + statusLine(status) + '</section>';
         }
         if (info.status === 'pending') {
