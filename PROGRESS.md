@@ -1,5 +1,14 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 榴莲外卖 Peach/Nordic 视觉接入（1.2 之上）
+基线为 5c1eb17（小窗内容等比缩放之上，642/642）。用户确认接入《榴莲外卖UI视觉代码包》（奶油杏桃＋北欧极简编辑风），以包内 preview 渲染与四张页面截图为验收基准，仅接入不重新设计。逐项核对包内 README/GLM-INTEGRATION 与项目现有接口后完成接入：
+**视图（src/food-view.js 整体替换，接口零变化）**：`createFoodPanel({adapter,getView,redraw,notice})`、data-food-action/id/form/field 事件、food.js 搜索与数据链路全部沿用。新增：①首页编辑风排版（kicker/大标题「今天吃点好的。」/搜索框＋深绿箭头钮/DISCOVER 连续餐厅列表——SVG 菜系图案按菜系关键词匹配六种纹样，6 色渐变芯片轮换，卡内已选数量徽章、菜品数与低至价）；②店铺菜单页——店铺头部＋可横滚分类筛选 rail（内部 category 状态，纯客户端过滤，不加请求）＋菜品行（名称/描述/价格/加减数量）＋常驻结算底栏（已选份数·合计＋深绿结算钮）＋购买气泡浮层；③订单页两级排版——时间/店铺名/状态胶囊（已完成绿、等待送达杏桃；**delivered 判定改用 foodDeliveryStatus 的 delivered 字段**，替换包内按文案正则猜测的版本——'等待送达'含'送达'会被误判为已完成）、收件人与 NPC 代付行、菜品行、实付金额。冒头 ENJOY YOUR MOMENT/DURIAN·DELIVERY 装饰字标。
+**CSS（style.css 原外卖区块 941–1027 行整体替换为包内 style-food.css）**：Peach/Nordic 变量组（奶油白 #F8F6F2/杏桃 #C8795B/鼠尾草 #779484/深绿 #35483D）＋编辑风排版＋320/330 断点；`.pp-shop-bubble` 共享基础组件保留（Amazon 共用），外卖气泡仅做 `.pp-food` 作用域覆盖；新增 `.pp-phone[data-active-app="food"]` 壳层奶油白衔接（顶栏/标题栏/底部手势区跟随，深色全局主题下外卖保持明亮）。
+**机制保留**：搜索、加减、同店购买、收件人气泡（送到这里来/点给别人吃）、NPC 名称输入与代付判断、拒绝回付款步、余额不足与真实错误留气泡、订单状态与来源楼层、剧情注入、去重、聊天隔离、存档回退全部沿用；菜单滚动恢复沿用 data-food-menu 键（现含分类段）；预览演示数据不入仓库。
+**测试**：tests/food.test.js 两处文案断言适配新 UI（收件人是 Sam→收件人：Sam；外卖订单→你的订单），业务断言（搜索一次请求、加减数量、底栏合计、checkout 参数顺序、NPC 拒绝回付款步、失败留气泡）全部保留通过。
+验证：外卖专项 10/10；完整 npm test 642/642；npm run build:preview 通过。内置 Chromium 实测（真实面板＋模拟 adapter：3 店铺/5 菜菜单/购物车 1 件/两笔订单含 NPC 代付与送达回执）：①首页搜索框＋连续餐厅卡与参考图一致；②菜单页分类 rail＋菜品行＋底栏合计 $12.50 与结算钮；③收件人气泡浮层（送到这里来/点给别人吃/取消）正确浮于菜单上方；④订单页「已完成」绿胶囊与「等待送达」杏桃胶囊并存（回执楼层在来源楼之后的判定验证）、实付金额与代付信息正确；⑤320/360/390 三宽度 body/content 横向溢出全 0。四页截图已交付用户对照参考图。
+未完成：真实手机触屏最终确认待用户验收；版本参数保持 1.2 待发布统一；本轮已本地提交、未推送远端（等待用户指示）。
+
 ## 本地待发布 · 小手机窗口内容等比缩放（真实调试小窗模式）（1.2 之上）
 基线为 8b20285（资产手动编辑删除之上，642/642）。用户报告：窗口缩放只是外框变化、内容未同比例缩放；要求像真实手机调试小窗一样内容自适配。实现：**内容按设计基准 390px 排版，经 transform 整体等比缩放适配窗口**。
 **实现（src/ui.js + style.css + src/press-menu.js）**：①ui.js 手机模板将顶栏/标题栏/内容/Toast/底部手势区包进新 `.pp-phone-scale` 包裹层（缩放手柄留在窗口层不随缩放）；②新增 `syncPhoneScale()`——以 `phone.clientWidth / 390` 计算缩放（钳制 0.4–2.2），写 `--pp-phone-scale` 与 `--pp-phone-logical-height`（= clientHeight/scale）；由 applyAppearance（设置变化）、open()（取消隐藏后测量——挂载时 clientWidth 为 0 无法测量，守卫跳过）、ResizeObserver(phone)（手柄拖拽/视口钳制）与 window resize 四路触发；③CSS：`.pp-phone` 保持窗口职责（尺寸/圆角/裁切），`.pp-phone-scale` 以 390px 逻辑宽排版并 `transform: scale(var(--pp-phone-scale))`（origin top-left，精确填满窗口）；④press-menu 气泡按 `--pp-phone-scale` 同步缩放（定位用缩放后 rect ✓）；⑤`<dialog>` 编辑窗口（showModal 顶层不受祖先 transform 影响）自行 `transform: scale(var(--pp-phone-scale))`。

@@ -229,7 +229,7 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
   // 购买先弹收件气泡，再弹付款方式气泡，不直接下单
   await panel.action('buy');
   page=panel.html();
-  assert.match(page,/role="dialog" aria-label="选择收件人"/);assert.match(page,/送到这里来/);assert.match(page,/收件人是 Sam/);assert.match(page,/点给别人吃/);
+  assert.match(page,/role="dialog" aria-label="选择收件人"/);assert.match(page,/送到这里来/);assert.match(page,/收件人：Sam/);assert.match(page,/点给别人吃/);
   assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[]);
   await panel.action('gift-self');
   page=panel.html();
@@ -237,7 +237,7 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
   await panel.action('pay-self');
   assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[['checkout','foodShop:0','self','','self','']]);
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
-  assert.match(panel.html(),/外卖订单/);
+  assert.match(panel.html(),/你的订单/);
   // 点给别人：空名字留在气泡内提示；填名字进付款方式；NPC 代付输入名字原样传给下单
   await panel.action('tab','home');await panel.action('shop','foodShop:0');
   await panel.action('inc','foodShop:0#0'); // 上一单成功后清空了本店已选，重新选一份
