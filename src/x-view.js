@@ -27,7 +27,10 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         return '<div class="pp-snap-person"><span class="pp-snap-avatar">'+xEscape(a.name.slice(0,1))+'</span><div><strong>'+xEscape(a.name)+'</strong><small>@'+xEscape(a.handle)+'</small></div></div>';
     }
     function accountHTML(a,full=false) {
-        return '<article class="pp-x-account" data-press="x-account" data-x-id="'+xEscape(a.id)+'">'+person(a)+(a.bio?'<p class="pp-snap-copy">'+xEscape(a.bio)+'</p>':'')+'<div class="pp-snap-actions">'+(!full?button('account','查看主页',a.id):a.blocked?button('unblock','解除拉黑',a.id):button(a.following?'unfollow':'follow',a.following?'已关注':'关注',a.id)+button('thread','私信',a.id)+(full?button('block','拉黑',a.id):button('account','主页',a.id)))+'</div></article>';
+        return '<article class="pp-x-account'+(full?' pp-x-account-full':'')+'" data-press="x-account" data-x-id="'+xEscape(a.id)+'">'+
+            (full?'<div class="pp-x-profile-cover" aria-hidden="true"></div>':'')+
+            person(a)+(a.bio?'<p class="pp-snap-copy">'+xEscape(a.bio)+'</p>':'')+
+            '<div class="pp-snap-actions">'+(!full?button('account','查看主页',a.id):a.blocked?button('unblock','解除拉黑',a.id):button(a.following?'unfollow':'follow',a.following?'已关注':'关注',a.id)+button('thread','私信',a.id)+button('block','拉黑',a.id))+'</div></article>';
     }
     function squareHeader(state) {
         const edition=state.x?.['square-edition'];if(!edition)return '';
@@ -43,17 +46,23 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     }
     function postsHTML(state,posts) {
         return posts.filter(p=>p.author==='user'||!state.x[p.author]?.blocked).map(p=>{
-            const a=state.x[p.author];const self=p.author==='user';
-            const name=self?profile().alias:a?.name||'用户';const comments=xItems(state,'comment').filter(c=>c.postId===p.id);const counts=xCounts(state,p);
+            const a=state.x[p.author],self=p.author==='user',name=self?profile().alias:a?.name||'用户';
+            const comments=xItems(state,'comment').filter(c=>c.postId===p.id),counts=xCounts(state,p);
             const target=comments.find(c=>c.id===replyTarget);
             if(page==='post:'+p.id && !target)replyTarget=null;
             const commenter=c=>c.author==='user'?profile().alias:state.x[c.author]?.name||'用户';
-            return '<article class="pp-x-post" data-x-post="'+xEscape(p.id)+'" data-press="x-post" data-x-id="'+xEscape(p.id)+'">'+(page==='profile'&&!self&&p.reposted?'<small>你转发了</small>':'')+'<header><button type="button" class="pp-x-post-avatar" data-x-action="'+(self?'profile':'account')+'" data-x-id="'+xEscape(p.author)+'" aria-label="查看 '+xEscape(name)+' 的主页">'+xEscape(name.slice(0,1))+'</button><div class="pp-x-author">'+(self?'<strong>'+xEscape(name)+'</strong>':button('account',name,p.author))+'<small>'+(!self&&a?'@'+xEscape(a.handle)+' · ':'')+(p.storyTime?.date?xEscape(p.storyTime.date)+' ':'')+displayStoryTime(p)+'</small></div></header><p class="pp-snap-copy">'+xEscape(p.text)+'</p>'+(p.imageDescription?'<p class="pp-snap-copy"><small>配图</small> '+xEscape(p.imageDescription)+'</p>':'')+'<div class="pp-snap-actions pp-x-reactions">'+button('comments','回复 '+counts.replies,p.id)+button('repost',(p.reposted?'已转发 ':'转发 ')+counts.reposts,p.id,'aria-pressed="'+!!p.reposted+'"')+button('like',(p.liked?'已赞 ':'赞 ')+counts.likes,p.id,'aria-pressed="'+!!p.liked+'"')+'</div>'+
-                (page==='post:'+p.id?'<div class="pp-x-comments">'+visibleXComments(comments).map(c=>{
-                    const parent=comments.find(other=>other.id===c.replyTo);
-                    return '<article class="pp-x-comment" data-x-comment="'+xEscape(c.id)+'" data-press="x-comment" data-x-id="'+xEscape(c.id)+'"><p class="pp-snap-copy">'+commentAuthor(state,c)+'：'+xEscape(c.text)+'</p>'+(parent?'<small>回复 @'+xEscape(commenter(parent))+'</small>':'')+button('reply-comment','回复',c.id)+'</article>';
-                }).join('')+(comments.length<Math.min(X_COMMENT_LIMIT,counts.replies)?button('complete-comments','补齐评论（'+comments.length+'/'+Math.min(X_COMMENT_LIMIT,counts.replies)+'）',p.id):'')+(target?'<div class="pp-snap-actions"><span>回复 @'+xEscape(commenter(target))+'</span>'+button('cancel-reply','取消')+'</div>':'')+form('comment',field('comment',target?'回复内容':'回复帖子','',true),'回复')+'</div>':'')+'</article>';
-        }).join('')||(empty('暂无帖子'));
+            const time=(p.storyTime?.date?xEscape(p.storyTime.date)+' ':'')+displayStoryTime(p);
+            const author='<header><button type="button" class="pp-x-post-avatar" data-x-action="'+(self?'profile':'account')+'" data-x-id="'+xEscape(p.author)+'" aria-label="查看 '+xEscape(name)+' 的主页">'+xEscape(name.slice(0,1))+'</button><div class="pp-x-author"><div class="pp-x-author-line">'+(self?'<strong>'+xEscape(name)+'</strong>':button('account',name,p.author))+(!self&&a?.handle?'<small class="pp-x-handle">@'+xEscape(a.handle)+'</small>':'')+'</div><small class="pp-x-time">'+time+'</small></div></header>';
+            const media=p.imageDescription?'<div class="pp-x-post-media"><span class="pp-x-media-label">配图描述</span><p>'+xEscape(p.imageDescription)+'</p></div>':'';
+            const reactions='<div class="pp-snap-actions pp-x-reactions">'+button('comments','回复 '+counts.replies,p.id)+button('repost',(p.reposted?'已转发 ':'转发 ')+counts.reposts,p.id,'aria-pressed="'+!!p.reposted+'"')+button('like',(p.liked?'已赞 ':'赞 ')+counts.likes,p.id,'aria-pressed="'+!!p.liked+'"')+'</div>';
+            const detail=page==='post:'+p.id?'<div class="pp-x-comments">'+visibleXComments(comments).map(c=>{
+                const parent=comments.find(other=>other.id===c.replyTo);
+                return '<article class="pp-x-comment" data-x-comment="'+xEscape(c.id)+'" data-press="x-comment" data-x-id="'+xEscape(c.id)+'"><div class="pp-x-comment-row"><span class="pp-x-comment-avatar" aria-hidden="true">'+xEscape(commenter(c).slice(0,1))+'</span><div class="pp-x-comment-main"><div class="pp-x-comment-heading">'+commentAuthor(state,c)+'</div>'+(parent?'<small class="pp-x-comment-parent">回复 @'+xEscape(commenter(parent))+'</small>':'')+'<p class="pp-x-comment-text pp-snap-copy">'+xEscape(c.text)+'</p>'+button('reply-comment','回复',c.id)+'</div></div></article>';
+            }).join('')+(comments.length<Math.min(X_COMMENT_LIMIT,counts.replies)?button('complete-comments','补齐评论（'+comments.length+'/'+Math.min(X_COMMENT_LIMIT,counts.replies)+'）',p.id):'')+(target?'<div class="pp-x-reply-target"><span>回复 @'+xEscape(commenter(target))+'</span>'+button('cancel-reply','取消')+'</div>':'')+form('comment',field('comment',target?'回复内容':'回复帖子','',true),'回复')+'</div>':'';
+            return '<article class="pp-x-post" data-x-post="'+xEscape(p.id)+'" data-press="x-post" data-x-id="'+xEscape(p.id)+'">'+
+                (page==='profile'&&!self&&p.reposted?'<small class="pp-x-reposted-label">你转发了</small>':'')+
+                author+'<p class="pp-snap-copy">'+xEscape(p.text)+'</p>'+media+reactions+detail+'</article>';
+        }).join('')||empty('暂无帖子');
     }
     function trendsHTML(state) {
         const edition=state.x?.['trend-edition'];
@@ -79,7 +88,12 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         const floor=refreshFloor(adapter.storyChat?.()||[]);
         let body;
         if(page.startsWith('post:')&&!state.x?.[page.slice(5)]){page='';replyTarget=null;}
-        if(page==='profile')body=button('back','‹ 返回')+'<div class="pp-x-audience"><strong data-x-followers>'+xEscape(xAudience(state)?.followers?.toLocaleString('en-US')??'—')+'</strong><span> 粉丝</span> · <strong>'+xItems(state,'account').filter(a=>a.following&&!a.blocked).length+'</strong><span> 正在关注</span>'+button('reset-followers','还原初始粉丝')+'</div>'+form('profile',field('alias','名称',p.alias)+field('bio','简介',p.bio,true)+'<label>陌生私信请求<select name="requestsOpen"><option value="true">允许</option><option value="false"'+(p.requestsOpen===false?' selected':'')+'>关闭</option></select></label>','保存')+'<h3>帖子与转发</h3>'+postsHTML(state,xItems(state,'post').filter(p=>p.author==='user'||p.reposted).reverse());
+        if(page==='profile'){
+            const followingCount=xItems(state,'account').filter(a=>a.following&&!a.blocked).length;
+            const hero='<section class="pp-x-profile" aria-label="个人资料"><div class="pp-x-profile-cover" aria-hidden="true"></div><div class="pp-x-profile-intro"><span class="pp-x-profile-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><h2>'+xEscape(p.alias||'用户')+'</h2>'+(p.bio?'<p class="pp-x-profile-bio">'+xEscape(p.bio)+'</p>':'')+'<div class="pp-x-audience"><strong>'+followingCount+'</strong><span> 正在关注</span><strong data-x-followers>'+xEscape(xAudience(state)?.followers?.toLocaleString('en-US')??'—')+'</strong><span> 粉丝</span></div></div></section>';
+            const settings='<section class="pp-x-profile-editor"><h3>编辑个人资料</h3>'+form('profile',field('alias','名称',p.alias)+field('bio','简介',p.bio,true)+'<label class="pp-x-requests-field">陌生私信请求<select name="requestsOpen"><option value="true">允许</option><option value="false"'+(p.requestsOpen===false?' selected':'')+'>关闭</option></select></label>','保存')+'<div class="pp-x-profile-tools">'+button('reset-followers','还原初始粉丝')+'</div></section>';
+            body=button('back','‹ 返回')+hero+settings+'<h3 class="pp-x-section-title">帖子与转发</h3>'+postsHTML(state,xItems(state,'post').filter(p=>p.author==='user'||p.reposted).reverse());
+        }
         else if(page==='account'&&a)body=button('back','‹ 返回')+accountHTML(a,true)+postsHTML(state,xItems(state,'post').filter(p=>p.author===a.id).reverse());
         else if(page==='thread'&&a)body=threadHTML(state,a);
         else if(page.startsWith('post:'))body=button('back','‹ 返回')+postsHTML(state,[state.x?.[page.slice(5)]].filter(p=>p?.type==='post'));
@@ -89,7 +103,10 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         }
         else if(tab==='messages')body=inbox(state);
         else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3></div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>squareFeedPost(state,p)).reverse());
-        else body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||state.x?.['public-refresh']?.floor===floor)+'</div>'+form('post',field('post','有什么新鲜事？','',true),'发帖')+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+        else {
+            const composer='<div class="pp-x-feed-composer"><span class="pp-x-compose-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><form class="pp-snap-form pp-x-compose" data-x-form="post"><label class="pp-field"><span class="pp-x-sr-only">新帖内容</span><textarea name="post" data-x-field="post" rows="3" maxlength="6000" placeholder="有什么新鲜事？">'+xEscape(value('post'))+'</textarea></label><div class="pp-x-compose-bottom"><small>公开发布</small><button type="submit" class="pp-snap-primary"'+disabled()+'>发帖</button></div></form></div>';
+            body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||state.x?.['public-refresh']?.floor===floor)+'</div>'+composer+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+        }
         if(editor){
             const inputs=editor.fields.map((f,i)=>'<label class="pp-field"><span>'+xEscape(f.label)+'</span>'+(f.number?'<input type="number" min="0" max="1000000000"':'<textarea rows="2" maxlength="6000"')+' name="f'+i+'" data-x-field="f'+i+'"'+(f.number?' value="'+xEscape(editor.values[i])+'">':'>'+xEscape(editor.values[i])+'</textarea>')+'</label>').join('');
             body=button('cancel-edit','取消编辑')+(inputs?form('edit-page',inputs,'保存修改'):empty('当前页面暂无可编辑内容'));
