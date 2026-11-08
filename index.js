@@ -1,5 +1,5 @@
-import { createDaily } from './src/daily.js?v=1.2.3';
-import { createWeather } from './src/weather.js?v=1.2.3';
+import { createDaily } from './src/daily.js?v=1.2.4';
+import { createWeather } from './src/weather.js?v=1.2.4';
 import { createDailyBridge } from './src/daily-story.js?v=1.2';
 import { createAssets } from './src/assets.js?v=1.2';
 import { createAssetBridge } from './src/assets-story.js?v=1.2';
@@ -10,19 +10,19 @@ import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
-import { createX } from './src/x.js?v=1.2';
+import { createX } from './src/x.js?v=1.2.4';
 import { createChatApp } from './src/chat-apps.js?v=1.2';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.3';
-import { mountPhone } from './src/ui.js?v=1.2.3';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.4';
+import { mountPhone } from './src/ui.js?v=1.2.4';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2';
 import { createPhoneService } from './src/phone.js?v=1.2';
 import { createContinuityBridge } from './src/continuity.js?v=1.2';
-import { normalizeSettings } from './src/config.js?v=1.2.3';
+import { normalizeSettings } from './src/config.js?v=1.2.4';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.4';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -62,7 +62,7 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=1.2.3', import.meta.url), { cache: 'no-cache' });
+        const response = await fetch(new URL('./style.css?v=1.2.4', import.meta.url), { cache: 'no-cache' });
         if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         let hostModule=null;
