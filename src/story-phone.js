@@ -221,7 +221,7 @@ export function importStoryPhone(raw,revisions,chat,context){
 export function buildStoryPhonePrompt(state,context,settings,chat){
     const channels={phone:!!settings.apps.phone,messages:!!settings.apps.messages};
     const business=businessPrompt(state,settings,chat,context.name1);
-    const x=settings.apps.x?xStoryPrompt(state):'';
+    const x=settings.apps.x?xStoryPrompt(state,exactStoryTime(chat)):'';
     // Shared scene background: location tag rules and current weather go to the
     // narrative model with every normal generation, independent of phone channels.
     const scene=sceneBackground(state,chat,settings);

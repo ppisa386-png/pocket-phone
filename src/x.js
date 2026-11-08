@@ -52,7 +52,7 @@ export function parseXObject(text) {
 export const X_ACCOUNT_RULES = '先判断谁可能使用 X/Twitter：根据时代、地区、联网条件、年龄、性格和明确设定筛选，不假定每个 char 都有账号。与世隔绝、长期不接触网络、明确厌恶现代科技/社交平台或设定无账号者不得生成个人账号，不借官方/代运营账号冒充本人。已有合法账号和明确新使用事实优先，不能因有电话号码或别的平台账号推定。char 使用真名是命名规则，不代表必定使用平台。';
 const noAccount = row => row?.has_account === false || row?.has_account === 'false';
 const X_JSON_OUTPUT = '当前是 X 应用结构化任务，不续写正文或输出HTML。最终只输出本任务要求的一个JSON对象。字段名和字符串使用英文双引号；字符串内部的双引号、反斜杠及换行必须转义。布尔值用true/false，数值直接写数字，不写千分位或单位。不得照抄说明性占位符，不使用单引号、注释、尾逗号或多个结果。内容语言、人物记忆和知情边界仍遵守原要求。';
-const X_FEED_OUTPUT = (recommended,square=false) => '本次为X刷新，根结构为 {"posts":[],"replies":[]}；无内容也保留这两个数组，不能返回accounts代替posts。'+(square?'生成 10～15 条不同作者的广场帖子，少于 10 条本次不会保存；':recommended?'有足够适合发帖的剧情NPC时返回10～15条不同作者的新推文，每人一条；合理人数较少时按实际人数，可为0；':'posts 最多5条；')+'replies 最多5条，可为空。帖子字段accountId/name/handle/text为字符串，has_account为布尔值；replies用postId和accountId关联提供的真实ID。推荐账号可另附accounts数组（最多15个），新作者直接附在 posts 中也可正常注册。可选metrics为含likes/reposts/replies数字的对象，comments为数组；已有帖互动放engagementUpdates数组，最多15条。所有可选内容合并到同一个根对象，不输出额外JSON。';
+    const X_FEED_OUTPUT = (recommended,square=false) => '本次为X刷新，根结构为 {"posts":[],"replies":[]}；无内容也保留这两个数组，不能返回accounts代替posts。'+(square?'生成 10～15 条不同作者的广场帖子，少于 10 条本次不会保存；':recommended?'有足够适合发帖的剧情NPC时返回10～15条不同作者的新推文，每人一条；合理人数较少时按实际人数，可为0；':'posts 最多5条；')+'replies 最多5条，可为空。帖子字段accountId/name/handle/text为字符串，has_account为布尔值，category 为可选时效分类（"A"=日常闲聊/短时动态，"B"=约定/待办/仍在发展的具体事件）；replies用postId和accountId关联提供的真实ID，可同样附 category。推荐账号可另附accounts数组（最多15个），新作者直接附在 posts 中也可正常注册。可选metrics为含likes/reposts/replies数字的对象，comments为数组；已有帖互动放engagementUpdates数组，最多15条。所有可选内容合并到同一个根对象，不输出额外JSON。';
 const X_SEARCH_OUTPUT = '本次任务是搜索/添加 X 角色账号，不续写正文。最终仅输出一个 JSON 对象，根字段 accounts 为数组，最多10个；无合适账号返回 {"accounts":[]}。每条格式为 {"name":"姓名","handle":"唯一账号名","bio":"简介","has_account":true,"dm_policy":"requests"}，dm_policy 只选 open、requests、closed 之一。字段名及字符串必须用英文双引号；字符串内双引号、换行须按JSON转义，布尔值用true/false；不使用尾逗号、单引号、代码或说明。不抄占位内容，不用姓名替代字段名。内容语言及账号适用性保持原规则。';
 
 export function createX({memory,phone,getContext,getSettings}) {
@@ -111,7 +111,7 @@ export function createX({memory,phone,getContext,getSettings}) {
     }
     const list=(data,key,max)=>{if(!Array.isArray(data?.[key])||data[key].length>max)throw Error('X 返回字段 '+key+' 应为最多 '+max+' 条的数组，当前'+(data?.[key]==null?'缺失':Array.isArray(data[key])?'有 '+data[key].length+' 条':'类型不正确')+'。本次未保存。');return data[key];};
     const engagementRules = () => '\n'+getSettings().prompts.xInteractions;
-    const engagementShape = '\n每条 post 可附 metrics:{"likes":0,"reposts":0,"replies":0} 以及 comments:[{"key":"本帖内唯一标记","accountId":"已知评论者账号 ID，未知留空","name":"评论者姓名或网名","handle":"账号名","text":"评论内容","replyTo":"回复本帖某条 comment 的 key；回复帖子留空","isAuthor":false}]。作者发言用 isAuthor:true，不必再给姓名。按累计评论数给出最多15条具体评论，0～15条时全部给出，超过15条时选15条有代表性的评论。已有具体评论计入目标，不重写或重复。先给原评论再给它的回复；metrics.replies 为含这些样本的累计数。评论只属于本帖。';
+    const engagementShape = '\n每条 post 可附 metrics:{"likes":0,"reposts":0,"replies":0} 以及 comments:[{"key":"本帖内唯一标记","accountId":"已知评论者账号 ID，未知留空","name":"评论者姓名或网名","handle":"账号名","text":"评论内容","replyTo":"回复本帖某条 comment 的 key；回复帖子留空","isAuthor":false,"category":"可选时效分类：A=日常闲聊/短时回应，B=约定/待办/仍在发展的具体事件"}]。作者发言用 isAuthor:true，不必再给姓名。按累计评论数给出最多15条具体评论，0～15条时全部给出，超过15条时选15条有代表性的评论。已有具体评论计入目标，不重写或重复。先给原评论再给它的回复；metrics.replies 为含这些样本的累计数。评论只属于本帖。';
     const findComment=(state,postId,author,body,parent=null)=>{
         const key=xCommentKey(postId,author,body,parent);
         return xComments(state).find(c=>xCommentKey(c.postId,c.author,c.text,c.replyTo)===key);
@@ -135,6 +135,11 @@ export function createX({memory,phone,getContext,getSettings}) {
                 const comment={id,type:'comment',postId:post.id,author:a.id,text:xText(row.text),replyTo:parent||null,
                     ambient:true,read:true,createdAt:Date.now(),sourceIndex:getContext().chat.length-1,postedAtStory:squareClock(getContext().chat)};
                 state.x[id]=comment;changes.push(xSet(comment));count++;
+                // Backfilled samples join the unified timing sidecar: whenever
+                // the phone provides a comment to the narrative it obeys the
+                // same A/B expiry and shown rules as every other record.
+                const classified=commReplyClassification('x',id,post.id,smsCategory(row.category),state);
+                if(classified.length)changes.push(...classified);
             }
             if(row.key&&!keys.has(String(row.key)))keys.set(String(row.key),id);
         }
@@ -154,7 +159,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         const saved=xComments(state).filter(c=>c.postId===id);
         const target=Math.min(X_COMMENT_LIMIT,xCounts(state,post).replies),missing=target-saved.length;
         if(missing<=0)return;
-        const contract='仅输出 {"comments":[]}，comments 恰好填 '+missing+' 条缺少的具体评论，属于已有累计评论样本。不得返回互动或粉丝统计。';
+        const contract='仅输出 {"comments":[]}，comments 恰好填 '+missing+' 条缺少的具体评论，属于已有累计评论样本，每条可附可选时效分类 category（"A"=日常闲聊/短时回应，"B"=约定/待办/仍在发展的具体事件）。不得返回互动或粉丝统计。';
         const task='当前任务：补齐此帖已有公开评论。'+contract+engagementRules()+engagementShape+
             '只生成此帖还未保存的公开回应，不重复已有评论，不替user发言。replyTo 可填此帖已有评论ID或本批前面评论的key；回复帖子本身留空。已知作者用账号ID，新作者填姓名、唯一handle及has_account。禁止使用私信、隐藏身份或私人剧情作公众已知。'+
             JSON.stringify({post:{id:post.id,author:post.author,text:post.text,imageDescription:post.imageDescription,sourceIndex:post.sourceIndex},
@@ -329,6 +334,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const post=xRecord('post',{author:a.id,postedAtStory:squareClock(chat),text:xText(item.text),liked:false,reposted:false,feed:square?'square':'home',mentionsUser});
             if(square){post.publication={editionId:edition.editionId,clock:edition.clock,publicBasis:basis,selected:false,sourceIndex:chat.length-1};edition.postIds.push(post.id);}
             state.x[post.id]=post;addEngagement(state,post,item,changes);
+            // Home-feed posts enter the unified timing sidecar; square keeps its
+            // own publication mechanism. The model may classify each post.
+            if(!square&&item.category)changes.push(...commReplyClassification('x',post.id,null,smsCategory(item.category),state));
             added++;
         }
         // Empty model batches (no fitting NPC) return added: 0 normally;
@@ -344,6 +352,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(findComment(state,post.id,a.id,xText(item.text)))continue;
             a=known(state,a);state.x[a.id]=a;changes.push(xSet(a));
             const reply=xRecord('comment',{postId:post.id,author:a.id,text:xText(item.text),replyTo:null});state.x[reply.id]=reply;changes.push(xSet(reply));
+            if(item.category)changes.push(...commReplyClassification('x',reply.id,post.id,smsCategory(item.category),state));
         }
         for(const item of results.engagementUpdates){
             if(combined&&!reachPosts.some(p=>p.postId===item?.postId))continue;

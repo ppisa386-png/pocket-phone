@@ -56,7 +56,9 @@ export function xTriggerCandidates(state,user,now=null){
     if((state.x?.profile?.alias??user)!==user)return [];
     const posts=Object.values(state.x||{}).filter(p=>p.type==='post'&&(p.author==='user'||p.reposted===true));
     if(!posts.length)return [];
-    const hitsAfter=message=>posts.filter(p=>postAfterMessage(p,message))
+    // Expired public posts are no longer fresh narrative material, so they stop
+    // serving as a re-outreach trigger or a quoted catalyst.
+    const hitsAfter=message=>posts.filter(p=>postAfterMessage(p,message)&&!(now&&commExpired(commMeta(state,'x',p.id),now)))
         .sort((a,b)=>(publicPostAnchor(b).at||0)-(publicPostAnchor(a).at||0)).slice(0,2).map(describePost);
     const candidates=[];
     // SMS threads follow journal replay order, i.e. narrative occurrence order.

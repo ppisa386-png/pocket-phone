@@ -5,6 +5,7 @@
 // Records themselves, read states and business status are never touched here.
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.1.29';
 import { appendChange, replayJournal } from './journal.js?v=1.1.29';
+import { xFeedArea } from './x-feed.js?v=1.1.29';
 
 export const COMM_PLATFORMS = ['sms', 'call', 'whatsapp', 'wechat', 'snapchat', 'x'];
 // Journal collections that hold communcation records the sidecar can attach to.
@@ -43,8 +44,11 @@ export const commExcerpt = (text, max = 80) => {
 const collectionOf = platform => PLATFORM_COLLECTION[platform] ?? platform;
 
 // Every narrative-injected communication entry, record-level and element-level.
-// Transfers, square posts and ambient samples stay outside: they never enter
-// the narrative history injection (transfers follow the ledger instead).
+// Transfers and square posts stay outside: transfers follow the ledger and
+// square content keeps its own selection/injection mechanism. Home-feed X
+// posts and backfilled comment samples are covered — the narrative catalog
+// presents their content, so they obey the unified rules whenever the phone
+// provides them; the phone's own history is never touched.
 export function commEntries(state) {
     const out = [];
     for (const rec of Object.values(state.messages || {}))
@@ -68,10 +72,13 @@ export function commEntries(state) {
         }
     }
     for (const rec of Object.values(state.x || {})) {
-        if (rec.type === 'message' || (rec.type === 'comment' && !rec.ambient))
+        if (rec.type === 'message' || rec.type === 'comment')
             out.push({ platform: 'x', id: String(rec.id), record: rec });
-        else if (rec.type === 'post') for (const kind of ['liked', 'reposted']) if (rec[kind] === true)
-            out.push({ platform: 'x', id: rec.id + '#' + kind, record: rec, element: { kind }, fixedCategory: 'A' });
+        else if (rec.type === 'post' && xFeedArea(state, rec) !== 'square') {
+            out.push({ platform: 'x', id: String(rec.id), record: rec });
+            for (const kind of ['liked', 'reposted']) if (rec[kind] === true)
+                out.push({ platform: 'x', id: rec.id + '#' + kind, record: rec, element: { kind }, fixedCategory: 'A' });
+        }
     }
     return out;
 }

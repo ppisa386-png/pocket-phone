@@ -1,5 +1,10 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · X 帖子目录与评论补齐样本纳入统一时效（1.1.29 之上）
+基线为本地工作区（统一通信时效 1dad36f 之上）。按用户补充确认实现"所有实际提供给正文 AI 的 X 内容遵守统一机制；小手机自身的帖子和评论历史正常保留"。①`commEntries` 纳入 X 首页帖（xFeedArea 判非广场；广场帖仍走现有 publication 手动注入机制）与**全部评论含 ambient 补齐样本**（此前仅非 ambient），sidecar 行为一致；②xStoryPrompt 目录：完整目录与引用信息不过期，非广场帖内容按 commMeta 过滤——过期帖降级为仅引用（无 text/配图/metrics，不再同步互动数），shown 帖内容 commExcerpt 梗概并附 shown:true，unshown 提供内容（160 截断现状）；`xStoryPrompt(state,now)` 新增 now 参数（story-phone 传入剧情时间，缺省不过期保持旧行为）；③continuity X 公开评论去除 ambient 排除——针对 user 帖子的补齐样本作为可选剧情参考注入（unshown 全文/shown 梗概/过期消失），其他账号帖子下的样本仍不进入正文（知情边界不变）；④x.js 分类写入：刷新帖子（feedResult item.category）、refresh replies（item.category）、addSamples 补齐样本（row.category）→ commReplyClassification('x',…)，X_FEED_OUTPUT/engagementShape/completeComments 契约同步加 category 说明；⑤x-story published 帖也写 commRecordPatch（category/shown）；⑥outreach xTriggerCandidates 排除过期帖子（不再作为再次联系契机或引用文本）。
+验证：完整 npm test 601/601（598＋新增 3 项）。新增覆盖：home 帖纳入/广场帖排除/样本与好友回复纳入/user 帖上的样本注入而他人帖样本不入正文；目录完整引用保留＋过期降级无 text＋shown 梗概省略号＋fresh 全文；过期帖不再触发主动联系契机（fresh 仍触发）。既有回归全过（x 66、story-phone、continuity、sms-context 等全部）。
+未完成：真实模型对目录降级与样本注入的实际遵循未验证；浏览器触屏回归未运行；版本参数保持 1.1.29 待发布统一。
+
 ## 本地待发布 · 统一通信时效与正文展示机制（1.1.29 之上）
 基线为本地工作区（X 推文删除、栏目统一、地点类型适配等全部本地待发布特性之上，含 598 项测试基线）。按用户确认的"榴莲手机：统一通信时效与正文展示机制"规格实现。新建 `src/comm-context.js`：统一 sidecar（journal 新 collection `commContext`，key=`平台:记录ID`，元素条目如 `storyId#comment:accountId`、`postId#liked`），每条通信记录存 A/B 分类、来源楼层剧情时间锚点（queued 草稿从实际发送楼层）、过期状态与 shown/unshown；`commEntries` 枚举短信/电话/三聊天 App 消息与通话/X 私信与非 ambient 评论/故事反应/X 公开互动（转账、广场帖、X 首页帖目录、ambient 采样不纳入）。sms-context.js 变为兼容委托层（smsExpired/smsForAI/smsAIRecords/syncSMSContext/smsClassification*/smsReplyClassification/smsEventForAI 全部读 commContext，旧 `smsContext` 元数据首次同步自动迁移，行为与锚点语义不变）。
 

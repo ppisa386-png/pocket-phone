@@ -5,6 +5,8 @@ import { appendChange, replayJournal, reconcileJournal, revisionsFor, messageSig
 import { syncCommContext, commEntries, commExpired, commMeta, commKey, commReplyClassification, commRecordPatch, commClassificationPlan, commClassificationChanges, commRecordExists, commExcerpt, inferShown, COMM_PLATFORMS } from '../src/comm-context.js';
 import { importStoryPhone } from '../src/story-phone.js';
 import { buildContinuityPrompt } from '../src/continuity.js';
+import { xStoryPrompt } from '../src/x-story.js';
+import { xTriggerCandidates } from '../src/outreach.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { normalizeSettings } from '../src/config.js';
 
@@ -213,3 +215,65 @@ test('commExcerpt summarizes without rewriting',()=>{
     assert.equal(commExcerpt('一'.repeat(100)), '一'.repeat(80)+'…');
     assert.equal(commExcerpt(null),'');
 });
+
+test('home-feed X posts and backfilled samples join the sidecar; square posts stay outside',async()=>{
+    const chat=[{mes:'2026-11-01 09:00',name:'Alex',is_user:false}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    const journal=appendChange(undefined,rev,[
+        set('x','u1',{id:'u1',type:'account',name:'U1',createdAt:0}),
+        set('x','home1',{id:'home1',type:'post',author:'user',feed:'home',text:'home post',createdAt:1,liked:false,reposted:false}),
+        set('x','sq1',{id:'sq1',type:'post',author:'org1',feed:'square',text:'square post',createdAt:2,liked:false,reposted:false,publication:{editionId:'e'}}),
+        set('x','npcPost',{id:'npcPost',type:'post',author:'u1',feed:'home',text:'npc thread',createdAt:2,liked:false,reposted:false}),
+        set('x','sample',{id:'sample',type:'comment',postId:'npcPost',author:'u1',text:'backfilled sample',replyTo:null,ambient:true,read:true,createdAt:3}),
+        set('x','friendReply',{id:'friendReply',type:'comment',postId:'home1',author:'u1',text:'reply to user thread',replyTo:null,createdAt:4}),
+    ]);
+    const state=replayJournal(syncCommContext(journal,rev,chat).journal);
+    const ids=commEntries(state).map(e=>e.platform+':'+e.id).sort();
+    assert.ok(ids.includes('x:home1'),'home-feed post enters the sidecar');
+    assert.ok(!ids.includes('x:sq1'),'square post keeps its own mechanism');
+    assert.ok(ids.includes('x:sample'),'backfilled sample enters the sidecar');
+    assert.ok(ids.includes('x:friendReply'));
+    assert.equal(commMeta(state,'x','home1').shown,false,'phone-side posts default to unshown');
+    assert.equal(commMeta(state,'x','sample').classification,'pending');
+    // Samples targeting user's thread are provided to the narrative as optional
+    // references; samples on other accounts' posts never enter the history.
+    const prompt=buildContinuityPrompt({...state,contacts:{'name:u1':{id:'name:u1',name:'U1'}},profiles:{}},{name:'U1',nameIsUnique:true},{instruction:'参考',currentStoryTime:stamp('2026-11-02')});
+    assert.match(prompt,/reply to user thread/,'sample on user thread is provided');
+    assert.doesNotMatch(prompt,/backfilled sample/,'samples on other threads stay out of the history');
+});
+
+test('the narrative catalog keeps every reference but degrades expired or shown post content',async()=>{
+    const state=channelState();
+    state.x.fresh={id:'fresh',type:'post',author:'u1',feed:'home',text:'未过期的帖子完整内容应该出现在目录里供正文参考',createdAt:1,liked:false,reposted:false};
+    state.x.old={id:'old',type:'post',author:'u1',feed:'home',text:'已过期的帖子内容不应该再提供给正文AI',createdAt:2,liked:false,reposted:false};
+    state.x.shown={id:'shown',type:'post',author:'u1',feed:'home',text:'已展示的帖子正文只需梗概其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉',createdAt:3,liked:false,reposted:false};
+    state.commContext={
+        'x:fresh':{version:1,category:'B',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:false,shown:false},
+        'x:old':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','09:00'),anchorSource:'source-floor',expired:true,shown:false},
+        'x:shown':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:false,shown:true},
+    };
+    const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-11-02','12:00')).split('已保存帖子（reply只用于user帖，metrics可用于user及NPC帖）：')[1].trim());
+    const rows=Object.fromEntries(catalog.map(p=>[p.id,p]));
+    assert.equal(rows.fresh.text.includes('未过期的帖子完整内容'),true,'fresh content stays available');
+    assert.equal(rows.old.text,undefined,'expired post degrades to a bare reference');
+    assert.ok(rows.old.id,'the full catalog keeps the expired reference');
+    assert.equal(rows.shown.text.endsWith('…'),true,'shown post content is summarized');
+    assert.ok(rows.shown.text.length<=81,'shown content stays within the excerpt');
+});
+
+test('expired posts stop serving as re-outreach catalysts',async()=>{
+    const state=channelState();
+    state.messages.m1={id:'m1',contactId:'card:alex.png',role:'assistant',text:'还在吗',createdAt:1};
+    state.x.p1={id:'p1',type:'post',author:'user',feed:'home',text:'新的公开动态内容',postedAtStory:{day:19000,hour:9},createdAt:2,liked:false,reposted:false};
+    const contacts={ 'card:alex.png':{id:'card:alex.png',name:'Alex'} };
+    const base={...state,contacts,x:{...state.x,'p1':state.x.p1},profiles:{}};
+    const fresh=buildCandidates(base,null);
+    assert.ok(fresh.some(c=>c.posts.some(p=>p.id==='p1')),'fresh post qualifies as a catalyst');
+    base.commContext={'x:p1':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:true,shown:false}};
+    const expired=buildCandidates(base,stamp('2026-11-02','13:00'));
+    assert.equal(expired.length,0,'expired post no longer triggers outreach');
+});
+
+function buildCandidates(state,now){
+    return xTriggerCandidates(state,'Sam',now);
+}

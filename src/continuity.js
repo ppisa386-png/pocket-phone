@@ -138,7 +138,10 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
             const meta=commMetaOrInfer(state,'x',record.id,record);
             if(!commExpired(meta,currentStoryTime))entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',platform:'x',recordId:record.id,shown:meta.shown===true,...who,speaker:record.role==='user'?who.otherParty:a.name,storyTime:record.storyTime||null,text:shownText(meta,a.inboundRequest&&!a.dmAccepted&&['image','video'].includes(record.kind)?'[请求中的媒体已隐藏]':record.text)}});
         }
-        if(record.type==='comment'&&!record.ambient){
+        if(record.type==='comment'){
+            // Backfilled sample comments obey the unified rules too: whenever a
+            // sample actually targets user's thread it enters the same
+            // shown/expiry path; samples on other accounts' posts stay private.
             const post=state.x[record.postId],parent=state.x[record.replyTo],fromUser=record.author==='user';
             const counterpart=fromUser?(parent?.author||post?.author):record.author;
             const addressedUser=!fromUser&&(parent?.author==='user'||!parent&&post?.author==='user');
