@@ -30,6 +30,7 @@ const legacyRoll=id=>{
     for(const char of id){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}
     return (hash>>>0)%65536;
 };
+export const initialHighRiskForRoll=roll=>Number.isInteger(roll)&&roll>=0&&roll<65536&&roll<30*65536/100;
 const validRate=n=>Number.isInteger(n)&&n>=0&&n<=100;
 export function dealDecision(p,kind,turn,day,risky,terms,details={},roll=null){
     if(!p||p.status!=='invited')return [];
@@ -124,7 +125,7 @@ export function importBusiness(raw,revisions,chat,settings,annotations){
                     const account=delivery[0].value;
                     if(!state.x[account.id])account.identityKnown=false;
                     const draws=journal.businessDraws??={};
-                    if(!Object.hasOwn(draws,id))draws[id]=crypto.getRandomValues(new Uint16Array(1))[0]<0.30*65536;
+                    if(!Object.hasOwn(draws,id))draws[id]=initialHighRiskForRoll(crypto.getRandomValues(new Uint16Array(1))[0]);
                     const rolls=journal.businessRolls??={};
                     if(!Object.hasOwn(rolls,id))rolls[id]=crypto.getRandomValues(new Uint16Array(1))[0];
                     add(delivery);add([write(id,{id,brand:row.brand,project:row.project,terms:row.terms,accountId:account.id,status:'invited',investigated:false})]);
