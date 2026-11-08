@@ -148,7 +148,7 @@ test('continuity omits shown records on every communication channel, including X
     assert.match(prompt,/UNSHOWN_SMS/);
     for(const app of ['whatsapp','wechat','snapchat','x'])assert.match(prompt,new RegExp('UNSHOWN_'+app));
     assert.match(prompt,/UNSHOWN_X_COMMENT/);
-    assert.doesNotMatch(prompt,/SHOWN_SMS|SHOWN_CALL|SHOWN_whatsapp|SHOWN_wechat|SHOWN_snapchat|SHOWN_x|SHOWN_X_POST/);
+    assert.doesNotMatch(prompt,/"text":"SHOWN_SMS"|"text":"SHOWN_(?:whatsapp|wechat|snapchat|x)"|SHOWN_CALL|SHOWN_X_POST/);
     const records=JSON.parse(prompt.split('\n').at(-2)).records;
     assert.ok(records.every(record=>record.shown===false),'only unshown records enter the payload');
     assert.equal(state.messages.shown.text,'SHOWN_SMS','phone history remains unchanged');
