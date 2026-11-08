@@ -17,12 +17,12 @@ import { createApiClient, createKeyStore } from './src/api.js?v=1.2';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
 import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.12';
 import { mountPhone } from './src/ui.js?v=1.2.12';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.12';
 import { createPhoneService } from './src/phone.js?v=1.2';
-import { createContinuityBridge } from './src/continuity.js?v=1.2.11';
+import { createContinuityBridge } from './src/continuity.js?v=1.2.12';
 import { normalizeSettings } from './src/config.js?v=1.2.12';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.11';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.12';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
