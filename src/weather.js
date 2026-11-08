@@ -566,6 +566,26 @@ export function locationProbePrompt(chat, context) {
 export function createWeather({ memory, phone, getContext, getSettings }) {
     return {
         open: () => memory.read(),
+        editLocation(city, previousCity) { return phone.appTask(async (view,current) => {
+            const name=typeof city==='string'?city.trim():'';
+            if(!name||name.length>60||/[\r\n<>]/.test(name))
+                throw Error('请输入有效的地点名称（最多60字）。');
+            const old=view.state.location?.current?.city||'';
+            if(!current()||old!==previousCity)throw Error('当前位置已变化，请重新打开编辑。');
+            if(old===name)return {city:name,unchanged:true};
+            const chat=getContext().chat||[];
+            const clock=readStoryClock(chat);
+            const changes=[{collection:'location',key:'current',value:{city:name,sourceIndex:Math.max(0,chat.length-1),manual:true}}];
+            if(clock.day!=null&&clock.hour!=null){
+                const key=normCity(name),kind=locationKind(name,getContext());
+                const climate=climateFor(name,view.state.weather?.[key]?.climate,kind,getContext());
+                const hour=clock.day*24+Math.floor(clock.hour),seed=crypto.randomUUID();
+                changes.push({collection:'weather',key,value:{city:name,climate,kind,seed,hour,date:dayDate(clock.day),state:initialWeather(climate,clock,rngAt(seed,key,hour)),refreshedAt:Date.now()}});
+            }
+            if(!current())throw Error('剧情或设置已变化，本次地点修改未保存。');
+            await memory.commit(await memory.begin(view),changes);
+            return {city:name};
+        }, 'weather'); },
         report(state) {
             const chat = getContext().chat || [];
             const clock = readStoryClock(chat);
