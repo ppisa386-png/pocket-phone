@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.3';
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
 import { storyEvidenceRows } from './square-core.js?v=1.2';
-import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2';
+import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2';
 import { parseModelObject } from './model-json.js?v=1.2';
 import { locationKind } from './weather.js?v=1.2.3';
 import { establishedSources } from './contacts.js?v=1.2';
@@ -58,6 +58,22 @@ export function createDaily({memory, phone, getContext, getSettings}) {
             if (!current()) throw Error('剧情或设置已变化，本期日报未保存。');
             await memory.commit(ticket,changes);
             return {count:changes.filter(c=>c.value?.type==='article').length};
+        }, 'daily'); },
+        deleteArchive(id) { return phone.appTask(async (view, current) => {
+            const archive=dailyArchives(view.state,getContext().chat||[]).find(e=>e.editionId===id);
+            if (!current()||!archive) throw Error('这期过往报纸已不存在。');
+            const stored=view.state.daily?.['archive:'+id],changes=[];
+            if (stored?.type==='archive'&&stored.editionId===id) {
+                changes.push({collection:'daily',key:stored.id,value:null});
+            } else if (view.state.daily?.edition?.editionId===id && dailyExpiry(view.state.daily.edition,getContext().chat||[])==='expired') {
+                changes.push({collection:'daily',key:'edition',value:null});
+                for (const article of dailyArticles(view.state))
+                    changes.push({collection:'daily',key:article.id,value:null});
+            } else throw Error('这期报纸已变化，请重新打开报纸夹。');
+            const schema=view.state.daily?.archiveSchema;
+            if (Array.isArray(schema?.sectionLog) && schema.sectionLog.some(row=>row.editionId===id))
+                changes.push({collection:'daily',key:'archiveSchema',value:{...schema,sectionLog:schema.sectionLog.filter(row=>row.editionId!==id)}});
+            await memory.commit(await memory.begin(view),changes);
         }, 'daily'); },
         editEdition(id,before,draft){return phone.appTask(async(view,current)=>{
             const saved=paperDraft(view.state,id);
