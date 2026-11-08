@@ -566,7 +566,13 @@ test('month leap resolves four pending short references, deducts living once and
   assert.equal(summary.salaryAddedMinor,495000);assert.equal(summary.incomeAddedMinor,495000);assert.equal(summary.expenseAddedMinor,200000);
   assert.equal(summary.netChangeMinor,295000);assert.equal(cashBalance(f.state()),1495000);
   const panel=createAssetPanel({adapter:{},getView:()=>f.state(),redraw(){},notice(){}});
-  assert.match(panel.html(),/上次结算明细/);assert.match(panel.html(),/43 天/);assert.match(panel.html(),/本次补扣生活费/);assert.match(panel.html(),/\$1,600.00/);
+  assert.match(panel.html(),/上次结算明细/);
+  assert.doesNotMatch(panel.html(),/43 天/); // 结算明细默认折叠，不占首屏
+  await panel.action('ledger');
+  const opened=panel.html();
+  assert.match(opened,/aria-expanded="true"/);assert.match(opened,/43 天/);assert.match(opened,/本次补扣生活费/);assert.match(opened,/\$1,600.00/);
+  await panel.action('tab','fixed');await panel.action('tab','cash');
+  assert.match(panel.html(),/43 天/); // 展开状态在界面重绘后保持
   await f.memory.read();assert.deepEqual(f.state().assets.wallet.settlement,summary);
   assert.equal((await f.assets.update()).ok,false);assert.equal(cashBalance(f.state()),1495000);
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();

@@ -1,5 +1,13 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 小榴莲界面重设计：独立明亮主题与新首页结构（1.2 之上）
+基线为本地工作区（d0b0e22 小榴莲美化之上，633/633）。用户反馈上一轮"只调了配色圆角，仍是旧布局"，按新规格真正重构页面结构：**小榴莲内部使用独立明亮主题**（手机整体深色时仍显示奶油白/淡紫/鼠尾草绿/杏桃亮色），首页布局重组。仅改 `src/assets-view.js` 与 `style.css`，业务逻辑零改动、ui.js 未动（renderAssets 滚动保留机制兼容）。
+
+**实现**：①**强制亮主题**——`.pp-assets` 直接覆盖继承的 `--pp-bg/--pp-card/--pp-text/--pp-muted/--pp-line/--pp-input/--pp-accent` 为亮色值（不随 `data-theme` 切换，无 dark 覆盖分支），pp-snap 基础类在作用域内自动变亮。②**首页结构重组**（自上而下）：顶部"财务概览"＋结算日期/待结算小字＋鹅黄"一键更新"胶囊（不再重复大号 App 名标题）；淡紫渐变余额主视觉卡（`::before/::after` 弧形色块＋大号 tabular 余额＋币种 chip＋预留资金虚线行）；**新增左右并列收支概览两小卡**（鼠尾草绿 `#DCE9DD` 收入＋杏桃 `#F4D5C5` 支出，线性图标（icons.js cash/cart）＋大金额＋结算区间小字，数据取 settlement.incomeAdded/expenseAdded，无 settlement 不显示）；**最近收支改为直接展示的流水列表**（不再要求展开，细分隔线＋收入绿/支出杏桃右对齐＋异币种小字）；工作与收入小卡；**上次结算明细移至页面底部默认折叠**——`<details>` 改为 `button.pp-asset-ledger-toggle[data-asset-action=ledger]`＋闭包 `ledgerOpen` 条件渲染（重绘/切分类后展开状态保持，aria-expanded 驱动箭头旋转），action 新增 'ledger' 分支。③底部导航：白底＋细顶线＋淡紫 pill 选中态（原厚重色块取消），附 safe-area-inset-bottom。④reset() 重置 ledgerOpen。
+**保留**：全部 data-asset-action/tab/rate/page 属性、一键更新/建账/换算/加载禁用/错误提示、最近收支与工作数据、金额计算与 journal 机制零改动。
+验证：npm test 633/633（assets.test.js 面板断言更新为折叠契约——默认不含明细体、action('ledger') 展开后 43 天/本次补扣生活费/$1,600.00/aria-expanded、切分类重绘后展开保持）。浏览器实测（深色 layer 主题 + Node 直调真实 HTML）：深色手机主题下首页/固定资产/奢侈品/投资全部明亮奶油风；首屏含余额卡＋双统计卡＋收支列表；展开态含全部结算行与加粗余额变化；320/360/390 三宽度 body/导航横向溢出均 0；preview.html/deliverables 重建（语法通过）。
+未完成：真实手机触屏最终确认待用户验收；版本参数保持 1.2 待发布统一。
+
 ## 本地待发布 · 小榴莲记账 App 视觉美化（1.2 之上）
 基线为本地工作区（c814816 缩放回弹修复之上，633/633）。按用户规格对小榴莲做整体视觉美化：现代生活方式 App 风格（奶油白/鹅黄/鼠尾草绿＋薰衣草紫/灰紫/杏桃），不做账本风/卡通/金融后台感。仅改 `src/assets-view.js`（HTML 结构与视觉层级）与 `style.css`（.pp-assets 作用域样式重写），业务逻辑零改动。
 

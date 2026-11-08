@@ -2,44 +2,53 @@ import { walletCurrency, formatMoney } from './currency.js?v=1.2';
 import { needsOwnershipRecovery } from './assets-recovery.js?v=1.2';
 import { assetRows, cashBalance, reservedCash, recentCash } from './assets-core.js?v=1.2';
 import { dayDate } from './story-clock.js?v=1.2';
+import { icon } from './icons.js?v=1.2';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function createAssetPanel({ adapter, getView, redraw, notice }) {
-    let tab = 'cash', working = false, status = '', epoch = 0, proposal = null;
+    let tab = 'cash', working = false, status = '', epoch = 0, proposal = null, ledgerOpen = false;
     const labels = { cash: '余额', fixed: '固定资产', luxury: '奢侈品', investment: '投资' };
     function html() {
         const state = getView(), wallet = state.assets?.wallet, balance = cashBalance(state), hold = reservedCash(state);
         const code=walletCurrency(state), money=n=>formatMoney(n,code);
         const locked = !!wallet?.region && wallet.revision === state.revision && !needsOwnershipRecovery(wallet) && !adapter.assets?.needsResidenceCheck?.(wallet);
         const pending = assetRows(state, 'story_event').filter(e => !e.processed).length;
+        const flowRow = t => '<article class="pp-asset-row"><span class="pp-asset-memo">' + assetEscape(t.memo || (t.source === 'snapcash' ? 'Snapchat 转账' : '收支')) + '</span><b class="' + (t.deltaMinor > 0 ? 'pp-asset-income' : 'pp-asset-expense') + '">' + (t.deltaMinor > 0 ? '+' : '−') + formatMoney(Math.abs(t.deltaMinor),t.currency) + (t.currency!==code?' <i>'+assetEscape(t.currency)+'</i>':'') + '</b></article>';
         let body;
         if (tab === 'cash') {
             body = '<section class="pp-asset-balance"><div class="pp-asset-balance-head"><small>可支配资金</small><span class="pp-asset-chip">' + assetEscape(code || '待定币种') + '</span></div>' +
                 '<strong>' + (balance === null ? '—' : assetEscape(money(balance))) + '</strong>' +
                 (hold ? '<div class="pp-asset-hold"><span>转账待收款占用 <b>' + money(hold) + '</b></span><span>可用 <b>' + money(balance === null ? 0 : balance - hold) + '</b></span></div>' : '') + '</section>';
             const summary = wallet?.settlement;
-            if (summary) {
-                const line = (label, amount) => '<article class="pp-asset-row"><span>' + label + '</span><b>' + money(amount) + '</b></article>';
-                body += '<details class="pp-asset-ledger" open><summary>上次结算明细</summary><div class="pp-asset-ledger-body"><p class="pp-asset-note">' + dayDate(summary.fromDay) + ' 至 ' + dayDate(summary.toDay) + ' · ' + summary.days + ' 天</p>' +
-                    line('期间生活费估算', summary.livingTotalMinor) + line('其中已逐笔扣除', summary.livingPaidMinor) + line('本次补扣生活费', summary.livingAddedMinor) +
-                    line('本次补发工资', summary.salaryAddedMinor) + line('本次新增收入合计', summary.incomeAddedMinor) + line('本次新增支出合计', summary.expenseAddedMinor) +
-                    '<article class="pp-asset-row pp-asset-row-total"><span>本次余额变化</span><b>' + (summary.netChangeMinor < 0 ? '−' : '+') + money(Math.abs(summary.netChangeMinor)) + '</b></article>' +
-                    '<p class="pp-asset-note">更新前 ' + money(summary.balanceBeforeMinor) + ' → 更新后 ' + money(summary.balanceAfterMinor) + '。已逐笔扣除的费用不重复扣款；工资已包含在新增收入合计中。</p></div></details>';
-            } else if (wallet) body += '<p class="pp-asset-note">暂无期间结算明细；首次建账只记录当时余额。旧版结算未保存此明细。</p>';
+            if (summary) body += '<div class="pp-asset-overview">' +
+                '<div class="pp-asset-stat pp-asset-stat-income"><span class="pp-asset-stat-icon" aria-hidden="true">' + icon('cash') + '</span><small>上次结算收入</small><b>+' + money(summary.incomeAddedMinor) + '</b><i>' + dayDate(summary.fromDay) + ' – ' + dayDate(summary.toDay) + '</i></div>' +
+                '<div class="pp-asset-stat pp-asset-stat-expense"><span class="pp-asset-stat-icon" aria-hidden="true">' + icon('cart') + '</span><small>上次结算支出</small><b>−' + money(summary.expenseAddedMinor) + '</b><i>' + dayDate(summary.fromDay) + ' – ' + dayDate(summary.toDay) + '</i></div>' +
+                '</div>';
+            body += '<h3 class="pp-asset-heading">最近收支</h3><div class="pp-asset-card pp-asset-flow">' + (recentCash(state).map(flowRow).join('') || '<p class="pp-snap-empty">暂无收支</p>') + '</div>';
             const jobs = assetRows(state, 'job').filter(j => j.endDay == null);
             body += '<h3 class="pp-asset-heading">工作与收入</h3><div class="pp-asset-card">' + (jobs.map(j => '<article class="pp-asset-row"><span class="pp-asset-job"><strong>' + assetEscape(j.name) + '</strong><small>每月 15 日发薪</small></span><b>' + (j.monthlyMinor == null ? '待评估' : money(j.monthlyMinor) + '/月') + '</b></article>').join('') || '<p class="pp-snap-empty">暂无工作记录</p>') + '</div>';
-            body += '<details class="pp-asset-ledger"><summary>最近收支</summary><div class="pp-asset-ledger-body">' + (recentCash(state).map(t => '<article class="pp-asset-row"><span class="pp-asset-memo">' + assetEscape(t.memo || (t.source === 'snapcash' ? 'Snapchat 转账' : '收支')) + '</span><b class="' + (t.deltaMinor > 0 ? 'pp-asset-income' : 'pp-asset-expense') + '">' + (t.deltaMinor > 0 ? '+' : '−') + formatMoney(Math.abs(t.deltaMinor),t.currency) + (t.currency!==code?' <i>'+assetEscape(t.currency)+'</i>':'') + '</b></article>').join('') || '<p class="pp-snap-empty">暂无收支</p>') + '</div></details>';
+            if (summary) {
+                const line = (label, amount) => '<article class="pp-asset-row"><span>' + label + '</span><b>' + money(amount) + '</b></article>';
+                body += '<section class="pp-asset-ledger"><button type="button" class="pp-asset-ledger-toggle" data-asset-action="ledger" aria-expanded="' + ledgerOpen + '"><span>上次结算明细</span><i class="pp-asset-chevron" aria-hidden="true"></i></button>' +
+                    (ledgerOpen ? '<div class="pp-asset-ledger-body"><p class="pp-asset-note">' + dayDate(summary.fromDay) + ' 至 ' + dayDate(summary.toDay) + ' · ' + summary.days + ' 天</p>' +
+                        line('期间生活费估算', summary.livingTotalMinor) + line('其中已逐笔扣除', summary.livingPaidMinor) + line('本次补扣生活费', summary.livingAddedMinor) +
+                        line('本次补发工资', summary.salaryAddedMinor) + line('本次新增收入合计', summary.incomeAddedMinor) + line('本次新增支出合计', summary.expenseAddedMinor) +
+                        '<article class="pp-asset-row pp-asset-row-total"><span>本次余额变化</span><b>' + (summary.netChangeMinor < 0 ? '−' : '+') + money(Math.abs(summary.netChangeMinor)) + '</b></article>' +
+                        '<p class="pp-asset-note">更新前 ' + money(summary.balanceBeforeMinor) + ' → 更新后 ' + money(summary.balanceAfterMinor) + '。已逐笔扣除的费用不重复扣款；工资已包含在新增收入合计中。</p></div>' : '') +
+                    '</section>';
+            } else if (wallet) body += '<p class="pp-asset-note">暂无期间结算明细；首次建账只记录当时余额。旧版结算未保存此明细。</p>';
         } else {
             body = '<div class="pp-asset-card">' + (assetRows(state, 'holding').filter(h => h.category === tab && h.active !== false && !h.excludedFromAssets).map(h => '<article class="pp-asset-row"><span class="pp-asset-memo">' + assetEscape(h.name) + '</span><b>' + (h.valueMinor == null ? '待估值' : money(h.valueMinor)) + '</b></article>').join('') || '<p class="pp-snap-empty">暂无' + labels[tab] + '</p>') + '</div>';
         }
-        return '<div class="pp-snap pp-assets"><div class="pp-asset-body" data-asset-page="' + tab + '"><header class="pp-asset-head"><div class="pp-asset-title"><b>小榴莲</b><small>记账本</small></div><button type="button" class="pp-asset-update" data-asset-action="update"' + (working || state.busy || locked ? ' disabled' : '') + '>一键更新</button></header>' +
-            '<p class="pp-asset-note">' + (wallet ? '已结算至 ' + dayDate(wallet.lastDay) : '点击一键更新，建立你的账本') + (pending ? ' · ' + pending + ' 笔待结算' : '') + '</p>' + (wallet?.skippedUnverified ? '<p class="pp-asset-note">上次更新跳过 ' + wallet.skippedUnverified + ' 条无法核对正文依据的新增收支，未入账。</p>' : '') +
+        return '<div class="pp-snap pp-assets"><div class="pp-asset-body" data-asset-page="' + tab + '"><header class="pp-asset-top"><div class="pp-asset-top-info"><b>财务概览</b><small>' + (wallet ? '已结算至 ' + dayDate(wallet.lastDay) : '点击一键更新，建立你的账本') + (pending ? ' · ' + pending + ' 笔待结算' : '') + '</small></div><button type="button" class="pp-asset-update" data-asset-action="update"' + (working || state.busy || locked ? ' disabled' : '') + '>一键更新</button></header>' +
+            (wallet?.skippedUnverified ? '<p class="pp-asset-note">上次更新跳过 ' + wallet.skippedUnverified + ' 条无法核对正文依据的新增收支，未入账。</p>' : '') +
             '<p class="pp-snap-status" role="status">' + assetEscape(working ? '正在更新…' : status || (locked ? '已更新' : '')) + '</p>' + (proposal?'<div class="pp-asset-convert"><p class="pp-asset-note">常住地区使用 '+proposal.switchTo+'。旧账仍为 '+proposal.switchFrom+'。请输入剧情换算比例：1 '+proposal.switchFrom+' 等于多少 '+proposal.switchTo+'？</p><input data-asset-rate type="text" inputmode="decimal" aria-label="换算比例"><button type="button" data-asset-action="convert">按此比例换算旧账</button></div>':'') + body +
             '</div>' +
-            '<nav class="pp-snap-tabs pp-asset-tabs" aria-label="小榴莲分类">' + Object.entries(labels).map(([key, label]) => '<button type="button" data-asset-action="tab" data-asset-tab="' + key + '" aria-pressed="' + (tab === key) + '">' + label + '</button>').join('') + '</nav></div>';
+            '<nav class="pp-asset-tabs" aria-label="小榴莲分类">' + Object.entries(labels).map(([key, label]) => '<button type="button" data-asset-action="tab" data-asset-tab="' + key + '" aria-pressed="' + (tab === key) + '">' + label + '</button>').join('') + '</nav></div>';
     }
-    return { html, reset() { epoch++; proposal=null; tab = 'cash'; status = ''; working = false; },
+    return { html, reset() { epoch++; proposal=null; tab = 'cash'; status = ''; working = false; ledgerOpen = false; },
         async action(action, nextTab, rate) {
             if (action === 'tab') { if (labels[nextTab]) tab = nextTab; redraw(); return; }
+            if (action === 'ledger') { ledgerOpen = !ledgerOpen; redraw(); return; }
             if (!['update','convert'].includes(action) || working || getView().busy) return;
             if (!adapter.assets) { notice('请在酒馆中点击一键更新建立账本。'); return; }
             const token = epoch; working = true; redraw();
