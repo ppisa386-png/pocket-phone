@@ -1,9 +1,9 @@
 import {paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources} from '../src/daily-core.js';
-import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_STORY_DEFAULT } from '../src/daily-prompts.js';
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createDaily } from '../src/daily.js';
+import { createDaily, dailyHistoryRules } from '../src/daily.js';
 import { createDailyBridge, DAILY_KEY } from '../src/daily-story.js';
 import { createDailyPanel } from '../src/daily-view.js';
 import { dailyArticles, dailyExpiry, dailyStatus, buildDailyPrompt, dailyChanges, dailyArchives, dailyEditorialHistory } from '../src/daily-core.js';
@@ -406,5 +406,39 @@ test('real locations keep the real-history editorial contract',async()=>{
   assert.equal(payload.locationKind,'real');
   assert.match(f.prompt(),/剧情年份、月份相同的现实历史事件/);
   assert.doesNotMatch(f.prompt(),/当前架空世界为唯一现实/);
+ }finally{f.close();}
+});
+test('2024 Los Angeles date and location select the real-history editorial branch',async()=>{
+ const f=setup();try{
+  f.c.chat[0].mes='2024-10-07\n综合性报纸。';
+  f.c.chat.push({mes:'Sam 抵达 Los Ángeles, CA。<!--durian-location:{"city":"Los Ángeles, CA"}-->',is_user:false});
+  await f.memory.read();
+  ok(await f.daily.update());
+  const prompt=f.prompt(),payload=JSON.parse(prompt.split('剧情资料：')[1].split('\n')[0]);
+  assert.equal(payload.currentLocation,'Los Ángeles, CA');
+  assert.equal(payload.locationKind,'real');
+  assert.equal(payload.date,'2024-10-07');
+  assert.ok(prompt.includes(dailyHistoryRules('real')),'historical branch is in the actual quietPrompt');
+  assert.match(prompt,/现实地点从模型已有的历史知识中回忆/);
+  assert.match(prompt,/确定事件以后再分配唯一头条/);
+  assert.match(prompt,/不先按栏目寻找素材/);
+  assert.equal(f.calls(),1,'no extra request added');
+ }finally{f.close();}
+});
+
+test('event-first editorial rule follows saved custom preferences and older defaults migrate',async()=>{
+ const migrated=normalizeSettings({prompts:{daily:PREVIOUS_DAILY_EDITORIAL_DEFAULT}});
+ assert.equal(migrated.prompts.daily,DAILY_EDITORIAL_PROMPT);
+ const custom='只按近期学校、机构和行业线索编写简报';
+ const f=setup();try{
+  f.settings.prompts.daily=custom;
+  ok(await f.daily.update());
+  const prompt=f.prompt();
+  assert.ok(prompt.indexOf(custom)>=0 && prompt.indexOf(custom)<prompt.indexOf('当前任务：为榴莲日报 App'));
+  assert.match(prompt,/最近7期统计只在选定事件后辅助版面多样性/);
+  assert.match(prompt,/机构政策、学校管理、道路维修、企业流程及行业审核只在具有/);
+  assert.match(prompt,/选出4～6个最值得刊登的不同事件/);
+  assert.equal(normalizeSettings({prompts:{daily:custom}}).prompts.daily,custom);
+  assert.equal(f.calls(),1);
  }finally{f.close();}
 });
