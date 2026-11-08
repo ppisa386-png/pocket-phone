@@ -33,13 +33,13 @@ const legacyRoll=id=>{
 const validRate=n=>Number.isInteger(n)&&n>=0&&n<=100;
 export function dealDecision(p,kind,turn,day,risky,terms,details={},roll=null){
     if(!p||p.status!=='invited')return [];
-    const baseline=risky===true?100:0;
+    const baseline=risky===true?100:1;
     if(kind==='investigate')return p.investigated?[]:[
         write(p.id,{...p,investigated:true,riskRate:baseline,
             ...(typeof details.findings==='string'&&details.findings.trim()?{findings:details.findings.trim().slice(0,1200)}:{})})
     ];
     if(kind==='mitigate'){
-        if(!p.investigated||baseline===0)return [];
+        if(!p.investigated||risky!==true)return [];
         const previous=validRate(p.riskRate)?p.riskRate:baseline;
         const measure=typeof details.measure==='string'?details.measure.trim().slice(0,500):'';
         const existing=p.mitigations||[];
@@ -74,9 +74,9 @@ export function businessPrompt(state,settings,chat,user,privateDraws={}){
         parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文"}。只用商业标签。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
     }
     const open=plans.filter(p=>p.status==='invited');
-    if(open.length)parts.push('隐藏商业背调事实（仅供本次正文模型在user实际完成背调时写出结果，绝不可在背调前向角色泄漏或自动替user调查）：'+JSON.stringify(open.map(p=>({id:p.id,problematic:privateDraws?.[p.id]===true})))+'。problematic=true 的商家经真实完成的背调会查出与合作相关的实质隐患，后台翻车率为100%；problematic=false 的后台预设翻车率为0%。此处只决定故事内合作风险，不代表现实品牌的经核实事实。调查完成后正文应自然呈现实际发现，不要把后台随机机制写入正文，文尾按规则记录。');
+    if(open.length)parts.push('隐藏商业背调事实（仅供本次正文模型在user实际完成背调时写出结果，绝不可在背调前向角色泄漏或自动替user调查）：'+JSON.stringify(open.map(p=>({id:p.id,problematic:privateDraws?.[p.id]===true})))+'。problematic=true 的商家经真实完成的背调会查出与合作相关的实质隐患，后台翻车率为100%；problematic=false 的商家不属于预设高风险对象，但合作正式成立时仍有1%翻车率。此处只决定故事内合作风险，不代表现实品牌的经核实事实。调查完成后正文应自然呈现实际发现，不要把后台随机机制写入正文，文尾按规则记录。');
     if(open.length){
-        parts.push('已有商业邀约 '+JSON.stringify(open.map(publicPlan))+'。只有user实际完成调查、打听或委托背调并获得有依据的结果，才在本楼末尾附<!--durian-business:{"kind":"investigate","id":"企划ID","findings":"实际查出的情况","riskRate":100}-->（示例数字须按后台风险旗标为100或0）；只表达打算调查、浏览主页、询价或尚未拿到结果不算背调。对实际成功落实的风险防范措施，单独附<!--durian-business:{"kind":"mitigate","id":"企划ID","measure":"已成功落实的具体措施","reduction":20,"riskRate":80}-->；降低多少由本轮实际措施的效果决定，可逐次降低，未生效、仅建议或计划中的措施不能标记。仅在合作正式开始前允许降风险。正式签约/合作开始才附<!--durian-business:{"kind":"accept","id":"企划ID","terms":"实际成立的约定"}-->；仅表示兴趣、询价或接受私信请求不算成立；拒绝时附kind=reject。程序在正式开始时按剩余风险进行一次随机判定，判中后沿用现有成立满三剧情日以后的翻车流程；本轮标记不得预先宣布后续事故。报价、签约及索赔不等于实际资金收付，财务按原规则。');
+        parts.push('已有商业邀约 '+JSON.stringify(open.map(publicPlan))+'。只有user实际完成调查、打听或委托背调并获得有依据的结果，才在本楼末尾附<!--durian-business:{"kind":"investigate","id":"企划ID","findings":"实际查出的情况","riskRate":100}-->（实际后台初始风险为100或1，按对应风险如实填写）；只表达打算调查、浏览主页、询价或尚未拿到结果不算背调。对实际成功落实的风险防范措施，单独附<!--durian-business:{"kind":"mitigate","id":"企划ID","measure":"已成功落实的具体措施","reduction":20,"riskRate":80}-->；降低多少由本轮实际措施的效果决定，可逐次降低，未生效、仅建议或计划中的措施不能标记。仅在合作正式开始前允许降风险。正式签约/合作开始才附<!--durian-business:{"kind":"accept","id":"企划ID","terms":"实际成立的约定"}-->；仅表示兴趣、询价或接受私信请求不算成立；拒绝时附kind=reject。程序在正式开始时对每个企划只按当时剩余风险进行一次随机判定：初始高风险商家未经减险为100%，减险后按新概率；非高风险商家也有1%概率。判中后沿用现有成立满三剧情日以后的翻车流程；本轮标记不得预先宣布后续事故。报价、签约及索赔不等于实际资金收付，财务按原规则。');
     }
     const undated=plans.filter(p=>p.status==='active'&&p.startDay===null);
     if(undated.length)parts.push('这些合作的成立日期尚未明确：'+JSON.stringify(undated.map(publicPlan))+'。若本楼明确提及实际签约日期，可附<!--durian-business:{"kind":"date","id":"企划ID","date":"YYYY-MM-DD"}，不得推测或改用设备时间。');
@@ -124,7 +124,7 @@ export function importBusiness(raw,revisions,chat,settings,annotations){
                     const account=delivery[0].value;
                     if(!state.x[account.id])account.identityKnown=false;
                     const draws=journal.businessDraws??={};
-                    if(!Object.hasOwn(draws,id))draws[id]=crypto.getRandomValues(new Uint8Array(1))[0]<128;
+                    if(!Object.hasOwn(draws,id))draws[id]=crypto.getRandomValues(new Uint16Array(1))[0]<0.30*65536;
                     const rolls=journal.businessRolls??={};
                     if(!Object.hasOwn(rolls,id))rolls[id]=crypto.getRandomValues(new Uint16Array(1))[0];
                     add(delivery);add([write(id,{id,brand:row.brand,project:row.project,terms:row.terms,accountId:account.id,status:'invited',investigated:false})]);
