@@ -2335,6 +2335,12 @@ h2, p { margin: 0; }
 }
 .pp-shop .pp-shop-art-plant{background:linear-gradient(145deg,#eaf6ec,#dcefe9)}
 .pp-shop .pp-shop-art-shopping{background:linear-gradient(145deg,#fff2d7,#fce4c8)}
+.pp-shop .pp-shop-art-ring,.pp-shop .pp-shop-art-watch{
+  background:linear-gradient(145deg,#fff5e8,#f8e7d1)
+}
+.pp-shop .pp-shop-art-shoes{background:linear-gradient(145deg,#e7f5fb,#e7e9fa)}
+.pp-shop .pp-shop-art-home{background:linear-gradient(145deg,#f4eddf,#e7eee3)}
+.pp-shop .pp-shop-art-tv{background:linear-gradient(145deg,#e6edf7,#ddeaf0)}
 .pp-shop .pp-shop-art-list{width:107px;height:126px;aspect-ratio:auto}
 .pp-shop .pp-shop-art-list img{width:77%;height:70%}
 .pp-shop .pp-shop-product-info{
