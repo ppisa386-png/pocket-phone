@@ -5,7 +5,7 @@ import { appendChange, replayJournal, reconcileJournal, revisionsFor, messageSig
 import { syncCommContext, commEntries, commExpired, commMeta, commKey, commReplyClassification, commRecordPatch, commClassificationPlan, commClassificationChanges, commRecordExists, commExcerpt, inferShown, COMM_PLATFORMS } from '../src/comm-context.js';
 import { importStoryPhone, buildStoryPhonePrompt } from '../src/story-phone.js';
 import { buildContinuityPrompt } from '../src/continuity.js';
-import { xStoryPrompt } from '../src/x-story.js';
+import { xStoryPrompt, xStoryChanges } from '../src/x-story.js';
 import { xTriggerCandidates } from '../src/outreach.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { normalizeSettings } from '../src/config.js';
@@ -124,29 +124,41 @@ test('narrative shown markers flip existing records only, ignore invented ids, r
     assert.equal(commMeta(rolled,'whatsapp','旧消息1'),undefined,'rollback removes the marker with its floor');
 });
 
-test('continuity injects unshown content, summarizes shown records and drops expired ones on every channel',()=>{
-    const state=channelState();
-    state.messages.u={id:'u',contactId:'card:alex.png',role:'assistant',text:'未展示的完整消息内容很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长附加内容附加内容附加内容附加内容附加内容附加内容附加内容附加内容',createdAt:1,read:true};
-    state.messages.s={id:'s',contactId:'card:alex.png',role:'assistant',text:'已展示的完整消息内容也很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长结尾部分结尾部分结尾部分结尾部分结尾部分结尾部分结尾部分结尾部分',createdAt:2,read:true};
-    state.calls.e={id:'e',contactId:'card:alex.png',status:'ended',turns:[{role:'assistant',text:'通话对白一'},{role:'assistant',text:'通话对白二'},{role:'assistant',text:'通话对白三'}],createdAt:3};
-    state.commContext={
-        'sms:u':{version:1,category:null,classification:'pending',anchor:{date:'',time:'',precision:'exact'},anchorSource:'source-floor',expired:false,shown:false},
-        'sms:s':{version:1,category:'A',classification:'classified',anchor:{date:'',time:'',precision:'exact'},anchorSource:'source-floor',expired:false,shown:true},
-        'call:e':{version:1,category:'B',classification:'classified',anchor:{date:'2026-11-01',time:'12:00'},anchorSource:'source-floor',expired:false,shown:true},
-    };
-    const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',currentStoryTime:stamp('2026-11-02','12:01')});
-    assert.match(prompt,/附加内容附加内容附加内容附加内容附加内容附加内容附加内容附加内容/,'unshown keeps its full content');
-    assert.doesNotMatch(prompt,/结尾部分结尾部分结尾部分结尾部分结尾部分结尾部分结尾部分结尾部分/,'shown never re-injects the full text');
-    assert.match(prompt,/已展示的完整消息内容也很长[^\n"]*…/,'shown is present as a summary');
-    assert.doesNotMatch(prompt,/通话对白三/,'shown call turns are summarized');
-    assert.match(prompt,/通话对白一/);
-    // Expired rows leave every channel, while the phone history keeps them.
-    assert.equal(state.messages.s.text.includes('已展示'),true,'phone history untouched');
-    state.commContext['sms:u'].expired=true;
-    state.commContext['call:e'].category='A';
-    const expired=buildContinuityPrompt(state,speaker,{instruction:'衔接',currentStoryTime:stamp('2026-11-03','12:01')});
-    assert.doesNotMatch(expired,/未展示的完整消息|通话对白一|通话对白三/);
-    assert.match(expired,/已展示的完整消息内容也很长.*…|已展示/,'shown summaries may still appear as history');
+test('continuity omits shown records on every communication channel, including X replies',()=>{
+    const state=channelState(),who={id:'card:alex.png',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
+    state.messages.unshown={id:'unshown',contactId:who.id,role:'assistant',text:'UNSHOWN_SMS',createdAt:1};
+    state.messages.shown={id:'shown',contactId:who.id,role:'assistant',text:'SHOWN_SMS',createdAt:2};
+    state.calls.shown={id:'shown',contactId:who.id,status:'ended',turns:[{role:'assistant',text:'SHOWN_CALL'}],createdAt:3};
+    state.commContext['sms:unshown']={shown:false};
+    state.commContext['sms:shown']={shown:true};
+    state.commContext['call:shown']={shown:true};
+    for(const app of ['whatsapp','wechat','snapchat','x']){
+        state[app][who.id]={...who};
+        for(const shown of [false,true]){
+            const id=app+(shown?'-shown':'-unshown');
+            state[app][id]={id,type:'message',accountId:who.id,role:'assistant',text:(shown?'SHOWN_':'UNSHOWN_')+app,createdAt:shown?5:4,read:true};
+            state.commContext[app+':'+id]={shown};
+        }
+    }
+    state.x.post={id:'post',type:'post',author:'user',feed:'home',text:'SHOWN_X_POST',createdAt:6};
+    state.x.comment={id:'comment',type:'comment',postId:'post',author:who.id,text:'UNSHOWN_X_COMMENT',createdAt:7};
+    state.commContext['x:post']={shown:true};
+    state.commContext['x:comment']={shown:false};
+    const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
+    assert.match(prompt,/UNSHOWN_SMS/);
+    for(const app of ['whatsapp','wechat','snapchat','x'])assert.match(prompt,new RegExp('UNSHOWN_'+app));
+    assert.match(prompt,/UNSHOWN_X_COMMENT/);
+    assert.doesNotMatch(prompt,/SHOWN_SMS|SHOWN_CALL|SHOWN_whatsapp|SHOWN_wechat|SHOWN_snapchat|SHOWN_x|SHOWN_X_POST/);
+    const records=JSON.parse(prompt.split('\n').at(-2)).records;
+    assert.ok(records.every(record=>record.shown===false),'only unshown records enter the payload');
+    assert.equal(state.messages.shown.text,'SHOWN_SMS','phone history remains unchanged');
+    const fullyShown=structuredClone(state);
+    for(const meta of Object.values(fullyShown.commContext))meta.shown=true;
+    assert.equal(buildContinuityPrompt(fullyShown,speaker,{instruction:'衔接',allParticipants:true}),'');
+
+    state.commContext['sms:unshown'].expired=true;
+    const expired=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true});
+    assert.doesNotMatch(expired,/UNSHOWN_SMS/,'expiry still filters unshown records');
 });
 
 test('element entries anchor to the floor their reaction appeared on and default to A',async()=>{
@@ -257,8 +269,13 @@ test('the narrative catalog keeps every reference but degrades expired or shown 
     assert.equal(rows.fresh.text.includes('未过期的帖子完整内容'),true,'fresh content stays available');
     assert.equal(rows.old.text,undefined,'expired post degrades to a bare reference');
     assert.ok(rows.old.id,'the full catalog keeps the expired reference');
-    assert.equal(rows.shown.text.endsWith('…'),true,'shown post content is summarized');
-    assert.ok(rows.shown.text.length<=81,'shown content stays within the excerpt');
+    assert.equal(rows.shown.text,undefined,'shown posts omit text completely');
+    assert.equal(rows.shown.imageDescription,undefined,'shown posts omit imagery completely');
+    assert.equal(rows.shown.shown,true,'shown metadata still identifies the post');
+    const updated=xStoryChanges(state,[{action:'metrics',postId:'shown',metrics:{likes:{value:5}}}],[{mes:'正文写出点赞数'}],0,'metrics-check',{name1:'Sam'});
+    assert.equal(updated.find(change=>change.key==='shown').value.metrics.likes,5,'shown posts can still update engagement by ID');
+    const ignored=xStoryChanges(state,[{action:'metrics',postId:'fresh',metrics:{likes:{value:5}}}],[{mes:'正文写出点赞数'}],0,'metrics-check',{name1:'Sam'});
+    assert.equal(ignored.length,0,'unshown posts still require matching post text');
 });
 
 test('expired posts stop serving as re-outreach catalysts',async()=>{
@@ -300,13 +317,7 @@ test('an X DM actually sent in narrative is imported as shown, not re-presented 
     state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
     assert.equal(Object.values(state.x).filter(r=>r.type==='message').length,1,'later floors do not re-import old prose');
     const prompt=buildContinuityPrompt(state,speaker,{instruction:'延续既有交流',allParticipants:true,userName:'Sam',currentStoryTime:stamp('2024-10-07','15:30'),budget:40000});
-    const record=JSON.parse(prompt.split('\n').at(-2)).records.find(r=>r.channel==='X 私信');
-    assert.equal(record.shown,true);
-    assert.equal(record.speaker,'匿名账号');
-    assert.ok(record.text.length<content.length,'shown X DM contributes only an excerpt');
-    assert.doesNotMatch(prompt,/首次发送同一私信/);
-    assert.match(prompt,/不得再次作为新消息/);
-    assert.match(prompt,/不得仅因出现在手机历史里/);
+    assert.equal(prompt,'','shown X DM is absent from the next narrative context');
     const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,0)).journal);
     assert.equal(Object.values(rolled.x).filter(r=>r.type==='message').length,0,'message rolls back with source floor');
 });
@@ -325,6 +336,9 @@ test('X narrative replies are shown, while app-only X replies remain unshown',as
     const unshown={id:'app-only',type:'message',accountId:message.accountId,role:'assistant',text:'Later followup',createdAt:50};
     state.x[unshown.id]=unshown;
     assert.equal(inferShown({platform:'x',id:unshown.id,record:unshown}),false);
+    const continuity=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true});
+    assert.doesNotMatch(continuity,/周二见。/,'shown reply is absent');
+    assert.match(continuity,/Later followup/,'app-only reply stays available');
     const entryPrompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),context.chat);
     assert.match(entryPrompt,/X 私信与其他通信使用同一已展示\/未展示记录机制/);
     assert.match(entryPrompt,/"platform":"x"/);
