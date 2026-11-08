@@ -476,8 +476,13 @@ h2, p { margin: 0; }
 }
 .pp-weather-metrics{
     position:relative;z-index:3;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
-    margin:1px 0 16px;padding:12px 3px 10px;border:1px solid var(--w-line);border-radius:20px;
-    background:var(--w-panel);box-shadow:var(--w-shadow);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    margin:0 0 16px;padding:12px 3px 10px;
+    border:1px solid var(--w-line);
+    border-top-color:var(--w-scene-merge); /* 顶边取衔接色：与 hero 底部渐隐色连续，消除白线 */
+    border-radius:20px;
+    background:var(--w-panel);
+    box-shadow:var(--w-shadow);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
 }
 .pp-weather-metric{
     display:grid;grid-template-rows:25px auto auto;align-content:center;justify-items:center;gap:3px;
