@@ -1,7 +1,7 @@
 import {paperDraft} from './daily-core.js?v=1.2';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2.5';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.6';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2';
@@ -152,7 +152,33 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice,editPart:editDailyPart});
-    const weatherPanel=createWeatherPanel({adapter,getView:()=>viewFor('weather'),redraw:()=>{if(!destroyed&&opened&&route==='app:weather')renderWeather();}});
+    const weatherPanel=createWeatherPanel({adapter,getView:()=>viewFor('weather'),redraw:()=>{if(!destroyed&&opened&&route==='app:weather')renderWeather();},editLocation:editWeatherLocation});
+    function editWeatherLocation(previousCity) {
+        if(!adapter.weather?.editLocation||shadow.querySelector('.pp-weather-location-editor'))return;
+        const dialog=document.createElement('dialog');
+        dialog.className='pp-daily-editor pp-weather-location-editor';
+        dialog.setAttribute('aria-label','修改天气地点');
+        dialog.innerHTML='<form><h3>修改地点</h3><div><label>当前位置<input type="text" maxlength="60" required autocomplete="off"></label></div><p role="status"></p><footer><button type="button">取消</button><button type="submit">保存</button></footer></form>';
+        const form=dialog.querySelector('form'),field=form.querySelector('input'),save=form.querySelector('[type="submit"]');
+        field.value=previousCity;
+        dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+        dialog.addEventListener('keydown',event=>{if(event.key==='Escape')event.stopPropagation();});
+        form.querySelector('[type="button"]').onclick=()=>dialog.close();
+        form.onsubmit=async event=>{
+            event.preventDefault();event.stopPropagation();
+            if(save.disabled)return;
+            save.disabled=true;
+            try{
+                const result=await adapter.weather.editLocation(field.value,previousCity);
+                if(!result?.ok)throw Error(result?.error||'地点修改失败，请重试。');
+                if(dialog.open)dialog.close();
+            }catch(error){form.querySelector('[role="status"]').textContent=error.message;}
+            finally{save.disabled=false;}
+        };
+        shadow.append(dialog);
+        dialog.showModal();
+        field.focus();
+    }
     function editDailyPart(id,scope) {
         const before=paperDraft(phoneView,id);
         if(!before||!adapter.daily?.editEdition||shadow.querySelector('.pp-daily-editor'))return;
@@ -231,6 +257,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
         if(kind==='asset-row')return assetPanel.press(target);
         if(kind==='daily-article'||kind==='daily-meta'||kind==='daily-archive')return dailyPanel.press(target);
+        if(kind==='weather-location')return weatherPanel.press(target);
         if(String(kind).startsWith('x-'))return xPanel.press(target);
         return [];
     }
