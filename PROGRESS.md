@@ -1,5 +1,17 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 小榴莲固定资产/奢侈品/投资手动编辑与删除（1.2 之上）
+基线为 02609aa（小榴莲视觉二次整改之上，642→642）。按用户规格为三个资产栏目增加长按/右键菜单与手动编辑、删除；余额栏目保持无此功能。财务计算零改动。
+
+**服务层（src/assets.js）**：新增 `manualEdit(id, fields)` / `manualDelete(id)`（phone.appTask('assets')，memory.begin/commit + assetSet，聊天隔离与剧情回退天然兼容）。manualEdit 校验名称非空、分类合法、金额经 moneyMinor 按账本币种精度转 Minor（负数/格式错误友好报错）；估值可清空（valueMinor:null、valued:false、valueManual:false 恢复自动估值），填写则 valued:true＋**valueManual:true 手动保护标记**；投资类编辑 sharePercent（>0≤100）/expiresOn（null 允许）/details，条款变化时以剧情日（缺省回退 wallet.lastDay）追加 `termsHistory` 最新一段（`rightsHistory(holding)` 取既往历史，修复了初版误用 patch 取历史的 bug），校验到期日不早于生效日。manualDelete 仅置墓碑 `deleted:true + active:false + deletedDay`——不动余额、不退款、不删来源事件；active:false 使其退出展示/估值/业务结算。
+**AI 保护（applyAssessment + 提示词）**：valuations 循环跳过 `valueManual===true`（用户估值不被覆盖；清空后恢复正常估值）；payload 新增 `deletedHoldings`（墓碑列表）并在 ledger.holdings/valuations 中天然排除（active:false）；提示词新增"user 手动确认的估值不要在 valuations 返回；deletedHoldings 不得通过 events/ownership/classifications 重新登记或估值"。applyAssessment 新增墓碑防重登记：新增 acquire 事件与 ownership 条目按归一化名称匹配墓碑即跳过（待处理事件标记 processed+absorbed 就地吸收，不阻塞一键更新）。
+**视图（assets-view.js）**：三个分类页资产行加 `data-press="asset-row" data-asset-id`；新增 `press(target)` 返回 编辑/删除（删除走 window.confirm「确定从资产列表中删除这项记录吗？」，沿用短信删除先例）——余额栏目无 data-press 不出现菜单；新增轻量编辑窗口（`.pp-asset-edit` 覆盖层＋表单：名称/分类 select/购入价格/当前估值/详细说明，投资类追加持有比例 %/到期日期/权益说明标签，说明文字提示手动估值保护与清空恢复自动估值）；action 新增 cancel-edit/save-edit 分支（fields 由 ui.js 第 4 参传入；保存失败 notice 且窗口保留输入，成功关闭并刷新）。
+**ui.js**：pressActions 新增 `asset-row` 分支；renderAssets 开头 pressMenu.close(true)；资产委托改为传递编辑字段对象（`[data-asset-edit]` 内 `[data-asset-field]` 收集为第 4 参）。
+**机制保留**：手动选择、分类纠正、exclude、classifications、 disposе/来源事件、journal 与回退全部未动；press-menu.js 未改。
+**测试**：+4（638→642）——①编辑持久化（名称/购入/估值/说明 + valueManual）且 AI valuations 不覆盖、清空后恢复 AI 估值、提示词契约；②非法输入拒绝（空名称/格式错/负数，appTask 错误经 {ok:false,error} 断言）+ press() 分类行返回 编辑/删除 而余额流水/未知 id 返回空；③投资条款编辑 termsHistory 两段（旧段保留/新段 rights+expiresOn）+比例与到期日校验；④删除墓碑不动余额、AI 同名 acquire 不再登记、剧情回退（pop 楼层）后墓碑撤销登记恢复——初版测试顺序错误（删除锚定第 1 楼 pop 不到）已修正为删除后追加正文再回退。
+验证：npm test 642/642；npm run build:preview 通过。内置 Chromium 实测（真实 press-menu＋模拟酒馆服务）：右键资产行弹出胶囊菜单（编辑/删除图标，红标删除，带尾巴定位）；点击编辑打开预填窗口（名称/分类/购入 3500000/估值 4800000/说明）；修改保存后行文本「曼哈顿公寓 $5,200,000.00」、state valueManual:true；删除经 window.confirm 后墓碑生效、行移除；余额栏目右键无菜单。调试记录：菜单打开后 900ms 内的点击被 press-menu 幽灵点击抑制窗口拦截（脚本过快所致，真实用户填表超时不受影响）；harness 委托初版未传编辑字段已修正。截图（菜单/编辑窗口）已交付用户。
+未完成：真实手机长按触感与右键菜单在酒馆实际环境的最终确认待用户验收；版本参数保持 1.2 待发布统一；本轮已本地提交、未推送远端（等待用户指示）。
+
 ## 本地待发布 · 小榴莲视觉二次整改：壳层衔接＋余额主卡重设计＋紧凑信息层级（1.2 之上）
 基线为 4a4dbd7（指标面板白线修复之上，638/638）。用户按参考图（左侧目标方案布局）要求小榴莲视觉二次整改：解决"普通网页卡片组合"感，重点为余额主视觉、紧凑统计卡、首屏交易列表、壳层衔接与底部导航；财务业务逻辑零改动。仅动 `src/assets-view.js` 与 `style.css`：
 

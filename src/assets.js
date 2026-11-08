@@ -3,7 +3,7 @@ import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency
 import { changeWalletCurrency } from './assets-currency.js?v=1.2';
 import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES } from './assets-policy.js?v=1.2';
-import { validateRights, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2';
+import { validateRights, rightsHistory, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2';
 import { parseModelObject } from './model-json.js?v=1.2';
 import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.2';
 import { latestMemory } from './external-memory.js?v=1.2';
@@ -103,6 +103,8 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
         // memory quotes are no longer required as proof of the date.
     }
     if (before && day < before.lastDay) throw Error('剧情日期早于上次结算，请先核对时间或回退对应正文。');
+    // 手动删除的资产以墓碑保留：同名的再取得事件不再自动登记回账本。
+    const deletedNames = new Set(assetRows(state, 'holding').filter(h => h.deleted === true).map(h => h.name.normalize('NFKC').toLowerCase()));
     const home=assessmentResidence(before,data,persona,[],residenceSummaries);
     if (!before && !home) throw Error('无法确定 user 常住地区，请在人设或正文说明 user 通常在哪里生活后再建账。');
     const currency=home?.currency || walletCurrency(original);
@@ -185,6 +187,11 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
             }
             if (event.day !== null && event.day > day) throw Error('不能提前登记未来收支。');
             if (event.kind === 'job' && (event.day === null || event.day < before.lastDay)) throw Error('工作变动日期不明确或早于已结算期间。');
+            if (event.kind === 'asset' && event.action === 'acquire' && deletedNames.has(event.name.normalize('NFKC').toLowerCase())) {
+                // user 已手动删除同名资产登记：不再自动登记回来；已登记的待处理事件就地吸收。
+                if (item.id) add([assetSet({ ...event, processed: true, absorbed: true })]);
+                continue;
+            }
             seen.add(event.id); add(applyFinancialEvent(state, event));
         }
         // Existing fixed salary is immutable. A promotion creates a new segment.
@@ -208,6 +215,7 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
                 id = 'holding:order:' + order.id + ':' + item.id; name = item.product.name + ' × ' + item.quantity;
                 purchaseMinor = item.product.currency===currency ? item.product.priceMinor * item.quantity : null; startDay = order.createdDay;
             }
+            if (deletedNames.has(name.normalize('NFKC').toLowerCase())) continue;
             if (state.assets[id]) throw Error('该财产已经登记。');
             add([assetSet({ id, type: 'holding', name, category: h.category, purchaseMinor, startDay, details, rights, valueMinor: h.value == null ? null : assessmentMoney(h.value, 'ownership[].value'), active: true, valued: h.value != null })]);
         }
@@ -225,6 +233,7 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
         for (const v of array(data, 'valuations')) {
             const old = state.assets[v.id];
             if (!old || old.type !== 'holding' || old.active === false) throw Error('估值资产不存在。');
+            if (old.valueManual === true) continue; // 用户手动确认的估值受保护，不被 AI 估值覆盖。
             if (v.value == null) continue; // Unknown is not zero; preserve an existing known value.
             if (old.category !== 'investment' && old.valued) throw Error('固定资产或奢侈品已有估值，不重复估价。');
             add([assetSet({ ...old, valueMinor: assessmentMoney(v.value, 'valuations[].value'), valued: true })]);
@@ -308,9 +317,70 @@ export function applyAssessment(original, data, { chat, index, revision, memoryT
 export function createAssets({ memory, phone, getContext, getSettings }) {
     let pendingSwitch=null;
     const needsResidenceCheck=wallet=>!!wallet && !hasResidence(wallet);
+    // 手动编辑/删除仅面向固定资产、奢侈品、投资；墓碑记录保留来源并阻止 AI 重新登记。
+    const editableHolding=(view,id)=>{
+        const holding=view.state.assets?.[id];
+        if (!holding || holding.type !== 'holding' || holding.deleted === true) throw Error('资产不存在或已被删除。');
+        if (!['fixed', 'luxury', 'investment'].includes(holding.category)) throw Error('余额栏目不支持手动编辑或删除。');
+        return holding;
+    };
     return {
         open: () => memory.read(),
         needsResidenceCheck,
+        manualEdit(id, fields) { return phone.appTask(async (view, check) => {
+            if (!check()) throw Error('小榴莲已关闭。');
+            const holding = editableHolding(view, id);
+            const currency = walletCurrency(view.state);
+            if (!currency) throw Error('账本尚未确定币种，请先完成一键更新。');
+            const name = assetText(fields?.name, 300);
+            if (!name) throw Error('资产名称不能为空。');
+            const category = ['fixed', 'luxury', 'investment'].includes(fields?.category) ? fields.category : holding.category;
+            const money = raw => {
+                const text = typeof raw === 'string' ? raw.trim() : raw;
+                if (text === '' || text == null) return null;
+                try { return moneyMinor(text, false, currency); }
+                catch { throw Error('金额格式不正确，请输入' + currency + '数值或留空。'); }
+            };
+            const valueMinor = money(fields?.value);
+            const ticket = await memory.begin(view);
+            const patch = { ...holding, name, category,
+                purchaseMinor: money(fields?.purchase),
+                valueMinor, valued: valueMinor !== null, valueManual: valueMinor !== null,
+                details: assetText(fields?.details, 600) };
+            if (category === 'investment') {
+                const rights = { ...(holding.rights || {}) };
+                const share = typeof fields?.sharePercent === 'string' ? fields.sharePercent.trim() : fields?.sharePercent;
+                if (share !== '' && share != null) {
+                    const pct = Number(share);
+                    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) throw Error('持有比例须大于 0 且不超过 100。');
+                    rights.sharePercent = pct;
+                }
+                if (fields?.expiresOn !== undefined) rights.expiresOn = fields.expiresOn === '' || fields.expiresOn == null ? null : fields.expiresOn;
+                patch.rights = validateRights(rights);
+                // 手动修改投资条款：更新当前有效条款并追加 termsHistory 最新一段，保留既往历史。
+                const changed = patch.details !== (holding.details || '') || JSON.stringify(patch.rights) !== JSON.stringify(holding.rights || {});
+                if (changed) {
+                    const day = readStoryClock(getContext().chat).day ?? view.state.assets.wallet?.lastDay ?? null;
+                    const history = rightsHistory(holding); // 以原持有记录为准，保留既往条款段
+                    const lastFrom = history.at(-1)?.fromDay ?? -1;
+                    if (day !== null && day >= lastFrom) patch.termsHistory = [...history, { fromDay: day, details: patch.details, rights: patch.rights, manual: true }];
+                }
+                const effective = patch.termsHistory?.at(-1)?.fromDay ?? patch.startDay ?? 0;
+                if (patch.rights.expiresOn != null && dateDay(patch.rights.expiresOn) < effective) throw Error('权益到期日期早于生效日；已终止权益请通过正文 dispose 流程处理。');
+            }
+            if (!check()) throw Error('剧情或设置已变化，本次修改未保存。');
+            await memory.commit(ticket, [assetSet(patch)]);
+            return { ok: true };
+        }, 'assets'); },
+        manualDelete(id) { return phone.appTask(async (view, check) => {
+            if (!check()) throw Error('小榴莲已关闭。');
+            const holding = editableHolding(view, id);
+            const ticket = await memory.begin(view);
+            if (!check()) throw Error('剧情或设置已变化，本次删除未保存。');
+            // 墓碑仅表示 user 不再保留这条登记：不动余额、不退款、不删来源；随账本存档可回退。
+            await memory.commit(ticket, [assetSet({ ...holding, deleted: true, deletedDay: readStoryClock(getContext().chat).day ?? view.state.assets.wallet?.lastDay ?? null, active: false })]);
+            return { ok: true };
+        }, 'assets'); },
         convert(rate) { return phone.appTask(async(view,current)=>{
             const proposal=pendingSwitch;
             if (!proposal || proposal.scope!==view.scope || proposal.revision!==view.revision || proposal.from!==walletCurrency(view.state) ||
@@ -370,6 +440,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                     offsetReferences: references,
                 },
                 orders: Object.values(view.state.orders || {}).filter(o => o.type === 'order' && o.sourceIndex > (wallet?.lastIndex ?? -1)),
+                deletedHoldings: assetRows(view.state, 'holding').filter(h => h.deleted === true).map(({ id, name, category }) => ({ id, name, category })),
                 unsettledFromIndex: wallet ? wallet.lastIndex + 1 : 0, throughIndex:index };
             const prompt = getSettings().prompts.general + '\n' + getSettings().prompts.assetAssessment + '\n' + ASSET_ASSESSMENT_RULES + '\n' + homeContract + '\n'+pendingContract+'\n金额以常住地区本币为单位。顶层 currency 与金额的单位必须相符。现有账本的地区变更仅按本次常住地规则处理，跨币区须先确认换币，不在本次结算。剧情资料中的 currentLocation 只是共享当前位置，仅作地理背景；旅行、出差、短期停留不改变常住地，不据此换币。' +
                 (recovery ? '\n' + OWNERSHIP_RECOVERY_RULES : '') + '\n输入账本字段以 Minor 结尾的是最小货币单位，本币每单位对应 '+(currency?unitScale(currency):'所选币种的标准倍率')+' 个最小单位。输出金额统一使用主要货币单位的数字，日元等零小数币种填整数。只输出以下 JSON，未用数组填空。' + dateContract +
@@ -377,6 +448,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 '\n后续：{"date":"YYYY-MM-DD","events":[{"id":"已有未处理 story_event 的 id；补漏事件省略","sourceIndex":0,"kind":"income/expense/asset/job","name":"事项","amount":5,"date":"YYYY-MM-DD","category":"可选 fixed/luxury/investment；核对后确属误登记普通物品的待处理资产事项填 exclude，由程序排除并保留来源","action":"资产 acquire/amend/dispose 或工作 start/change/end","holdingId":"amend修改或dispose终止时已有资产id","details":"新资产或amend生效后的完整合同摘要","rights":{},"jobId":"调薪/离职时旧工作id","monthlySalary":3000,"salaryMode":"劳动报酬one_off或scheduled","salaryEmployer":"仅固定月薪匹配的employer","payDate":"仅固定月薪对应工资周期日"}],"salaries":[{"id":"monthlyMinor 为 null 的新工作id","monthlySalary":3000}],"valuations":[{"id":"资产id","value":100}],"living":{"total":0,"bookedIds":[]},"business":[{"id":"投资资产id","from":"本段起日 YYYY-MM-DD","to":"本段止日 YYYY-MM-DD","netIncome":0,"bookedIds":[]}],"note":"可选简短说明"}。sourceIndex 填事项所属的正文楼号，不确定可省略。'+
                 '\n处理所有未完成事件，财产暂无法估值时保留null待估；已有明确收支金额不可改。新财产事件可附 marketValue 给出正常价值，details 保留股份数量、车型等已知规格；既有待估财产必须先尝试依据现有资料估算正常市价，使用 valuations 填已有资产 id 和数值；这不是新增 events，也不用编造正文消费依据或扣余额。实在无法合理估算才省略或填 null 并在 note 说明。工作月薪可在 events 中一次给定。普通明确消费已记 cash 不再返回。已记消费但未分类且符合资产范围的财产，可另附 ownership:[{eventId:"对应 story_event id",category:"fixed/luxury/investment",value:正常价值}]；本人 Amazon 订单可用 orderId 和 itemId 替代 eventId。只能新增未登记的财产，不重复扣款，不登记日常工具、消耗品或送给别人的礼物。每次核对旧 fixed/luxury 是否误登普通物品或分错类，可附 classifications:[{id:已有资产id,category:fixed/luxury/exclude}]。exclude仅移出资产展示，保留原始财产和收支，不出售、不退款、不重复记收入支出；excludedFromAssets的条目不可重新acquire/ownership，确有分类纠正依据可用classifications恢复。investment不通过此接口修改。'+
                 '\nbookedIds优先填写ledger.offsetReferences中的短ref（C1/P1等），不要凭空拼接长ID。P编号的待处理收支必须先在events补齐金额，events.id也可填写P编号；原事件ID和真实cash流水ID仍兼容。只有该总额实际包含的流水才列入，生活/经营不能重复引用同一笔；固定月薪由程序处理，不得抵扣；一次性劳动报酬只按income入账一次。若本次补漏新增收支，优先只在events登记并从生活/经营估算中排除此项，禁止编造未知流水ID。\n生活 total 是整个区间总生活费，bookedIds 列其中已记费用；business netIncome 是整个区间总净现金收益，bookedIds 列已记经营收支。已售产业只算持有时段。禁止将股票浮盈、工资、资产市值变化作为 business 收益。开销/经营仅计算 from 至 date 的完整实际期间，未经过时间均0。'+
+                '\nledger.holdings 中 valueManual:true 的估值由 user 手动确认并受保护，不要在 valuations 中返回这些资产，也不要在 events/classifications 中改动其价值；valueManual 缺失或 false 且尚无估值的资产按待估正常估值。deletedHoldings 列出 user 已手动删除的资产登记：它们已不在账本中，不得通过 events/ownership/classifications 重新登记、估值或分类，即使正文再次提到也忽略其登记，不为此编造事件或扣款。'+
                 '\n账本与待核对资料：' + JSON.stringify(payload);
             // One assessment attempt per click; failure commits nothing. A saved
             // revision remains locked across reloads and changes of API settings.

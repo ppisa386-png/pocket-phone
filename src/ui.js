@@ -227,13 +227,14 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             }});
             return actions;
         }
+        if(kind==='asset-row')return assetPanel.press(target);
         if(kind==='daily-article'||kind==='daily-meta')return dailyPanel.press(target);
         if(String(kind).startsWith('x-'))return xPanel.press(target);
         return [];
     }
     const pressMenu=createPressMenu({shadow,root:layer,phone,getActions:pressActions});
     const assetPanel=createAssetPanel({adapter,getView:()=>viewFor('assets'),redraw:()=>{if(!destroyed&&opened&&route==='app:assets')renderAssets();},notice});
-    function renderAssets(){
+    function renderAssets(){pressMenu.close(true);
         const old=content.querySelector('.pp-asset-body'), scroll=old?.scrollTop||0, page=old?.dataset.assetPage;
         content.innerHTML=assetPanel.html();
         const body=content.querySelector('.pp-asset-body');
@@ -544,7 +545,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (!target) return;
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
         if(target.dataset.weatherAction){void weatherPanel.action(target.dataset.weatherAction);return;}
-        if(target.dataset.assetAction){void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value);return;}
+        if(target.dataset.assetAction){
+            const editHost=target.closest('[data-asset-edit]');
+            const fields=editHost?Object.fromEntries(Array.from(editHost.querySelectorAll('[data-asset-field]'),input=>[input.dataset.assetField,input.value])):undefined;
+            void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value,fields);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
         if(target.dataset.foodAction){void foodPanel.action(target.dataset.foodAction,target.dataset.foodId);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }

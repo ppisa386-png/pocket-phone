@@ -935,3 +935,92 @@ test('shared currentLocation ships with the assessment payload as background onl
   assert.equal(f.state().assets.wallet.region,'US');
  }finally{f.close();}
 });
+
+// ---- 手动编辑与删除（固定资产/奢侈品/投资） ----
+
+test("manual edit persists name, price, value and details; manual value survives AI valuations until cleared", async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const ticket = await f.memory.begin();
+        await f.memory.commit(ticket, [{ collection: "assets", key: "holding:t1", value: { id: "holding:t1", type: "holding", name: "超跑", category: "luxury", valueMinor: 20000000, valued: true, active: true, startDay: day("2026-01-01"), sourceIndex: 1 } }]);
+        ok(await f.assets.manualEdit("holding:t1", { name: "限量超跑", category: "luxury", purchase: "150000", value: "250000", details: "限量 50 台" }));
+        const h = f.state().assets["holding:t1"];
+        assert.equal(h.name, "限量超跑"); assert.equal(h.valueMinor, 25000000); assert.equal(h.purchaseMinor, 15000000);
+        assert.equal(h.valued, true); assert.equal(h.valueManual, true); assert.equal(h.details, "限量 50 台");
+        await f.append("又一天。", "2026-01-02"); f.reply({ ...evaluation("2026-01-02"), valuations: [{ id: "holding:t1", value: 999 }] });
+        ok(await f.assets.update());
+        assert.equal(f.state().assets["holding:t1"].valueMinor, 25000000);
+        assert.match(f.prompt(), /valueManual:true 的估值由 user 手动确认/);
+        ok(await f.assets.manualEdit("holding:t1", { name: "限量超跑", category: "luxury", purchase: "", value: "", details: "" }));
+        const cleared = f.state().assets["holding:t1"];
+        assert.equal(cleared.valueMinor, null); assert.equal(cleared.valued, false); assert.equal(cleared.valueManual, false);
+        await f.append("又一天。", "2026-01-03"); f.reply({ ...evaluation("2026-01-03"), valuations: [{ id: "holding:t1", value: 888 }] });
+        ok(await f.assets.update());
+        assert.equal(f.state().assets["holding:t1"].valueMinor, 88800);
+    } finally { f.close(); }
+});
+
+test("manual edit rejects invalid input and the balance tab never offers the menu", async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const ticket = await f.memory.begin();
+        await f.memory.commit(ticket, [{ collection: "assets", key: "holding:t2", value: { id: "holding:t2", type: "holding", name: "公寓", category: "fixed", valueMinor: 480000000, active: true, startDay: day("2026-01-01") } }]);
+        const badName = await f.assets.manualEdit("holding:t2", { name: "", category: "fixed", value: "100" });
+        assert.equal(badName.ok, false); assert.match(badName.error, /名称不能为空/);
+        const badMoney = await f.assets.manualEdit("holding:t2", { name: "公寓", category: "fixed", value: "abc" });
+        assert.equal(badMoney.ok, false); assert.match(badMoney.error, /金额格式不正确/);
+        const badNegative = await f.assets.manualEdit("holding:t2", { name: "公寓", category: "fixed", value: "-5" });
+        assert.equal(badNegative.ok, false); assert.match(badNegative.error, /金额格式不正确/);
+        ok(await f.assets.manualEdit("holding:t2", { name: "公寓", category: "fixed", value: "" }));
+        assert.equal(f.state().assets["holding:t2"].valueMinor, null);
+        const panel = createAssetPanel({ adapter: { assets: f.assets }, getView: f.state, redraw() {}, notice() {} });
+        const actions = panel.press({ dataset: { assetId: "holding:t2" } });
+        assert.deepEqual(actions.map(a => a.label), ["编辑", "删除"]);
+        assert.deepEqual(panel.press({ dataset: { assetId: "missing" } }), []);
+        const cashId = Object.keys(f.state().assets).find(k => f.state().assets[k].type === "cash_transaction");
+        assert.deepEqual(panel.press({ dataset: { assetId: cashId } }), []);
+    } finally { f.close(); }
+});
+
+test("investment rights edit appends terms history, keeps prior segments and validates input", async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const ticket = await f.memory.begin();
+        await f.memory.commit(ticket, [{ collection: "assets", key: "holding:inv", value: { id: "holding:inv", type: "holding", name: "音乐版权", category: "investment", valueMinor: 5000000, active: true, startDay: day("2026-01-01"), rights: { sharePercent: 50 }, details: "词曲版权 50%", sourceIndex: 1 } }]);
+        ok(await f.assets.manualEdit("holding:inv", { name: "音乐版权", category: "investment", value: "60000", details: "词曲版权 60%，2026-06-30 到期", sharePercent: "60", expiresOn: "2026-06-30" }));
+        const h = f.state().assets["holding:inv"];
+        assert.equal(h.rights.sharePercent, 60); assert.equal(h.rights.expiresOn, "2026-06-30");
+        assert.equal(h.termsHistory.length, 2);
+        assert.deepEqual(h.termsHistory[0].rights, { sharePercent: 50 });
+        assert.deepEqual(h.termsHistory[1].rights, { sharePercent: 60, expiresOn: "2026-06-30" });
+        assert.equal(h.termsHistory[1].fromDay, day("2026-01-01"));
+        assert.equal(h.details, "词曲版权 60%，2026-06-30 到期");
+        const badShare = await f.assets.manualEdit("holding:inv", { name: "音乐版权", category: "investment", sharePercent: "150" });
+        assert.equal(badShare.ok, false); assert.match(badShare.error, /持有比例/);
+        const badExpiry = await f.assets.manualEdit("holding:inv", { name: "音乐版权", category: "investment", expiresOn: "2025-01-01" });
+        assert.equal(badExpiry.ok, false); assert.match(badExpiry.error, /到期日期早于生效日/);
+    } finally { f.close(); }
+});
+
+test("manual delete removes the row without touching balance, blocks AI re-registration and rolls back with floors", async () => {
+    const f = setup(); try {
+        ok(await f.assets.update());
+        const ticket = await f.memory.begin();
+        await f.memory.commit(ticket, [{ collection: "assets", key: "holding:t3", value: { id: "holding:t3", type: "holding", name: "音乐版权", category: "investment", valueMinor: 5000000, active: true, startDay: day("2026-01-01"), sourceIndex: 1 } }]);
+        assert.equal(cashBalance(f.state()), 100000);
+        await f.append("Sam 重新取得了音乐版权。", "2026-01-02");
+        ok(await f.assets.manualDelete("holding:t3")); // 删除锚定当前楼层，随剧情回退
+        const tomb = f.state().assets["holding:t3"];
+        assert.equal(tomb.deleted, true); assert.equal(tomb.active, false);
+        assert.equal(cashBalance(f.state()), 100000); // 删除不动余额
+        f.reply({ ...evaluation("2026-01-02"), events: [{ sourceIndex: 2, name: "音乐版权", kind: "asset", action: "acquire", category: "investment" }], ownership: [], living: { total: 0, bookedIds: [] } });
+        ok(await f.assets.update());
+        const revived = Object.values(f.state().assets).filter(x => x.type === "holding" && x.name === "音乐版权" && !x.deleted);
+        assert.equal(revived.length, 0); // 删除后不被 AI 重新登记
+        assert.equal(f.state().assets["holding:t3"].deleted, true);
+        assert.equal(cashBalance(f.state()), 100000);
+        f.c.chat.pop(); await f.memory.read(); // 剧情回退：墓碑随楼层撤销，登记恢复
+        assert.equal(f.state().assets["holding:t3"].deleted, undefined);
+        assert.equal(f.state().assets["holding:t3"].active, true);
+    } finally { f.close(); }
+});
