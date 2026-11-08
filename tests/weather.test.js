@@ -593,3 +593,37 @@ test('the redesigned panel carries the theme attribute, new layout blocks and un
         assert.match(noLocation, /pp-weather-hero/); // 占位与正常页共用同一视觉语言
     } finally { f.close(); }
 });
+test('the redesigned surface carries the backdrop art layer, flat hero, inline metrics and hourly band', async () => {
+    const f = setup(); try {
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await f.memory.read();
+        await f.weather.refresh();
+        const current = await f.state();
+        const make = (now, type) => {
+            const view = { ...current, busy: false };
+            if (type) view.weather['上海'] = { ...view.weather['上海'], state: { ...view.weather['上海'].state, type } };
+            return createWeatherPanel({ adapter: { weather: f.weather }, getView: () => view, redraw() {}, notice() {}, now: () => now });
+        };
+        const page = make(new Date(2026, 4, 1, 9, 0)).html();
+        // 素材层：大面积场景 SVG + 主视觉插画 + 指标横排 + 逐小时色带
+        assert.match(page, /pp-weather-backdrop/);
+        assert.match(page, /pp-weather-backdrop-art/);
+        assert.match(page, /pp-weather-art-main/);
+        assert.match(page, /pp-weather-band/);
+        assert.match(page, /pp-weather-hour-now/);
+        // 雨天场景层带雨丝
+        const rain = make(new Date(2026, 4, 1, 9, 0), 'rain').html();
+        assert.match(rain, /M150 152l-6 22/); // 场景层雨丝路径
+        // 不同天气类型挂不同场景图形
+        for (const [type, art] of [['sunny', 'M48 13v8.5'], ['thunder', 'M50 72 40 88'], ['snow', 'circle cx="36" cy="80"'], ['windy', 'M14 38h44'], ['typhoon', 'M74 30A30 30 0 1 0 78 48']]) {
+            const typed = make(new Date(2026, 4, 1, 9, 0), type).html();
+            assert.ok(typed.includes(art), type + ' scene art');
+        }
+        // 切主题不触碰数据：两次渲染城市与温度一致，仅 data-wtheme 不同
+        const mist = make(new Date(2026, 4, 1, 9, 0)).html();
+        const night = make(new Date(2026, 4, 1, 22, 0)).html();
+        assert.match(mist, /data-wtheme="mist"/); assert.match(night, /data-wtheme="night"/);
+        assert.ok(mist.includes('<strong>') && mist.includes('<b>上海</b>'));
+        assert.ok(night.includes('<strong>') && night.includes('<b>上海</b>'));
+    } finally { f.close(); }
+});
