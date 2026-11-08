@@ -500,11 +500,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (app?.id === 'x') renderX();
         else if (app?.id === 'daily') renderDaily();
         else if (app?.id === 'weather') renderWeather();
-        if (route !== 'app:weather') clearWeatherThemeTimer();
         else if (app?.id === 'assets') renderAssets();
         else if (app?.id === 'amazon') renderAmazon();
         else if (app?.id === 'food') renderFood();
         else if (app) renderEmptyApp(app.id);
+        if (route !== 'app:weather') clearWeatherThemeTimer();
         content.scrollTop = route === 'app:messages' && selectedSMSContactId ? content.scrollHeight : 0;
         updateClock();
     }
