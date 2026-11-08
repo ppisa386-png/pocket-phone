@@ -6,6 +6,7 @@ import { createAssetBridge } from './src/assets-story.js?v=1.2';
 import { createOpinionBridge } from './src/x-opinion.js?v=1.2';
 import { createAmazon } from './src/amazon.js?v=1.2';
 import { createFood } from './src/food.js?v=1.2';
+import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
@@ -98,13 +99,15 @@ async function start() {
                 dailyBridge=createDailyBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'日报正文衔接')});
                 incomingWatcher = createStoryPhoneBridge({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),onError:e=>diagnostics.add(e,'正文通信')});
             }
+            const paymentRequest = enabled ? createPaymentRequest({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null;
             const adapter = {
                 daily:enabled ? createDaily({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 weather:enabled ? createWeather({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 assets:enabled ? createAssets({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 storyChat:()=>globalThis.SillyTavern.getContext().chat||[],
-                amazon:enabled ? createAmazon({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
-                food:enabled ? createFood({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
+                paymentRequest,
+                amazon:enabled ? createAmazon({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),paymentRequest}) : null,
+                food:enabled ? createFood({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),paymentRequest}) : null,
                 api: modelClient, keyStore, diagnostics,
                 memoryStatus: settings => latestMemory(globalThis.SillyTavern.getContext(), settings),
                 continuitySupported: continuityBridge?.supported ?? false,

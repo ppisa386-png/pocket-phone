@@ -203,7 +203,7 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
     else{const line=cartLines.find(i=>i.dishId===dishId);if(line)line.quantity=quantity;}
     return {ok:true};},
    async search(...args){calls.push(['search',...args]);return {ok:true};},
-   async checkout(shopId,recipient,name){calls.push(['checkout',shopId,recipient,name]);
+   async checkout(shopId,recipient,name,method,payerName){calls.push(['checkout',shopId,recipient,name,method,payerName]);
     if(checkoutFail)return {ok:false,error:'支付失败，余额不足。'};
     cartLines=cartLines.filter(i=>i.shopId!==shopId);return {ok:true,id:'o1'};}}};
  const state=()=>({busy:false,error:'',errorKind:null,orders:{foodSearch:{query:'pasta'},'foodShop:0':shopRecord,foodCart:{id:'foodCart',type:'foodCart',items:cartLines}}});
@@ -226,16 +226,19 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
   page=panel.html();
   assert.match(page,/aria-label="已选 1 份"/);
   assert.match(page,/\$19\.00/); // 12.50 + 6.50
-  // 购买先弹收件气泡，不直接下单
+  // 购买先弹收件气泡，再弹付款方式气泡，不直接下单
   await panel.action('buy');
   page=panel.html();
   assert.match(page,/role="dialog" aria-label="选择收件人"/);assert.match(page,/送到这里来/);assert.match(page,/收件人是 Sam/);assert.match(page,/点给别人吃/);
   assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[]);
   await panel.action('gift-self');
-  assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[['checkout','foodShop:0','self','']]);
+  page=panel.html();
+  assert.match(page,/role="dialog" aria-label="选择付款方式"/);assert.match(page,/自己付款/);assert.match(page,/请 TA 代付/);
+  await panel.action('pay-self');
+  assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[['checkout','foodShop:0','self','','self','']]);
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
   assert.match(panel.html(),/外卖订单/);
-  // 点给别人：空名字留在气泡内提示，填名字后原样传给下单
+  // 点给别人：空名字留在气泡内提示；填名字进付款方式；NPC 代付输入名字原样传给下单
   await panel.action('tab','home');await panel.action('shop','foodShop:0');
   await panel.action('inc','foodShop:0#0'); // 上一单成功后清空了本店已选，重新选一份
   await panel.action('buy');
@@ -249,23 +252,37 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
   fields=new Map([['foodName','Alex']]);
   panel.input({dataset:{foodField:'foodName'},value:'Alex'});
   await panel.submit({dataset:{foodForm:'gift-name'}});
-  assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[['checkout','foodShop:0','self',''],['checkout','foodShop:0','other','Alex']]);
+  assert.match(panel.html(),/aria-label="选择付款方式"/);
+  await panel.action('pay-npc');
+  page=panel.html();
+  assert.match(page,/aria-label="请 NPC 代付"/);assert.match(page,/代付角色名字/);
+  fields=new Map([['foodName','Alex'],['payerName','小美']]);
+  panel.input({dataset:{foodField:'payerName'},value:'小美'});
+  await panel.submit({dataset:{foodForm:'payer-name'}});
+  assert.deepEqual(calls.filter(c=>c[0]==='checkout'),[['checkout','foodShop:0','self','','self',''],['checkout','foodShop:0','other','Alex','npc','小美']]);
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
-  // 下单失败时反馈留在气泡内，可重试；取消和上一步正常
+  // NPC 拒绝：回到付款方式选择，可换方式重试
   checkoutFail=true;
+  adapter.food.checkout=async(...args)=>{calls.push(['checkout',...args]);return checkoutFail?{ok:true,value:{rejected:true}}:{ok:true,id:'o1'};};
   await panel.action('tab','home');await panel.action('shop','foodShop:0');
   cartLines=[{dishId:'foodShop:0#0',shopId:'foodShop:0',shopName:shopRecord.name,name:'Carbonara',category:'主食',priceMinor:1250,currency:'USD',quantity:1}];
   await panel.action('buy');await panel.action('gift-self');
+  await panel.action('pay-npc');
+  fields=new Map([['payerName','小美']]);
+  await panel.submit({dataset:{foodForm:'payer-name'}});
   page=panel.html();
-  assert.match(page,/支付失败，余额不足/);assert.match(page,/aria-label="选择收件人"/);
+  assert.match(page,/对方拒绝了你的代付要求/);assert.match(page,/aria-label="选择付款方式"/);
   checkoutFail=false;
-  await panel.action('gift-self');
+  await panel.action('pay-self');
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
+  // 请求失败：真实错误留在气泡内，可重试；取消和上一步正常
+  adapter.food.checkout=async(...args)=>{calls.push(['checkout',...args]);return {ok:false,error:'连接已超时'};};
   await panel.action('tab','home');await panel.action('shop','foodShop:0');
-  await panel.action('inc','foodShop:0#0'); // 重试成功后已选清空，为取消流程再选一份
-  await panel.action('buy');
-  await panel.action('gift-other');await panel.action('gift-back');
-  assert.match(panel.html(),/aria-label="选择收件人"/);
+  cartLines=[{dishId:'foodShop:0#0',shopId:'foodShop:0',shopName:shopRecord.name,name:'Carbonara',category:'主食',priceMinor:1250,currency:'USD',quantity:1}];
+  await panel.action('buy');await panel.action('gift-self');
+  await panel.action('pay-self');
+  page=panel.html();
+  assert.match(page,/连接已超时/);assert.match(page,/aria-label="选择付款方式"/);
   await panel.action('gift-cancel');
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
   panel.reset();

@@ -79,7 +79,7 @@ test('gift order rolls back with its floor and keeps recipient matching local',a
  }finally{f.close();}
 });
 test('invalid prices and missing luxury brand are rejected',()=>{for(const p of [{...product,price:'-1'},{...product,price:'1.001'},{...product,brand:''}])assert.throws(()=>validateProducts({products:[p]}));});
-test('checkout bubble: two steps, unique confirm, ambiguous pick and re-enter on miss',async()=>{
+test('checkout bubble: recipient then payment steps, NPC payer input, unique confirm, ambiguous pick and re-enter on miss',async()=>{
  const OriginalFormData=globalThis.FormData;
  let fields=new Map([['date','2026-10-11'],['time','14:00']]);
  globalThis.FormData=class{constructor(){return fields;}};
@@ -97,11 +97,15 @@ test('checkout bubble: two steps, unique confirm, ambiguous pick and re-enter on
   let page=panel.html();
   assert.match(page,/role="dialog" aria-label="选择收货对象"/);assert.match(page,/寄到自己的地址/);assert.match(page,/收件人是 Sam/);assert.match(page,/买给别人/);
   assert.deepEqual(calls,[]);
-  // 自己的地址：收件人 user，沿用表单中的剧情日期时间。
+  // 自己的地址：收件人 user，先选付款方式再下单。
   await panel.action('gift-self');
-  assert.deepEqual(calls,[['checkout','self','2026-10-11','14:00']]);calls.length=0;
+  page=panel.html();
+  assert.match(page,/role="dialog" aria-label="选择付款方式"/);assert.match(page,/自己付款/);assert.match(page,/请 TA 代付/);
+  assert.deepEqual(calls,[]);
+  await panel.action('pay-self');
+  assert.deepEqual(calls,[['checkout','self','2026-10-11','14:00','self','']]);calls.length=0;
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
-  // 买给别人：唯一匹配直接确认，输入查询原样传给本地匹配。
+  // 买给别人：唯一匹配进入付款方式，不再自动下单；上一步可退回收件人选择。
   matches={kind:'unique',matches:[{key:'card:0',name:'Alex'}]};
   await panel.action('tab','cart');
   await panel.submit({dataset:{shopForm:'checkout'}});
@@ -109,9 +113,32 @@ test('checkout bubble: two steps, unique confirm, ambiguous pick and re-enter on
   assert.match(panel.html(),/aria-label="买给别人"/);assert.match(panel.html(),/输入角色名/);
   fields=new Map([['date','2026-10-11'],['time','14:00'],['giftName','alex']]);
   await panel.submit({dataset:{shopForm:'gift-name'}});
-  assert.deepEqual(calls,[['match','alex'],['checkout','card:0','2026-10-11','14:00']]);calls.length=0;
+  page=panel.html();
+  assert.match(page,/aria-label="选择付款方式"/);
+  assert.deepEqual(calls,[['match','alex']]);calls.length=0;
+  await panel.action('gift-back');
+  assert.match(panel.html(),/aria-label="买给别人"/);
+  await panel.submit({dataset:{shopForm:'gift-name'}});
+  await panel.action('pay-self');
+  assert.deepEqual(calls,[['match','alex'],['checkout','card:0','2026-10-11','14:00','self','']]);calls.length=0;
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
-  // 重名：弹出候选气泡，点击候选后以其 key 下单。
+  // NPC 代付：输入名字后原样传给下单，不查通讯录。
+  matches={kind:'unique',matches:[{key:'card:0',name:'Alex'}]};
+  await panel.action('tab','cart');
+  await panel.submit({dataset:{shopForm:'checkout'}});
+  await panel.action('gift-self');
+  await panel.action('pay-npc');
+  page=panel.html();
+  assert.match(page,/aria-label="请 NPC 代付"/);assert.match(page,/代付角色名字/);
+  fields=new Map([['date','2026-10-11'],['time','14:00'],['payerName','  ']]);
+  await panel.submit({dataset:{shopForm:'payer-name'}});
+  assert.match(panel.html(),/请填写代付角色的名字/);
+  fields=new Map([['date','2026-10-11'],['time','14:00'],['payerName','小美']]);
+  panel.input({dataset:{shopField:'payerName'},value:'小美'});
+  await panel.submit({dataset:{shopForm:'payer-name'}});
+  assert.deepEqual(calls,[['checkout','self','2026-10-11','14:00','npc','小美']]);calls.length=0;
+  assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
+  // 重名：弹出候选气泡，点选后进入付款方式。
   fields=new Map([['date','2026-10-11'],['time','14:00'],['giftName','小美']]);
   matches={kind:'ambiguous',matches:[{key:'contact:a1',name:'小美一'},{key:'contact:a2',name:'小美二'}]};
   await panel.action('tab','cart');
@@ -122,7 +149,9 @@ test('checkout bubble: two steps, unique confirm, ambiguous pick and re-enter on
   page=panel.html();
   assert.match(page,/aria-label="选择角色"/);assert.match(page,/小美一/);assert.match(page,/小美二/);assert.match(page,/重新输入/);
   await panel.action('gift-pick','contact:a2');
-  assert.deepEqual(calls,[['match','小美'],['checkout','contact:a2','2026-10-11','14:00']]);calls.length=0;
+  assert.match(panel.html(),/aria-label="选择付款方式"/);
+  await panel.action('pay-self');
+  assert.deepEqual(calls,[['match','小美'],['checkout','contact:a2','2026-10-11','14:00','self','']]);calls.length=0;
   // 找不到：停留在输入步并提示重新输入，不下单。
   matches={kind:'none',matches:[]};
   await panel.action('tab','cart');
@@ -132,20 +161,37 @@ test('checkout bubble: two steps, unique confirm, ambiguous pick and re-enter on
   page=panel.html();
   assert.match(page,/没有找到这个角色，请重新输入/);assert.match(page,/aria-label="买给别人"/);
   assert.deepEqual(calls,[['match','小美']]);
-  // 取消关闭气泡；上一步回到收货对象选择。
+  // 取消关闭气泡；上一步在付款方式步退回收件人选择。
   await panel.action('gift-back');
   assert.match(panel.html(),/aria-label="选择收货对象"/);
   await panel.action('gift-cancel');
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
-  assert.deepEqual(calls,[['match','小美']]);
-  // 失败反馈留在气泡内，状态可重试。
-  adapter.amazon.checkout=async()=>({ok:false,error:'可用余额不足。'});
+  assert.deepEqual(calls,[['match','小美']]);calls.length=0;
+  // NPC 拒绝：回到付款方式选择，可换方式重试；收件人保持不变。
+  adapter.amazon.checkout=async(...args)=>{calls.push(['checkout',...args]);return {ok:true,value:{rejected:true}};};
   matches={kind:'unique',matches:[{key:'card:0',name:'Alex'}]};
   await panel.action('tab','cart');
   await panel.submit({dataset:{shopForm:'checkout'}});
-  await panel.action('gift-self');
+  await panel.action('gift-other');
+  fields=new Map([['date','2026-10-11'],['time','14:00'],['giftName','Alex']]);
+  await panel.submit({dataset:{shopForm:'gift-name'}});
+  await panel.action('pay-npc');
+  fields=new Map([['date','2026-10-11'],['time','14:00'],['payerName','小美']]);
+  await panel.submit({dataset:{shopForm:'payer-name'}});
   page=panel.html();
-  assert.match(page,/可用余额不足/);assert.match(page,/aria-label="选择收货对象"/);
+  assert.match(page,/对方拒绝了你的代付要求/);assert.match(page,/aria-label="选择付款方式"/);
+  await panel.action('pay-self');
+  assert.deepEqual(calls,[['match','Alex'],['checkout','card:0','2026-10-11','14:00','npc','小美'],['checkout','card:0','2026-10-11','14:00','self','']]);calls.length=0;
+  // 请求失败：真实错误留在气泡内，可重试。
+  adapter.amazon.checkout=async()=>({ok:false,error:'连接已超时'});
+  await panel.action('tab','cart');
+  await panel.submit({dataset:{shopForm:'checkout'}});
+  await panel.action('gift-self');
+  await panel.action('pay-npc');
+  fields=new Map([['date','2026-10-11'],['time','14:00'],['payerName','小美']]);
+  await panel.submit({dataset:{shopForm:'payer-name'}});
+  page=panel.html();
+  assert.match(page,/连接已超时/);assert.match(page,/aria-label="请 NPC 代付"/);
   panel.reset();
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
  }finally{globalThis.FormData=OriginalFormData;}

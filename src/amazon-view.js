@@ -22,7 +22,9 @@ export function createAmazonPanel({adapter,getView,redraw,notice}){
         const hint=gift.hint?'<p class="pp-shop-bubble-hint">'+shopEscape(gift.hint)+'</p>':'';
         if(gift.step==='target')return bubble('选择收货对象','<p class="pp-shop-bubble-title">选择收货对象</p><div class="pp-shop-bubble-options">'+bubbleOption('gift-self','self','寄到自己的地址','收件人是 '+String(adapter.userName?.()||'user'))+bubbleOption('gift-other','','买给别人','输入角色名，不需要电话号码')+'</div>'+hint+cancel);
         if(gift.step==='name')return bubble('买给别人','<p class="pp-shop-bubble-title">买给别人</p><form data-shop-form="gift-name" class="pp-shop-bubble-form">'+hint+'<label class="pp-field"><span>输入角色名</span><input data-shop-field="giftName" name="giftName" type="text" placeholder="输入角色名，可以是单个名字" value="'+shopEscape(drafts.giftName??'')+'"'+disabled()+'></label><div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-shop-action="gift-back"'+disabled()+'>上一步</button><button type="submit" class="pp-shop-bubble-confirm"'+disabled()+'>确认</button></div></form>'+cancel);
-        return bubble('选择角色','<p class="pp-shop-bubble-title">「'+shopEscape(drafts.giftName??'')+'」对应多位角色，请选择收件人</p><div class="pp-shop-bubble-options">'+gift.candidates.map(c=>bubbleOption('gift-pick',c.key,c.name)).join('')+'</div>'+hint+'<div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-shop-action="gift-back"'+disabled()+'>重新输入</button>'+cancel+'</div>');
+        if(gift.step==='pick')return bubble('选择角色','<p class="pp-shop-bubble-title">「'+shopEscape(drafts.giftName??'')+'」对应多位角色，请选择收件人</p><div class="pp-shop-bubble-options">'+gift.candidates.map(c=>bubbleOption('gift-pick',c.key,c.name)).join('')+'</div>'+hint+'<div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-shop-action="gift-back"'+disabled()+'>重新输入</button>'+cancel+'</div>');
+        if(gift.step==='payer')return bubble('请 NPC 代付','<p class="pp-shop-bubble-title">请 TA 代付</p><form data-shop-form="payer-name" class="pp-shop-bubble-form">'+hint+'<label class="pp-field"><span>代付角色名字</span><input data-shop-field="payerName" name="payerName" type="text" placeholder="名字、昵称都可以" value="'+shopEscape(drafts.payerName??'')+'"'+disabled()+'></label><div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-shop-action="gift-back"'+disabled()+'>上一步</button><button type="submit" class="pp-shop-bubble-confirm"'+disabled()+'>询问对方</button></div></form>'+cancel);
+        return bubble('选择付款方式','<p class="pp-shop-bubble-title">选择付款方式</p><div class="pp-shop-bubble-options">'+bubbleOption('pay-self','self','自己付款','从小榴莲余额中支付')+bubbleOption('pay-npc','','请 TA 代付','输入名字，由对方决定是否愿意')+'</div>'+hint+cancel);
     }
     function html(){
         const state=getView(),products=shopItems(state,'product'),cart=state.orders?.cart?.items||[];
@@ -56,24 +58,41 @@ export function createAmazonPanel({adapter,getView,redraw,notice}){
             if(action==='product'){selected=id;delete drafts.variant;drafts.quantity=1;redraw();return;}
             if(action==='back'){selected=null;redraw();return;}
             if(action==='remove')await perform('remove',[id]);
-            if(action==='gift-self'){await placeOrder('self');return;}
-            if(action==='gift-other'){gift={step:'name'};status='';delete drafts.giftName;redraw();return;}
-            if(action==='gift-back'){gift={step:gift?.step==='pick'?'name':'target',hint:''};if(gift.step==='target')delete drafts.giftName;redraw();return;}
+            if(action==='gift-self'){gift={step:'pay',recipientKey:'self',origin:'target',hint:''};status='';redraw();return;}
+            if(action==='gift-other'){gift={step:'name',hint:''};status='';delete drafts.giftName;redraw();return;}
+            if(action==='gift-back'){
+                if(gift?.step==='payer')gift={...gift,step:'pay',hint:''};
+                else if(gift?.step==='pay')gift={...gift,step:gift.origin||'target',hint:''};
+                else {gift={step:gift?.step==='pick'?'name':'target',hint:''};if(gift.step==='target')delete drafts.giftName;}
+                redraw();return;
+            }
             if(action==='gift-cancel'){gift=null;status='';redraw();return;}
-            if(action==='gift-pick')await placeOrder(id);
+            if(action==='gift-pick'){gift={...(gift||{}),step:'pay',recipientKey:id,origin:'name',hint:''};status='';redraw();return;}
+            if(action==='pay-self')await placeOrder(gift?.recipientKey||'self','self');
+            if(action==='pay-npc'){gift={...(gift||{}),step:'payer',hint:''};status='';delete drafts.payerName;redraw();return;}
         },
         async submit(form){const v=Object.fromEntries(new FormData(form)),kind=form.dataset.shopForm;
             if(kind==='search')await perform('search',[v.query]);
             if(kind==='add')await perform('add',[selected,v.variant,Number(v.quantity)],'已加入购物车');
             if(kind==='checkout'){drafts.date=v.date;drafts.time=v.time;gift={step:'target',hint:''};status='';redraw();return;}
             if(kind==='gift-name')await resolveGift(String(v.giftName||''));
+            if(kind==='payer-name'){
+                const name=String(v.payerName||'').trim();
+                if(!name){gift={...(gift||{}),step:'payer',hint:'请填写代付角色的名字。'};status='';redraw();return;}
+                await placeOrder(gift?.recipientKey||'self','npc',name);
+            }
         },
     };
-    async function placeOrder(key){
+    async function placeOrder(key,method='self',payerName=''){
         const target=gift;gift=null;status='';redraw();
-        const r=await perform('checkout',[key,drafts.date??'',drafts.time??''],'下单成功');
-        if(r?.ok){tab='orders';delete drafts.date;delete drafts.time;delete drafts.giftName;redraw();return;}
-        gift=target?{...target,hint:r?.error||'请重试。'}:null;redraw();
+        const r=await perform('checkout',[key,drafts.date??'',drafts.time??'',method,payerName],'下单成功');
+        if(r?.ok){
+            // NPC 拒绝不是请求失败：回到付款方式选择，收件人与购物车原样保留。
+            if(r.value?.rejected){gift={...target,step:'pay',hint:'对方拒绝了你的代付要求'};status='';redraw();return;}
+            tab='orders';delete drafts.date;delete drafts.time;delete drafts.giftName;delete drafts.payerName;redraw();return;
+        }
+        // AI 请求失败或格式错误：显示真实错误，保留原有选择，可重试。
+        gift=target?{...target,step:method==='npc'?'payer':'pay',hint:r?.error||'请重试。'}:null;redraw();
     }
     async function resolveGift(query){
         if(!adapter.amazon?.recipientMatches){notice('请在酒馆内使用 Amazon。');return;}
@@ -89,7 +108,7 @@ export function createAmazonPanel({adapter,getView,redraw,notice}){
         }catch(e){if(token===epoch)status=e.message;}
         finally{working=false;}
         if(token!==epoch)return;
-        if(matched!==null){redraw();await placeOrder(matched);return;}
+        if(matched!==null){gift={...(gift||{}),step:'pay',recipientKey:matched,origin:'name',hint:''};status='';}
         redraw();
     }
 }

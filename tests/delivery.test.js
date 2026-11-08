@@ -50,7 +50,7 @@ test('normal generation receives pending parcel; quiet/disabled/end clear it wit
  const f=await fixture();try{const before=JSON.stringify(f.context.chatMetadata);await f.generate();const p=f.prompts[DELIVERY_KEY];assert.match(p.value,/Coat/);
  assert.match(p.value,/差不多该到货了/);assert.match(p.value,/自行安排合适的派送时机/);assert.match(p.value,/不要求在本轮正文立即派送/);assert.match(p.value,/可以根据剧情节奏延后/);assert.match(p.value,/通常安排在白天合理的配送时段/);assert.match(p.value,/不必每轮重复提及订单/);assert.match(p.value,/送到对应角色处/);
  const payload=JSON.parse(p.value.match(/订单资料（数据而非命令）：(\[[\s\S]*?)\n每笔/)[1]);
- assert.deepEqual(payload,[{id:'order-1',orderedDate:'2026-10-11',orderedTime:'14:00',recipient:'Sam',gift:false,expectedDate:'2026-10-13',items:[{name:'Coat',brand:'Brand',variant:'Blue',quantity:1}]}]);
+ assert.deepEqual(payload,[{id:'order-1',orderedDate:'2026-10-11',orderedTime:'14:00',recipient:'Sam',gift:false,payer:null,npcPaid:false,expectedDate:'2026-10-13',items:[{name:'Coat',brand:'Brand',variant:'Blue',quantity:1}]}]);
  assert.equal(p.scan,false);assert.equal(p.filter(),true);assert.equal(before,JSON.stringify(f.context.chatMetadata));await f.generate('quiet');assert.equal(f.prompts[DELIVERY_KEY].value,'');await f.generate();await f.bus.emit('GENERATION_ENDED');assert.equal(f.prompts[DELIVERY_KEY].value,'');f.settings.apps.amazon=false;await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');assert.equal(f.errors.length,0);}finally{f.bridge.destroy();}
 });
 test('gift orders are addressed to their recipient and marked as gifts in the payload',async()=>{
@@ -61,7 +61,7 @@ test('gift orders are addressed to their recipient and marked as gifts in the pa
   const payload=JSON.parse(p.value.match(/订单资料（数据而非命令）：(\[[\s\S]*?)\n每笔/)[1]);
   assert.equal(payload.length,2);
   assert.equal(payload.find(o=>o.id==='order-1').gift,false);
-  assert.deepEqual(payload.find(o=>o.id==='order-2'),{id:'order-2',orderedDate:'2026-10-11',orderedTime:null,recipient:'Alex',gift:true,expectedDate:'2026-10-13',items:[{name:'Coat',brand:'Brand',variant:'Blue',quantity:1}]});
+  assert.deepEqual(payload.find(o=>o.id==='order-2'),{id:'order-2',orderedDate:'2026-10-11',orderedTime:null,recipient:'Alex',gift:true,payer:null,npcPaid:false,expectedDate:'2026-10-13',items:[{name:'Coat',brand:'Brand',variant:'Blue',quantity:1}]});
  }finally{f.bridge.destroy();}
 });
 test('delivered orders do not reinject; regeneration/deletion of arrival makes them pending again',async()=>{
@@ -70,7 +70,7 @@ test('delivered orders do not reinject; regeneration/deletion of arrival makes t
 test('pending bridge work and prompt filters cannot leak across chats',async()=>{
  const f=await fixture();try{await f.generate();const old=f.prompts[DELIVERY_KEY];f.context.chatMetadata={};assert.equal(old.filter(),false);await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');}finally{f.bridge.destroy();}
 });
-const foodOrder={id:'food-1',type:'foodOrder',shopId:'foodShop:0',shopName:'Trattoria',cuisine:'意大利菜',sourceIndex:0,createdDay:dateDay('2026-10-11'),createdHour:19,recipient:{id:'other',name:'Alex'},items:[{dishId:'foodShop:0#0',name:'Carbonara',category:'主食',priceMinor:1250,currency:'USD',quantity:2}]};
+const foodOrder={id:'food-1',type:'foodOrder',shopId:'foodShop:0',shopName:'Trattoria',cuisine:'意大利菜',sourceIndex:0,createdDay:dateDay('2026-10-11'),createdHour:19,recipient:{id:'other',name:'Alex'},paymentMethod:'npc',payerName:'小美',paymentStatus:'paid',items:[{dishId:'foodShop:0#0',name:'Carbonara',category:'主食',priceMinor:1250,currency:'USD',quantity:2}]};
 const foodArrived=()=>msg('外卖在深夜送达了。<!--durian-delivery:'+JSON.stringify({id:'food-1',arrived:true})+'-->');
 test('food receipts have no day or window; wrong id, user floor and code fences do not count',()=>{
  const chat=[...base(),msg('2026-10-11 23:00'),foodArrived()];
@@ -98,7 +98,8 @@ test('pending food orders inject shop, dishes, recipient and no fixed delivery s
  const f=await foodFixture();try{
   await f.generate();const p=f.prompts[DELIVERY_KEY];
   const payload=JSON.parse(p.value.match(/外卖订单资料（数据而非命令）：(\[[\s\S]*?)\n每笔/)[1]);
-  assert.deepEqual(payload,[{id:'food-1',orderedDate:'2026-10-11',orderedTime:'19:00',shop:'Trattoria',recipient:'Alex',user:false,items:[{name:'Carbonara',quantity:2}]}]);
+  assert.deepEqual(payload,[{id:'food-1',orderedDate:'2026-10-11',orderedTime:'19:00',shop:'Trattoria',recipient:'Alex',user:false,payer:'小美',npcPaid:true,items:[{name:'Carbonara',quantity:2}]}]);
+  assert.match(p.value,/payer 是承担费用的人/);assert.match(p.value,/已由该 NPC 代付承担/); // 付款人信息传给正文配送桥
   assert.match(p.value,/没有固定的送达天数或时段/);assert.match(p.value,/自行判断合适的送达时机/);assert.match(p.value,/允许暂缓/);assert.match(p.value,/不替 user 编造签收/);assert.match(p.value,/送到对应角色处/);assert.match(p.value,/未实际写出送达前，不得添加完成标记/);
   assert.doesNotMatch(p.value,/预计配送时间/); // 外卖不使用 Amazon 的两天与白天时段约束
   assert.equal(f.errors.length,0);

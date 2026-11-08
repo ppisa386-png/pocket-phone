@@ -62,7 +62,7 @@ export function validateProducts(data,currency = null) {
             reviews:(Array.isArray(p.reviews)?p.reviews:[]).slice(0,4).map(r=>({name:shopText(r.name,80),text:shopText(r.text,500),rating:Math.max(1,Math.min(5,Math.round(Number(r.rating)||4)))}))};
     });
 }
-export function createAmazon({memory,phone,getContext,getSettings}) {
+export function createAmazon({memory,phone,getContext,getSettings,paymentRequest}) {
     const run=work=>phone.appTask(async(view,current,request)=>{
         const ticket=await memory.begin(view);
         const commit=async changes=>{if(!current())throw Error('聊天已变化，请重试。');await memory.commit(ticket,changes);};
@@ -94,8 +94,16 @@ export function createAmazon({memory,phone,getContext,getSettings}) {
             await commit([shopSet({id:'cart',type:'cart',items})]);
         });},
         remove(id){return run(async(state,_c,_r,commit)=>{await commit([shopSet({id:'cart',type:'cart',items:(state.orders.cart?.items||[]).filter(i=>i.id!==id)})]);});},
-        checkout(recipient='self',date='',time=''){return run(async(state,_c,_r,commit)=>{
+        // paymentMethod: 'self' deducts the ledger as before; 'npc' asks the
+        // named NPC first — acceptance creates a paid order without touching
+        // the user's ledger, a refusal returns {rejected:true} for the bubble,
+        // and any request failure throws so the real error reaches the view.
+        checkout(recipient='self',date='',time='',paymentMethod='self',payerName=''){return run(async(state,current,request,commit)=>{
             const items=state.orders.cart?.items||[];if(!items.length)throw Error('购物车是空的。');
+            if(paymentMethod!=='self'&&paymentMethod!=='npc')throw Error('付款方式不正确，请重新选择。');
+            const npcPay=paymentMethod==='npc';
+            const payer=npcPay?shopText(payerName,80):'';
+            if(npcPay&&!payer)throw Error('请填写代付角色的名字。');
             const context=getContext(),clock=readStoryClock(context.chat);
             const self=recipient==='self';
             const gift=self?null:resolveGiftRecipient(shopText(recipient,120),state,context);
@@ -106,9 +114,16 @@ export function createAmazon({memory,phone,getContext,getSettings}) {
             if(Object.values(totals).some(n=>!Number.isSafeInteger(n)))throw Error('订单金额过大，请减少数量。');
             const currency=walletCurrency(state);
             if(currency && Object.keys(totals).some(c=>c!==currency))throw Error('购物车币种不同，请重新搜索 '+currency+' 商品。');
-            requireCash(state,totals[currency],currency);
+            if(!currency)throw Error('请先在小榴莲点击「一键更新」建立账本。'); // 订单金额始终使用账本币种
             const id=crypto.randomUUID(),receiver=gift||{id:'self',name:context.name1||'user',phone:null};
-            await commit([shopSet({id,type:'order',items:structuredClone(items),totals,recipient:receiver,createdDay:day,createdHour:hour,dueDay:day+2,sourceIndex:context.chat.length-1,createdAt:Date.now()}),shopSet({id:'cart',type:'cart',items:[]}),assetSet(cashRecord('order:'+id,-totals[currency],'Amazon 购物',{currency,source:'amazon',orderId:id,day})),...items.filter(i=>self&&i.product.luxury).map(i=>assetSet({id:'holding:order:'+id+':'+i.id,type:'holding',name:i.product.name+' × '+i.quantity,category:'luxury',active:true,valueMinor:null,purchaseMinor:i.quantity*i.product.priceMinor,startDay:day,orderId:id}))]);
+            if(npcPay){
+                const answer=await paymentRequest.judge({request,current,app:'amazon',npc:payer,totalMinor:totals[currency],currency,items:items.map(i=>({name:i.product.name,quantity:i.quantity})),recipientName:receiver.name});
+                if(!current())throw Error('剧情或设置已变化，本次下单已取消。');
+                if(!answer.accept)return {rejected:true};
+            } else {
+                requireCash(state,totals[currency],currency);
+            }
+            await commit([shopSet({id,type:'order',items:structuredClone(items),totals,recipient:receiver,createdDay:day,createdHour:hour,dueDay:day+2,sourceIndex:context.chat.length-1,createdAt:Date.now(),paymentMethod:npcPay?'npc':'self',payerName:payer,paymentStatus:'paid'}),shopSet({id:'cart',type:'cart',items:[]}),...(npcPay?[]:[assetSet(cashRecord('order:'+id,-totals[currency],'Amazon 购物',{currency,source:'amazon',orderId:id,day}))]),...items.filter(i=>self&&i.product.luxury).map(i=>assetSet({id:'holding:order:'+id+':'+i.id,type:'holding',name:i.product.name+' × '+i.quantity,category:'luxury',active:true,valueMinor:null,purchaseMinor:i.quantity*i.product.priceMinor,startDay:day,orderId:id}))]);
             return {id};
         });},
         async recipientMatches(query){const view=await memory.read();const matches=matchGiftRecipients(shopText(query,60),view.state,getContext());return {kind:matches.length===1?'unique':matches.length?'ambiguous':'none',matches};},

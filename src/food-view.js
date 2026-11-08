@@ -22,7 +22,9 @@ export function createFoodPanel({adapter,getView,redraw,notice}){
         const cancel='<button type="button" class="pp-shop-bubble-quiet" data-food-action="gift-cancel"'+disabled()+'>取消</button>';
         const hint=buy.hint?'<p class="pp-shop-bubble-hint">'+foodEscape(buy.hint)+'</p>':'';
         if(buy.step==='target')return bubble('选择收件人','<p class="pp-shop-bubble-title">这份外卖送给谁？</p><div class="pp-shop-bubble-options">'+bubbleOption('gift-self','self','送到这里来','收件人是 '+String(adapter.userName?.()||'user'))+bubbleOption('gift-other','','点给别人吃','输入名字就可以，不用电话号码')+'</div>'+hint+cancel);
-        return bubble('点给别人吃','<p class="pp-shop-bubble-title">点给别人吃</p><form data-food-form="gift-name" class="pp-shop-bubble-form">'+hint+'<label class="pp-field"><span>收件人名字</span><input data-food-field="foodName" name="foodName" type="text" placeholder="姓、名、昵称都可以" value="'+foodEscape(drafts.foodName??'')+'"'+disabled()+'></label><div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-food-action="gift-back"'+disabled()+'>上一步</button><button type="submit" class="pp-shop-bubble-confirm"'+disabled()+'>确认下单</button></div></form>'+cancel);
+        if(buy.step==='name')return bubble('点给别人吃','<p class="pp-shop-bubble-title">点给别人吃</p><form data-food-form="gift-name" class="pp-shop-bubble-form">'+hint+'<label class="pp-field"><span>收件人名字</span><input data-food-field="foodName" name="foodName" type="text" placeholder="姓、名、昵称都可以" value="'+foodEscape(drafts.foodName??'')+'"'+disabled()+'></label><div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-food-action="gift-back"'+disabled()+'>上一步</button><button type="submit" class="pp-shop-bubble-confirm"'+disabled()+'>确认</button></div></form>'+cancel);
+        if(buy.step==='payer')return bubble('请 NPC 代付','<p class="pp-shop-bubble-title">请 TA 代付</p><form data-food-form="payer-name" class="pp-shop-bubble-form">'+hint+'<label class="pp-field"><span>代付角色名字</span><input data-food-field="payerName" name="payerName" type="text" placeholder="名字、昵称都可以" value="'+foodEscape(drafts.payerName??'')+'"'+disabled()+'></label><div class="pp-shop-bubble-row"><button type="button" class="pp-shop-bubble-quiet" data-food-action="gift-back"'+disabled()+'>上一步</button><button type="submit" class="pp-shop-bubble-confirm"'+disabled()+'>询问对方</button></div></form>'+cancel);
+        return bubble('选择付款方式','<p class="pp-shop-bubble-title">选择付款方式</p><div class="pp-shop-bubble-options">'+bubbleOption('pay-self','self','自己付款','从小榴莲余额中支付')+bubbleOption('pay-npc','','请 TA 代付','输入名字，由对方决定是否愿意')+'</div>'+hint+cancel);
     }
     function shopPage(state){
         const shop=state.orders[selectedShop];
@@ -69,12 +71,17 @@ export function createFoodPanel({adapter,getView,redraw,notice}){
         try{const r=await adapter.food[method](...args);if(token!==epoch)return null;status=r?.ok?message:r?.error||'请重试。';return r;}
         catch(e){if(token===epoch)status=e.message;return null;}finally{working=false;redraw();}
     }
-    async function placeOrder(key){
-        const target=buy;buy=null;status='';redraw();
-        const name=key==='other'?(drafts.foodName??''):'';
-        const r=await perform('checkout',[selectedShop,key,name],'下单成功');
-        if(r?.ok){tab='orders';selectedShop=null;delete drafts.foodName;redraw();return;}
-        buy=target?{...target,hint:r?.error||'请重试。'}:null;redraw();
+    async function placeOrder(key,method='self',payerName=''){
+        const target=buy;const recipientName=key==='other'?(drafts.foodName??''):'';
+        buy=null;status='';redraw();
+        const r=await perform('checkout',[selectedShop,key,recipientName,method,payerName],'下单成功');
+        if(r?.ok){
+            // NPC 拒绝不是请求失败：回到付款方式选择，收件人与已选原样保留。
+            if(r.value?.rejected){buy={...target,step:'pay',hint:'对方拒绝了你的代付要求'};status='';redraw();return;}
+            tab='orders';selectedShop=null;delete drafts.foodName;delete drafts.payerName;redraw();return;
+        }
+        // AI 请求失败或格式错误：显示真实错误，保留原有选择，可重试。
+        buy=target?{...target,step:method==='npc'?'payer':'pay',hint:r?.error||'请重试。'}:null;redraw();
     }
     return {html,back(){if(tab==='home'&&selectedShop){selectedShop=null;buy=null;redraw();return true;}return false;},reset(){epoch++;tab='home';selectedShop=null;drafts={};status='';buy=null;},input(el){drafts[el.dataset.foodField]=el.value;},
         async action(action,id){
@@ -91,16 +98,28 @@ export function createFoodPanel({adapter,getView,redraw,notice}){
                 if(!shopLines(state,selectedShop).length){status='还没有选择菜品，先挑几样想吃的吧。';redraw();return;}
                 buy={step:'target',hint:''};status='';redraw();return;
             }
-            if(action==='gift-self')await placeOrder('self');
+            if(action==='gift-self'){buy={step:'pay',recipientKey:'self',origin:'target',hint:''};status='';redraw();return;}
             if(action==='gift-other'){buy={step:'name',hint:''};status='';delete drafts.foodName;redraw();return;}
-            if(action==='gift-back'){buy={step:buy?.step==='name'?'target':'name',hint:''};if(buy.step==='name')delete drafts.foodName;redraw();return;}
+            if(action==='gift-back'){
+                if(buy?.step==='payer')buy={...buy,step:'pay',hint:''};
+                else if(buy?.step==='pay')buy={...buy,step:buy.origin||'target',hint:''};
+                else {buy={step:buy?.step==='name'?'target':'name',hint:''};if(buy.step==='name')delete drafts.foodName;}
+                redraw();return;
+            }
             if(action==='gift-cancel'){buy=null;status='';redraw();return;}
+            if(action==='pay-self')await placeOrder(buy?.recipientKey||'self','self');
+            if(action==='pay-npc'){buy={...(buy||{}),step:'payer',hint:''};status='';delete drafts.payerName;redraw();return;}
         },
         async submit(form){const v=Object.fromEntries(new FormData(form)),kind=form.dataset.foodForm;
             if(kind==='search')await perform('search',[v.query]);
             if(kind==='gift-name'){
                 if(!String(v.foodName||'').trim()){buy={step:'name',hint:'请填写收件人的名字。'};status='';redraw();return;}
-                await placeOrder('other');
+                buy={...(buy||{}),step:'pay',recipientKey:'other',origin:'name',hint:''};status='';redraw();
+            }
+            if(kind==='payer-name'){
+                const name=String(v.payerName||'').trim();
+                if(!name){buy={...(buy||{}),step:'payer',hint:'请填写代付角色的名字。'};status='';redraw();return;}
+                await placeOrder(buy?.recipientKey||'self','npc',name);
             }
         },
     };

@@ -1,5 +1,20 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · NPC 代付：Amazon 与榴莲外卖共用付款方式（1.2 之上）
+基线为本地工作区（0f34d70 天气文案之上，626/626）。按用户规格实现：结算时可选自己付款或输入 NPC 名字请其代付，由当前 AI 依人设、关系、交情、经济状况与剧情判断是否愿意；收货人与付款人相互独立。
+
+**共用模块（src/payment-request.js 新增）**：`createPaymentRequest({getContext,getSettings})` → `judge({request,current,app,npc,totalMinor,currency,items,recipientName})`，在调用方 checkout 的 appTask 内用该任务的 request 闭包与 current 执行（取消/开关/票据校验不旁路）。提示词＝general＋可编辑 `paymentRequest`（config.js 新增）＋订单摘要（付款人/收件人/金额 formatMoney/内容）＋判断规则＋`xMemoryPrompt(readXMemory(context,settings,{names:[npc],topic:'代付 '+菜品},…),app)`（按规格以 NPC 名字与代付内容为查询条件纳入同一次请求，`establishedImport:true` 抑制通用记忆块避免重复注入）；`validatePaymentAnswer` 严格布尔——true 接受、false 拒绝、其余抛"代付回应格式不正确"（真实错误透传，不视为拒绝）。
+
+**服务层（src/amazon.js + src/food.js）**：checkout 签名扩展 `paymentMethod='self',payerName=''`（旧调用兼容）。校验顺序：购物车/已选→付款方式合法性→npc 时名字必填→币种与账本校验（两款都要求已建账，npc 同样适用——订单金额始终账本币种）→剧情日期→收件人→金额安全整数→npc 发起判断（`retries:0`）/self 走原 requireCash＋余额不足转译。接受（npc）：订单记 `paymentMethod:'npc'、payerName、paymentStatus:'paid'`，**不扣款、不写现金流水、不建 NPC 账本**，购物车/已选照常清空，Amazon 奢侈品登记仍按收货人判断（npc 代付＋user 收货照常登记 holding）；返回 {id}。拒绝：返回 {rejected:true}（任务 ok，不进诊断报错），零副作用。请求失败/格式错误：task 失败原错误透传，零副作用。
+
+**视图（src/amazon-view.js + src/food-view.js）**：收件人解析成功后进入"选择付款方式"气泡（自己付款/请 TA 代付）→ TA 代付进"请 NPC 代付"名字输入（placeholder 名字、昵称都可以，确认钮"询问对方"）；gift-back 链路 payer→pay→来源步（target/name）；NPC 拒绝回到付款方式选择并提示「对方拒绝了你的代付要求」；AI 失败回到进入步（npc=payer 输入步/self=付款步）显示真实错误；成功清 drafts（date/time/giftName/payerName）。
+
+**配送桥（src/delivery.js）**：Amazon 与外卖 payload 增 `payer`（npc 代付为名字、自己付款为 null）与 `npcPaid`；指令增加一句"payer 是承担费用的人：null=user 自己支付；NPC 名字＝费用已由其代付承担，不需要正文再描写付款或转账过程"。
+
+**注册（index.js + tools/build_preview.mjs）**：paymentRequest 在 adapter 建一次传给两款服务；preview 构建列表加入 payment-request.js（其 external-memory 导入被构建剥除，函数体仅在酒馆内执行，预览无碍）。
+验证：npm test 633/633（626＋7：新增 tests/payment-request.test.js——Amazon 接受（订单已支付/零流水/购物车清空/判断请求一次/提示词契约含付款人收件人金额菜品与 xMemoryPrompt 记忆块）、拒绝（rejected/零副作用/换 self 照常扣款）、失败与格式错误透传（无订单/保留购物车/可重试）、收件人付款人独立（送 Alex 由小美付＋奢侈品按收货人登记）、外卖接受/拒绝/自己付款、外卖币种校验先于判断（SGD 菜单＋USD 账本不发请求）、名字缺失不发请求＋npc 订单随楼层回退；amazon 气泡测试重写为收件人→付款两段流程（pay-npc 输入/payer 空名提示/拒绝回付款步/失败留气泡）；food 面板测试同步（npc 代付全流程/拒绝/失败/取消）；delivery payload deepEqual 加 payer/npcPaid＋npc 订单 payer 传递与指令契约断言）。preview.html/deliverables 重建（语法通过，代付模块在包内）。
+未完成：真实模型对代付意愿判断的合理性未验证（自动化为提示词契约断言）；browser.mjs 未扩代付流程；版本参数保持 1.2 待发布统一。
+
 ## 本地待发布 · 天气启用双通道：无标记时刷新改为探测正文判断所在地（1.2 之上）
 基线为本地工作区（de79b12 外卖补充之上，624/624）。按用户确认新增第二条地点启用路径：原来必须正文楼末附 durian-location 标记、小手机捕捉后才能刷新；现保持该路径不动，另增——无标记时直接点刷新不再失败，由手机主动把最近剧情正文与状态栏发给 API，判断 user 此刻身处何处的城市。
 

@@ -40,7 +40,7 @@ export function validateShops(data,ledgerCurrency=null){
         return {id:`foodShop:${index}`,type:'foodShop',name,cuisine,description,currency,menu:dishes};
     });
 }
-export function createFood({memory,phone,getContext,getSettings}){
+export function createFood({memory,phone,getContext,getSettings,paymentRequest}){
     const run=work=>phone.appTask(async(view,current,request)=>{
         const ticket=await memory.begin(view);
         const commit=async changes=>{if(!current())throw Error('聊天已变化，请重试。');await memory.commit(ticket,changes);};
@@ -82,9 +82,13 @@ export function createFood({memory,phone,getContext,getSettings}){
         });},
         add(shopId,dishId,quantity=1){return run(async(state,_c,_r,commit)=>{await commit(changesFor(state,shopId,dishId,Number(quantity)||0,'add'));});},
         update(shopId,dishId,quantity){return run(async(state,_c,_r,commit)=>{await commit(changesFor(state,shopId,dishId,Number(quantity)||0,'set'));});},
-        checkout(shopId,recipient='self',name=''){return run(async(state,_c,_r,commit)=>{
+        checkout(shopId,recipient='self',name='',paymentMethod='self',payerName=''){return run(async(state,current,request,commit)=>{
             const lines=(state.orders.foodCart?.items||[]).filter(i=>i.shopId===shopId);
             if(!lines.length)throw Error('还没有选择菜品，先挑几样想吃的吧。');
+            if(paymentMethod!=='self'&&paymentMethod!=='npc')throw Error('付款方式不正确，请重新选择。');
+            const npcPay=paymentMethod==='npc';
+            const payer=npcPay?foodText(payerName,80):'';
+            if(npcPay&&!payer)throw Error('请填写代付角色的名字。');
             const currency=walletCurrency(state);
             if(!currency)throw Error('请先在小榴莲点击「一键更新」建立账本，再重新搜索外卖。');
             if(state.orders.foodSearch?.currency!==currency)throw Error('菜单币种与账本不一致，请先重新搜索外卖再结算。');
@@ -98,15 +102,22 @@ export function createFood({memory,phone,getContext,getSettings}){
             if(Object.values(totals).some(n=>!Number.isSafeInteger(n)))throw Error('订单金额过大，请减少数量。');
             if(Object.keys(totals).some(c=>c!==currency))throw Error('菜单币种与账本不一致，请先重新搜索外卖再结算。');
             const total=totals[currency];
-            try{requireCash(state,total,currency);}
-            catch(error){
-                if(/余额不足/.test(error.message))throw Error('支付失败，余额不足。');
-                throw error;
-            }
             const id=crypto.randomUUID(),shop=state.orders[shopId];
-            await commit([foodSet({id,type:'foodOrder',shopId,shopName:shop?.name||lines[0].shopName,cuisine:shop?.cuisine||lines[0].cuisine||'',items:lines.map(({dishId,name,category,priceMinor,currency,quantity})=>({dishId,name,category,priceMinor,currency,quantity})),totals,recipient:receiver,createdDay:clock.day,createdHour:clock.hour,sourceIndex:context.chat.length-1,createdAt:Date.now()}),
+            if(npcPay){
+                // 收件人与付款人相互独立：由 AI 判断被点名的 NPC 是否愿意代付。
+                const answer=await paymentRequest.judge({request,current,app:'food',npc:payer,totalMinor:total,currency,items:lines.map(({name,quantity})=>({name,quantity})),recipientName:receiver.name});
+                if(!current())throw Error('剧情或设置已变化，本次下单已取消。');
+                if(!answer.accept)return {rejected:true};
+            } else {
+                try{requireCash(state,total,currency);}
+                catch(error){
+                    if(/余额不足/.test(error.message))throw Error('支付失败，余额不足。');
+                    throw error;
+                }
+            }
+            await commit([foodSet({id,type:'foodOrder',shopId,shopName:shop?.name||lines[0].shopName,cuisine:shop?.cuisine||lines[0].cuisine||'',items:lines.map(({dishId,name,category,priceMinor,currency,quantity})=>({dishId,name,category,priceMinor,currency,quantity})),totals,recipient:receiver,createdDay:clock.day,createdHour:clock.hour,sourceIndex:context.chat.length-1,createdAt:Date.now(),paymentMethod:npcPay?'npc':'self',payerName:payer,paymentStatus:'paid'}),
                 foodSet({id:'foodCart',type:'foodCart',items:(state.orders.foodCart?.items||[]).filter(i=>i.shopId!==shopId)}),
-                assetSet(cashRecord('foodOrder:'+id,-total,'榴莲外卖 · '+(shop?.name||lines[0].shopName),{currency,source:'food',orderId:id,day:clock.day}))]);
+                ...(npcPay?[]:[assetSet(cashRecord('foodOrder:'+id,-total,'榴莲外卖 · '+(shop?.name||lines[0].shopName),{currency,source:'food',orderId:id,day:clock.day}))])]);
             return {id};
         });},
     };
