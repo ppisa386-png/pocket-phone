@@ -45,7 +45,7 @@ test('manual refresh samples the first weather locally for the marked city with 
         assert.equal(f.weather.report(await f.state()).status, 'no-location');
         const refused = await f.weather.refresh();
         assert.equal(refused.ok, false);
-        assert.match(refused.error, /找不到 user 所在的城市/); // 无标记先探测，探测无果才失败
+        assert.match(refused.error, /你太神秘了/); // 探测无果才失败，提示保持剧情内口吻
         assert.equal(f.calls(), 1);
         assert.match(f.prompt(), /判断 user 此刻身处哪座城市/);
         assert.match(f.prompt(), /"city":null/);

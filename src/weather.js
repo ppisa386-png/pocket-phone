@@ -579,7 +579,7 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
                     return { city: city || null };
                 }, current, null, { retries: 0 });
                 if (!current()) throw new Error('剧情或设置已变化，本次天气刷新未保存。');
-                if (!probe.city) throw new Error('最近的正文和状态栏里都找不到 user 所在的城市，暂不能刷新天气。可以让正文提一句所在地，或在楼末附地点标记。');
+                if (!probe.city) throw new Error('你太神秘了，发送一条消息让我知道你在哪儿吧！');
                 location = { city: probe.city, sourceIndex: chat.length - 1 };
                 inferred = location;
             }
