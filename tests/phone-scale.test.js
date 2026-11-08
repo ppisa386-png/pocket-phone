@@ -4,16 +4,21 @@ import { readFileSync } from 'node:fs';
 
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const ui = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
+const pressMenu = readFileSync(new URL('../src/press-menu.js', import.meta.url), 'utf8');
 
-test('the shared scale layer keeps its computed logical height in every phone app', () => {
-    const rule = css.match(/\.pp-phone-scale\s*\{([^}]*)\}/)?.[1];
-    assert.ok(rule, 'common phone-scale rule exists');
-    assert.match(rule, /\bflex:\s*0\s+0\s+auto\s*;/, 'flexbox must not grow or shrink the computed logical height');
-    assert.match(rule, /\bheight:\s*var\(--pp-phone-logical-height\s*,/, 'logical height is computed independently of parent flex height');
-    assert.match(rule, /transform:\s*scale\(var\(--pp-phone-scale/, 'visual scaling remains enabled');
-    assert.match(rule, /transform-origin:\s*top left/, 'scaling remains anchored to the phone top-left');
-    assert.match(ui, /--pp-phone-logical-height['"],\s*\(phone\.clientHeight\s*\/\s*rounded\)/, 'precise logical height uses the current viewport and scale');
-    assert.match(ui, /'<div class="pp-phone-scale">'/, 'all app pages share the scale layer');
-    assert.ok(ui.indexOf('class="pp-phone-scale"') < ui.indexOf('class="pp-content"'), 'content lives inside scale layer');
-    assert.ok(ui.indexOf('class="pp-footer"') < ui.indexOf("'</div>' +"), 'footer is rendered with content in the scale layer');
+test('floating phone reflows at its own dimensions instead of scaling a fixed-width canvas', () => {
+    const phone = css.match(/(?:^|\n)\.pp-phone\s*\{([^}]*)\}/)?.[1] || '';
+    const canvas = css.match(/\.pp-phone-scale\s*\{([^}]*)\}/)?.[1] || '';
+    assert.match(phone, /container:\s*pp-phone\s*\/\s*size\s*;/);
+    assert.match(canvas, /\bwidth:\s*100%\s*;/);
+    assert.match(canvas, /\bheight:\s*100%\s*;/);
+    assert.match(canvas, /\bflex:\s*1\s+1\s+auto\s*;/);
+    assert.doesNotMatch(canvas, /transform|390px|--pp-phone-logical-height/);
+    assert.doesNotMatch(ui, /PHONE_BASE_WIDTH|syncPhoneScale|--pp-phone-scale|--pp-phone-logical-height/);
+    assert.doesNotMatch(pressMenu, /--pp-phone-scale/);
+    assert.match(ui, /'<div class="pp-phone-scale">'/);
+    assert.match(css, /@container pp-phone \(max-width:360px\)/);
+    assert.match(css, /@container pp-phone \(max-width:330px\)/);
+    assert.match(css, /@container pp-phone \(max-height: 590px\)/);
+    assert.match(ui, /phone\.style\.width = width \+ 'px'; phone\.style\.height = height \+ 'px';/);
 });

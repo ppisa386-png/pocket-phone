@@ -18,7 +18,7 @@ h2, p { margin: 0; }
 .pp-launcher { position: fixed; width: var(--pp-launcher-size); height: var(--pp-launcher-size); border-radius: 50%; border: 1px solid #ffffff55; background: linear-gradient(145deg, #b5a2df, #70619a); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 24px #0005; touch-action: none; user-select: none; -webkit-user-select: none; }
 .pp-launcher:hover { filter: brightness(1.1); }
 .pp-launcher svg { width: 21px; height: 21px; pointer-events: none; }
-.pp-phone { position: fixed; right: 24px; top: max(12px, calc((100dvh - var(--pp-phone-height, 740px)) / 2)); width: min(var(--pp-phone-width), calc(100vw - 24px)); height: min(var(--pp-phone-height, 740px), calc(100dvh - 24px)); background: var(--pp-bg); border: 1px solid #ffffff30; border-radius: 36px; box-shadow: 0 24px 90px #0007, inset 0 0 0 5px #ffffff04; overflow: hidden; display: flex; flex-direction: column; isolation: isolate; }
+.pp-phone { position: fixed; right: 24px; top: max(12px, calc((100dvh - var(--pp-phone-height, 740px)) / 2)); width: min(var(--pp-phone-width), calc(100vw - 24px)); height: min(var(--pp-phone-height, 740px), calc(100dvh - 24px)); background: var(--pp-bg); border: 1px solid #ffffff30; border-radius: 36px; box-shadow: 0 24px 90px #0007, inset 0 0 0 5px #ffffff04; overflow: hidden; display: flex; flex-direction: column; isolation: isolate; container: pp-phone / size; }
 .pp-phone[data-home="true"] { background: var(--pp-wallpaper); color: #fff; }
 .pp-topline { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 16px 24px 4px; height: 46px; min-height: 46px; font-size: 11px; font-weight: 600; }
 .pp-island { position: absolute; width: 74px; height: 20px; left: calc(50% - 37px); top: 13px; border-radius: 12px; background: #090a0d; }
@@ -28,11 +28,8 @@ h2, p { margin: 0; }
 .pp-icon-button { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; }
 .pp-icon-button:hover { background: #8882; }
 .pp-icon-button svg { width: 21px; height: 21px; }
-/* 真实调试小窗模式：内容按设计基准 390px 排版，经 transform 等比缩放适配窗口；
-   .pp-phone 只负责窗口尺寸与裁切，缩放手柄留在窗口层不随缩放。
-   缩放层的逻辑高度 = 实际窗口内高 / 缩放倍数；禁止作为 flex 子元素被父层压缩/拉伸，
-   否则窄屏会在手势条下方留下空白，宽屏会把底部内容裁掉。 */
-.pp-phone-scale { flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; width: var(--pp-phone-base-width, 390px); height: var(--pp-phone-logical-height, calc(var(--pp-phone-height, 740px) / var(--pp-phone-scale, 1))); transform: scale(var(--pp-phone-scale, 1)); transform-origin: top left; }
+/* 响应式小窗：内容直接用窗口的实际内宽和内高排版；滚动保持在 App 区域内。 */
+.pp-phone-scale { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
 .pp-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #8885 transparent; }
 .pp-home { min-height: 100%; display: flex; flex-direction: column; padding: 0 23px 8px; }
 .pp-home-clock { text-align: center; padding: 10px 0 32px; }
@@ -112,7 +109,7 @@ h2, p { margin: 0; }
 .pp-phone-tabs button { min-width: 74px; padding: 6px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--pp-muted); font-size: .8em; border-radius: 10px; }
 .pp-phone-tabs button[aria-pressed="true"] { color: var(--pp-accent); }
 @media (max-width: 480px) { .pp-phone { right: 12px; top: max(8px, env(safe-area-inset-top)); height: min(var(--pp-phone-height, 740px), calc(100dvh - 20px)); max-height: calc(100dvh - 20px); border-radius: 28px; } .pp-home-clock { padding-top: 4px; padding-bottom: 24px; } }
-@media (max-height: 590px) { .pp-home-clock { padding: 0 0 12px; } .pp-big-time { font-size: 48px; } .pp-dock { padding: 10px 5px; } .pp-home .pp-app-grid { margin-bottom: 12px; } .pp-app-icon { width: 48px; height: 48px; } }
+@container pp-phone (max-height: 590px) { .pp-home-clock { padding: 0 0 12px; } .pp-big-time { font-size: 48px; } .pp-dock { padding: 10px 5px; } .pp-home .pp-app-grid { margin-bottom: 12px; } .pp-app-icon { width: 48px; height: 48px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 /* Phone app */
 .pp-phone-app { display: flex; flex-direction: column; height: 100%; min-height: 260px; }
@@ -610,7 +607,7 @@ h2, p { margin: 0; }
 .pp-phone[data-active-app="weather"]:has(.pp-weather[data-wtheme="night"]) .pp-footer{background:#0b2b4d;color:#f2f6ff;border-color:transparent;}
 .pp-phone[data-active-app="weather"]:has(.pp-weather[data-wtheme="night"]) .pp-header .pp-icon-button{color:#f2f6ff;}
 
-@media(max-width:360px){
+@container pp-phone (max-width:360px){
     .pp-weather-scroll{padding-left:13px;padding-right:13px;}
     .pp-weather-scene{margin-left:-13px;margin-right:-13px;}
     .pp-weather-hero-copy{max-width:84%;}
@@ -621,7 +618,7 @@ h2, p { margin: 0; }
     .pp-weather-day{grid-template-columns:40px 25px minmax(0,1fr) auto;gap:6px;}
     .pp-weather-day-temp{grid-template-columns:30px 27px;}
 }
-@media(max-width:330px){
+@container pp-phone (max-width:330px){
     .pp-weather-hero-copy{max-width:88%;}
     .pp-weather-hero-copy>strong>span{font-size:58px;}
     .pp-weather-hourly-card{padding-left:4px;padding-right:4px;}
@@ -1141,7 +1138,7 @@ h2, p { margin: 0; }
 .pp-food-empty h3{margin:18px 0 6px;font-size:16px;font-weight:700;color:var(--fd-ink)}
 .pp-food-empty p{margin:0;max-width:250px;font-size:12px;line-height:1.7;color:var(--fd-muted)}
 
-@media(max-width:360px){
+@container pp-phone (max-width:360px){
   .pp-food-body{padding-left:14px;padding-right:14px}
   .pp-food-masthead{padding-left:15px;padding-right:15px}
   .pp-food-masthead-side{display:none}
@@ -1158,7 +1155,7 @@ h2, p { margin: 0; }
   .pp-food-shophead{padding-left:15px;padding-right:15px}
   .pp-food-bar{padding-left:15px;padding-right:15px}
 }
-@media(max-width:330px){
+@container pp-phone (max-width:330px){
   .pp-food-shop-thumb{flex-basis:62px;width:62px;height:68px}
   .pp-food-shop-thumb svg{width:48px;height:48px}
   .pp-food-shop-chevron{display:none}
@@ -1303,7 +1300,7 @@ h2, p { margin: 0; }
 .pp-wechat .pp-chat-settings{background:#f5f5f5;min-height:100%}
 .pp-wechat .pp-chat-transfer{background:#f8a846;color:#fff}
 .pp-wechat .pp-chat-transfer>svg,.pp-wechat .pp-chat-transfer small{color:#fff}
-@media(max-width:360px){.pp-chat-top .pp-chat-button.is-icon{width:31px;min-width:31px;padding:6px}.pp-chat-row{padding:11px 12px}.pp-chat-avatar{width:40px;min-width:40px;height:40px}.pp-chat-bubble{max-width:90%}.pp-chat-composer .pp-chat-primary{padding:10px}.pp-chat-compose-input select{width:51px}.pp-wechat .pp-chat-bubble{max-width:calc(100% - 64px)}}
+@container pp-phone (max-width:360px){.pp-chat-top .pp-chat-button.is-icon{width:31px;min-width:31px;padding:6px}.pp-chat-row{padding:11px 12px}.pp-chat-avatar{width:40px;min-width:40px;height:40px}.pp-chat-bubble{max-width:90%}.pp-chat-composer .pp-chat-primary{padding:10px}.pp-chat-compose-input select{width:51px}.pp-wechat .pp-chat-bubble{max-width:calc(100% - 64px)}}
 
 .pp-phone:is([data-active-app="whatsapp"],[data-active-app="wechat"]){--pp-bg:#fff;--pp-text:#18251e;--pp-accent:#07a45c;--pp-line:#e2e7e3;background:#fff;color:#18251e;color-scheme:light}
 .pp-phone[data-active-app="whatsapp"] .pp-topline,.pp-phone[data-active-app="whatsapp"] .pp-header,.pp-phone[data-active-app="whatsapp"] .pp-footer{background:#fff;color:#17251e}
@@ -1590,3 +1587,22 @@ h2, p { margin: 0; }
     .pp-press-action{transition:none;}
 }
 .pp-x-trend-on{color:#8fd6a0;font-size:10px}
+
+/* 小窗宽度断点独立于酒馆所在浏览器视口。 */
+@container pp-phone (max-width:360px) {
+  .pp-home { padding-inline: 14px; }
+  .pp-home-clock { padding-bottom: 20px; }
+  .pp-app-grid { gap: 15px 7px; }
+  .pp-dock { padding: 12px 5px; gap: 6px; }
+  .pp-topline { padding-inline: 15px; }
+  .pp-header { padding-inline: 6px; }
+  .pp-page { padding-inline: 13px; }
+}
+@container pp-phone (max-width:330px) {
+  .pp-app-icon { width: 51px; height: 51px; border-radius: 15px; }
+  .pp-app-icon svg { width: 26px; height: 26px; }
+  .pp-home-clock { padding-bottom: 13px; }
+  .pp-home .pp-app-grid { margin-bottom: 15px; }
+  .pp-dock { border-radius: 18px; }
+  .pp-phone-toolbar { padding-inline: 12px; }
+}

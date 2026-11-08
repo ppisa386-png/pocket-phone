@@ -15,8 +15,8 @@ import { createSnapPanel } from './snapchat-view.js?v=1.2';
 import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
-import { createPressMenu } from './press-menu.js?v=1.2';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.1';
+import { createPressMenu } from './press-menu.js?v=1.2.2';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.2';
 import { icon } from './icons.js?v=1.2';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
@@ -193,7 +193,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         };
         shadow.append(dialog);
         dialog.showModal();
-        dialog.style.transform = 'scale(var(--pp-phone-scale,1))';
     }
     function renderDaily(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
     // 昼夜主题定时切换：只在天气页打开时挂载，对齐下一个 06:00/16:00/20:00
@@ -296,22 +295,13 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         return true;
     }
 
-    // 真实调试小窗模式：内容按设计基准 390px 排版，整体等比缩放适配窗口。
-    const PHONE_BASE_WIDTH = 390;
-    function syncPhoneScale() {
-        if (!phone || !phone.isConnected || phone.clientWidth === 0) return; // 窗口隐藏时不测量，保留上次缩放
-        const scale = Math.min(2.2, Math.max(0.4, phone.clientWidth / PHONE_BASE_WIDTH));
-        const rounded = Math.round(scale * 10000) / 10000;
-        layer.style.setProperty('--pp-phone-scale', String(rounded));
-        layer.style.setProperty('--pp-phone-logical-height', (phone.clientHeight / rounded) + 'px');
-    }
+    // 窗口宽高直接驱动 CSS 容器查询，所有 App 原生自适应排版。
     function applyAppearance() {
         layer.dataset.theme = settings.theme;
         layer.dataset.wallpaper = settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
         layer.style.setProperty('--pp-phone-height', settings.phoneHeight + 'px');
-        syncPhoneScale();
         launcher.hidden = !settings.enabled || !settings.launcherVisible;
         const badge = launcher.querySelector('.pp-launcher-badge');
         badge.hidden = !settings.apps.phone || !unreadCalls();
@@ -517,7 +507,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         opened = true;
         route = 'home'; history = []; selectedSMSContactId = null; pickingSMSContact = false; smsEditing = null; contactSearchOpen = false;
         phone.hidden = false;
-        syncPhoneScale(); // 取消隐藏后测量真实窗口尺寸（挂载时 clientWidth 为 0 无法同步）
         if(windowPosition){const point={...windowPosition};phone.style.height='';phone.style.bottom='';phone.style.top='';movePhone(point.x,point.y);}
         launcher.setAttribute('aria-expanded', 'true');
         launcher.setAttribute('aria-label', '收起榴莲手机');
@@ -804,11 +793,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     for(const event of ['pointerup','pointercancel','lostpointercapture'])phoneHandle.addEventListener(event,finishWindowDrag,{signal:lifetime.signal});
     // Floating-window resize: drag the corner grip like a small-window app.
     const resizeGrip = shadow.querySelector('.pp-resize');
-    if (typeof ResizeObserver === 'function' && phone) {
-        const scaleObserver = new ResizeObserver(() => syncPhoneScale());
-        scaleObserver.observe(phone);
-    }
-    window.addEventListener('resize', () => syncPhoneScale());
     let windowResize = null;
     resizeGrip.addEventListener('pointerdown', event => {
         if (event.button !== 0 || event.isPrimary === false) return;
