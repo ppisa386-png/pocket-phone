@@ -124,7 +124,7 @@ test('weather location can be edited from the shared location record without a m
         const state=await f.state();
         assert.equal(state.location.current.city,'洛杉矶');
         assert.equal(state.location.current.manual,true);
-        assert.equal(state.weather['上海'].seed,oldWeather.seed,'the previous city's weather stays intact');
+        assert.equal(state.weather['上海'].seed,oldWeather.seed,"the previous city weather stays intact");
         assert.equal(state.weather['洛杉矶'].kind,'real');
         assert.equal(state.weather['洛杉矶'].climate.archetype,'csa');
         assert.equal(f.weather.report(state).city,'洛杉矶');
