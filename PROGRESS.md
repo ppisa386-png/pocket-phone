@@ -1,5 +1,15 @@
 # 榴莲手机开发进度
 
+## 本地待发布 · 天气 App 重设计与昼夜自动主题（1.2 之上）
+基线为本地工作区（8ca8a1a 小榴莲重设计之上，633/633）。按用户规格重新设计天气 App：E「杏桃晴日」为主基准，B「雾紫晴空」/D「深蓝玻璃」两套昼夜主题；重构页面构图、信息层级与天气主体视觉；按手机本地时间自动切换主题。天气数据、演变、剧情时间与注入机制零改动（src/weather.js 未触碰），只改 `src/weather-view.js`、`style.css`、`src/ui.js`。
+
+**主题机制**：`themeFor(date)`（导出）——06:00–15:59 mist / 16:00–19:59 apricot / 其余 night，只看手机本地时间（Date.getHours）；`nextThemeChange(from)`（导出）返回下一个 06/16/20 边界。`createWeatherPanel` 增可选 `now` 参数（默认 `()=>new Date()`，测试注入）。section 用独立 `data-wtheme="mist|apricot|night"` 驱动三套主题，`data-weather` 继续标记实际天气场景。ui.js：`scheduleWeatherTheme` 对齐下一边界精确 setTimeout（上限 2^31-1 ms 钳制、到点重绘并续排）——仅当天气页打开才重绘；离开天气页/destroy 清理定时器；`visibilitychange` 回前台时若在天气页立即重判；重绘纯渲染不触发天气生成、刷新、API 或存档。主题不保存，每次现算。
+**视图重构（src/weather-view.js 全部重写）**：①顶部城市区——定位 pin＋城市名（主导航层级，19px）＋剧情时间小字＋右上迷你刷新图标按钮（与底部胶囊同 action）；不再使用居中小标题。②主视觉不对称构图——hero 渐变卡（`::before/::after` 光晕弧形）左侧大字号温度（250 字重）＋天气描述＋日期，右侧 96px 现代插画（`weatherArt(type)`：太阳光晕/层叠云/雨云雨滴/雪花/风线/闪电/台风螺旋/警示三角，颜色全部走主题变量 `--w-art/--w-cloud/--w-warn`）；极端天气 hero 顶部警示徽标＋警示描边。③四张 2×2 指标卡（体感/降水/风力/湿度，独立浅色 tint：紫/杏桃/绿/鹅黄，线性小图标）。④逐小时改为横向滚动卡片（小时/场景图标/温度，当前小时 hero 渐变突出）。⑤七天预报一张卡：每天日期星期/图标/描述/最高最低温＋温度区间条（周内归一化渐变位置条）＋降水/风力小字，今天 chip 突出、极端天 inset 警示条与预警文案。⑥底部辅助区：状态文本＋主题色胶囊刷新按钮（apricot 深字）。⑦特殊状态（未标记/待刷新/时间不明确/刷新中/失败/极端）全部复用同一顶部/hero/底部结构，占位用同一插画语言；no-location 文案"等待你的位置…点击刷新自动判断"。
+**CSS（style.css 天气块整体替换）**：三套 `data-wtheme` 变量组（页面渐变、卡片、线条、强调、插画色、hero 渐变、玻璃/警示/当前高亮），night 主题卡片 `backdrop-filter:blur` 轻玻璃；布局类（top/scroll/hero/metrics/hours/day/foot）主题无关共用；横向 hours 隐藏滚动条；`.pp-weather` 作用域不影响其他 App。
+**保留**：report/refresh/剧情时钟/极端识别/注入（weather.js 未动）、刷新 action 与按钮禁用、状态文本机制、全部数据来自现有 weatherAt/buildForecast，不新增虚构指标。
+验证：npm test 635/635（633＋2：①昼夜主题边界 7 点＋nextThemeChange 四段；②重设计面板契约——三主题 data-wtheme、<b>城市</b> 顶部区、hero/metrics/hours/week/range 结构、当前小时高亮、刷新入口，且换主题城市与数据块不变；特殊状态（无位置）保留刷新入口与同一 hero 语言；旧 <h2> 断言更新）。浏览器实测（Node 直调真实 createWeather+weatherView，深色 layer 下渲染）：B 雾紫（雨天：雾白浅蓝＋薰衣草紫 hero＋雨云）、E 杏桃（奶油白＋日落光感渐变＋暖橘点缀）、D 深蓝玻璃（深海蓝＋半透明玻璃卡＋月光白）三主题完整首页；B 主题另实测热浪极端帧（警示徽标＋描边＋天级预警文案）；未标记位置状态与正常页同一视觉语言；320/360/390 三宽度 scroll/页面横向溢出 0、逐小时横滚可滚。preview.html/deliverables 重建（语法通过）。
+未完成：真实手机触屏与真机时间切换（跨 16:00/20:00 边界）待用户验收（自动化为 themeFor/nextThemeChange 边界断言＋ui.js 定时逻辑）；版本参数保持 1.2 待发布统一。
+
 ## 本地待发布 · 小榴莲界面重设计：独立明亮主题与新首页结构（1.2 之上）
 基线为本地工作区（d0b0e22 小榴莲美化之上，633/633）。用户反馈上一轮"只调了配色圆角，仍是旧布局"，按新规格真正重构页面结构：**小榴莲内部使用独立明亮主题**（手机整体深色时仍显示奶油白/淡紫/鼠尾草绿/杏桃亮色），首页布局重组。仅改 `src/assets-view.js` 与 `style.css`，业务逻辑零改动、ui.js 未动（renderAssets 滚动保留机制兼容）。
 

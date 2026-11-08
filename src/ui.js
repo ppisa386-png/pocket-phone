@@ -1,7 +1,7 @@
 import {paperDraft} from './daily-core.js?v=1.2';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2';
-import { createWeatherPanel } from './weather-view.js?v=1.2';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2';
@@ -193,7 +193,21 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         dialog.showModal();
     }
     function renderDaily(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=dailyPanel.html();content.scrollTop=scroll;}
-    function renderWeather(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=weatherPanel.html();content.scrollTop=scroll;}
+    // 昼夜主题定时切换：只在天气页打开时挂载，对齐下一个 06:00/16:00/20:00
+    // 边界精确触发；只重绘界面，不触碰天气数据、请求或存档。
+    let weatherThemeTimer = null;
+    function clearWeatherThemeTimer() { if (weatherThemeTimer) { clearTimeout(weatherThemeTimer); weatherThemeTimer = null; } }
+    function scheduleWeatherTheme() {
+        clearWeatherThemeTimer();
+        const delay = Math.max(1000, Math.min(nextThemeChange(new Date()) - Date.now(), 2147483647));
+        weatherThemeTimer = setTimeout(() => {
+            weatherThemeTimer = null;
+            if (destroyed) return;
+            if (opened && route === 'app:weather') renderWeather();
+            scheduleWeatherTheme();
+        }, delay);
+    }
+    function renderWeather(){pressMenu.close(true);const scroll=content.scrollTop;content.innerHTML=weatherPanel.html();content.scrollTop=scroll;scheduleWeatherTheme();}
     function pressActions(target){
         const kind=target.dataset.press;
         if(kind==='chat-message')return currentChat()?.press(target)||[];
@@ -455,6 +469,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (app?.id === 'x') renderX();
         else if (app?.id === 'daily') renderDaily();
         else if (app?.id === 'weather') renderWeather();
+        if (route !== 'app:weather') clearWeatherThemeTimer();
         else if (app?.id === 'assets') renderAssets();
         else if (app?.id === 'amazon') renderAmazon();
         else if (app?.id === 'food') renderFood();
@@ -812,6 +827,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             if(opened)movePhone(point.x,point.y);
         }
     }, { signal: lifetime.signal });
+    // 天气昼夜主题：回到前台时按手机本地时间重判一次（页面隐藏期间定时器不可靠）。
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && opened && route === 'app:weather') renderWeather();
+    }, { signal: lifetime.signal });
     shadow.addEventListener('keydown', event => {
         if (event.key === 'Escape' && opened) { event.preventDefault(); event.stopPropagation(); close(); }
     }, { signal: lifetime.signal });
@@ -866,6 +885,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         getSettings() { return structuredClone(settings); },
         destroy() {
             destroyed = true;
+            clearWeatherThemeTimer();
             apiPanel.destroy();
             lifetime.abort();
             unsubscribeMemory?.();

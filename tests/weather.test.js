@@ -11,7 +11,7 @@ import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay, dayDate } from '../src/story-clock.js';
-import { createWeatherPanel } from '../src/weather-view.js';
+import { createWeatherPanel, themeFor, nextThemeChange } from '../src/weather-view.js';
 
 // Simple deterministic LCG so statistical assertions never flake between runs.
 let lcg = 0x2f6e2b1;
@@ -318,10 +318,14 @@ test('the weather panel renders the report and refresh reports success', async (
         let redraws = 0;
         const panel = createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, busy: false }), redraw: () => { redraws++; } });
         const html = panel.html();
-        assert.match(html, /<h2>上海<\/h2>/);
+        assert.match(html, /data-wtheme="(mist|apricot|night)"/);
+        assert.match(html, /<b>上海<\/b>/); // 城市在顶部导航信息区
         assert.match(html, /data-weather="(clear|cloud|rain|snow|wind|typhoon|extreme)"/);
         assert.match(html, /data-weather-action="refresh"/);
         assert.match(html, /刷新天气/);
+        assert.match(html, /体感温度/);assert.match(html, /降水情况/);assert.match(html, /风力/);assert.match(html, /湿度/);
+        assert.match(html, /pp-weather-hour-now/); // 当前小时突出
+        assert.match(html, /pp-weather-range/); // 七天温度区间视觉
         await panel.action('refresh');
         current = await f.state();
         assert.match(panel.html(), /已为当前位置抽取天气。/);
@@ -538,4 +542,54 @@ test('the same fictional city name in a different world gets a different climate
     const hot = { name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'a.png', data: { character_book: { entries: [{ enabled: true, content: '云京城地处热带，全年炎热。' }] } } }] };
     assert.equal(worldClimate('云京城', cold).archetype, 'et');
     assert.equal(worldClimate('云京城', hot).archetype, 'af');
+});
+
+// ---- 昼夜自动主题（手机本地时间）与视图结构 ----
+
+test('day-night themes switch exactly at 06:00, 16:00 and 20:00 local time', () => {
+    const at = (h, m = 0) => new Date(2026, 4, 1, h, m);
+    assert.equal(themeFor(at(5, 59)), 'night');
+    assert.equal(themeFor(at(6, 0)), 'mist');
+    assert.equal(themeFor(at(15, 59)), 'mist');
+    assert.equal(themeFor(at(16, 0)), 'apricot');
+    assert.equal(themeFor(at(19, 59)), 'apricot');
+    assert.equal(themeFor(at(20, 0)), 'night');
+    assert.equal(themeFor(at(23, 30)), 'night');
+    assert.equal(themeFor(at(0, 30)), 'night');
+    assert.deepEqual(nextThemeChange(at(9, 0)), at(16, 0));
+    assert.deepEqual(nextThemeChange(at(17, 0)), at(20, 0));
+    assert.deepEqual(nextThemeChange(at(21, 0)), new Date(2026, 4, 2, 6, 0));
+    assert.deepEqual(nextThemeChange(at(3, 0)), at(6, 0));
+    assert.deepEqual(nextThemeChange(at(15, 59)), at(16, 0));
+});
+test('the redesigned panel carries the theme attribute, new layout blocks and unchanged data across themes', async () => {
+    const f = setup(); try {
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await f.memory.read();
+        await f.weather.refresh();
+        const current = await f.state();
+        const make = now => createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, busy: false }), redraw() {}, notice() {}, now: () => now });
+        const morning = make(new Date(2026, 4, 1, 9, 0)).html();
+        const dusk = make(new Date(2026, 4, 1, 17, 0)).html();
+        const night = make(new Date(2026, 4, 1, 22, 0)).html();
+        assert.match(morning, /data-wtheme="mist"/);
+        assert.match(dusk, /data-wtheme="apricot"/);
+        assert.match(night, /data-wtheme="night"/);
+        // 主题只换氛围：城市、天气与数据块在三个主题下一致
+        for (const page of [morning, dusk, night]) {
+            assert.match(page, /<b>上海<\/b>/);
+            assert.match(page, /pp-weather-hero-copy/);
+            assert.match(page, /体感温度/);
+            assert.match(page, /pp-weather-hours/);
+            assert.match(page, /pp-weather-week/);
+            assert.match(page, /pp-weather-day-now/);
+            assert.match(page, /pp-weather-range/);
+            assert.match(page, /aria-label="刷新天气"/);
+        }
+        // 视图重绘不调用模型：adapter 无生成入口，纯渲染
+        const noLocation = createWeatherPanel({ adapter: { weather: f.weather }, getView: () => ({ ...current, location: null, busy: false }), redraw() {}, notice() {}, now: () => new Date(2026, 4, 1, 9, 0) }).html();
+        assert.match(noLocation, /尚未标记位置/);
+        assert.match(noLocation, /data-weather-action="refresh"/); // 特殊状态保留刷新入口
+        assert.match(noLocation, /pp-weather-hero/); // 占位与正常页共用同一视觉语言
+    } finally { f.close(); }
 });
