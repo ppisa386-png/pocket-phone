@@ -82,7 +82,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                 &&row.recipient==='user'&&typeof row.sender==='string'&&row.sender.trim()&&row.sender!==context.name1;
             let changes=[];
             if(allowed&&['sms','call'].includes(row.channel)){
-                rows.push({...row,kind:row.channel,name:row.sender,status:'ringing',outreachId:id});
+                rows.push({...row,kind:row.channel,name:row.sender,status:'ringing',outreachId:id,shown:row.channel==='call'?true:row.shown});
                 continue;
             }
             if(allowed&&typeof row.text==='string'&&row.text.trim())changes=socialContact(state,row,id,storyTime(chat.slice(0,index+1)),(Date.parse(chat[index].send_date)||Date.now())+n,context.name1);
