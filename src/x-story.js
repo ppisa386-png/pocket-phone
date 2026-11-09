@@ -1,23 +1,40 @@
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';
-import { readStoryClock, storyTime } from './story-clock.js?v=1.2';
+import { readStoryClock, storyTime, dateDay, dayDate } from './story-clock.js?v=1.2';
 import { xComments, xCommentKey } from './x-comments.js?v=1.2';
 import {xFeedArea} from './x-feed.js?v=1.2';
 import { xAudience } from './x-audience.js?v=1.2';
-import { commRecordPatch, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2';
+import { commRecordPatch, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2.21';
+
+// Publication dates are anchored to story time, never device time.
+export function xPostTiming(post, now = null, meta = null) {
+    const day=Number.isInteger(post?.postedAtStory?.day)?post.postedAtStory.day:
+        (dateDay(post?.storyTime?.date)??dateDay(meta?.anchor?.date));
+    if(!Number.isInteger(day)||day < -719162||day > 2932896)
+        return {postedDate:'',postDaysAgo:null,stale:false};
+    const postedDate=dayDate(day),today=dateDay(now?.date);
+    const postDaysAgo=today!==null&&today>=day?today-day:null;
+    const clock=/^([01]\d|2[0-3]):([0-5]\d)$/.exec(now?.time||'');
+    const publishedHour=post?.postedAtStory?.hour;
+    const beyond72h=postDaysAgo>3||(postDaysAgo===3&&clock&&Number.isFinite(publishedHour)&&
+        (+clock[1]+(+clock[2])/60)>publishedHour);
+    // Classification remains pending. Only old public post content stops
+    // entering every narrative prompt after the longest 72-hour window.
+    return {postedDate,postDaysAgo,stale:!!beyond72h};
+}
 
 export function xStoryPrompt(state, now = null) {
     const allPosts = Object.values(state.x || {}).filter(p => p.type === 'post');
     const targets = [...new Map([...allPosts.slice(-20),...allPosts.filter(p=>p.author==='user').slice(-10)].map(p=>[p.id,p])).values()]
         .map(p=>{
-            const reference={id:p.id,author:p.author,postedAtStory:p.postedAtStory,sourceIndex:p.sourceIndex};
-            // A catalog reference must not inject unselected square content into narrative.
+            const meta=commMetaOrInfer(state,'x',p.id,p);
+            const timing=xPostTiming(p,now,meta);
+            const reference={id:p.id,author:p.author,postedAtStory:p.postedAtStory,sourceIndex:p.sourceIndex,
+                ...(timing.postedDate?{postedDate:timing.postedDate}:{}),
+                ...(timing.postDaysAgo!==null?{storyDaysAgo:timing.postDaysAgo}:{})};
             if(xFeedArea(state,p)==='square')return reference;
-            // The full catalog stays available for locating posts, but the content
-            // the phone hands to the narrative obeys the unified rules: expired
-            // posts degrade to a bare reference, shown posts omit content entirely.
+            // Keep old and shown IDs for matching without re-sending the post.
             if(now){
-                const meta=commMetaOrInfer(state,'x',p.id,p);
-                if(commExpired(meta,now))return reference;
+                if(commExpired(meta,now)||timing.stale)return reference;
                 if(meta.shown===true)return {...reference,name:p.author==='user'?state.x.profile?.alias:state.x[p.author]?.name,
                     metrics:p.metrics,shown:true};
             }
@@ -30,7 +47,9 @@ export function xStoryPrompt(state, now = null) {
         '若本楼只新增对既有 user 推文的回复，每条附 <!--durian-x:{"action":"reply","postId":"对应已有帖子ID","name":"实际回复者","text":"回复原文","category":"可选A或B：日常闲聊为A，约定/持续事件为B","shown":true}-->。' +
         '正文明确写出既有 user 或 NPC 推文的累计互动数时，另附 <!--durian-x:{"action":"metrics","postId":"准确的已保存帖子ID","postText":"未展示的帖子填目录文字片段或配图描述，已展示的帖子可省略。广场必须由本楼提供原帖内容","metrics":{"replies":{"value":4000}}}-->。' +
         'metrics 仅填正文明确提供的 likes、reposts、replies；每项各含 value 非负整数，未提及的项省略。达到4236填4236，突破四千或四千多填4000，点赞破两万填20000，不把下限推成虚构精确值。已经发布的新帖标记也可附同样 metrics。' +
-        '目录中 shown 为 true 的帖子已在正文展示过，只保留定位与互动元数据，不再注入正文或配图内容，也不得再次作为新发布内容出现；没有 text 且未标记 shown 的条目是已过时效的旧帖，仅作定位引用，不再同步其互动数。' +
+        '已保存帖子目录仅用于核对，不代表本楼新消息。postedDate 是原帖剧情发布日期，storyDaysAgo 是距离当前剧情日期的日历天数；据此判断“昨天”等说法，日期缺失时不猜。没有新的剧情进展或公开互动时，不反复提及同一帖。' +
+        '正文第一次明确展示或提及手机中已有、尚未在正文展示的 X 帖子时，末尾附 <!--durian-message-shown:{"platform":"x","id":"该帖准确的已有ID"}-->；已经展示过的不重复标记。' +
+        '目录中 shown 为 true 的帖子仅保留定位与互动元数据，不再注入正文或配图，也不得再次作为新发布内容出现；没有 text 且未标记 shown 的旧帖仅作定位引用，不再同步其互动数。' +
         '根据原帖内容、作者、发布时间和本楼指代确认目标，postId 和 postText 必须对应同一帖，不能只凭作者选最新一条；指代有歧义就不记。数字不能来自预期、假设、草稿、他帖或旧数的回忆，不因同步数字编写可见评论或粉丝变化。' +
         '回忆、转述旧帖、草稿、打算发布、转发他人帖子、私信均不记。没有发生就不输出，不为标记安排发帖或回复。已保存帖子（reply只用于user帖，metrics可用于user及NPC帖）：' +
         JSON.stringify(targets).replace(/\{\{/g,'\\u007b\\u007b') + '\n';

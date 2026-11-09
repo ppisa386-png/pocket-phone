@@ -1,4 +1,4 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.12';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.21';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.4';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2';
 import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2';

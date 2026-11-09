@@ -270,7 +270,7 @@ export function commReplyClassification(platform, id, conversationId, category, 
 // explicit shown override. A single change keeps replay atomic per record.
 export function commRecordPatch(platform, id, conversationId, category, shown, state = null) {
     const patch = { ...(commReplyClassification(platform, id, conversationId, category, state)[0]?.value || {}) };
-    if (shown === false) patch.shown = false;
+    if (typeof shown === 'boolean') patch.shown = shown;
     return Object.keys(patch).length ? [{ collection: 'commContext', key: commKey(platform, id), value: patch }] : [];
 }
 

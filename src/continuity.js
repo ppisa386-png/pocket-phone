@@ -2,6 +2,7 @@ import {recentPerConversation} from './proactive-pacing.js?v=1.2';
 import { majorAmount } from './currency.js?v=1.2';
 import {xFeedArea} from './x-feed.js?v=1.2';
 import { xComments } from './x-comments.js?v=1.2';
+import { xPostTiming } from './x-story.js?v=1.2.21';
 import { smsForAI } from './sms-context.js?v=1.2';
 import { syncCommContext, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2';
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
@@ -146,7 +147,12 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
                 const meta=commMetaOrInfer(state,'x',record.id,record);
                 if(shouldInject(meta,currentStoryTime)){
                     const who2=identity(account,record.alias||state.x?.profile?.alias);
-                    entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',platform:'x',recordId:record.id,shown:meta.shown===true,...who2,storyTime:record.storyTime||null,speaker:fromUser?who2.otherParty:account.name,text:record.text,post:xFeedArea(state,post)==='square'||!shouldInject(commMetaOrInfer(state,'x',post.id,post),currentStoryTime)?undefined:post.text}});
+                    const postMeta=commMetaOrInfer(state,'x',post.id,post);
+                    const timing=xPostTiming(post,currentStoryTime,postMeta);
+                    entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',platform:'x',recordId:record.id,shown:meta.shown===true,...who2,storyTime:record.storyTime||null,speaker:fromUser?who2.otherParty:account.name,text:record.text,
+                        ...(timing.postedDate?{postDate:timing.postedDate}:{}),
+                        ...(timing.postDaysAgo!==null?{postDaysAgo:timing.postDaysAgo}:{}),
+                        post:xFeedArea(state,post)==='square'||timing.stale||!shouldInject(postMeta,currentStoryTime)?undefined:post.text}});
                 }
             }
         }
@@ -154,7 +160,14 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
             const who2=identity(xAccounts.get(record.author),state.x?.profile?.alias);
             for(const kind of ['liked','reposted'])if(record[kind]){
                 const meta=commMetaOrInfer(state,'x',record.id+'#'+kind,record,{kind});
-                if(shouldInject(meta,currentStoryTime))entries.push({time:Number(record[kind+'At']||record.createdAt)||0,data:{channel:'X 公开互动',platform:'x',recordId:record.id+'#'+kind,shown:meta.shown===true,...who2,speaker:who2.otherParty,action:kind==='liked'?'点赞':'转发',post:shouldInject(commMetaOrInfer(state,'x',record.id,record),currentStoryTime)?record.text:undefined}});
+                if(shouldInject(meta,currentStoryTime)){
+                    const postMeta=commMetaOrInfer(state,'x',record.id,record);
+                    const timing=xPostTiming(record,currentStoryTime,postMeta);
+                    entries.push({time:Number(record[kind+'At']||record.createdAt)||0,data:{channel:'X 公开互动',platform:'x',recordId:record.id+'#'+kind,shown:meta.shown===true,...who2,speaker:who2.otherParty,action:kind==='liked'?'点赞':'转发',
+                        ...(timing.postedDate?{postDate:timing.postedDate}:{}),
+                        ...(timing.postDaysAgo!==null?{postDaysAgo:timing.postDaysAgo}:{}),
+                        post:!timing.stale&&shouldInject(postMeta,currentStoryTime)?record.text:undefined}});
+                }
             }
         }
     }

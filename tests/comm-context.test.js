@@ -369,3 +369,50 @@ test('anonymous X retains narrative DM markers even with no other outgoing chann
  assert.match(prompt,/商业邀约已经用durian-business offer/);
  assert.match(prompt,/"platform":"x"/);
 });
+
+
+test('X catalog uses source story dates and does not repeatedly send old pending post text',()=>{
+ const state=channelState(),day=Date.UTC(2026,9,4)/86400000;
+ state.x.p={id:'p',type:'post',author:'user',feed:'home',text:'十月四号发的公开推文',postedAtStory:{day,hour:10},createdAt:Date.now()};
+ const row=now=>JSON.parse(xStoryPrompt(state,now).split('已保存帖子（reply只用于user帖，metrics可用于user及NPC帖）：')[1].trim())[0];
+ assert.equal(row(stamp('2026-10-05','12:00')).postedDate,'2026-10-04');
+ assert.equal(row(stamp('2026-10-05','12:00')).storyDaysAgo,1);
+ assert.equal(row(stamp('2026-10-07','10:00')).text,state.x.p.text,'72h boundary remains visible');
+ assert.equal(row(stamp('2026-10-07','10:01')).text,undefined);
+ assert.equal(row(stamp('2026-11-09','12:00')).storyDaysAgo,36);
+ assert.equal(row(stamp('2026-11-09','12:00')).id,'p');
+ assert.equal(row(stamp('2026-11-09','12:00')).text,undefined);
+ state.x.p.postedAtStory={day,hour:null};
+ assert.equal(row(stamp('2026-10-07','12:00')).text,state.x.p.text,'unknown hour does not guess cutoff');
+ assert.equal(row(stamp('2026-10-08','12:00')).text,undefined);
+ delete state.x.p.postedAtStory;
+ assert.equal(row(stamp('2026-11-09','12:00')).postedDate,undefined,'missing date does not use createdAt');
+});
+test('existing X post is marked shown on first prose mention and reverts on floor rollback',async()=>{
+ const ctx={name1:'Sam',name2:'Alex',chatId:'x-post-shown',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[],chatMetadata:{}};
+ ctx.chat.push({mes:'2026-10-04 10:00 发帖当日',is_user:false});
+ let rev=await revisionsFor(messageSignatures(ctx.chat));
+ let journal=appendChange(undefined,rev,[set('x','old',{id:'old',type:'post',author:'user',feed:'home',text:'十月四日发的公开内容',postedAtStory:{day:Date.UTC(2026,9,4)/86400000,hour:10},createdAt:1})]);
+ journal=syncCommContext(journal,rev,ctx.chat).journal;
+ assert.equal(commMeta(replayJournal(journal),'x','old').shown,false);
+ assert.equal(commRecordPatch('x','some-id',null,null,true)[0].value.shown,true);
+ ctx.chat.push({mes:'2026-10-05 10:00 她提到了昨天 X 的旧帖。<!--durian-message-shown:{"platform":"x","id":"old"}-->',is_user:false});
+ rev=await revisionsFor(messageSignatures(ctx.chat));
+ journal=importStoryPhone(journal,rev,ctx.chat,ctx).journal;
+ const state=replayJournal(syncCommContext(journal,rev,ctx.chat).journal);
+ assert.equal(commMeta(state,'x','old').shown,true);
+ const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-10-05','10:00')).split('已保存帖子（reply只用于user帖，metrics可用于user及NPC帖）：')[1].trim());
+ assert.equal(catalog[0].text,undefined);assert.equal(catalog[0].postedDate,'2026-10-04');
+ assert.equal(commMeta(replayJournal(reconcileJournal(journal,rev.slice(0,1)).journal),'x','old').shown,false);
+});
+test('X comment references use the original post date, not the comment timestamp',()=>{
+ const state=channelState(),day=Date.UTC(2026,9,4)/86400000;
+ state.x.a={id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
+ state.x.p={id:'p',type:'post',author:'user',feed:'home',text:'十月四日原帖',postedAtStory:{day,hour:10},createdAt:1};
+ state.x.c={id:'c',type:'comment',postId:'p',author:'a',text:'这是一条刚发出的旧帖评论',createdAt:2};
+ state.commContext['x:c']={shown:false};
+ const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,currentStoryTime:stamp('2026-11-09','12:00')});
+ const row=JSON.parse(prompt.split('\n').at(-2)).records.find(r=>r.channel==='X 公开评论');
+ assert.equal(row.postDate,'2026-10-04');assert.equal(row.postDaysAgo,36);
+ assert.equal(row.post,undefined);assert.equal(row.storyDaysAgo,undefined);
+});
