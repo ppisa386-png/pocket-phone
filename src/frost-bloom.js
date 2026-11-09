@@ -29,7 +29,7 @@ const orbPetal = (degrees, i) => {
     <path d="M50 12.4 38.8 30.6 25.9 24.7 36.3 14.8Z" fill="${shade}" fill-opacity=".38"/>
     <path d="M50 12.4 61.2 30.6 74.1 24.7 63.7 14.8Z" fill="#fff" fill-opacity=".29"/>
     <path d="M50 12.4 38.8 30.6 50 50 61.2 30.6Z" fill="none" stroke="#fffefe" stroke-opacity=".78" stroke-width=".72" stroke-linejoin="round"/>
-    <path d="M25.9 24.7 38.8 30.6 29.4 41.3 50 50 70.6 41.3 61.2 30.6 74.1 24.7" fill="none" stroke="#8daab8" stroke-opacity=".62" stroke-width=".62" stroke-linejoin="round"/>
+    <path d="M25.9 24.7 38.8 30.6 29.4 41.3 50 50 70.6 41.3 61.2 30.6 74.1 24.7" fill="none" stroke="#7898aa" stroke-opacity=".78" stroke-width=".94" stroke-linejoin="round"/>
     <path d="M50 12.4 43.6 23.1 50 38.8 56.4 23.1 50 12.4" fill="none" stroke="#fffefb" stroke-opacity=".84" stroke-width=".66"/>
     <path d="M36.3 14.8 25.9 24.7" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width=".64"/>
   </g>`;
@@ -41,7 +41,7 @@ const snowBranch = (degrees, i) => {
   const front = i % 2 ? LILAC : LAKE;
   const back = i % 2 ? MINT : LILAC;
   return `<g class="pp-frost-branch" transform="rotate(${degrees} 50 50)">
-    <path d="M50 44.6 47.6 34.4 48.1 20.8 50 8.4 51.9 20.8 52.4 34.4Z" fill="${front}" fill-opacity=".85" stroke="#9daebd" stroke-opacity=".78" stroke-width=".68" stroke-linejoin="round"/>
+    <path d="M50 44.6 47.6 34.4 48.1 20.8 50 8.4 51.9 20.8 52.4 34.4Z" fill="${front}" fill-opacity=".85" stroke="#819aaa" stroke-opacity=".82" stroke-width=".90" stroke-linejoin="round"/>
     <path d="M50 44.6 47.6 34.4 48.1 20.8 50 8.4Z" fill="${ICE}" fill-opacity=".9"/>
     <path d="M50 8.4 51.9 20.8 52.4 34.4 50 44.6Z" fill="${back}" fill-opacity=".61"/>
     <path d="M50 8.4 46.3 18.4 50 25.8 53.7 18.4Z" fill="${LILAC}" fill-opacity=".70" stroke="#b6b3c8" stroke-width=".46"/>
@@ -75,7 +75,7 @@ const setGem = degrees => `<g class="pp-frost-setting" transform="rotate(${degre
 function orbSvg() {
   return `<g class="pp-frost-orb">
     <circle cx="50" cy="50" r="47.0" fill="#8f97a4" fill-opacity=".16"/>
-    <circle cx="50" cy="50" r="46.1" fill="${METAL}" fill-opacity=".9" stroke="#a6a0a4" stroke-width=".72"/>
+    <circle cx="50" cy="50" r="46.1" fill="${METAL}" fill-opacity=".9" stroke="#a09ca3" stroke-width="1.0"/>
     <circle cx="50" cy="50" r="44.3" fill="#fdfbf8" stroke="#fffefa" stroke-width=".78"/>
     <g clip-path="url(#pp-frost-clip)">
       <circle cx="50" cy="50" r="43.2" fill="url(#pp-frost-ground)"/>
@@ -89,7 +89,7 @@ function orbSvg() {
     </g>
     <circle cx="50" cy="50" r="43.6" fill="none" stroke="#fbf8f4" stroke-width="1.32" stroke-opacity=".98"/>
     <circle cx="50" cy="50" r="45.4" fill="none" stroke="#fffdf5" stroke-width=".67" stroke-opacity=".89"/>
-    <circle cx="50" cy="50" r="46.5" fill="none" stroke="#9e9ca8" stroke-width=".65" stroke-opacity=".75"/>
+    <circle cx="50" cy="50" r="46.5" fill="none" stroke="#8d99a7" stroke-width="1.0" stroke-opacity=".82"/>
     ${[0,90,180,270].map(setGem).join('')}
   </g>`;
 }
@@ -116,7 +116,7 @@ export function frostBloomLauncherArt() {
         <clipPath id="pp-frost-clip"><circle cx="50" cy="50" r="43.2"/></clipPath>
         <radialGradient id="pp-frost-ground" cx=".3" cy=".22" r=".88">
           <stop stop-color="#FCFFFF"/><stop offset=".43" stop-color="#E5F4F5"/>
-          <stop offset=".79" stop-color="#D0DFE8"/><stop offset="1" stop-color="#D7D2EB"/>
+          <stop offset=".79" stop-color="#C9DEE4"/><stop offset="1" stop-color="#D7D2EB"/>
         </radialGradient>
       </defs>
       ${frostBloomGeometry.orbSvg()}

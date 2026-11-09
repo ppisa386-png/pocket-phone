@@ -60,4 +60,6 @@ test('animation is scoped to selected launcher and respects reduced motion and k
   assert.match(css,/prefers-reduced-motion:reduce/);
   assert.match(css,/\.pp-launcher:focus-visible/);
   assert.doesNotMatch(css,/\.pp-layer\[data-skin="enamel"\] \.pp-frost-/);
+  assert.match(css,/z-index:3; \/\* keep the six-point bloom visible/);
+  assert.match(ui,/event.animationName === 'pp-frost-bloom'/,'the temporary foreground stacking must be cleared on animation end');
 });

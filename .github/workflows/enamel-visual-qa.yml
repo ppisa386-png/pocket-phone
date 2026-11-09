@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'src/enamel-icons.js'
+      - 'src/frost-bloom.js'
+      - 'tests/frost-bloom.test.js'
       - 'src/ui.js'
       - 'src/config.js'
       - 'style-enamel.css'

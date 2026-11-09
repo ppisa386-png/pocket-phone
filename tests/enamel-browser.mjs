@@ -62,12 +62,14 @@ try {
   await launcherChoice.selectOption('enamel');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel');
+  const independentFrostArt = await page.locator('.pp-frost-art').evaluate(el=>el.outerHTML);
   assert.equal(await page.locator('.pp-haze-launcher-art').isVisible(),true,'enamel ball works with dark phone theme');
   await page.locator('[data-setting="theme"]').selectOption('enamel');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'enamel');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-theme'),'light');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-wallpaper'),'haze');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel','launcher survives theme switch');
+  assert.equal(await page.locator('.pp-frost-art').evaluate(el=>el.outerHTML),independentFrostArt,'theme default and independent style share one SVG, not stale copies');
   assert.equal(await page.locator('.pp-swatch[aria-pressed="true"]').getAttribute('data-wallpaper'),'haze');
   await page.locator('[data-setting="launcherStyle"]').selectOption('classic');
   assert.equal(await page.locator('.pp-haze-launcher-art').isVisible(),false,'classic ball works inside enamel theme');
@@ -86,7 +88,18 @@ try {
   assert.equal(shapes,11,'all badges have enamel-metal edging');
   const noOverflow = await page.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1);
   assert.ok(noOverflow,'enamel desktop has no horizontal overflow');
+  const rhythm=await page.locator('.pp-home').evaluate(home=>{
+    const clock=home.querySelector('.pp-home-clock').getBoundingClientRect();
+    const grid=home.querySelector('.pp-app-grid').getBoundingClientRect();
+    const dock=home.querySelector('.pp-dock').getBoundingClientRect();
+    return {upper:grid.top-clock.bottom,lower:dock.top-grid.bottom};
+  });
+  assert.ok(Math.abs(rhythm.upper-rhythm.lower)<4,'desktop icon grid is optically centered between clock and dock');
   await phone.screenshot({path:resolve(output,'enamel-home-390.png')});
+  await page.setViewportSize({width:360,height:740});
+  assert.ok(await page.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'360px home remains within its phone');
+  await phone.screenshot({path:resolve(output,'enamel-home-360.png')});
+  await page.setViewportSize({width:390,height:844});
 
   await page.locator('[data-app="whatsapp"]').click();
   assert.equal(await page.locator('.pp-status-time').isVisible(),true,'app pages retain the status time');
@@ -136,9 +149,13 @@ try {
   assert.equal(await page.locator('.pp-haze-spark').count(),12);
   const burst = await launcher.evaluate(el=>el.classList.contains('pp-haze-burst'));
   assert.ok(burst,'click triggers the finite snow/star burst');
+  assert.equal(await launcher.evaluate(el=>getComputedStyle(el).zIndex),'3','snowflake blooms over the newly opened phone, not underneath it');
+  assert.ok(Number(await page.locator('.pp-frost-snow').evaluate(el=>getComputedStyle(el).opacity))>.1,'six-branch snowflake is perceptibly visible at 180ms');
   const bounding = await launcher.boundingBox();
   const clip={x:Math.max(0,bounding.x-44),y:Math.max(0,bounding.y-44),width:Math.min(126,390-Math.max(0,bounding.x-44)),height:Math.min(126,844-Math.max(0,bounding.y-44))};
   await page.screenshot({path:resolve(output,'enamel-floating-burst.png'),clip});
+  await page.waitForTimeout(540);
+  assert.equal(await launcher.evaluate(el=>el.classList.contains('pp-haze-burst')),false,'burst returns to normal stacking and visual state after 680ms');
   await page.getByRole('button',{name:'收起手机',exact:true}).click();
   await page.waitForTimeout(570);
   await launcher.evaluate(el=>el.classList.remove('pp-haze-burst'));

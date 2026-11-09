@@ -16,9 +16,9 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.29';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.30';
 import { icon } from './icons.js?v=1.2';
-import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.26';
+import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.30';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
 import { renderPhoneScreen } from './phone-view.js?v=1.2';
@@ -781,6 +781,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
         opened ? close() : open();
     }
+    // The open phone covers the launcher: lift only the active bloom above it,
+    // then restore the original stacking order when the 680ms SVG transition ends.
+    launcher.addEventListener('animationend', event => {
+        if (event.animationName === 'pp-frost-bloom') launcher.classList.remove('pp-haze-burst');
+    }, { signal: lifetime.signal });
     launcher.addEventListener('click', event => {
         event.stopPropagation();
         if (Date.now() < suppressClickUntil) return;
