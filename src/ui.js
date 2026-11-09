@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.22';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.23';
 import { icon } from './icons.js?v=1.2';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.22';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
@@ -377,8 +377,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderSettings() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-page-lead">按你的习惯设置手机</div><div class="pp-card"><label class="pp-setting-row"><span>启用榴莲手机</span><input type="checkbox" data-phone-enabled' + (settings.enabled ? ' checked' : '') + '></label></div>' +
-            (!settings.enabled ? '<p class="pp-footnote">榴莲手机已停用，已有数据保留。勾选后恢复使用。</p>' : '') + '<div class="pp-card">' +
+        content.innerHTML = '<div class="pp-page"><div class="pp-card">' +
             SECTIONS.map(section => '<button type="button" class="pp-setting-row" data-section="' + section.id + '"><span class="pp-section-icon">' + icon(section.icon) + '</span><span><strong>' + section.name + '</strong><small>' + section.note + '</small></span><span class="pp-row-chevron">' + icon('chevron') + '</span></button>').join('') +
             '</div><p class="pp-footnote">榴莲手机 ' + VERSION + ' · 开发测试版</p></div>';
     }
@@ -710,7 +709,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
-        if (target.hasAttribute('data-phone-enabled')) { persist({ enabled: target.checked }); render(); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.foodField){foodPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}

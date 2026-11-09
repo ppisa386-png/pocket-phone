@@ -42,6 +42,9 @@ try {
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
   assert.equal(await page.locator('.pp-app').count(),11);
   assert.equal(await page.locator('.pp-haze-art').count(),0);
+  assert.equal(await page.locator('.pp-status-time').isHidden(),true,'desktop top-left time is hidden');
+  assert.equal(await page.locator('.pp-big-time').isVisible(),true,'desktop central clock remains');
+  assert.equal(await page.locator('.pp-island').count(),1,'status island remains for dragging');
   await phone.screenshot({path:resolve(output,'enamel-classic-before.png')});
 
   await page.locator('[data-app="settings"]').click();
@@ -54,6 +57,9 @@ try {
   assert.equal(await page.locator('.pp-swatch[aria-pressed="true"]').getAttribute('data-wallpaper'),'haze');
   assert.equal(await page.locator('[data-wallpaper]').count()>=5,true);
   await page.getByRole('button',{name:'返回',exact:true}).click();
+  assert.equal(await page.locator('.pp-status-time').isVisible(),true,'settings retain the status time');
+  assert.equal(await page.locator('.pp-page-lead, [data-phone-enabled]').count(),0,'redundant settings rows removed');
+  assert.equal(await page.locator('.pp-page .pp-card').first().locator('[data-section="appearance"]').count(),1);
   await phone.screenshot({path:resolve(output,'enamel-settings.png')});
 
   await page.getByRole('button',{name:'回到桌面',exact:true}).click();
@@ -65,6 +71,7 @@ try {
   await phone.screenshot({path:resolve(output,'enamel-home-390.png')});
 
   await page.locator('[data-app="whatsapp"]').click();
+  assert.equal(await page.locator('.pp-status-time').isVisible(),true,'app pages retain the status time');
   assert.equal(await phone.getAttribute('data-active-app'),'whatsapp');
   const appBackground = await phone.evaluate(el=>getComputedStyle(el).backgroundColor);
   await phone.screenshot({path:resolve(output,'enamel-whatsapp.png')});

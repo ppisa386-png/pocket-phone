@@ -22,6 +22,8 @@ h2, p { margin: 0; }
 .pp-phone[data-home="true"] { background: var(--pp-wallpaper); color: #fff; }
 .pp-topline { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 16px 24px 4px; height: 46px; min-height: 46px; font-size: 11px; font-weight: 600; }
 .pp-island { position: absolute; width: 74px; height: 20px; left: calc(50% - 37px); top: 13px; border-radius: 12px; background: #090a0d; }
+/* Desktop already has a large clock; preserve the status time on every other screen. */
+.pp-phone[data-home="true"] .pp-status-time { display: none; }
 .pp-header { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; flex: 0 0 48px; padding: 0 10px; }
 .pp-title { grid-column: 2; font-weight: 600; font-size: 1.08em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pp-header > [data-action="close"] { grid-column: 3; }

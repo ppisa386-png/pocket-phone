@@ -22,3 +22,17 @@ test('floating phone reflows at its own dimensions instead of scaling a fixed-wi
     assert.match(css, /@container pp-phone \(max-height: 590px\)/);
     assert.match(ui, /phone\.style\.width = width \+ 'px'; phone\.style\.height = height \+ 'px';/);
 });
+
+test('settings remove redundant introduction and master switch, desktop alone hides status time', () => {
+    const index = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+    assert.ok(css.includes('.pp-phone[data-home="true"] .pp-status-time { display: none; }'));
+    assert.match(ui, /pp-status-time/);
+    assert.match(ui, /pp-home-clock/);
+    assert.match(ui, /pp-big-time/);
+    assert.match(ui, /\.pp-status-time'\)\.textContent = time/);
+    assert.doesNotMatch(ui, /按你的习惯设置手机|data-phone-enabled|榴莲手机已停用/);
+    assert.match(ui, /content\.innerHTML = '<div class="pp-page"><div class="pp-card">'/);
+    assert.match(ui, /SECTIONS\.map\(section =>/);
+    assert.match(index, /data-pp-enabled/);
+    assert.match(index, /controller\.setEnabled\(master\.checked\)/);
+});
