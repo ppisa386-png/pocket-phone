@@ -749,15 +749,27 @@ test('UV and AQI are deterministic local metrics that respond to solar time and 
     }
 });
 
-test('only active extreme weather maps to an orange or red alert level', () => {
+test('extreme weather warnings support all four color grades and respond to simulated intensity', () => {
     assert.equal(weatherWarning('rain'), null);
-    assert.deepEqual(weatherWarning('storm'), {
-        level: '橙色', color: 'orange', title: '暴雨',
+    assert.deepEqual(weatherWarning('storm', { wind: 4, humidity: 50 }), {
+        level: '黄色', color: 'yellow', grade: 'Ⅲ级', title: '暴雨',
         detail: '当前出现暴雨天气，留意强降雨和积水。', type: 'storm',
     });
-    assert.equal(weatherWarning('typhoon').level, '红色');
-    assert.equal(weatherWarning('severe').color, 'red');
-    assert.equal(weatherWarning('heat').color, 'orange');
+    assert.deepEqual(
+        [6, 8, 10, 12].map(wind => weatherWarning('dust', { wind }).color),
+        ['blue', 'yellow', 'orange', 'red'],
+    );
+    assert.deepEqual(
+        [34, 36, 41, 45].map(temp => weatherWarning('heat', { temp }).grade),
+        ['Ⅳ级', 'Ⅲ级', 'Ⅱ级', 'Ⅰ级'],
+    );
+    assert.deepEqual(
+        [-5, -15, -25, -35].map(temp => weatherWarning('cold', { temp }).color),
+        ['blue', 'yellow', 'orange', 'red'],
+    );
+    assert.equal(weatherWarning('typhoon', { wind: 8 }).level, '橙色');
+    assert.equal(weatherWarning('typhoon', { wind: 10 }).level, '红色');
+    assert.equal(weatherWarning('severe', { wind: 8 }).grade, 'Ⅰ级');
 });
 
 test('weather reports expose stable UV/AQI readings and the weather panel renders six matching metrics plus active alerts', async () => {
@@ -774,11 +786,11 @@ test('weather reports expose stable UV/AQI readings and the weather panel render
         assert.equal(base.report.uv, f.weather.report(state).report.uv);
         assert.equal(base.report.aqi, f.weather.report(state).report.aqi);
 
-        const make = type => createWeatherPanel({
+        const make = (type, overrides = {}) => createWeatherPanel({
             adapter: { weather: { report: () => ({
                 ...base,
                 report: { ...base.report, type, label: weatherType(type), extreme: weatherExtreme(type),
-                    uv: 7, uvLevel: '高', aqi: 138, aqiLevel: '轻度污染' },
+                    uv: 7, uvLevel: '高', aqi: 138, aqiLevel: '轻度污染', ...overrides },
             }) } },
             getView: () => ({ ...state, busy: false }), redraw() {},
             now: () => new Date(2026, 4, 1, 12),
@@ -791,13 +803,19 @@ test('weather reports expose stable UV/AQI readings and the weather panel render
         assert.match(normal, />138<|>7</);
         assert.doesNotMatch(normal, /pp-weather-warning/);
 
-        const orange = make('storm').html();
+        const blue = make('dust', { wind: 6 }).html();
+        assert.match(blue, /pp-weather-warning-blue/);
+        assert.match(blue, /蓝色预警 · Ⅳ级/);
+        const yellow = make('heat', { temp: 36 }).html();
+        assert.match(yellow, /pp-weather-warning-yellow/);
+        assert.match(yellow, /黄色预警 · Ⅲ级/);
+        const orange = make('storm', { wind: 8, humidity: 50 }).html();
         assert.match(orange, /pp-weather-warning-orange/);
-        assert.match(orange, /橙色预警/);
+        assert.match(orange, /橙色预警 · Ⅱ级/);
         assert.match(orange, /暴雨/);
-        const red = make('typhoon').html();
+        const red = make('typhoon', { wind: 10 }).html();
         assert.match(red, /pp-weather-warning-red/);
-        assert.match(red, /红色预警/);
+        assert.match(red, /红色预警 · Ⅰ级/);
         assert.match(red, /台风/);
     } finally { f.close(); }
 });
