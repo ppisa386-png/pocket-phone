@@ -1,5 +1,5 @@
-import { weatherScene, weatherType, weatherExtreme } from './weather.js?v=1.2.6';
-import { sceneIcon, sceneBackdrop, metricIcon, weatherPhoto } from './weather-art.js?v=1.2.12';
+import { weatherScene, weatherType, weatherExtreme, weatherWarning } from './weather.js?v=1.2.15';
+import { sceneIcon, sceneBackdrop, metricIcon, weatherPhoto } from './weather-art.js?v=1.2.15';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -143,17 +143,35 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
                     '</article>';
             }).join('') + '</div></section>' : '';
 
+        const uv = w.uv == null ? '—' : String(w.uv);
+        const aqi = w.aqi == null ? '—' : String(w.aqi);
+        const uvNote = w.uvLevel ? w.uvLevel + ' · UV指数' : '紫外线指数';
+        const aqiNote = w.aqiLevel ? w.aqiLevel + ' · AQI' : '空气质量指数';
         const metrics = '<section class="pp-weather-metrics" aria-label="天气指标">' +
             metric('feels', '体感温度', feels, '当前体感') +
             metric('precip', '降水情况', precip, '当前降水强度') +
             metric('wind', '风力', wind, '当前风力等级') +
             metric('humidity', '湿度', humidity, '空气相对湿度') +
+            metric('uv', '紫外线', uv, uvNote) +
+            metric('air', '空气质量', aqi, aqiNote) +
             '</section>';
+
+        const warning = weatherWarning(type);
+        const warningMarkup = warning
+            ? '<section class="pp-weather-warning pp-weather-warning-' + warning.color + '" role="status" aria-label="' +
+                escapeHtml(warning.level + '预警：' + warning.title) + '">' +
+                '<span class="pp-weather-warning-symbol" aria-hidden="true">!</span>' +
+                '<div class="pp-weather-warning-copy">' +
+                    '<div class="pp-weather-warning-head"><small>气象预警</small><b>' + escapeHtml(warning.level + '预警') + '</b></div>' +
+                    '<strong>' + escapeHtml(warning.title) + '</strong>' +
+                    '<p>' + escapeHtml(warning.detail) + '</p>' +
+                '</div></section>'
+            : '';
 
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '" data-photo="' + photo + '">' +
             background(type, theme) + '<div class="pp-weather-scroll">' +
             '<div class="pp-weather-scene">' + hero(w, theme, city, busy, today) + '</div>' +
-            statusMarkup() + hourly + week + metrics +
+            statusMarkup() + warningMarkup + hourly + week + metrics +
             '</div></section>';
     }
 
