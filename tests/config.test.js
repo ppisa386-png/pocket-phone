@@ -79,6 +79,15 @@ test('old immediate-delivery default migrates to the relaxed timing prompt',()=>
  assert.equal(normalizeSettings({prompts:{amazonDelivery:custom}}).prompts.amazonDelivery,custom);
 });
 
+test('saved outreach built-in prompt upgrades to notification-only default; custom remains untouched',()=>{
+    const previous='根据近期剧情与人物性格选择合适渠道，允许零人或多人。不为通知创造动机。';
+    assert.equal(normalizeSettings({prompts:{outreach:previous}}).prompts.outreach,PROMPTS.outreach.text);
+    assert.match(PROMPTS.outreach.text,/完整内容放在文尾隐藏标记/);
+    const custom='我的自定义角色联络提示词';
+    assert.equal(normalizeSettings({prompts:{outreach:custom}}).prompts.outreach,custom);
+    assert.equal(normalizeSettings({prompts:{outreach:''}}).prompts.outreach,'');
+});
+
 test('launcher style is independently selectable and preserves pre-update enamel users',()=>{
     assert.equal(normalizeSettings({}).launcherStyle,'classic');
     assert.equal(normalizeSettings({theme:'enamel'}).launcherStyle,'enamel','old enamel users keep the enamel ball');
