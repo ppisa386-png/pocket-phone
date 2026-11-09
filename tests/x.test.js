@@ -510,7 +510,7 @@ test('reactions leave the inactivity anchor alone and publishing resets it after
 });
 
 
-test('new post stats receive the recalled subject from the publication floor in the original request',async()=>{
+test('initial post stats include visible source prose without reading QQJ on the first refresh',async()=>{
  const f=setup(),previous=globalThis.qqj_v3_public_bridge_v1,lookups=[];
  try{
   const identity={hostChatId:'x-test'};
@@ -522,15 +522,15 @@ test('new post stats receive the recalled subject from the publication floor in 
   ok(await f.x.publish('他在舞台唱歌。'));const post=xItems(f.state(),'post')[0];
   f.reply(({quietPrompt})=>{
    if(quietPrompt.includes('逐条独立估计')){
-    assert.match(quietPrompt,/KNOWN_PERFORMER/);assert.doesNotMatch(quietPrompt,/UNRELATED_CHEF/);
+    assert.match(quietPrompt,/柯林在舞台唱歌/);assert.doesNotMatch(quietPrompt,/KNOWN_PERFORMER|UNRELATED_CHEF/);
     return JSON.stringify({initialFollowers:4,stats:[{postId:post.id,likes:5000,reposts:43,replies:9,gained:41,lost:2}]});
    }
    if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]});
    return JSON.stringify(quietPrompt.includes('当前任务：X 广场')?{posts:[],replies:[]}:feedResult());
   });
   ok(await f.x.refreshPublic());assert.equal(f.count(),4);assert.equal(f.state().x.audience.followers,43);
-  assert.ok(lookups.length);assert.ok(lookups.every(o=>o.entityIds.join()==='c'&&!o.query.includes('stats')));
-  const reads=lookups.length;assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),4);assert.equal(lookups.length,reads);
+  assert.equal(lookups.length,0,'first floor assessment uses visible story only');
+  assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),4);assert.equal(lookups.length,0);
  }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
 });
 
@@ -731,6 +731,7 @@ test('narrative 4000 replies remain visible through both first stats and later r
    if(quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[]});
    if(quietPrompt.includes('趋势评估资料'))return JSON.stringify(trendResult([post,other],false));
    if(quietPrompt.includes('逐条独立估计')){estimates++;return JSON.stringify({initialFollowers:100,stats:[post,other].map(p=>({postId:p.id,likes:120,reposts:15,replies:35,gained:4,lost:1}))});}
+   if(quietPrompt.includes('当前任务：X 未结算剧情楼层'))return JSON.stringify({effects:[]});
    return JSON.stringify(feedResult({posts:[],engagementUpdates:[{postId:post.id,metrics:{likes:140,reposts:20,replies:50}}]}));
   });
   ok(await f.x.refreshPublic());
@@ -739,7 +740,7 @@ test('narrative 4000 replies remain visible through both first stats and later r
   const impact=structuredClone(xItems(f.state(),'influence'));
   f.context.chat.push({mes:'Still the same day.'});ok(await f.x.refreshPublic());
   assert.deepEqual(f.state().x[post.id].metrics,{likes:140,reposts:20,replies:4000});
-  assert.equal(f.state().x.audience.followers,106);assert.deepEqual(xItems(f.state(),'influence'),impact);assert.equal(estimates,1);assert.equal(f.count(),7);
+  assert.equal(f.state().x.audience.followers,106);assert.deepEqual(xItems(f.state(),'influence'),impact);assert.equal(estimates,1);assert.equal(f.count(),8);
   f.reply(feedResult({posts:[],engagementUpdates:[{postId:post.id,metrics:{likes:150,reposts:25,replies:5000}}]}));ok(await f.x.refresh());
   assert.equal(f.state().x[post.id].metrics.replies,5000);assert.equal(f.state().x.audience.followers,106);
   f.context.chat.pop();await f.memory.read();assert.equal(f.state().x[post.id].metrics.replies,4000);
@@ -953,7 +954,7 @@ test('first floor refresh ignores QQJ, upgrades work on the same legacy floor, a
  try{
   f.context.chat[0].mes='2026-06-01\nA first public X post.';
   ok(await f.x.publish('A song is released.'));const post=xItems(f.state(),'post')[0];
-  const results=[feedResult(),{posts:[]},{initialFollowers:100,stats:[{postId:post.id,likes:120,reposts:14,replies:5,gained:20,lost:0}]},{topics:worldTopics(),evaluations:[]}];
+  const results=[feedResult(),{posts:[]},{initialFollowers:100,stats:[{postId:post.id,likes:120,reposts:14,replies:5,gained:20,lost:0}]},{topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
   f.reply(()=>JSON.stringify(results.shift()));
   globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('First refresh must not read QQJ');},
    getPeopleSnapshot(){reads++;throw Error('First refresh must not read QQJ');}};
@@ -961,10 +962,10 @@ test('first floor refresh ignores QQJ, upgrades work on the same legacy floor, a
   assert.equal(f.state().x.audience.followers,120);
   assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
   f.context.chat.push({mes:'2026-06-02\nThe song remains viral. More people follow its singer.'});await f.memory.read();
-  const update=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:17,lost:2}]},{topics:worldTopics(),evaluations:[]}];
+  const update=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:17,lost:2}]},{topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
   f.reply(()=>JSON.stringify(update.shift()));
   ok(await f.x.refreshPublic());
-  assert.equal(f.state().x.audience.followers,135);
+  assert.equal(f.state().x.audience.followers,149); // 120 + 14 scheduled day-two reach + 15 new floor impact
   assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,1]]);
   const count=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),count);
   f.context.chat.pop();await f.memory.read();

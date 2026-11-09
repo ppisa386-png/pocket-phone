@@ -435,8 +435,14 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(pending.length||!xAudience(staged)){
                 const contract='只返回一个 JSON 对象，stats 数组必须恰好覆盖列出的每个 postId，各一次。每项只填 postId、likes、reposts、replies、gained、lost，均为非负整数。初始粉丝未知时另填 initialFollowers。无需理由、等级、传播预测或分类。';
                 const inputs=pending.map(({id,text,imageDescription,sourceIndex})=>({postId:id,text,imageDescription,sourceIndex}));
+                const sources=new Set(inputs.map(p=>p.sourceIndex).filter(Number.isInteger));
+                const prose=storyEvidenceRows(chat).filter(r=>r.index<=floor);
+                const visible=[...new Map([...prose.filter(r=>sources.has(r.index)),...prose.slice(-12)]
+                    .map(r=>[r.index,{sourceIndex:r.index,role:r.role,text:r.text.slice(0,4000)}])).values()]
+                    .sort((a,b)=>a.sourceIndex-b.sourceIndex);
                 const task=(xAudience(staged)?'':AUDIENCE_RULES)+'\n'+REACH_CONTEXT+'\n逐条独立估计当前帖子的点赞、转发、回复和首日新增关注、取关人数。结合实际发布内容、设定、世界书和本帖所指剧情。五项数字不按固定比例，账号粉丝数不是热度上限。不把后台私事或匿名身份当作公开事实。'+
-                    '\n资料：'+JSON.stringify({posts:inputs,alias:profile(staged).alias,bio:profile(staged).bio,followers:xAudience(staged)?.followers??null})+'\n'+contract;
+                    '\n资料：'+JSON.stringify({posts:inputs,alias:profile(staged).alias,bio:profile(staged).bio,followers:xAudience(staged)?.followers??null})+
+                    '\n当前可见正文：'+JSON.stringify(visible)+'\n'+contract;
                 const impactChanges=await refreshRequest(task,d=>{
                     if(!Array.isArray(d.stats)||d.stats.length!==pending.length||new Set(d.stats.map(r=>r?.postId)).size!==pending.length||
                         !d.stats.every(r=>pending.some(p=>p.id===r?.postId)))throw Error('推文评估缺少、重复或错用了帖子ID。');
