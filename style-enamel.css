@@ -156,3 +156,100 @@
  .pp-layer[data-launcher="enamel"] .pp-haze-burst .pp-haze-spark{animation:none!important}
  .pp-layer[data-skin="enamel"] .pp-home .pp-app-icon{transition:none}
 }
+
+/* Frost Bloom / 霜华晶球 — isolated to the independently selected enamel launcher.
+   The phone skin, its application badges, all classic launchers remain unchanged. */
+.pp-layer[data-launcher="enamel"] .pp-launcher{
+  border-radius:50%;
+  background:transparent;
+  border:0;
+  box-shadow:none;
+  overflow:visible;
+  -webkit-tap-highlight-color:transparent;
+}
+.pp-layer[data-launcher="enamel"] .pp-launcher:hover{
+  box-shadow:none;
+}
+/* The shadow belongs to the circular setting, not the snowflake state. */
+.pp-layer[data-launcher="enamel"] .pp-frost-orb{
+  filter:drop-shadow(0 2px 1.3px rgba(75,84,104,.14));
+}
+.pp-layer[data-launcher="enamel"] .pp-launcher:focus-visible{
+  outline:2px solid #7896a6;
+  outline-offset:3px;
+}
+.pp-layer[data-launcher="enamel"] .pp-frost-bloom{
+  display:block;
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+.pp-layer[data-launcher="enamel"] .pp-frost-art{
+  display:block;
+  width:100%;
+  height:100%;
+  overflow:visible;
+  shape-rendering:geometricPrecision;
+}
+.pp-layer[data-launcher="enamel"] .pp-frost-orb,
+.pp-layer[data-launcher="enamel"] .pp-frost-snow{
+  transform-box:view-box;
+  transform-origin:50% 50%;
+}
+.pp-layer[data-launcher="enamel"] .pp-frost-orb{
+  opacity:1;
+}
+.pp-layer[data-launcher="enamel"] .pp-frost-snow{
+  opacity:0;
+  transform:scale(.36) rotate(-15deg);
+}
+/* Suppress the legacy launcher-wide squash/glow. Animate only crystal artwork. */
+.pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst{
+  animation:none;
+  transform:none;
+  filter:none;
+}
+.pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-orb{
+  animation:pp-frost-fold 680ms cubic-bezier(.21,.62,.28,1) both;
+}
+.pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-snow{
+  animation:pp-frost-bloom 680ms cubic-bezier(.19,.78,.28,1) both;
+}
+@keyframes pp-frost-fold{
+  0%{opacity:1;transform:scale(1) rotate(0)}
+  13%{opacity:1;transform:scale(.92) rotate(-2deg)}
+  28%,72%{opacity:0;transform:scale(.24) rotate(-17deg)}
+  88%{opacity:.2;transform:scale(.65) rotate(-4deg)}
+  100%{opacity:1;transform:scale(1) rotate(0)}
+}
+@keyframes pp-frost-bloom{
+  0%,14%{opacity:0;transform:scale(.22) rotate(-20deg)}
+  26%{opacity:.66;transform:scale(.52) rotate(-12deg)}
+  44%{opacity:1;transform:scale(1.14) rotate(1deg)}
+  56%,71%{opacity:1;transform:scale(1.24) rotate(0)}
+  88%{opacity:.3;transform:scale(1.12) rotate(3deg)}
+  100%{opacity:0;transform:scale(.73) rotate(7deg)}
+}
+/* Legacy 12 micro-ice flashes are restrained supporting glints, not the snowflake. */
+.pp-layer[data-launcher="enamel"] .pp-haze-spark{
+  stroke:#bbc7d4;
+  fill:#edf8fa;
+  filter:none;
+}
+.pp-layer[data-launcher="enamel"] .pp-haze-spark.is-snow{
+  stroke:#a8d4cf;
+  fill:none;
+}
+.pp-layer[data-launcher="enamel"] .pp-haze-burst .pp-haze-spark{
+  animation-duration:640ms;
+  opacity:0;
+}
+@media (prefers-reduced-motion:reduce){
+  .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-orb,
+  .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-snow,
+  .pp-layer[data-launcher="enamel"] .pp-haze-burst .pp-haze-spark{
+    animation:none!important;
+  }
+  .pp-layer[data-launcher="enamel"] .pp-frost-orb{opacity:1;transform:none}
+  .pp-layer[data-launcher="enamel"] .pp-frost-snow{opacity:0;transform:none}
+}

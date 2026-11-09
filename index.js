@@ -15,12 +15,12 @@ import { createChatApp } from './src/chat-apps.js?v=1.2';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.25';
-import { mountPhone } from './src/ui.js?v=1.2.25';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.26';
+import { mountPhone } from './src/ui.js?v=1.2.26';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.25';
 import { createPhoneService } from './src/phone.js?v=1.2';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.21';
-import { normalizeSettings } from './src/config.js?v=1.2.25';
+import { normalizeSettings } from './src/config.js?v=1.2.26';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.25';
 
@@ -64,7 +64,7 @@ async function start() {
         }
         const [response, enamelResponse] = await Promise.all([
             fetch(new URL('./style.css?v=1.2.23', import.meta.url), { cache: 'no-cache' }),
-            fetch(new URL('./style-enamel.css?v=1.2.24', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-enamel.css?v=1.2.26', import.meta.url), { cache: 'no-cache' }),
         ]);
         if (!response.ok || !enamelResponse.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text() + '\n' + await enamelResponse.text();

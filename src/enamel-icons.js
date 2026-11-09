@@ -1,3 +1,4 @@
+import { frostBloomLauncherArt } from './frost-bloom.js?v=1.2.26';
 /*
  * Soft Haze Enamel — opt-in launcher art.
  * Original vector artwork, no third-party asset/license required.
@@ -29,7 +30,7 @@ export function enamelIcon(name) {
     '<path d="' + outline + '" fill="none" stroke="#fff7e9" stroke-width=".95" opacity=".59"/>' + detail + '</svg>';
 }
 export function enamelLauncherArt() {
-  return '<span class="pp-haze-launcher-art" aria-hidden="true"><svg viewBox="0 0 36 36"><defs><linearGradient id="pp-haze-ball" x1="0" x2="1" y2="1"><stop stop-color="#e4dbe8"/><stop offset=".63" stop-color="#a99caf"/><stop offset="1" stop-color="#7d778a"/></linearGradient></defs><path d="M18 2c8 0 16 8 16 16s-8 16-16 16S2 26 2 18 10 2 18 2Z" fill="url(#pp-haze-ball)" stroke="#c9a678" stroke-width="1.3"/><path d="M18 7 20.7 15.3 29 18l-8.3 2.7L18 29l-2.7-8.3L7 18l8.3-2.7Z" fill="#faf4e7" stroke="#c5a77b" stroke-width=".55"/><circle cx="18" cy="18" r="2.3" fill="#b7afc1"/></svg></span>';
+  return frostBloomLauncherArt();
 }
 export function enamelParticles() {
   const points = [[0,-30,12], [20,-22,-26], [31,-5,33], [26,18,-19], [9,31,24], [-13,29,-23], [-29,12,19], [-30,-10,-17],[-16,-28,28],[29,29,18],[-30,28,-12],[9,-34,17]];
