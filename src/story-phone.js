@@ -166,7 +166,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                         if(!state.x?.[account.id]&&state.x?.profile?.alias!==context.name1)
                             account.identityKnown=false;
                     }
-                    changes.push(...commRecordPatch(row.platform,id,message.accountId,row.category,row.shown===false?false:true));
+                    changes.push(...commRecordPatch(row.platform,id,message.accountId,row.category,out?true:row.shown===false?false:true));
                 }
             }
             journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+id,{ignored:true})],id);
@@ -223,7 +223,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                 // the complete message twice. The valid contact tag carries it.
                 if(typeof row.text!=='string'||!row.text.trim()||row.text.length>6000)continue;
                 changes.push(set('messages',recordId,{id:recordId,contactId:id,participant,name:participant.name,role:outgoing?'user':'assistant',text:row.text.trim(),proactive:incoming,replyable:row.replyable!==false,origin:'narrative',createdAt:now,storyTime:clock,read:outgoing||row.read===true,...(outgoing?{replyStatus:'sent'}:{}),acquisition}));
-                changes.push(...commRecordPatch('sms',recordId,id,row.category||row.sms_category,row.outreachId?row.shown===true:row.shown));
+                changes.push(...commRecordPatch('sms',recordId,id,row.category||row.sms_category,outgoing?true:row.outreachId?row.shown===true:row.shown));
             }else{
                 if(!['ringing','missed','declined','connected','ended'].includes(row.status))continue;
                 const previous=row.call_id?state.calls[row.call_id]:null;
