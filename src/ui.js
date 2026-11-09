@@ -16,8 +16,9 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.17';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.22';
 import { icon } from './icons.js?v=1.2';
+import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.22';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
 import { renderPhoneScreen } from './phone-view.js?v=1.2';
@@ -81,7 +82,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const layer = document.createElement('div');
     layer.className = 'pp-layer';
     layer.style.setProperty('--pp-launcher-size', LAUNCHER_SIZE + 'px');
-    layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + '<span class="pp-launcher-badge" hidden></span></button>' +
+    layer.innerHTML = '<button type="button" class="pp-launcher" aria-label="打开榴莲手机" title="打开榴莲手机 · 拖动可移动" aria-expanded="false">' + icon('launcher') + enamelLauncherArt() + enamelParticles() + '<span class="pp-launcher-badge" hidden></span></button>' +
         '<section class="pp-phone" role="dialog" aria-label="榴莲手机" hidden>' +
         '<div class="pp-phone-scale">' +
         '<div class="pp-topline"><span class="pp-status-time"></span><span class="pp-island"></span></div>' +
@@ -337,8 +338,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     // 窗口宽高直接驱动 CSS 容器查询，所有 App 原生自适应排版。
     function applyAppearance() {
-        layer.dataset.theme = settings.theme;
-        layer.dataset.wallpaper = settings.wallpaper;
+        // Opt-in enamel mode inherits classic LIGHT App colors while only its
+        // home/system chrome uses the new skin. Branded interiors are untouched.
+        layer.dataset.theme = settings.theme === 'enamel' ? 'light' : settings.theme;
+        layer.dataset.skin = settings.theme === 'enamel' ? 'enamel' : 'classic';
+        layer.dataset.wallpaper = settings.theme === 'enamel' ? settings.enamelWallpaper : settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
         layer.style.setProperty('--pp-phone-height', settings.phoneHeight + 'px');
@@ -361,7 +365,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     function appButton(app) {
         const unread = app.id === 'messages' ? unreadMessages(phoneView.messages) : app.id === 'phone' ? unreadCalls() : chatPanels[app.id] ? chatUnread(phoneView,app.id) : app.id === 'snapchat' ? snapUnread(phoneView) : app.id === 'x' ? xUnread(phoneView) : 0;
         const badge = unread ? '<span class="pp-app-badge" aria-label="' + unread + (app.id === 'phone' ? ' 条待处理来电' : ' 条未读消息') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '';
-        return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + badge + '</span><span class="pp-app-name">' + app.name + '</span></button>';
+        return '<button type="button" class="pp-app" data-app="' + app.id + '" aria-label="打开' + app.name + '"><span class="pp-app-icon pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + (settings.theme === 'enamel' ? enamelIcon(app.id) || icon(app.id) : icon(app.id)) + badge + '</span><span class="pp-app-name">' + app.name + '</span></button>';
     }
 
     function renderHome() {
@@ -384,9 +388,12 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     function renderAppearance() {
+        const isEnamel = settings.theme === 'enamel';
+        const appearanceWallpapers = isEnamel ? [['haze','柔雾纸'],['violet','暮紫'],['ocean','海蓝'],['sand','暖砂'],['graphite','石墨']] : [['violet','暮紫'],['ocean','海蓝'],['sand','暖砂'],['graphite','石墨']];
+        const selectedWallpaper = isEnamel ? settings.enamelWallpaper : settings.wallpaper;
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
-            selectField('theme', '主题', [['dark', '深色'], ['light', '浅色']], settings.theme) +
-            '<div class="pp-field pp-wallpaper-field"><span>壁纸</span><div class="pp-swatches">' + [['violet', '暮紫'], ['ocean', '海蓝'], ['sand', '暖砂'], ['graphite', '石墨']].map(([value, name]) => '<button type="button" class="pp-swatch" data-wallpaper="' + value + '" aria-label="' + name + '壁纸" aria-pressed="' + (settings.wallpaper === value) + '"><span></span><small>' + name + '</small></button>').join('') + '</div></div>' +
+            selectField('theme', '主题', [['dark', '深色 · 原有'], ['light', '浅色 · 原有'], ['enamel', '柔雾珐琅 · 新增']], settings.theme) +
+            '<div class="pp-field pp-wallpaper-field"><span>壁纸</span><div class="pp-swatches">' + appearanceWallpapers.map(([value, name]) => '<button type="button" class="pp-swatch" data-wallpaper="' + value + '" aria-label="' + name + '壁纸" aria-pressed="' + (selectedWallpaper === value) + '"><span></span><small>' + name + '</small></button>').join('') + '</div></div>' +
             '<label class="pp-field"><span>字号 <output data-output="fontSize">' + settings.fontSize + '</output></span><input type="range" min="14" max="20" step="1" data-setting="fontSize" value="' + settings.fontSize + '"></label>' +
             '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="640" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度；拖动手机右下角手柄可像小窗一样调整大小。</p></div>';
     }
@@ -620,8 +627,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
         if (target.dataset.app) navigate(target.dataset.app === 'settings' ? 'settings' : 'app:' + target.dataset.app);
         if (target.dataset.section) navigate(target.dataset.section);
-        if (target.dataset.wallpaper && persist({ wallpaper: target.dataset.wallpaper })) {
-            shadow.querySelectorAll('[data-wallpaper]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.wallpaper === settings.wallpaper)));
+        if (target.dataset.wallpaper) {
+            const key = settings.theme === 'enamel' ? 'enamelWallpaper' : 'wallpaper';
+            if (persist({ [key]: target.dataset.wallpaper })) {
+                shadow.querySelectorAll('[data-wallpaper]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.wallpaper === settings[key])));
+            }
         }
         if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; selectedCallId = null; renderPhone(); }
         if (target.hasAttribute('data-phone-sync')) openContactSearch();
@@ -723,6 +733,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             if (['proactiveEnabled'].includes(key)) value = value === 'true';
             if (persist({ [key]: value })) {
                 if(key==='proactiveEnabled')renderContactSettings();
+                if(key==='theme')renderAppearance();
                 const output = shadow.querySelector('[data-output="' + key + '"]');
                 if (output) output.textContent = settings[key];
             }
@@ -756,10 +767,18 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
     }, { signal: lifetime.signal });
 
+    function toggleLauncher() {
+        if (settings.theme === 'enamel' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            launcher.classList.remove('pp-haze-burst');
+            void launcher.offsetWidth; // reset only this short CSS animation
+            launcher.classList.add('pp-haze-burst');
+        }
+        opened ? close() : open();
+    }
     launcher.addEventListener('click', event => {
         event.stopPropagation();
         if (Date.now() < suppressClickUntil) return;
-        opened ? close() : open();
+        toggleLauncher();
     }, { signal: lifetime.signal });
 
     launcher.addEventListener('pointerdown', event => {
@@ -788,7 +807,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             persist({ position: { x: rect.left / Math.max(1, window.innerWidth - LAUNCHER_SIZE), y: rect.top / Math.max(1, window.innerHeight - LAUNCHER_SIZE) } });
         } else if (event.type === 'pointerup') {
             // Handle a tap here: Android browsers may omit the later click.
-            opened ? close() : open();
+            toggleLauncher();
         }
         pendingLauncherClick = true;
         suppressClickUntil = Date.now() + 750;
