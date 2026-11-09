@@ -146,6 +146,9 @@ try {
   assert.equal(await page.locator('.pp-haze-launcher-art:visible').count(),1);
   await page.waitForTimeout(570);
   await page.screenshot({path:resolve(output,'enamel-floating-closed.png')});
+  // Test-only framing: move the launcher away from the viewport edge so the
+  // entire 36px orb and sixfold bloom are visible in un-clipped real captures.
+  await launcher.evaluate(el=>{el.style.left='160px';el.style.top='290px';});
   await launcher.click();
   await page.waitForTimeout(180);
   assert.equal(await page.locator('.pp-haze-spark').count(),12);
@@ -156,7 +159,10 @@ try {
   const bounding = await launcher.boundingBox();
   const clip={x:Math.max(0,bounding.x-44),y:Math.max(0,bounding.y-44),width:Math.min(126,390-Math.max(0,bounding.x-44)),height:Math.min(126,844-Math.max(0,bounding.y-44))};
   await page.screenshot({path:resolve(output,'enamel-floating-burst.png'),clip});
-  await page.waitForTimeout(540);
+  await page.waitForTimeout(180);
+  assert.ok(Number(await page.locator('.pp-frost-snow').evaluate(el=>getComputedStyle(el).opacity))>.9,'snowflake reaches its visible mid-bloom peak');
+  await page.screenshot({path:resolve(output,'enamel-floating-burst-peak.png'),clip});
+  await page.waitForTimeout(360);
   assert.equal(await launcher.evaluate(el=>el.classList.contains('pp-haze-burst')),false,'burst returns to normal stacking and visual state after 680ms');
   await page.getByRole('button',{name:'收起手机',exact:true}).click();
   await page.waitForTimeout(570);
