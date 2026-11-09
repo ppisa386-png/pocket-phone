@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {frostBloomLauncherArt} from '../src/frost-bloom.js';
 import {enamelLauncherArt,enamelParticles} from '../src/enamel-icons.js';
-import {normalizeSettings} from '../src/config.js';
+import {normalizeSettings,appearanceSettingsPatch} from '../src/config.js';
 
 const css=readFileSync(new URL('../style-enamel.css',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
@@ -35,6 +35,22 @@ test('original enamel option is replaced in place, not added, while saved values
   assert.equal(normalizeSettings({launcherStyle:'classic',theme:'enamel'}).launcherStyle,'classic');
   assert.match(ui,/if \(dragging\.moved\)/);
   assert.equal((enamelParticles().match(/class="pp-haze-spark /g)||[]).length,12);
+});
+
+test('entering Soft Haze Enamel selects Frost Bloom; the manual style control remains usable',()=>{
+  const original=normalizeSettings({theme:'light',launcherStyle:'classic'});
+  const selected=normalizeSettings({...original,...appearanceSettingsPatch(original,'theme','enamel')});
+  assert.equal(selected.theme,'enamel');
+  assert.equal(selected.launcherStyle,'enamel');
+  const manual=normalizeSettings({...selected,...appearanceSettingsPatch(selected,'launcherStyle','classic')});
+  assert.equal(manual.launcherStyle,'classic','manual classic choice is honored while already on enamel');
+  assert.deepEqual(appearanceSettingsPatch(manual,'theme','enamel'),{theme:'enamel'},'same-theme selection does not override manual choice');
+  const light=normalizeSettings({...manual,...appearanceSettingsPatch(manual,'theme','light')});
+  assert.equal(light.launcherStyle,'classic','leaving enamel does not change preference');
+  const reentered=normalizeSettings({...light,...appearanceSettingsPatch(light,'theme','enamel')});
+  assert.equal(reentered.launcherStyle,'enamel','re-entering enamel chooses its included launcher');
+  assert.equal(normalizeSettings({...reentered,launcherStyle:'classic'}).launcherStyle,'classic','saved explicit choices remain valid');
+  assert.match(ui,/persist\(appearanceSettingsPatch\(settings, key, value\)\)/);
 });
 
 test('animation is scoped to selected launcher and respects reduced motion and keyboard focus',()=>{
