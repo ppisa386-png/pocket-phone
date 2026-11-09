@@ -31,7 +31,12 @@ try {
   page.on('request',request=>assert.ok(request.url().startsWith(origin),'no external asset requests: '+request.url()));
   await page.goto(origin+'/preview.html');
   const phone = page.locator('.pp-phone');
-  await phone.waitFor({state:'visible'});
+  try { await phone.waitFor({state:'visible',timeout:12000}); }
+  catch (error) {
+    const state = await page.evaluate(()=>({title:document.title,phoneRoot:!!document.querySelector('#personal-pocket-phone-root'),bodyText:document.body.innerText.slice(0,250),scripts:document.scripts.length}));
+    console.error('Browser bootstrap diagnostics', JSON.stringify({errors,state}));
+    throw error;
+  }
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
   assert.equal(await page.locator('.pp-app').count(),11);
   assert.equal(await page.locator('.pp-haze-art').count(),0);
