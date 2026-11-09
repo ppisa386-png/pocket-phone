@@ -62,9 +62,12 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=1.2.22', import.meta.url), { cache: 'no-cache' });
-        if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
-        const styles = await response.text();
+        const [response, enamelResponse] = await Promise.all([
+            fetch(new URL('./style.css?v=1.2.22', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-enamel.css?v=1.2.22', import.meta.url), { cache: 'no-cache' }),
+        ]);
+        if (!response.ok || !enamelResponse.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
+        const styles = await response.text() + '\n' + await enamelResponse.text();
         let hostModule=null;
         try { hostModule=await import(new URL('../../../../script.js',import.meta.url).href); }
         catch { /* Keep compatibility with hosts without public generation exports. */ }
