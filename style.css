@@ -1783,7 +1783,7 @@ h2, p { margin: 0; }
 .pp-x .pp-x-sr-only{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%);white-space:nowrap}
 .pp-x .pp-x-compose textarea{min-height:72px;padding:9px 0 7px!important;background:#fff!important;border:0!important;border-radius:0!important;font-size:15px!important;line-height:1.6;resize:none}
 .pp-x .pp-x-compose textarea::placeholder{color:#536471;opacity:1}
-.pp-x .pp-x-compose-bottom{display:flex;gap:8px;justify-content:space-between;align-items:center;border-top:1px solid #eff3f4;padding-top:9px}
+.pp-x .pp-x-compose-bottom{display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid #eff3f4;padding-top:9px}
 .pp-x .pp-x-compose-bottom small{font-size:11px;color:#1d9bf0}
 .pp-x .pp-snap-primary{background:#0f1419;color:#fff;font-size:13px;font-weight:700;min-height:36px;padding:8px 18px;border:0;border-radius:22px}
 .pp-x .pp-x-compose .pp-snap-primary{background:#1d9bf0;min-width:68px;justify-self:end}

@@ -84,7 +84,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         }
         const social = ['x','snapchat','whatsapp','wechat'].includes(app);
         const conversation=social||['phone','messages','incoming'].includes(app);
-        if(!options.establishedImport&&app!=='daily'){
+        if(!options.establishedImport&&!options.skipExternalMemory&&app!=='daily'){
             if(app==='x'&&options.postQueries?.length){
                 prompt+=await postMemoryPrompt(context,getSettings(),options.postQueries,isCurrent,undefined,Object.values(state.x||{}).filter(a=>a.type==='account'&&!a.crowd));
             }else if(conversation){

@@ -2,6 +2,7 @@ import {visibleXComments,X_COMMENT_LIMIT} from './x-comments.js?v=1.2';
 import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.2';
 import {pageFields,objectFields} from './x-edit.js?v=1.2';
 import {refreshFloor} from './x-influence.js?v=1.2';
+import {X_FLOOR_LEDGER,hasUnsettledFloors} from './x-floor.js?v=1.2';
 import { icon } from './icons.js?v=1.2';
 import { squareStatus, squareExpiry } from './square-core.js?v=1.2';
 import { displayStoryTime } from './story-clock.js?v=1.2';
@@ -104,8 +105,8 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         else if(tab==='messages')body=inbox(state);
         else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3></div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>squareFeedPost(state,p)).reverse());
         else {
-            const composer='<div class="pp-x-feed-composer"><span class="pp-x-compose-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><form class="pp-snap-form pp-x-compose" data-x-form="post"><label class="pp-field"><span class="pp-x-sr-only">新帖内容</span><textarea name="post" data-x-field="post" rows="3" maxlength="6000" placeholder="有什么新鲜事？">'+xEscape(value('post'))+'</textarea></label><div class="pp-x-compose-bottom"><small>公开发布</small><button type="submit" class="pp-snap-primary"'+disabled()+'>发帖</button></div></form></div>';
-            body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||state.x?.['public-refresh']?.floor===floor)+'</div>'+composer+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+            const composer='<div class="pp-x-feed-composer"><span class="pp-x-compose-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><form class="pp-snap-form pp-x-compose" data-x-form="post"><label class="pp-field"><span class="pp-x-sr-only">新帖内容</span><textarea name="post" data-x-field="post" rows="3" maxlength="6000" placeholder="有什么新鲜事？">'+xEscape(value('post'))+'</textarea></label><div class="pp-x-compose-bottom"><button type="submit" class="pp-snap-primary"'+disabled()+'>发帖</button></div></form></div>';
+            body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||(!!state.x?.[X_FLOOR_LEDGER]&&state.x?.['public-refresh']?.floor===floor&&!hasUnsettledFloors(adapter.storyChat?.()||[],state.x[X_FLOOR_LEDGER],floor)&&!xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id])))+'</div>'+composer+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
         }
         if(editor){
             const inputs=editor.fields.map((f,i)=>'<label class="pp-field"><span>'+xEscape(f.label)+'</span>'+(f.number?'<input type="number" min="0" max="1000000000"':'<textarea rows="2" maxlength="6000"')+' name="f'+i+'" data-x-field="f'+i+'"'+(f.number?' value="'+xEscape(editor.values[i])+'">':'>'+xEscape(editor.values[i])+'</textarea>')+'</label>').join('');

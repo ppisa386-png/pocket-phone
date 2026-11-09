@@ -1,6 +1,8 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2';
+import {X_FLOOR_LEDGER,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
+import {readXMemory} from './external-memory.js?v=1.2';
 import {dmDealTask,dealDecision} from './x-business.js?v=1.2.4';
 import {JOURNAL_KEY} from './journal.js?v=1.2';
 import {readStoryClock} from './story-clock.js?v=1.2';
@@ -406,30 +408,77 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         editPage(scope,edits){return run(async(state,_current,_request,commit)=>{await commit(scope?.kind?objectEdits(state,scope,edits):pageEdits(state,scope,edits));});},
         refreshPublic(){return run(async(state,current,request,commit)=>{
             const context=getContext(),chat=context.chat,floor=refreshFloor(chat);
-            if(floor<0||state.x['public-refresh']?.floor===floor)throw Error('当前楼层没有新的刷新机会。');
-            const persona=context.powerUserSettings?.persona_description,valid=()=>current()&&getContext().powerUserSettings?.persona_description===persona;
+            const oldLedger=state.x[X_FLOOR_LEDGER],firstUse=oldLedger?.type!=='floor-ledger';
+            const legacyFloor=firstUse&&Number.isInteger(state.x['public-refresh']?.floor)
+                ?Math.min(floor,state.x['public-refresh'].floor):-1;
+            const baseRanges=firstUse?(legacyFloor>=0?[[0,legacyFloor]]:[]):coveredFloors(oldLedger.ranges);
+            const batch=pendingFloorBatch(chat,baseRanges,floor);
+            const newPosts=xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id]);
+            if(floor<0||(!firstUse&&state.x['public-refresh']?.floor===floor&&!batch.rows.length&&!newPosts))
+                throw Error('当前楼层没有新的刷新机会。');
+            // A first-use or upgraded journal has no floor ledger. Its first
+            // refresh must work even when the legacy refresh marker matches.
+            // None of this first run may query the QQJ bridge.
+            const refreshRequest=firstUse?(prompt,validate,check,contact,options={})=>
+                request(prompt,validate,check,contact,{...options,skipExternalMemory:true}):request;
+            const persona=context.powerUserSettings?.persona_description;
+            const valid=()=>current()&&getContext().powerUserSettings?.persona_description===persona;
             const staged=structuredClone(state),changes=[],clock=squareClock(chat);
+            const previouslyAssessed=xItems(staged,'post').filter(p=>p.author==='user'&&staged.x['impact:post:'+p.id]);
             const collect=rows=>{for(const row of rows){
                 if(!staged.x[row.key]&&row.value?.type==='comment'){row.value.sourceIndex=chat.length-1;row.value.postedAtStory=clock;}
                 staged.x[row.key]=row.value;changes.push(row);
             }};
-            const home=await refreshFeedStage(staged,valid,request,collect,false,true);
-            await refreshFeedStage(staged,valid,request,collect,'square',true);
+            const home=await refreshFeedStage(staged,valid,refreshRequest,collect,false,true);
+            await refreshFeedStage(staged,valid,refreshRequest,collect,'square',true);
             const pending=xItems(staged,'post').filter(p=>p.author==='user'&&!staged.x['impact:post:'+p.id]);
             if(pending.length||!xAudience(staged)){
                 const contract='只返回一个 JSON 对象，stats 数组必须恰好覆盖列出的每个 postId，各一次。每项只填 postId、likes、reposts、replies、gained、lost，均为非负整数。初始粉丝未知时另填 initialFollowers。无需理由、等级、传播预测或分类。';
                 const inputs=pending.map(({id,text,imageDescription,sourceIndex})=>({postId:id,text,imageDescription,sourceIndex}));
                 const task=(xAudience(staged)?'':AUDIENCE_RULES)+'\n'+REACH_CONTEXT+'\n逐条独立估计当前帖子的点赞、转发、回复和首日新增关注、取关人数。结合实际发布内容、设定、世界书和本帖所指剧情。五项数字不按固定比例，账号粉丝数不是热度上限。不把后台私事或匿名身份当作公开事实。'+
                     '\n资料：'+JSON.stringify({posts:inputs,alias:profile(staged).alias,bio:profile(staged).bio,followers:xAudience(staged)?.followers??null})+'\n'+contract;
-                const changes=await request(task,d=>{
+                const impactChanges=await refreshRequest(task,d=>{
                     if(!Array.isArray(d.stats)||d.stats.length!==pending.length||new Set(d.stats.map(r=>r?.postId)).size!==pending.length||
                         !d.stats.every(r=>pending.some(p=>p.id===r?.postId)))throw Error('推文评估缺少、重复或错用了帖子ID。');
                     return settleInfluence(staged,chat,d.stats,d.initialFollowers);
                 },valid,null,{combined:true,postQueries:pending,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
-                collect(changes);
+                collect(impactChanges);
             }else collect(settleInfluence(staged,chat,[]));
-            await refreshTrendsStage(staged,valid,request,collect,true);
+
+            // Previously assessed posts may receive new, independently evidenced
+            // attention in later narrative floors. New posts already received
+            // their initial impact above and are excluded from this second pass.
+            if(batch.rows.length&&previouslyAssessed.length){
+                const selected=previouslyAssessed.map(p=>{
+                    const impact=staged.x['impact:post:'+p.id];
+                    return {postId:p.id,text:p.text,imageDescription:p.imageDescription,
+                        metrics:xCounts(staged,p),previouslyAssessed:{gained:impact.gained,lost:impact.lost,settledDays:impact.settled,totalPaid:impact.total}};
+                });
+                const remembered=firstUse?[]:JSON.parse(readXMemory(context,getSettings(),
+                    {floorIndices:batch.rows.map(row=>row.sourceIndex)}).text||'[]');
+                const contract='只返回 {"effects":[{"postId":"已有 user 推文 ID","gained":非负整数,"lost":非负整数}]}。没有符合条件的新增影响返回 {"effects":[]}；同一帖最多一次，不返回无关字段。';
+                const task='当前任务：X 未结算剧情楼层的新增粉丝影响。'+REACH_CONTEXT+
+                    '\n逐楼阅读本次未结算的有效正文，以及同楼已保存的千千结摘要。它们是同一剧情的两种资料，不得重复计数。'+
+                    '判断既有 user 推文在这些新楼层里是否持续获得新传播、讨论、关注或取关。几天前发布的旧帖，只要本段剧情表明热度继续发展，也可以产生新的粉丝变化。'+
+                    '仅估计这批新楼层额外带来的关注与取关，已评估的发帖首日收益及原有七日自然衰减影响已经单独结算，不再次发放。'+
+                    '单纯复述此前热度、不具备新增影响的剧情应返回零。结合公开内容、现实账号身份和剧情里的实际传播情况估计，不采用固定比例。私人事件未公开时不构成粉丝影响。'+
+                    '\n本次楼层和可见正文：'+JSON.stringify(batch.rows)+
+                    '\n同楼千千结正式摘要（可能为空）：'+JSON.stringify(remembered)+
+                    '\n此前已评估的 user 推文：'+JSON.stringify(selected)+
+                    '\n当前粉丝：'+JSON.stringify(xAudience(staged)?.followers??null)+'\n'+contract;
+                const delta=await refreshRequest(task,d=>floorAudienceChanges(staged,d.effects),valid,null,{
+                    skipExternalMemory:true,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
+                collect(delta);
+            }
+            await refreshTrendsStage(staged,valid,refreshRequest,collect,true);
             if(!valid())throw Error('聊天或人设已改变。');
+            // For a brand-new account the initial post assessment provides the
+            // baseline for the visible story. Upgrades use the old refresh
+            // position as their paid baseline and settle newer floors.
+            const baselineOnly=firstUse&&legacyFloor<0&&!previouslyAssessed.length;
+            const endCovered=baselineOnly?floor:batch.lastIndex;
+            collect([{collection:'x',key:X_FLOOR_LEDGER,value:{
+                id:X_FLOOR_LEDGER,type:'floor-ledger',ranges:coverThrough(baseRanges,endCovered)}}]);
             collect([xSet({id:'public-refresh',type:'refresh',floor})]);
             await commit(changes);return {added:home.added};
         });},

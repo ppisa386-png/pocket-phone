@@ -467,7 +467,7 @@ test('atomic refresh saves the five numbers without review, never asks for other
   assert.equal(f.state().x.audience.followers,60);assert.deepEqual(f.state().x[p.id].metrics,{likes:850,reposts:96,replies:43});
   const calls=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),calls);
   f.context.chat.push({mes:'same day'});ok(await f.x.publish('Second post'));const q=xItems(f.state(),'post').at(-1);
-  seq=[feedResult(),{posts:[]},{stats:[{...stat,postId:q.id,likes:1,gained:0,lost:1}]},{topics:worldTopics(),evaluations:[...trends.evaluations,{postId:q.id,eligible:false,reason:'daily'}]}];
+  seq=[feedResult(),{posts:[]},{stats:[{...stat,postId:q.id,likes:1,gained:0,lost:1}]},{effects:[]},{topics:worldTopics(),evaluations:[...trends.evaluations,{postId:q.id,eligible:false,reason:'daily'}]}];
   f.reply(({quietPrompt})=>{
    if(quietPrompt.includes('逐条独立估计')){assert.doesNotMatch(quietPrompt,/A player singing|"likes":850|传播理由|trendEvaluations/);assert.ok(quietPrompt.includes(q.id));}
    return JSON.stringify(seq.shift());
@@ -945,4 +945,45 @@ test('square and user posts can be deleted the same way and trend injection togg
   f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
   assert.equal(f.state().x['trend-edition'],undefined,'the whole trend edition rolls back with its floor');
  }finally{f.close();}
+});
+
+
+test('first floor refresh ignores QQJ, upgrades work on the same legacy floor, and later floors add followers once',async()=>{
+ const f=setup(),previous=globalThis.qqj_v3_public_bridge_v1;let reads=0;
+ try{
+  f.context.chat[0].mes='2026-06-01\nA first public X post.';
+  ok(await f.x.publish('A song is released.'));const post=xItems(f.state(),'post')[0];
+  const results=[feedResult(),{posts:[]},{initialFollowers:100,stats:[{postId:post.id,likes:120,reposts:14,replies:5,gained:20,lost:0}]},{topics:worldTopics(),evaluations:[]}];
+  f.reply(()=>JSON.stringify(results.shift()));
+  globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('First refresh must not read QQJ');},
+   getPeopleSnapshot(){reads++;throw Error('First refresh must not read QQJ');}};
+  ok(await f.x.refreshPublic());assert.equal(reads,0);
+  assert.equal(f.state().x.audience.followers,120);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
+  f.context.chat.push({mes:'2026-06-02\nThe song remains viral. More people follow its singer.'});await f.memory.read();
+  const update=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:17,lost:2}]},{topics:worldTopics(),evaluations:[]}];
+  f.reply(()=>JSON.stringify(update.shift()));
+  ok(await f.x.refreshPublic());
+  assert.equal(f.state().x.audience.followers,135);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,1]]);
+  const count=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),count);
+  f.context.chat.pop();await f.memory.read();
+  assert.equal(f.state().x.audience.followers,120);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
+ }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
+});
+test('legacy refreshed chat without a floor ledger is allowed to initialize without QQJ',async()=>{
+ const f=setup(),previous=globalThis.qqj_v3_public_bridge_v1;let reads=0;
+ try{
+  f.context.chat[0].mes='2026-06-01\nStory.';
+  await f.memory.commit(await f.memory.begin(),[
+   {collection:'x',key:'audience',value:{id:'audience',type:'audience',initialFollowers:90,followers:90}},
+   {collection:'x',key:'public-refresh',value:{id:'public-refresh',type:'refresh',floor:0}}
+  ]);
+  globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('QQJ must be skipped');}};
+  const seq=[feedResult(),{posts:[]},{topics:worldTopics(),evaluations:[]}];
+  f.reply(()=>JSON.stringify(seq.shift()));
+  ok(await f.x.refreshPublic());assert.equal(reads,0);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
+ }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
 });
