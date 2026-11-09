@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
-import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherBackground, sceneBackground, buildForecast, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
+import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
@@ -728,4 +728,76 @@ test('common Los Angeles labels stay real and use one climate profile',()=>{
   assert.equal(climateFor(label,null,'real').archetype,'csa',label);
  }
  assert.equal(locationKind('新洛杉矶城',{}),'unconfirmed');
+});
+
+// ---- Locally derived UV, AQI and active extreme-weather alert cards ----
+
+test('UV and AQI are deterministic local metrics that respond to solar time and weather', () => {
+    const climate = climateFor('上海'), day = dateDay('2026-07-01');
+    const sunny = environmentMetrics(climate, 'sunny', 30, 2, 52, day * 24 + 12, 'weather-seed', 'shanghai');
+    const same = environmentMetrics(climate, 'sunny', 30, 2, 52, day * 24 + 12, 'weather-seed', 'shanghai');
+    const night = environmentMetrics(climate, 'sunny', 24, 1, 58, day * 24 + 0, 'weather-seed', 'shanghai');
+    const dusty = environmentMetrics(climate, 'dust', 31, 5, 28, day * 24 + 12, 'weather-seed', 'shanghai');
+    assert.deepEqual(same, sunny, 'same saved seed and story hour always produce the same metrics');
+    assert.ok(sunny.uv >= 6 && sunny.uv <= 11, 'summer noon sunlight produces a high UV reading');
+    assert.equal(night.uv, 0, 'UV falls to zero at night');
+    assert.ok(dusty.aqi > sunny.aqi, 'a simulated dust storm raises the air-quality index');
+    for (const metrics of [sunny, night, dusty]) {
+        assert.ok(Number.isInteger(metrics.uv) && metrics.uv >= 0 && metrics.uv <= 11);
+        assert.ok(Number.isInteger(metrics.aqi) && metrics.aqi >= 5 && metrics.aqi <= 500);
+        assert.ok(metrics.uvLevel && metrics.aqiLevel);
+    }
+});
+
+test('only active extreme weather maps to an orange or red alert level', () => {
+    assert.equal(weatherWarning('rain'), null);
+    assert.deepEqual(weatherWarning('storm'), {
+        level: '橙色', color: 'orange', title: '暴雨',
+        detail: '当前出现暴雨天气，留意强降雨和积水。', type: 'storm',
+    });
+    assert.equal(weatherWarning('typhoon').level, '红色');
+    assert.equal(weatherWarning('severe').color, 'red');
+    assert.equal(weatherWarning('heat').color, 'orange');
+});
+
+test('weather reports expose stable UV/AQI readings and the weather panel renders six matching metrics plus active alerts', async () => {
+    const f = setup();
+    try {
+        f.c.chat.push(marker('2026-01-01 10:00\\nSam arrived in Shanghai.', '上海'));
+        await f.memory.read();
+        await f.weather.refresh();
+        const state = await f.state();
+        const base = f.weather.report(state);
+        assert.equal(base.status, 'ok');
+        assert.ok(Number.isInteger(base.report.uv));
+        assert.ok(Number.isInteger(base.report.aqi));
+        assert.equal(base.report.uv, f.weather.report(state).report.uv);
+        assert.equal(base.report.aqi, f.weather.report(state).report.aqi);
+
+        const make = type => createWeatherPanel({
+            adapter: { weather: { report: () => ({
+                ...base,
+                report: { ...base.report, type, label: weatherType(type), extreme: weatherExtreme(type),
+                    uv: 7, uvLevel: '高', aqi: 138, aqiLevel: '轻度污染' },
+            }) } },
+            getView: () => ({ ...state, busy: false }), redraw() {},
+            now: () => new Date(2026, 4, 1, 12),
+        });
+        const normal = make('sunny').html();
+        for (const label of ['体感温度', '降水情况', '风力', '湿度', '紫外线', '空气质量'])
+            assert.ok(normal.includes(label), 'metric card present: ' + label);
+        assert.match(normal, /pp-weather-metric-uv/);
+        assert.match(normal, /pp-weather-metric-air/);
+        assert.match(normal, />138<|>7</);
+        assert.doesNotMatch(normal, /pp-weather-warning/);
+
+        const orange = make('storm').html();
+        assert.match(orange, /pp-weather-warning-orange/);
+        assert.match(orange, /橙色预警/);
+        assert.match(orange, /暴雨/);
+        const red = make('typhoon').html();
+        assert.match(red, /pp-weather-warning-red/);
+        assert.match(red, /红色预警/);
+        assert.match(red, /台风/);
+    } finally { f.close(); }
 });
