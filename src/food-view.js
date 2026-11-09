@@ -19,18 +19,39 @@ const searchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>';
 const arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M13 5l7 7-7 7"/></svg>';
 
-function foodImageNumber(dish,index=0){
-    const clue=String((dish?.category||'')+' '+(dish?.name||'')).toLowerCase();
-    const choices=[
-        [/沙拉|蔬菜|素食|salad|vegetable/,1],
-        [/面|粉|意面|拉面|pasta|noodle|lasagne/,2],
-        [/汤|南瓜|浓汤|soup|pumpkin/,3],
-        [/牛|肉|鸡|猪|和牛|烤|beef|meat|chicken|steak|wagyu/,4],
-        [/橄榄|小食|前菜|olive|appetizer/,5],
-        [/鱼|虾|海鲜|fish|seafood|shrimp|salmon/,6]
+/* Visual category matching only: menu data, prices and business rules are untouched. */
+function foodArtName(dish) {
+    const rules = [
+        [/意大利面|意面|通心粉|pasta|spaghetti|macaroni/, 'spaghetti'],
+        [/拉面|乌冬|荞麦面|汤面|米线|米粉|河粉|面条|拌面|粉丝|方便面|noodle|ramen|udon|soba|pho/, 'ramen'],
+        [/汉堡|burger|hamburger/, 'hamburger'],
+        [/披萨|比萨|pizza/, 'pizza'],
+        [/寿司|刺身|生鱼片|手卷|sushi|sashimi/, 'sushi'],
+        [/咖喱|咖哩|curry/, 'curry'],
+        [/饭团|便当|定食|盖饭|米饭|炒饭|饭|rice|bento/, 'bento'],
+        [/沙拉|凉拌菜|时蔬|蔬菜|素菜|salad|vegetable|vegan/, 'salad'],
+        [/炸鸡|鸡腿|鸡翅|鸡排|烤鸡|鸡肉|chicken|poultry/, 'chicken'],
+        [/虾|海鲜拼盘|shrimp|prawn/, 'shrimp'],
+        [/塔可|玉米饼|taco/, 'taco'],
+        [/卷饼|煎饼果子|burrito|wrap/, 'burrito'],
+        [/三明治|帕尼尼|sandwich|panini/, 'sandwich'],
+        [/可颂|牛角包|croissant/, 'croissant'],
+        [/甜甜圈|多拿滋|doughnut|donut/, 'doughnut'],
+        [/纸杯蛋糕|cupcake/, 'cupcake'],
+        [/草莓蛋糕|奶油蛋糕|切块蛋糕|蛋糕|慕斯|提拉米苏|shortcake|cake|tiramisu/, 'shortcake'],
+        [/曲奇|饼干|cookie|biscuit/, 'cookie'],
+        [/面包|法棍|欧包|bread|baguette/, 'bread'],
+        [/松饼|薄饼|pancake|waffle/, 'pancakes'],
+        [/桃|水果拼盘|水果|果切|fruit|peach/, 'peach'],
+        [/奶茶|果茶|果汁|汽水|可乐|苏打|饮料|饮品|bubble tea|juice|soda|drink|smoothie/, 'drink'],
+        [/咖啡|拿铁|卡布奇诺|美式|浓缩|coffee|latte|espresso|cappuccino/, 'coffee'],
+        [/茶|tea|teapot/, 'teapot'],
+        [/汤|羹|粥|火锅|米糊|soup|broth|porridge|hotpot/, 'ramen'],
+        [/牛排|牛肉|猪排|排骨|羊排|烤肉|鱼排|鱼肉|烤鱼|steak|beef|pork|lamb|fish|grill/, 'plate']
     ];
-    const found=choices.find(([pattern])=>pattern.test(clue));
-    return found?found[1]:(Math.abs(Number(index)||0)%6)+1;
+    const find = source => rules.find(([pattern]) => pattern.test(source))?.[1];
+    return find(String(dish?.name || '').toLowerCase()) ||
+        find(String(dish?.category || '').toLowerCase()) || 'plate';
 }
 
 export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = adapter?.foodAssetBase || 'assets/food/' }) {
@@ -39,7 +60,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
     const chat = () => adapter.storyChat?.() || [];
     const assetRoot=String(assetBase||'assets/food/').replace(/\/?$/,'/');
     const asset=file=>esc(assetRoot+file);
-    const foodImage=(dish,index=0)=>asset('menu-'+foodImageNumber(dish,index)+'.png');
+    const foodImage=dish=>asset('illustrations/'+foodArtName(dish)+'.svg');
     const priceMarkup=(dish,currency)=>dish.specialDiscount&&Number.isSafeInteger(dish.originalPriceMinor)
         ? '<div class="pp-food-price-row"><b class="pp-food-price">'+esc(money(dish.priceMinor,currency))+'</b><del>'+esc(money(dish.originalPriceMinor,currency))+'</del><span>8折</span></div>'
         : '<b class="pp-food-price">'+esc(money(dish.priceMinor,currency))+'</b>';
@@ -79,7 +100,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
         const prices = (shop.menu || []).map(d => d.priceMinor).filter(Number.isFinite);
         const min = prices.length ? money(Math.min(...prices), shop.currency) : '—';
         return '<article class="pp-food-shop-card"><button type="button" class="pp-food-shop-open" data-food-action="shop" data-food-id="' + esc(shop.id) + '"' + disabled() + '>' +
-            '<div class="pp-food-shop-thumb" data-tint="' + (index % 6) + '"><img src="' + foodImage({category:shop.cuisine,name:shop.cuisine},index) + '" alt="" loading="lazy" decoding="async"></div>' +
+            '<div class="pp-food-shop-thumb" data-tint="' + (index % 6) + '"><img src="' + foodImage(shop.menu?.[0] || {category:shop.cuisine,name:shop.cuisine}) + '" alt="" loading="lazy" decoding="async"></div>' +
             '<div class="pp-food-shop-content"><div class="pp-food-shop-row"><strong>' + esc(shop.name) + '</strong>' + (count ? '<b class="pp-food-shop-badge" aria-label="已选 ' + count + ' 件">' + count + '</b>' : '') + '</div>' +
             '<small class="pp-food-cuisine">' + esc(shop.cuisine || '精选餐厅') + '</small>' +
             (shop.description ? '<p>' + esc(shop.description) + '</p>' : '') +
@@ -111,10 +132,9 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
     function homePage(state, shops) {
         const previous = state.orders?.foodSearch;
         return '<section class="pp-food-home">' +
-            '<section class="pp-food-hero"><img class="pp-food-hero-photo" src="' + asset('food.jpg') + '" alt="" loading="lazy" decoding="async">' +
-            '<div class="pp-food-hero-shade"></div><img class="pp-food-hero-shape" src="' + asset('shape-5.png') + '" alt="" aria-hidden="true">' +
-            '<div class="pp-food-hero-copy"><span class="pp-food-hero-kicker">GOOD FOOD · GOOD MOOD</span><h1>今天，吃点好的。</h1>' +
-            '<p>把喜欢的味道，送到身边。</p><img class="pp-food-hero-separator" src="' + asset('separator.svg') + '" alt=""></div></section>' +
+            '<section class="pp-food-hero"><div class="pp-food-hero-copy"><span class="pp-food-hero-kicker">FRESH BITE · DAILY</span><h1>今天，<br>吃点好的。</h1>' +
+            '<p>好味道，就在这一餐。</p></div><div class="pp-food-hero-art" aria-hidden="true">' +
+            '<img class="hero-main" src="' + asset('illustrations/ramen.svg') + '" alt=""><img class="hero-side" src="' + asset('illustrations/hamburger.svg') + '" alt=""><img class="hero-sweet" src="' + asset('illustrations/shortcake.svg') + '" alt=""></div></section>' +
             '<div class="pp-food-search"><form class="pp-food-search-form" data-food-form="search">' +
             '<label class="pp-food-search-input">' + searchIcon + '<span class="pp-food-sr">想吃的东西</span><input data-food-field="query" name="query" type="search" value="' + esc(drafts.query ?? (previous?.query || '')) + '" placeholder="今天想吃什么呢" autocomplete="off"' + disabled() + '></label>' +
             '<button type="submit" class="pp-food-search-btn" aria-label="搜索餐厅"' + disabled() + '>' + arrow + '</button></form></div>' +
@@ -182,7 +202,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
         const visibleStatus = working || state.busy ? '正在处理…' : state.errorKind === 'food' && state.error ? state.error : status;
         const isShop = tab === 'home' && !!selectedShop;
         return '<div class="pp-snap pp-food' + (isShop ? ' is-shop' : '') + '">' +
-            (isShop ? '' : '<header class="pp-food-masthead"><span class="pp-food-masthead-mark"><i></i> 榴莲外卖</span><span class="pp-food-masthead-side">DURIAN · FOOD DELIVERY</span></header>') +
+            (isShop ? '' : '<header class="pp-food-masthead"><span class="pp-food-masthead-mark"><span class="pp-food-masthead-logo">' + icon('food') + '</span>榴莲外卖</span><span class="pp-food-masthead-side">FRESH BITE</span></header>') +
             '<div class="pp-food-body" data-food-page="' + esc(tab + ':' + (selectedShop || '')) + '">' +
             (visibleStatus ? '<p class="pp-snap-status" role="status">' + esc(visibleStatus) + '</p>' : '') + body + '</div>' +
             (isShop ? '' : '<nav class="pp-snap-tabs pp-food-tabs" aria-label="榴莲外卖页面">' + [['home', '外卖', 'food'], ['orders', '订单', 'parcel']].map(([id, label, symbol]) =>

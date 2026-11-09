@@ -1,5 +1,12 @@
 # 榴莲手机开发进度
 
+## v1.2.33 · 榴莲外卖「鲜味日常 Fresh Bite」视觉重做（2026-11-09；基线 89f1ad6）
+**设计基准**：用户确认的 V2.0 文案与五屏效果图，依 Web Design Engineer Skill 的 Redesign · Overhaul / 保留技术契约方式执行。样式从 FoodFire × Grilli 摄影复古菜单转为精品外卖暖白、珊瑚橙、青绿；插画主视觉与紧凑信息结构相互配合，其他 App 和主题不随之更改。
+**代码**：新增独立 `style-food.css`（在旧样式及珐琅主题之后加载），主页面 120px 插画横幅、卡片列表、特价横滑与订单视觉；店铺页继续保留 56px 紧凑页头、滚动分类和独立菜单滚动、56px 固定结算栏。 `src/food-view.js` 仅替换旧摄影 DOM 和菜图映射，依菜名/类别选择 22 张本地插画及通用回退，全部业务 data-food-action、表单名、状态字段与实际数据不变。
+**素材**：随插件本地保存 Microsoft Fluent UI Emoji Flat（17 张，MIT）与 Twemoji（8 张，CC BY 4.0）；许可与来源登记在 `assets/food/`、`RESOURCE_SOURCES.md`，不联网载入图。历史 FoodFire／Grilli 资源暂保留在仓库，但新页面不再使用。
+**验证**：更新 `tests/food.test.js` 本地素材断言，新增 `tests/food-freshbite.test.js` 校验三页面关键展示及插画；旧 `tests/food-layout.test.js` 和结算、配送、账本回归保持不变。提交后 GitHub Actions 状态为准；真实 Termux 窄屏主观视觉需设备验收。版本同步为 1.2.33，预览构建器纳入新 CSS。
+
+
 ## v1.2.32 · 主动联系只呈现通知，不提前展示消息（2026-11-09）
 - **需求**：NPC 主动发消息可令手机响铃、震动或亮屏；user 没有实际查看手机时，正文不提前写出全文、概述、话题或得知内容后的反应，完整消息放本楼文尾隐藏标记。允许角色按原有节奏主动联系，不因此强行安排 user 打开手机。
 - **实现**：调整 `src/outreach.js`、`src/story-phone.js`、`src/continuity.js` 的正文提示与知情边界。主动短信、WhatsApp、微信、X 私信和公开提及默认 `shown:false` 并保存完整内容；正文实际阅读后才标 `shown:true`，已展示历史不再注入。普通 X/WhatsApp 的入站通知显式 `shown:false` 不再被强制覆盖；user 实际发送的消息仍是 shown。来电铃响算通话事件已呈现，不生成未接通的通话对白。保存的旧默认跨 App 主动联系提示词自动升级，自定义提示词保留。

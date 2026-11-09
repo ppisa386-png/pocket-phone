@@ -237,7 +237,7 @@ test('首页展示五款8折特价菜，特价卡片可加入对应店铺购物�
  const panel=createFoodPanel({adapter,getView:state,redraw(){},notice:m=>{throw Error('不应出现提示：'+m);},assetBase:'https://local/assets/food/'});
  const page=panel.html();
  assert.equal((page.match(/class="pp-food-special-card"/g)||[]).length,5);
- assert.match(page,/今日特价/);assert.match(page,/8折/);assert.match(page,/https:\/\/local\/assets\/food\/menu-1\.png/);
+ assert.match(page,/今日特价/);assert.match(page,/8折/);assert.match(page,/https:\/\/local\/assets\/food\/illustrations\/plate\.svg/);
  await panel.action('special-add','foodShop:0#2','foodShop:0');
  assert.deepEqual(calls,[['foodShop:0','foodShop:0#2',1]]);
  assert.match(panel.html(),/已加入购物车/);assert.match(panel.html(),/已选 1 份/);

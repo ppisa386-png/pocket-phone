@@ -23,3 +23,8 @@ https://github.com/j-labbe/weather-app-clone
 ## 榴莲外卖
 https://github.com/itswadesh/foodfire
 https://github.com/codewithsadee/grilli
+
+## 榴莲外卖 · 鲜味日常 Fresh Bite V2.0
+https://github.com/microsoft/fluentui-emoji
+https://github.com/jdecked/twemoji
+https://github.com/lucide-icons/lucide
