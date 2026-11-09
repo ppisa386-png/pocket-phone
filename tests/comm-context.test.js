@@ -416,3 +416,37 @@ test('X comment references use the original post date, not the comment timestamp
  assert.equal(row.postDate,'2026-10-04');assert.equal(row.postDaysAgo,36);
  assert.equal(row.post,undefined);assert.equal(row.storyDaysAgo,undefined);
 });
+
+test('notification-only incoming X and WhatsApp messages stay unshown until prose actually reads them',async()=>{
+    const context={name1:'Sam',name2:'Alex',chatId:'notification-only',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[],chatMetadata:{}};
+    const rows=[
+        {platform:'x',action:'received',sender:'唱片行',recipient:'user',kind:'text',text:'HIDDEN_X_PRIVATE',category:'B',shown:false},
+        {platform:'whatsapp',action:'received',sender:'Alex',recipient:'user',kind:'text',text:'HIDDEN_WA_PRIVATE',category:'A',shown:false},
+    ];
+    const notice='手机在口袋里短暂震动。';
+    context.chat.push({mes:notice+rows.map(row=>'<!--durian-message:'+JSON.stringify(row)+'-->').join('')});
+    let rev=await revisionsFor(messageSignatures(context.chat));
+    let journal=importStoryPhone(undefined,rev,context.chat,context).journal;
+    let state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
+    const saved=[];
+    for(const [platform,secret] of [['x','HIDDEN_X_PRIVATE'],['whatsapp','HIDDEN_WA_PRIVATE']]){
+        const message=Object.values(state[platform]).find(row=>row.type==='message'&&row.text===secret);
+        assert.ok(message,'incoming '+platform+' stored');
+        assert.equal(commMeta(state,platform,message.id)?.shown,false,'notification is not narrative reading');
+        assert.ok(!notice.includes(secret));
+        saved.push({platform,id:message.id});
+    }
+    const before=buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000});
+    assert.match(before,/HIDDEN_X_PRIVATE/);
+    assert.match(before,/HIDDEN_WA_PRIVATE/);
+    assert.match(before,/user 未在剧情里打开手机查看之前/);
+    context.chat.push({mes:'Sam实际打开手机阅读了这两条信息。'+saved.map(row=>
+        '<!--durian-message-shown:'+JSON.stringify(row)+'-->').join('')});
+    rev=await revisionsFor(messageSignatures(context.chat));
+    journal=importStoryPhone(journal,rev,context.chat,context).journal;
+    state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
+    for(const row of saved)assert.equal(commMeta(state,row.platform,row.id)?.shown,true,'explicit reading marks '+row.platform+' as shown');
+    assert.equal(buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000}),'');
+    const restored=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
+    for(const row of saved)assert.equal(commMeta(restored,row.platform,row.id)?.shown,false,'rolling back reading restores unshown');
+});
