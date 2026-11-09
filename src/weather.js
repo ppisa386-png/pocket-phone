@@ -629,18 +629,18 @@ export function weatherBackground(state, chat) {
     // in the future-warnings block, which covers days three to seven only.
     const inlineWarning = day => day.extreme ? `；预计${day.extremeSpan}出现${day.extremeLabel}（${day.extremeStrength}）` : '';
     const nowHour=Math.floor(clock.hour);
-    const hours=[...today.hours.slice(nowHour),...tomorrow.hours].slice(0,6);
-    const hourlyLine=hours.map((h,i)=>`${String((nowHour+i)%24).padStart(2,'0')}时${weatherType(h.type)}`).join('、');
+    const hours=[...today.hours.slice(nowHour+1),...tomorrow.hours].slice(0,6);
+    const hourlyLine=hours.map((h,i)=>`${String((nowHour+i+1)%24).padStart(2,'0')}时${weatherType(h.type)}`).join('、');
     const lines = [
         `当前位置：${location.city}；当前剧情时间：${report.date} ${report.time}。`,
-        `今天（${monthDayOf(today.date)}）：${today.label}，最高${today.hi}°C，最低${today.lo}°C；当前天气：${report.label}，${Math.round(report.temp)}°C，风力${report.wind}级${inlineWarning(today)}。`,
+        `今天（${monthDayOf(today.date)}）：${today.label}，最高${today.hi}°C，最低${today.lo}°C；当前天气：${report.label}，目前${Math.round(report.temp)}°C，风力${report.wind}级${inlineWarning(today)}。`,
         `未来6小时逐时预报（未发生）：${hourlyLine}。`,
         `明天（${monthDayOf(tomorrow.date)}）：${tomorrow.label}，最高${tomorrow.hi}°C，最低${tomorrow.lo}°C，降水概率${tomorrow.precip}%${inlineWarning(tomorrow)}。`,
     ];
     const warnings = forecast.days.filter((day, index) => day.extreme && index >= 2)
         .map(day => `${monthDayOf(day.date)}${day.extremeLabel}，强度${day.extremeStrength}，预计${day.extremeSpan}影响${forecast.city}`);
     if (warnings.length) lines.push('未来极端天气预警（尚未发生的预报）：' + warnings.join('；') + '。');
-    lines.push('以上天气由手机本地生成：当前场景依据“当前天气”，全天概况只描述当日主要变化，不能把“大雨转小雨”等全天预报理解成此刻持续下雨；逐时预报是尚未发生的天气，不得写成已发生；角色是否知道预报取决于剧情中的信息接触，不默认全知；不因预警自动编造事故、伤亡或财产损失；天气仅作场景背景，按需自然体现，不要求每轮描写。');
+    lines.push('以上天气由手机本地生成：当前场景依据“当前天气”，全天概况只描述当日主要变化，不能把“大雨转小雨”等全天预报理解成此刻持续下雨；逐时预报是尚未发生的天气，不得把未来天气写成当前正在发生；角色是否知道预报取决于剧情中的信息接触，不默认全知；不因预警自动编造事故、伤亡或财产损失；天气仅作场景背景，按需自然体现，不要求每轮描写。');
     return lines.join('\n');
 }
 

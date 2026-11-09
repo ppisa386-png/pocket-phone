@@ -6,6 +6,7 @@ export const weatherPhoto=(type,theme='mist')=>PHOTO_BY_TYPE[type]?'rain':(PHOTO
 
 const CLOUD = '<path d="M18 46c-2-12 7-21 19-21 6-16 31-19 42-5 14-2 25 8 25 21 13 1 20 9 20 20H27c-8 0-13-6-13-14 0-5 1-8 4-11Z"/>';
 const WEATHER_SCENES = {
+    partly: '<g fill="#F4BF5E" stroke="#F4BF5E" stroke-width="2.4"><circle cx="86" cy="32" r="17"/><path d="M86 7v8M86 49v9M61 32h8M103 32h8M68 14l6 6M104 14l-6 6" fill="none"/></g><path d="M26 74c-9 0-16-6-16-14 0-9 7-15 16-15 4-13 16-21 30-20 10 1 18 7 21 16 13-1 24 7 24 20 0 8-7 13-18 13H26Z" fill="#BDD0DF" stroke="#F4F9FC" stroke-width="2.5"/>',
     clear: '<g fill="#F9BD45" stroke="#F9BD45" stroke-width="3" stroke-linecap="round"><circle cx="78" cy="46" r="20"/><path d="M78 9v11M78 72v11M41 46h11M104 46h11M52 20l8 8M98 64l8 8M104 20l-8 8M60 64l-8 8" fill="none"/></g>',
     cloud: '<path d="M28 70c-11 0-18-7-18-17 0-9 7-16 17-17 3-16 16-26 31-24 11 1 20 9 23 20 13-1 23 8 23 20 0 10-8 18-20 18H28Z" fill="#B7C9DA"/><path d="M33 47c7-14 27-17 39-6" fill="none" stroke="#F8FCFF" stroke-width="5" stroke-linecap="round" opacity=".75"/>',
     rain: '<path d="M25 57c-9 0-15-6-15-14 0-8 6-14 15-15 3-13 14-21 27-20 10 1 17 8 20 17 11-1 19 6 19 16 0 9-7 16-17 16H25Z" fill="#A8BCD0"/><g stroke="#6AADE0" stroke-width="5" stroke-linecap="round"><path d="m32 68-5 12M54 68l-5 12M76 68l-5 12"/></g>',

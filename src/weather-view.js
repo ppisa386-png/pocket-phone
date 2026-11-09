@@ -131,7 +131,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
             '<div class="pp-weather-hourly-card"><div class="pp-weather-hours">' + hours.map(h =>
                 '<div class="pp-weather-hour' + (h.isNow ? ' pp-weather-hour-now' : '') + '">' +
                 '<i>' + (h.isNow ? '现在' : String(h.hour).padStart(2, '0') + '时') + '</i>' +
-                '<span aria-hidden="true">' + sceneIcon(weatherScene(h.type), 28) + '</span>' +
+                '<span aria-hidden="true">' + sceneIcon(h.type === 'partly' ? 'partly' : weatherScene(h.type), 28) + '</span>' +
                 '<b>' + Math.round(h.temp) + '°</b></div>'
             ).join('') + '</div></div></section>' : '';
 
@@ -146,7 +146,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
                 const high = Math.round(d.hi), lowest = Math.round(d.lo);
                 return '<article class="pp-weather-day' + (d.today ? ' pp-weather-day-now' : '') + (d.extreme ? ' pp-weather-day-extreme' : '') + '">' +
                     '<span class="pp-weather-day-date">' + escapeHtml(weekday) + '</span>' +
-                    '<span class="pp-weather-day-icon" aria-hidden="true">' + sceneIcon(d.scene || weatherScene(d.type), 27) + '</span>' +
+                    '<span class="pp-weather-day-icon" aria-hidden="true">' + sceneIcon(d.type === 'partly' ? 'partly' : (d.scene || weatherScene(d.type)), 27) + '</span>' +
                     '<span class="pp-weather-day-desc">' + (d.extreme ? '<em aria-label="极端天气">!</em>' : '') + escapeHtml(label) + '</span>' +
                     '<span class="pp-weather-day-temp"><i>' + lowest + '°</i><span class="pp-weather-tempbar"><span style="' + rangeStyle(d, low, span) + '"></span></span><b>' + high + '°</b></span>' +
                     (d.extreme ? '<small class="pp-weather-day-warn">预计' + escapeHtml(d.extremeSpan || '全天') + '：' + escapeHtml(d.extremeLabel || label) + '（' + escapeHtml(d.extremeStrength || '显著') + '）</small>' : '') +

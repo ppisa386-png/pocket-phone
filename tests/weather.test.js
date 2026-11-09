@@ -869,7 +869,24 @@ test('narrative weather gives actual conditions and a matching near-term hourly 
     const background=weatherBackground(state,chat),forecast=buildForecast(record,{day:dateDay(record.date),hour:10});
     const current=weatherAt(record,{day:dateDay(record.date),hour:10});
     assert.ok(background.includes('当前天气：'+current.label));
-    assert.ok(background.includes('10时'+weatherType(forecast.days[0].hours[10].type)));
     assert.ok(background.includes('11时'+weatherType(forecast.days[0].hours[11].type)));
+    assert.ok(background.includes('12时'+weatherType(forecast.days[0].hours[12].type)));
+    assert.ok(!background.includes('10时'+weatherType(forecast.days[0].hours[10].type)+'、'));
     assert.ok(background.includes('当前场景依据“当前天气”'));
+});
+
+test('partly-cloudy forecast icons display both sun and cloud instead of full sun',async()=>{
+    const {sceneIcon}=await import('../src/weather-art.js');
+    const partly=sceneIcon('partly');
+    assert.match(partly,/circle cx="86"/);
+    assert.match(partly,/M26 74/);
+    const f=setup();try{
+        f.c.chat.push(marker('2026-07-01 07:00\\nSam arrived in Shanghai.','上海'));
+        await f.memory.read();await f.weather.refresh();
+        const state=await f.state(),info=f.weather.report(state);
+        const mock={...info,forecast:{...info.forecast,days:[{...info.forecast.days[0],
+            hours:info.forecast.days[0].hours.map((h,i)=>i===7?{...h,type:'partly'}:h)},...info.forecast.days.slice(1)]}};
+        const panel=createWeatherPanel({adapter:{weather:{report:()=>mock}},getView:()=>state,redraw(){}});
+        assert.match(panel.html(),/circle cx="86"/);
+    }finally{f.close();}
 });
