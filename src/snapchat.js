@@ -45,7 +45,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
     const setSnap = value => ({collection:app,key:value.id,value});
     const accountBy = (state,id) => {const a=state[app]?.[id];if(a?.type!=='account')throw new Error('账号已不可用。');return a;};
     const friendBy = (state,id) => {const a=accountBy(state,id);if(a.friend!=='friends'||a.blocked)throw new Error('需要先成为好友，且不能处于拉黑状态。');return a;};
-    const mediaKinds=['text','voice','image','video'];
+    const mediaKinds=['text','voice','image','video',...(app==='wechat'?['music']:[])];
     const threadFor=(state,id)=>snapItems(state,'message').filter(m=>m.accountId===id&&m.status!=='queued').sort((a,b)=>a.createdAt-b.createdAt);
     const run=work=>phone.appTask(async(view,current,request)=>{
         if(!current())throw new Error(appName+' 已关闭或聊天已变化。');

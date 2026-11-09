@@ -1,5 +1,5 @@
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
-import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2';
+import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.34';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 
 export const CHAT_APPS = {whatsapp:'WhatsApp',wechat:'微信'};

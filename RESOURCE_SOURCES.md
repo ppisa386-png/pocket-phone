@@ -28,3 +28,10 @@ https://github.com/codewithsadee/grilli
 https://github.com/microsoft/fluentui-emoji
 https://github.com/jdecked/twemoji
 https://github.com/lucide-icons/lucide
+
+## 微信 · 朋友圈与音乐分享（继续采用原来源）
+https://github.com/yubo725/rn-wechat
+https://github.com/microsoft/fluentui-emoji
+https://github.com/lucide-icons/lucide
+
+音乐卡片 CD 对应 Fluent UI Emoji Flat 的 `assets/Optical disk/Flat/optical_disk_flat.svg`；许可保留于 `assets/food/LICENSE-fluentui-emoji.txt`。

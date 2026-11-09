@@ -1,5 +1,13 @@
 # 榴莲手机开发进度
 
+## v1.2.34 · 微信 RNWeChat 四栏、朋友圈与音乐分享（2026-11-09；基线 bd80be1）
+**参考基准**：继续用仓库已登记的 yubo725/rn-wechat（dev），检查真实的 TabNavConfigs.js / FindScreen / ContactsScreen / MeScreen / MomentScreen / PublishMomentScreen。实际 UI 按微信四栏、分组列表、灰色标题、白色内容与绿色互动细节实现；未做全新视觉方向。好友添加、单聊、通话、黑名单、转账等既有功能保持。
+**微信页面**：底栏改为「微信／通讯录／发现／我」，通讯录沿原项目的常用项分组；发现和我的未实现功能展示为不可交互的静态行。发现→朋友圈含封面、动态列表、相机直达发布；发布上方图片描述、下方正文（借鉴已登记 X 双文本输入结构但外观是微信）；权限公开／私密／部分可见／不给谁看在存储层校验并永久记录，分享目标仅来自有效微信好友。用户可点赞／评论，手动刷新好友朋友圈会进行一次静默模型请求获取 0～5 条合理动态；不给模型广播非公开 user 帖，避免匿名/好友可见信息跨角色泄露。
+**音乐分享**：微信聊天「＋」菜单中增加真正的音乐分享入口（歌曲、歌手、可选留言），调用原微信对话引擎发送音乐消息（kind music，内容以 JSON 存储），NPC 可以依据分享内容回复。音乐卡统一加载本地 `assets/wechat/optical_disk_flat.svg`，原始来源 Microsoft Fluent UI Emoji Optical disk Flat，MIT；图标沿用既有资源库 Lucide 路径，不引入新框架或运行时联网。
+**工程**：新增 `src/wechat-moments.js`、`style-wechat.css`、`assets/wechat/SOURCES.md`，更新 `src/chat-view.js`、`src/chat-apps.js`、`src/snapchat.js`，补入口资源路径、CSS 读取、预览构建与测试。检查入口时也发现 v1.2.33 外卖样式仅被 preview 工具读取，实际 `index.js` 未加载；本次补载 `style-food.css`，不改外卖业务。
+**验证**：新增 `tests/wechat-moments.test.js`：四栏／朋友圈导航、权限检查及持久保存、好友动态提示词隐私隔离、音乐消息与本地 CD；自动测试、浏览器 QA 依本版 Actions 运行结果记录，Termux 真机触屏需进一步验收。
+
+
 ## v1.2.33 · 榴莲外卖「鲜味日常 Fresh Bite」视觉重做（2026-11-09；基线 89f1ad6）
 **设计基准**：用户确认的 V2.0 文案与五屏效果图，依 Web Design Engineer Skill 的 Redesign · Overhaul / 保留技术契约方式执行。样式从 FoodFire × Grilli 摄影复古菜单转为精品外卖暖白、珊瑚橙、青绿；插画主视觉与紧凑信息结构相互配合，其他 App 和主题不随之更改。
 **代码**：新增独立 `style-food.css`（在旧样式及珐琅主题之后加载），主页面 120px 插画横幅、卡片列表、特价横滑与订单视觉；店铺页继续保留 56px 紧凑页头、滚动分类和独立菜单滚动、56px 固定结算栏。 `src/food-view.js` 仅替换旧摄影 DOM 和菜图映射，依菜名/类别选择 22 张本地插画及通用回退，全部业务 data-food-action、表单名、状态字段与实际数据不变。

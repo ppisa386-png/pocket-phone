@@ -9,14 +9,14 @@ import { createFoodPanel } from './food-view.js?v=1.2.20';
 import { bindComposerKeys } from './composer.js?v=1.2';
 import { createXPanel } from './x-view.js?v=1.2.28';
 import { xUnread } from './x.js?v=1.2';
-import { createChatPanel } from './chat-view.js?v=1.2.13';
-import { chatUnread } from './chat-apps.js?v=1.2';
+import { createChatPanel } from './chat-view.js?v=1.2.34';
+import { chatUnread } from './chat-apps.js?v=1.2.34';
 import { createSnapPanel } from './snapchat-view.js?v=1.2';
 import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.33';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.34';
 import { icon } from './icons.js?v=1.2';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.31';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
@@ -105,7 +105,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     const noticeElement = shadow.querySelector('.pp-toast');
     const apiPanel = createApiPanel({ adapter, getSettings: () => settings, persist, redraw: () => { if (!destroyed && route === 'api') renderAPI(); } });
 
-    const chatPanels=Object.fromEntries(['whatsapp','wechat'].map(app=>[app,createChatPanel({app,adapter,getView:()=>viewFor(app),redraw:()=>{if(!destroyed&&opened&&route==='app:'+app)renderChat(app);},notice})]));
+    const chatPanels=Object.fromEntries(['whatsapp','wechat'].map(app=>[app,createChatPanel({app,adapter,assetBase:adapter.wechatAssetBase||'assets/wechat/',getView:()=>viewFor(app),redraw:()=>{if(!destroyed&&opened&&route==='app:'+app)renderChat(app);},notice})]));
     const currentChat=()=>chatPanels[route.slice(4)];
     function renderChat(app) {
         pressMenu.close(true);

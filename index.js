@@ -11,16 +11,16 @@ import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
 import { createX } from './src/x.js?v=1.2.27';
-import { createChatApp } from './src/chat-apps.js?v=1.2';
+import { createChatApp } from './src/chat-apps.js?v=1.2.34';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.33';
-import { mountPhone } from './src/ui.js?v=1.2.33';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.34';
+import { mountPhone } from './src/ui.js?v=1.2.34';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.25';
 import { createPhoneService } from './src/phone.js?v=1.2';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.32';
-import { normalizeSettings } from './src/config.js?v=1.2.33';
+import { normalizeSettings } from './src/config.js?v=1.2.34';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.32';
 
@@ -62,12 +62,16 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const [response, enamelResponse] = await Promise.all([
+        const [response, enamelResponse, foodResponse, wechatResponse] = await Promise.all([
             fetch(new URL('./style.css?v=1.2.30', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-wechat.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
         ]);
-        if (!response.ok || !enamelResponse.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
-        const styles = await response.text() + '\n' + await enamelResponse.text();
+        if (!response.ok || !enamelResponse.ok || !foodResponse.ok || !wechatResponse.ok)
+            throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
+        const styles = await response.text() + '\n' + await enamelResponse.text() +
+            '\n' + await foodResponse.text() + '\n' + await wechatResponse.text();
         let hostModule=null;
         try { hostModule=await import(new URL('../../../../script.js',import.meta.url).href); }
         catch { /* Keep compatibility with hosts without public generation exports. */ }
@@ -106,6 +110,7 @@ async function start() {
             const adapter = {
                 weatherAssetBase:new URL('./assets/weather/',import.meta.url).href,
                 foodAssetBase:new URL('./assets/food/',import.meta.url).href,
+                wechatAssetBase:new URL('./assets/wechat/',import.meta.url).href,
                 daily:enabled ? createDaily({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 weather:enabled ? createWeather({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 assets:enabled ? createAssets({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
