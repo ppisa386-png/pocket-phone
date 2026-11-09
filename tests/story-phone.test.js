@@ -358,3 +358,58 @@ test('newly published narrative posts retain their own metrics without creating 
   assert.equal(posts.length,1);assert.equal(posts[0].metrics.likes,20000);assert.equal(Object.values(state.x).filter(p=>p.type==='comment').length,0);assert.equal(f.requests(),0);
  }finally{f.close();}
 });
+
+
+test('evidence-free X publish marker imports the exact rainy record post and both public replies',async()=>{
+ const f=setup();try{
+  const text='Rainy Tuesday shelter at @VinylTideRecords. Found an old Aretha pressing that hits every single note right in the chest. Definitely worth ducking out of the rain for their #FallIndieSpotlight listening corner. 🌧️🎶💿 (周二雨天的避风港 @黑胶浪潮唱片行。淘到一张老版艾瑞莎黑胶，每一个音符都直击心口。完全值得冒雨钻进他们的 #秋季独立音乐聚光灯 试听角听上一耳朵。🌧️🎶💿)';
+  const imageDescription='你右手扶着左边复古茶色皮革监听耳罩，左手拿着独立民谣乐队的黑胶封套，偏过头看向窗外的雨幕，暖黄色的射灯落在赤铜色马尾与带笑的侧脸上，身后是实木唱片架与黑胶转盘';
+  const replies=[
+   {name:'艾瑞斯·洛克',text:'Save that Aretha record for our next vocal warm-up session. (@VinylTideRecords always has the cleanest vintage pressings.) (把那张艾瑞莎唱片留着给我们下次开嗓热身用吧。@黑胶浪潮唱片行 的老版黑胶品相一直最干净。)'},
+   {name:'斯凯拉·詹金斯',text:'Wait the retro aesthetic goes crazy here!! Dropping by after cheer practice tomorrow 📸🔥 (等等，这复古氛围感也太绝了吧！！明天啦啦队训练完我也要去打卡 📸🔥)'}
+  ];
+  const row={action:'published',author:'user',text,imageDescription,replies,category:'B',shown:true,time:'16:35'};
+  // The prose shows the publication and full post, and describes the picture;
+  // the image description is metadata, not necessarily a second literal quote.
+  const prose='2024-10-08 16:35 她打开了店铺账号与活动标签，发送了新推：\n“'+text+'”\n'+'两分钟后手机上弹出互动通知。'+replies.map(r=>r.name+'评论：“'+r.text+'”').join('\n');
+  f.context.chat.push(xFloor(prose,row));
+  const state=(await f.memory.read()).state,all=Object.values(state.x);
+  const posts=all.filter(x=>x.type==='post'),comments=all.filter(x=>x.type==='comment');
+  assert.equal(posts.length,1);assert.equal(comments.length,2);
+  assert.equal(posts[0].text,text);assert.equal(posts[0].imageDescription,imageDescription);
+  assert.deepEqual([posts[0].storyTime.date,posts[0].storyTime.time],['2024-10-08','16:35']);
+  assert.equal(state.commContext['x:'+posts[0].id].shown,true);
+  assert.equal(state.commContext['x:'+posts[0].id].category,'B');
+  assert.deepEqual(comments.map(c=>[state.x[c.author].name,c.text]),replies.map(c=>[c.name,c.text]));
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>({x:state.x}),redraw(){},notice(){}});
+  await panel.action('profile');assert.match(panel.html(),/Rainy Tuesday shelter/);
+  await panel.action('comments',posts[0].id);
+  assert.match(panel.html(),/Save that Aretha record/);assert.match(panel.html(),/Wait the retro aesthetic/);
+  const prior=JSON.stringify(state.x);
+  f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));
+  assert.equal(JSON.stringify((await f.memory.read()).state.x),prior,'reload does not duplicate post or comments');
+  f.context.chat.pop();
+  assert.equal(Object.values((await f.memory.read()).state.x).filter(x=>x.type==='post').length,0,'deleting source floor rolls it back');
+  assert.equal(f.requests(),0);
+ }finally{f.close();}
+});
+
+test('previously ignored evidence-free X floor is recovered once with original revision and no regenerated prose',async()=>{
+ const f=setup();try{
+  const row={action:'published',author:'user',text:'Rainy Tuesday shelter at @VinylTideRecords.',imageDescription:'配图：室内唱片架',replies:[{name:'艾瑞斯·洛克',text:'Save that Aretha record.'}],shown:true,time:'16:35'};
+  f.context.chat.push(xFloor('2024-10-08 16:35 她发送了一条新推并收到了回复。'+row.text,row));
+  const rev=await revisionsFor(messageSignatures(f.context.chat)),id='narrative-x:'+rev[1];
+  f.context.chatMetadata[JOURNAL_KEY]=appendChange(undefined,rev,[{collection:'profiles',key:'ignored:'+id,value:{ignored:true}}],id);
+  const first=(await f.memory.read()).state;
+  assert.equal(Object.values(first.x).filter(x=>x.type==='post').length,1,'old ignored floor is automatically recovered');
+  assert.equal(Object.values(first.x).filter(x=>x.type==='comment').length,1);
+  assert.equal(f.context.chatMetadata[JOURNAL_KEY].events.filter(e=>e.id===id).length,1,'same event slot is repaired in place');
+  assert.ok(!f.context.chatMetadata[JOURNAL_KEY].events.find(e=>e.id===id).changes.some(c=>c.collection==='profiles'),'ignored tombstone replaced');
+  await f.memory.read();
+  assert.equal(Object.values((await f.memory.read()).state.x).filter(x=>x.type==='post').length,1,'idempotent replay');
+  f.context.chat.pop();
+  assert.equal(Object.values((await f.memory.read()).state.x).filter(x=>x.type==='post').length,0,'rollback still works');
+  assert.equal(f.requests(),0);
+ }finally{f.close();}
+});

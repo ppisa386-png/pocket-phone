@@ -1,4 +1,4 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.21';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.25';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.4';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2';
 import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2';
@@ -97,10 +97,28 @@ export function importStoryPhone(raw,revisions,chat,context){
         }
         const xRows=storyAnnotations(chat[index],'durian-x');
         const xEvent='narrative-x:'+revisions[index];
-        if(xRows.length&&effectiveReply(chat[index])&&!journal?.events.some(e=>e.id===xEvent)){
+        const existingX=journal?.events.find(e=>e.id===xEvent);
+        // v1.2.24 and earlier could reject a valid evidence-free published marker
+        // but still journal an "ignored" tombstone. Revisit that floor on read,
+        // without changing any successful imports, historical evidence-bearing
+        // annotations, or deliberately disabled X operations.
+        const recoverable=existingX?.changes.length===1 &&
+            existingX.changes[0].collection==='profiles' &&
+            existingX.changes[0].key==='ignored:'+xEvent &&
+            existingX.changes[0].value?.ignored===true &&
+            xRows.some(row=>row.action==='published'&&row.evidence===undefined);
+        if(xRows.length&&effectiveReply(chat[index])&&(!existingX||recoverable)){
             const changes=settings.apps.x?xStoryChanges(state,xRows,chat,index,xEvent,context):[];
-            journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+xEvent,{ignored:true})],xEvent);
-            state=replayJournal(journal);changed=true;
+            if(existingX){
+                if(changes.length){
+                    journal=structuredClone(journal);
+                    journal.events.find(e=>e.id===xEvent).changes=changes;
+                    state=replayJournal(journal);changed=true;
+                }
+            }else{
+                journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+xEvent,{ignored:true})],xEvent);
+                state=replayJournal(journal);changed=true;
+            }
         }
         const seenNormal=new Set();
         for(const [n,row] of storyAnnotations(chat[index],'durian-message').entries()){

@@ -102,7 +102,8 @@ export function xStoryChanges(state, rows, chat, index, eventId, context) {
         save(updated);
     }
     function addReply(reply, postId, prose, id) {
-        if (!reply || own(reply.name) ||
+        if (!reply || typeof reply.name !== 'string' || !reply.name.trim() ||
+            typeof reply.text !== 'string' || !reply.text.trim() || own(reply.name) ||
             (typeof reply.evidence === 'string' && unfinished.test(reply.evidence.replace(reply.text || '', '')))) return;
         const name = reply.name.trim();
         const matches = accounts.filter(a => sameNamedPerson(a,{name}) || (a.handle && '@'+a.handle === name));
@@ -135,9 +136,16 @@ export function xStoryChanges(state, rows, chat, index, eventId, context) {
         }
         if (row.action !== 'published' || !own(row.author)) continue;
         const {text='',imageDescription=''} = row;
-        if ((!text && !imageDescription) || (text !== '' && !quoted(row.prose,text)) ||
-            (imageDescription !== '' && !quoted(row.prose,imageDescription)) ||
-            (typeof row.evidence === 'string' && unfinished.test(row.evidence.replace(text,'')))) continue;
+        if (typeof text !== 'string' || typeof imageDescription !== 'string' ||
+            (!text.trim() && !imageDescription.trim())) continue;
+        // Old evidence-bearing annotations retain their original strict checks.
+        // New annotations explicitly describe the completed post; their text and
+        // image metadata need not be duplicated verbatim elsewhere in the prose.
+        // In particular, a picture description is not a quoted part of the post.
+        if (typeof row.evidence === 'string' &&
+            ((!text || quoted(row.prose,text)) === false ||
+             (imageDescription && !quoted(row.prose,imageDescription)) ||
+             unfinished.test(row.evidence.replace(text,'')))) continue;
         const key = JSON.stringify([text,imageDescription,row.evidence||'']);
         let postId = posts.get(key);
         if (!postId) {
