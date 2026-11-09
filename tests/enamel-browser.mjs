@@ -11,9 +11,11 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const { chromium } = createRequire(import.meta.url)('playwright');
 const output = resolve(root, '..', 'qa-results');
 await mkdir(output, { recursive: true });
+const fixtureHTML = "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>榴莲手机·真实模块视觉验收</title><style>body{margin:0;background:#e9e5e4;font-family:system-ui}main{padding:20px;color:#726c70;font-size:12px}</style></head><body><main>实际 HTML / CSS / SVG 浏览器测试（离线数据）</main><script type=\"module\">\nimport { mountPhone } from '/src/ui.js';\nimport { normalizeSettings } from '/src/config.js';\nconst KEY='pocket_phone_preview_v010';\nlet settings=normalizeSettings(JSON.parse(localStorage.getItem(KEY)||'{}'));\nconst adapter={\n  load:()=>settings,\n  save(next){settings=next;localStorage.setItem(KEY,JSON.stringify(next));},\n  onChange(){},\n  storyChat:()=>[],\n  userName:()=> '用户',\n  diagnostics:{add(error){console.error(error);},text:()=>'',persistent:()=>true},\n  connectionName:()=> '离线视觉验收'\n};\nconst styles=await (await fetch('/style.css')).text()+'\\n'+await (await fetch('/style-enamel.css')).text();\nwindow.controller=mountPhone({adapter,styles});\nwindow.controller.open();\nwindow.ready=true;\n</script></body></html>";
 const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, 'http://localhost').pathname;
+    if (pathname === '/enamel-fixture') { res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fixtureHTML);return; }
     const file = resolve(root, '.' + (pathname === '/' ? '/preview.html' : pathname));
     if (!file.startsWith(root + sep)) { res.writeHead(403).end(); return; }
     res.setHeader('Content-Type', ({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'})[extname(file)] || 'text/plain');
@@ -29,11 +31,11 @@ try {
   const page = await context.newPage();
   page.on('pageerror',error=>errors.push(error.message));
   page.on('request',request=>assert.ok(request.url().startsWith(origin),'no external asset requests: '+request.url()));
-  await page.goto(origin+'/preview.html');
+  await page.goto(origin+'/enamel-fixture');
   const phone = page.locator('.pp-phone');
   try { await phone.waitFor({state:'visible',timeout:12000}); }
   catch (error) {
-    const state = await page.evaluate(()=>({title:document.title,phoneRoot:!!document.querySelector('#personal-pocket-phone-root'),bodyText:document.body.innerText.slice(0,250),scripts:document.scripts.length}));
+    const state = await page.evaluate(()=>({title:document.title,phoneRoot:!!document.querySelector('#personal-pocket-phone-root'),ready:window.ready||false,bodyText:document.body.innerText.slice(0,250),scripts:document.scripts.length}));
     console.error('Browser bootstrap diagnostics', JSON.stringify({errors,state}));
     throw error;
   }
@@ -110,7 +112,7 @@ try {
 
   const reduced = await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});
   const reducePage = await reduced.newPage();
-  await reducePage.goto(origin+'/preview.html');
+  await reducePage.goto(origin+'/enamel-fixture');
   await reducePage.locator('.pp-launcher').waitFor();
   const settings = await reducePage.evaluate(()=>JSON.parse(localStorage.getItem('pocket_phone_preview_v010')||'{}'));
   assert.ok(settings && typeof settings==='object');
