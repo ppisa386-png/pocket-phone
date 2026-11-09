@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.23';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.24';
 import { icon } from './icons.js?v=1.2';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.22';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
@@ -24,7 +24,7 @@ import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
 import { renderPhoneScreen } from './phone-view.js?v=1.2';
 
 const SECTIONS = [
-    { id: 'appearance', name: '外观', icon: 'display', note: '主题、壁纸、字号与大小' },
+    { id: 'appearance', name: '外观', icon: 'display', note: '主题、悬浮球、壁纸、字号与大小' },
     { id: 'api', name: 'API', icon: 'api', note: '模型连接' },
     { id: 'apps', name: 'App 管理', icon: 'apps', note: '选择桌面上显示的应用' },
     { id: 'prompts', name: '提示词', icon: 'prompts', note: '按功能分别编辑' },
@@ -342,6 +342,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         // home/system chrome uses the new skin. Branded interiors are untouched.
         layer.dataset.theme = settings.theme === 'enamel' ? 'light' : settings.theme;
         layer.dataset.skin = settings.theme === 'enamel' ? 'enamel' : 'classic';
+        layer.dataset.launcher = settings.launcherStyle;
+        if (settings.launcherStyle !== 'enamel') launcher.classList.remove('pp-haze-burst');
         layer.dataset.wallpaper = settings.theme === 'enamel' ? settings.enamelWallpaper : settings.wallpaper;
         layer.style.setProperty('--pp-font-size', settings.fontSize + 'px');
         layer.style.setProperty('--pp-phone-width', settings.phoneWidth + 'px');
@@ -392,6 +394,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const selectedWallpaper = isEnamel ? settings.enamelWallpaper : settings.wallpaper;
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
             selectField('theme', '主题', [['dark', '深色'], ['light', '浅色'], ['enamel', '柔雾珐琅']], settings.theme) +
+            selectField('launcherStyle', '悬浮球样式', [['classic', '经典悬浮球'], ['enamel', '珐琅水晶球 · 雪晶绽放']], settings.launcherStyle) +
             '<div class="pp-field pp-wallpaper-field"><span>壁纸</span><div class="pp-swatches">' + appearanceWallpapers.map(([value, name]) => '<button type="button" class="pp-swatch" data-wallpaper="' + value + '" aria-label="' + name + '壁纸" aria-pressed="' + (selectedWallpaper === value) + '"><span></span><small>' + name + '</small></button>').join('') + '</div></div>' +
             '<label class="pp-field"><span>字号 <output data-output="fontSize">' + settings.fontSize + '</output></span><input type="range" min="14" max="20" step="1" data-setting="fontSize" value="' + settings.fontSize + '"></label>' +
             '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="640" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度；拖动手机右下角手柄可像小窗一样调整大小。</p></div>';
@@ -766,7 +769,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }, { signal: lifetime.signal });
 
     function toggleLauncher() {
-        if (settings.theme === 'enamel' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        if (settings.launcherStyle === 'enamel' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
             launcher.classList.remove('pp-haze-burst');
             void launcher.offsetWidth; // reset only this short CSS animation
             launcher.classList.add('pp-haze-burst');

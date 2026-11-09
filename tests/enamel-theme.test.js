@@ -43,6 +43,9 @@ test('theme styles are isolated and original base stylesheet remains independent
   const ui = readFileSync(new URL('../src/ui.js', import.meta.url),'utf8');
   const original = readFileSync(new URL('../style.css', import.meta.url),'utf8');
   assert.match(css,/data-skin="enamel"/);
+  assert.match(css,/data-launcher="enamel"/);
+  assert.match(css,/\.pp-layer\[data-launcher="enamel"\] \.pp-launcher/);
+  assert.doesNotMatch(css,/\.pp-layer\[data-skin="enamel"\] \.pp-launcher/);
   assert.match(css, /prefers-reduced-motion:reduce/);
   assert.match(css, /data-home="true"/);
   assert.match(css, /data-active-app=""/);
@@ -51,6 +54,9 @@ test('theme styles are isolated and original base stylesheet remains independent
   assert.doesNotMatch(css, /^\.pp-(?:phone|home|launcher)\b/m, 'new rules need a skin guard');
   assert.match(original, /\.pp-layer\[data-theme="light"\]/);
   assert.match(ui, /settings\.theme === 'enamel' \? 'light' : settings\.theme/);
+  assert.match(ui, /layer\.dataset\.launcher = settings\.launcherStyle/);
+  assert.match(ui, /settings\.launcherStyle === 'enamel' && !window\.matchMedia/);
+  assert.match(ui, /selectField\('launcherStyle', '悬浮球样式'/);
   assert.match(ui, /settings\.theme === 'enamel' \? settings\.enamelWallpaper : settings\.wallpaper/);
   assert.match(ui, /enamelIcon\(app\.id\) \|\| icon\(app\.id\)/);
   assert.match(ui, /if\(key==='theme'\)renderAppearance\(\)/);

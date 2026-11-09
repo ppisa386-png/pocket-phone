@@ -78,3 +78,17 @@ test('old immediate-delivery default migrates to the relaxed timing prompt',()=>
  const custom=previous+'我的自定义配送规则。';
  assert.equal(normalizeSettings({prompts:{amazonDelivery:custom}}).prompts.amazonDelivery,custom);
 });
+
+test('launcher style is independently selectable and preserves pre-update enamel users',()=>{
+    assert.equal(normalizeSettings({}).launcherStyle,'classic');
+    assert.equal(normalizeSettings({theme:'enamel'}).launcherStyle,'enamel','old enamel users keep the enamel ball');
+    assert.equal(normalizeSettings({theme:'light'}).launcherStyle,'classic');
+    const oldEnamel=normalizeSettings({theme:'enamel',wallpaper:'sand'});
+    const changedTheme=normalizeSettings({...oldEnamel,theme:'dark'});
+    assert.equal(changedTheme.launcherStyle,'enamel','changing theme does not change selected launcher');
+    assert.equal(changedTheme.theme,'dark');
+    assert.equal(normalizeSettings({...changedTheme,launcherStyle:'classic',theme:'enamel'}).launcherStyle,'classic');
+    assert.equal(normalizeSettings({theme:'light',launcherStyle:'enamel'}).launcherStyle,'enamel');
+    assert.equal(normalizeSettings({theme:'dark',launcherStyle:'invalid'}).launcherStyle,'classic');
+    assert.deepEqual(normalizeSettings(oldEnamel),oldEnamel,'migrated preferences are stable');
+});

@@ -40,6 +40,7 @@ try {
     throw error;
   }
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'classic');
   assert.equal(await page.locator('.pp-app').count(),11);
   assert.equal(await page.locator('.pp-haze-art').count(),0);
   assert.equal(await page.locator('.pp-status-time').isHidden(),true,'desktop top-left time is hidden');
@@ -50,11 +51,22 @@ try {
   await page.locator('[data-app="settings"]').click();
   await page.locator('[data-section="appearance"]').click();
   const originalWallpaper = await page.locator('.pp-swatch[aria-pressed="true"]').getAttribute('data-wallpaper');
+  const launcherChoice=page.locator('[data-setting="launcherStyle"]');
+  assert.equal(await launcherChoice.inputValue(),'classic');
+  await launcherChoice.selectOption('enamel');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel');
+  assert.equal(await page.locator('.pp-haze-launcher-art').isVisible(),true,'enamel ball works with dark phone theme');
   await page.locator('[data-setting="theme"]').selectOption('enamel');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'enamel');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-theme'),'light');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-wallpaper'),'haze');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel','launcher survives theme switch');
   assert.equal(await page.locator('.pp-swatch[aria-pressed="true"]').getAttribute('data-wallpaper'),'haze');
+  await page.locator('[data-setting="launcherStyle"]').selectOption('classic');
+  assert.equal(await page.locator('.pp-haze-launcher-art').isVisible(),false,'classic ball works inside enamel theme');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'enamel');
+  await page.locator('[data-setting="launcherStyle"]').selectOption('enamel');
   assert.equal(await page.locator('[data-wallpaper]').count()>=5,true);
   await page.getByRole('button',{name:'返回',exact:true}).click();
   assert.equal(await page.locator('.pp-status-time').isVisible(),true,'settings retain the status time');
@@ -110,11 +122,20 @@ try {
   await page.locator('[data-section="appearance"]').click();
   await page.locator('[data-setting="theme"]').selectOption('light');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel');
+  assert.equal(await page.locator('.pp-haze-launcher-art').isVisible(),true,'enamel launcher persists on light theme');
+  await page.locator('[data-setting="launcherStyle"]').selectOption('classic');
+  assert.equal(await page.locator('.pp-haze-launcher-art').isVisible(),false,'switching to classic restores original launcher');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'classic');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-wallpaper'),originalWallpaper,'classic wallpaper survives enamel switch');
   await page.getByRole('button',{name:'回到桌面',exact:true}).click();
   assert.equal(await page.locator('.pp-haze-art').count(),0,'classic icons return without reloading');
   await page.locator('[data-app="whatsapp"]').click();
   assert.equal(await phone.evaluate(el=>getComputedStyle(el).backgroundColor),appBackground,'brand app shell matches classic light');
+  await page.reload();
+  await page.locator('.pp-phone').waitFor();
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'classic','launcher style persists across reload');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
   await context.close();
 
   const reduced = await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});
