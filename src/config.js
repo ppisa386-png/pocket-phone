@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from './daily-prompts.js?v=1.2.4';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.2.21';
+export const VERSION = '1.2.22';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -96,8 +96,9 @@ export function normalizeSettings(value) {
         enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
         launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
         position: isRecord(raw.position) ? { x: numeric(raw.position.x, 0, 1, 1), y: numeric(raw.position.y, 0, 1, 0.8) } : null,
-        theme: ['dark', 'light'].includes(raw.theme) ? raw.theme : 'dark',
+        theme: ['dark', 'light', 'enamel'].includes(raw.theme) ? raw.theme : 'dark',
         wallpaper: ['violet', 'ocean', 'sand', 'graphite'].includes(raw.wallpaper) ? raw.wallpaper : 'violet',
+        enamelWallpaper: ['haze', 'violet', 'ocean', 'sand', 'graphite'].includes(raw.enamelWallpaper) ? raw.enamelWallpaper : 'haze',
         fontSize: Math.round(numeric(raw.fontSize, 14, 20, 15)),
         phoneWidth: Math.round(numeric(raw.phoneWidth, 280, 640, 360)),
         phoneHeight: Math.round(numeric(raw.phoneHeight, 460, 1200, 740)),
