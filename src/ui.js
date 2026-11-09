@@ -392,7 +392,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const appearanceWallpapers = isEnamel ? [['haze','柔雾纸'],['violet','暮紫'],['ocean','海蓝'],['sand','暖砂'],['graphite','石墨']] : [['violet','暮紫'],['ocean','海蓝'],['sand','暖砂'],['graphite','石墨']];
         const selectedWallpaper = isEnamel ? settings.enamelWallpaper : settings.wallpaper;
         content.innerHTML = '<div class="pp-page"><div class="pp-card pp-form">' +
-            selectField('theme', '主题', [['dark', '深色 · 原有'], ['light', '浅色 · 原有'], ['enamel', '柔雾珐琅 · 新增']], settings.theme) +
+            selectField('theme', '主题', [['dark', '深色'], ['light', '浅色'], ['enamel', '柔雾珐琅']], settings.theme) +
             '<div class="pp-field pp-wallpaper-field"><span>壁纸</span><div class="pp-swatches">' + appearanceWallpapers.map(([value, name]) => '<button type="button" class="pp-swatch" data-wallpaper="' + value + '" aria-label="' + name + '壁纸" aria-pressed="' + (selectedWallpaper === value) + '"><span></span><small>' + name + '</small></button>').join('') + '</div></div>' +
             '<label class="pp-field"><span>字号 <output data-output="fontSize">' + settings.fontSize + '</output></span><input type="range" min="14" max="20" step="1" data-setting="fontSize" value="' + settings.fontSize + '"></label>' +
             '<label class="pp-field"><span>窗口宽度 <output data-output="phoneWidth">' + settings.phoneWidth + '</output></span><input type="range" min="300" max="640" step="10" data-setting="phoneWidth" value="' + settings.phoneWidth + '"></label></div><p class="pp-footnote">小屏幕会自动适配可用宽度；拖动手机右下角手柄可像小窗一样调整大小。</p></div>';
