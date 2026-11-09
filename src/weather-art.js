@@ -57,6 +57,8 @@ export const metricIcon = name => {
         precip: '<path d="M12 3.6c3 3.5 5.4 6.4 5.4 9.2a5.4 5.4 0 1 1-10.8 0C6.6 10 9 7.1 12 3.6Z"/>',
         wind: '<path d="M3.5 9.5h9a2.4 2.4 0 1 0-2.3-3.1M3.5 13.5h13a2.7 2.7 0 1 1-2.6 3.5M3.5 17.5h7"/>',
         humidity: '<path d="M3.5 14.5c2-1.6 4-1.6 6 0s4 1.6 6 0 3.4-1.3 4.5-.6M3.5 9.8c2-1.6 4-1.6 6 0s4 1.6 6 0 3.4-1.3 4.5-.6"/>',
+        uv: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>',
+        air: '<path d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h8"/>',
     };
     return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (icons[name] || '') + '</svg>';
 };
