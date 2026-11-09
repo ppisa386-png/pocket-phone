@@ -3,7 +3,7 @@
 ## v1.2.28 · X 发推图片描述视觉统一（2026-11-09；基线 506f028）
 **参考**：既有 X 资源 https://github.com/ccrsxx/twitter-clone 的 `src/components/input/input.tsx`、`input-form.tsx`、`input-options.tsx`。采用原编辑区透明无框文字输入、主色微交互、轻量分隔线，不引入 Next.js 或 Firebase。
 **实现**：删除图片描述的灰底圆角卡片与独立外框，设为与推文正文同栏的 30px 紧凑单行灰色占位输入，带 X 淡色细分隔线，聚焦隐藏占位文字并将分隔线改为主蓝色；长描述按内容增高至 110px，并在渲染/切页后恢复合适高度。保留独立可选图片字段、输入草稿和发布功能。
-**验证**：Chromium 检查 390/320 手机尺寸、初始高度、无卡片背景/外边框、字体继承、聚焦占位消失、长文本自动增高和截图；`npm test` 与预览构建结果以 GitHub Actions 为准。Termux 实机排版待用户确认。
+**验证**：[回归 run 42587385711](https://github.com/ppisa386-png/pocket-phone/actions/runs/42587385711) 中 `npm test` **713/713 通过、0 失败**，`npm run build:preview` 成功。[Chromium run 42587385581](https://github.com/ppisa386-png/pocket-phone/actions/runs/42587385581) 成功验证 390/320 手机宽度、30px 初始高度、透明无边框、字体继承、聚焦占位消失及长描述自动增高；[浏览器截图 artifact 13659712762](https://github.com/ppisa386-png/pocket-phone/actions/runs/42587385581/artifacts/13659712762)。Termux 实机排版待用户确认。
 
 ## v1.2.27 · X 发推图片描述独立输入与 NPC 可选配图（2026-11-09；基线 b299d1b）
 **改动**：X 首页发推框上方增加 51px 左右的可选图片描述小框，占位文字「图片描述，不带也可以～」位于框内，获得焦点时隐藏；保留既有大文本输入框。表单调用 publish(text,imageDescription)，可选图片描述分字段存储；发帖成功清空两项输入，原图片展示卡片沿用既有样式。
