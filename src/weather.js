@@ -416,7 +416,7 @@ export function environmentMetrics(climate, type, temp, wind, humidity, absHour,
     const daylight = Math.max(0, Math.sin(Math.PI * (hour - 6) / 12));
     const seasonal = ctx.season === 'summer' ? 1 : ctx.season === 'winter' ? .42 : .76;
     const uvNoise = (rngAt(stableSeed, stableKey + '|uv', absHour)() - .5) * 1.2;
-    const uv = clamp(Math.round((UV_BASE[profile.archetype] || 7) * seasonal * daylight *
+    const uv = daylight <= 0 ? 0 : clamp(Math.round((UV_BASE[profile.archetype] || 7) * seasonal * daylight *
         (UV_WEATHER_FACTOR[type] ?? .55) + uvNoise), 0, 11);
 
     const dailyNoise = rngAt(stableSeed, stableKey + '|aqi-day', day)();
