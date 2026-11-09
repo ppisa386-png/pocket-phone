@@ -1,0 +1,42 @@
+name: Soft Haze Enamel visual QA
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/enamel-icons.js'
+      - 'src/ui.js'
+      - 'src/config.js'
+      - 'style-enamel.css'
+      - 'index.js'
+      - 'tools/build_preview.mjs'
+      - 'tests/enamel-browser.mjs'
+      - 'tests/enamel-theme.test.js'
+      - '.github/workflows/enamel-visual-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium test runner
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Build actual HTML/CSS/SVG preview
+        run: npm run build:preview
+      - name: Browser acceptance and screenshots
+        run: node tests/enamel-browser.mjs
+      - name: Upload actual browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soft-haze-enamel-browser-evidence
+          path: qa-results/enamel-*.png
+          if-no-files-found: warn
+          retention-days: 30
