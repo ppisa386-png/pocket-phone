@@ -640,7 +640,7 @@ export function weatherBackground(state, chat) {
     const warnings = forecast.days.filter((day, index) => day.extreme && index >= 2)
         .map(day => `${monthDayOf(day.date)}${day.extremeLabel}，强度${day.extremeStrength}，预计${day.extremeSpan}影响${forecast.city}`);
     if (warnings.length) lines.push('未来极端天气预警（尚未发生的预报）：' + warnings.join('；') + '。');
-    lines.push('以上天气由手机本地生成：当前场景依据“当前天气”，全天概况只描述当日主要变化，不能把“大雨转小雨”等全天预报理解成此刻持续下雨；逐时预报是尚未发生的天气，不得把未来天气写成当前正在发生；角色是否知道预报取决于剧情中的信息接触，不默认全知；不因预警自动编造事故、伤亡或财产损失；天气仅作场景背景，按需自然体现，不要求每轮描写。');
+    lines.push('以上天气由手机本地生成：预报不代表已经发生；当前场景依据“当前天气”，全天概况只描述当日主要变化，不能把“大雨转小雨”等全天预报理解成此刻持续下雨；逐时预报是尚未发生的天气，不得把未来天气写成当前正在发生；角色是否知道预报取决于剧情中的信息接触，不默认全知；不因预警自动编造事故、伤亡或财产损失；天气仅作场景背景，按需自然体现，不要求每轮描写。');
     return lines.join('\n');
 }
 
