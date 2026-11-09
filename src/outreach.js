@@ -119,7 +119,8 @@ export function outreachPrompt(settings,state,user,due,now=null) {
     }
     return '本轮是每五条有效角色正文一次的主动联系判定。只选当前开启且符合身份要求的渠道：'+channels.join('、')+'。'+frequencyRules[settings.proactiveFrequency||'low']+
         '从近期剧情中的相关人物出发，逐个人物结合近期正文、人设、当下具体动机、熟悉程度、最近交流、是否回应和表达习惯决定内容与渠道，不按关系类型分配平台，可无人联系，也可多人各自联系，无人数配额，不轮流点名。无需证明取得号码、交换账号、共同好友或在通讯录，不编造这些过程。第一次用这个App不等于刚认识；开局旧识与剧情新识按各自真实关系讲话。不得替user回应、接受、接听。被拉黑、拒绝或请求仍待处理的账号不得再发私信。公开@只写适合公开的内容，使用@加user完整账号名。'+
-        '每次主动联系写一条<!--durian-outreach:{"channel":"渠道代号","sender":"角色真实姓名","recipient":"user","accountId":"只复制本渠道列出的准确ID，未知则省略，不自行拼name:","text":"实际消息或公开帖全文","motive":"此人当下的具体联系动机","media":"text/image/video","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B","shown":true}-->。主动来电仅记录响铃。不要为同一件事再写durian-contact。其他自然短信电话沿用原记录格式。关闭陌生私信请求时只可给已接受的X会话发私信。渠道独立，账号状态：'+JSON.stringify({accounts,xRequestsOpen:state.x?.profile?.requestsOpen!==false})+'。近期各渠道来往（仅用于把握节奏，各人只知自己参与的通信）：'+JSON.stringify(activity)+extra;
+        '主动消息发生时，正文只写手机响铃、震动或亮屏等当前场景能感知到的通知动静；user未实际打开手机阅读时，不写消息原文、摘要、话题、对方解释或user的知情反应。完整内容只放本楼末尾的不可见标记，不能因为标记包含原文就让user提前知道。不要为了交代消息强行安排user拿起手机或中断原场景。主动来电仅记录响铃，接听后才有通话对白。'+
+        '每次主动联系写一条<!--durian-outreach:{"channel":"渠道代号","sender":"角色真实姓名","recipient":"user","accountId":"只复制本渠道列出的准确ID，未知则省略，不自行拼name:","text":"实际消息或公开帖全文，仅存于标记","motive":"此人当下的具体联系动机","media":"text/image/video","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B","shown":false}-->。shown:false表示本楼只出现通知、尚未展示消息内容；只有本楼确实写出user阅读该消息内容时才用shown:true。不要为同一件事再写durian-contact。其他自然短信电话沿用原记录格式。关闭陌生私信请求时只可给已接受的X会话发私信。渠道独立，账号状态：'+JSON.stringify({accounts,xRequestsOpen:state.x?.profile?.requestsOpen!==false})+'。近期各渠道来往（仅用于把握节奏，各人只知自己参与的通信）：'+JSON.stringify(activity)+extra;
 }
 export function socialContact(state,row,id,clock,now,user,role=null) {
     const app=row.channel.startsWith('x_')?'x':row.channel;
