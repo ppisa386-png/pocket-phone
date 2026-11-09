@@ -74,10 +74,12 @@ test('WeChat RN-style visuals retain existing page and event hooks, isolated fro
  const state={wechat:{a:{id:'a',type:'account',name:'陈默',friend:'friends',blocked:false},m:{id:'m',type:'message',accountId:'a',role:'assistant',kind:'text',text:'你好',status:'sent',createdAt:1}},whatsapp:{a:{id:'a',type:'account',name:'Alex',friend:'friends',blocked:false}}};
  const panel=createChatPanel({app:'wechat',adapter:{},getView:()=>state,redraw(){},notice(){}});
  let html=panel.html();assert.match(html,/class="pp-chat-app pp-wechat" data-chat-tab="chats"/);assert.match(html,/pp-wx-quick-actions/);assert.match(html,/data-chat-action="add"/);assert.match(html,/data-chat-action="bulk"/);
- assert.doesNotMatch(html,/朋友圈|data-chat-id="moments"|data-chat-id="discover"/);
+ assert.match(html,/data-chat-id="discover"/);assert.doesNotMatch(html,/data-chat-id="calls"/);
  await panel.action('tab','contacts');assert.match(panel.html(),/data-chat-tab="contacts"/);
- await panel.action('tab','calls');assert.match(panel.html(),/data-chat-tab="calls"/);
- await panel.action('tab','me');assert.match(panel.html(),/data-chat-form="profile"/);
+ await panel.action('tab','discover');assert.match(panel.html(),/朋友圈/);
+ await panel.action('tab','me');assert.match(panel.html(),/pp-wx-me-profile/);
+ await panel.action('wx-profile');assert.match(panel.html(),/data-chat-form="profile"/);
+ await panel.action('back');
  await panel.action('thread','a');html=panel.html();assert.match(html,/pp-wechat is-thread/);assert.match(html,/data-chat-form="message"/);assert.match(html,/data-chat-action="cash"/);assert.match(html,/data-chat-action="voice"/);assert.match(html,/data-chat-action="video"/);assert.match(html,/data-press="chat-message"/);
  const other=createChatPanel({app:'whatsapp',adapter:{},getView:()=>state,redraw(){},notice(){}});
  assert.doesNotMatch(other.html(),/pp-wx-quick-actions/);

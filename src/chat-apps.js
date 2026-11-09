@@ -1,6 +1,7 @@
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
 import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.34';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
+import { createWechatMoments } from './wechat-moments.js?v=1.2.34';
 
 export const CHAT_APPS = {whatsapp:'WhatsApp',wechat:'微信'};
 export const chatItems = (state,app,type) => Object.values(state[app]||{}).filter(i=>i.type===type);
@@ -117,5 +118,15 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
         return {added,updated};
     },app);
     const {discover,invite,inviteMany,accept,publish,refresh,like,comment,...conversation}=engine;
-    return {...conversation,accept,addByName,addEstablished};
+    const momentServices=app==='wechat'?createWechatMoments({memory,phone,getContext,getSettings}):{};
+    // Stored as a genuine WeChat chat message, with the metadata in JSON so
+    // the NPC receives the shared song and can discuss it in a normal reply.
+    const shareMusic=(id,song,artist,note='')=>{
+        if(app!=='wechat')throw new Error('仅微信支持分享音乐。');
+        const title=String(song??'').trim(),singer=String(artist??'').trim(),detail=String(note??'').trim();
+        if(!title||title.length>120||!singer||singer.length>120||detail.length>500)
+            return Promise.resolve({ok:false,error:'请填写歌曲名称和歌手，内容不要超过长度限制。'});
+        return conversation.send(id,'music',JSON.stringify({title,artist:singer,note:detail}));
+    };
+    return {...conversation,...momentServices,shareMusic,accept,addByName,addEstablished};
 }
