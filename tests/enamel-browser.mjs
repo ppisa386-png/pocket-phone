@@ -152,6 +152,10 @@ try {
   await launcher.click();
   await page.waitForTimeout(180);
   assert.equal(await page.locator('.pp-haze-spark').count(),12);
+  const arms = page.locator('.pp-frost-branch');
+  assert.equal(await arms.count(),6,'one original crystal arm per direction');
+  assert.equal(await page.locator('.pp-frost-heart').count(),1,'one original inlaid center');
+  assert.equal(await arms.first().evaluate(el=>getComputedStyle(el).animationName),'pp-frost-facet','six existing facets animate without changing SVG rotations');
   const burst = await launcher.evaluate(el=>el.classList.contains('pp-haze-burst'));
   assert.ok(burst,'click triggers the finite snow/star burst');
   assert.equal(await launcher.evaluate(el=>getComputedStyle(el).zIndex),'3','snowflake blooms over the newly opened phone, not underneath it');
@@ -162,8 +166,17 @@ try {
   await page.waitForTimeout(180);
   assert.ok(Number(await page.locator('.pp-frost-snow').evaluate(el=>getComputedStyle(el).opacity))>.9,'snowflake reaches its visible mid-bloom peak');
   await page.screenshot({path:resolve(output,'enamel-floating-burst-peak.png'),clip});
+  const armValues=await arms.evaluateAll(elements=>elements.map(el=>({
+    delay:parseFloat(getComputedStyle(el).animationDelay),
+    opacity:Number(getComputedStyle(el).opacity)
+  })));
+  assert.deepEqual(armValues.map(x=>x.delay),[0,.016,.032,.048,.064,.08],'short optical cascade across six branches');
+  assert.ok(armValues.every(x=>x.opacity>.65),'all arms remain legible at 36px bloom peak');
+  assert.ok(Number(await page.locator('.pp-frost-heart').evaluate(el=>getComputedStyle(el).opacity))>.8,'center inlay catches light at peak');
   await page.waitForTimeout(360);
   assert.equal(await launcher.evaluate(el=>el.classList.contains('pp-haze-burst')),false,'burst returns to normal stacking and visual state after 680ms');
+  assert.equal(await page.locator('.pp-frost-orb').evaluate(el=>getComputedStyle(el).opacity),'1','orb returns to fully visible');
+  assert.equal(await page.locator('.pp-frost-snow').evaluate(el=>getComputedStyle(el).opacity),'0','snowflake is completely hidden after the cycle');
   await page.getByRole('button',{name:'收起手机',exact:true}).click();
   await page.waitForTimeout(570);
   await launcher.evaluate(el=>el.classList.remove('pp-haze-burst'));
@@ -206,6 +219,14 @@ try {
   await reducePage.locator('.pp-launcher').waitFor();
   const settings = await reducePage.evaluate(()=>JSON.parse(localStorage.getItem('pocket_phone_preview_v010')||'{}'));
   assert.ok(settings && typeof settings==='object');
+  await reducePage.locator('[data-app="settings"]').click();
+  await reducePage.locator('[data-section="appearance"]').click();
+  await reducePage.locator('[data-setting="launcherStyle"]').selectOption('enamel');
+  await reducePage.getByRole('button',{name:'收起手机',exact:true}).click();
+  await reducePage.locator('.pp-launcher').click();
+  assert.equal(await reducePage.locator('.pp-launcher').evaluate(el=>el.classList.contains('pp-haze-burst')),false,'reduced-motion tap opens without jewel choreography');
+  assert.equal(await reducePage.locator('.pp-frost-snow').evaluate(el=>getComputedStyle(el).opacity),'0','reduced-motion snow stays hidden');
+  assert.equal(await reducePage.locator('.pp-frost-orb').evaluate(el=>getComputedStyle(el).opacity),'1','reduced-motion jewel stays legible');
   await reduced.close();
   assert.deepEqual(errors,[],'no browser runtime errors');
   console.log('PASS enamel Chromium acceptance; screenshots saved under qa-results/');

@@ -1,5 +1,8 @@
 # GitHub 参考项目来源
 
+## 悬浮球动效设计规范（Emil Design Engineering）
+https://github.com/emilkowalski/skills
+
 ## X
 https://github.com/ccrsxx/twitter-clone
 

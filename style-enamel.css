@@ -194,66 +194,91 @@
   overflow:visible;
   shape-rendering:geometricPrecision;
 }
+/* The same 680ms one-shot plays for both launcher entry paths.
+   Each phase starts visibly and settles softly: no large bounce or extra SVGs. */
 .pp-layer[data-launcher="enamel"] .pp-frost-orb,
 .pp-layer[data-launcher="enamel"] .pp-frost-snow{
   transform-box:view-box;
   transform-origin:50% 50%;
 }
-.pp-layer[data-launcher="enamel"] .pp-frost-orb{
-  opacity:1;
+.pp-layer[data-launcher="enamel"] .pp-frost-orb{opacity:1;transform:none}
+.pp-layer[data-launcher="enamel"] .pp-frost-snow{opacity:0;transform:scale(.88) rotate(-6deg)}
+.pp-layer[data-launcher="enamel"] .pp-frost-art{
+  transition:transform 130ms cubic-bezier(.23,1,.32,1);
 }
-.pp-layer[data-launcher="enamel"] .pp-frost-snow{
-  opacity:0;
-  transform:scale(.36) rotate(-15deg);
+.pp-layer[data-launcher="enamel"] .pp-launcher:active:not(.pp-haze-burst) .pp-frost-art{
+  transform:scale(.97);
 }
-/* Suppress the legacy launcher-wide squash/glow. Animate only crystal artwork. */
+/* Keep only the bloom in the foreground, and release it at animationend. */
 .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst{
-  animation:none;
-  transform:none;
-  filter:none;
+  animation:none;transform:none;filter:none;
   z-index:3; /* keep the six-point bloom visible while the phone opens */
 }
 .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-orb{
-  animation:pp-frost-fold 680ms cubic-bezier(.21,.62,.28,1) both;
+  animation:pp-frost-fold 680ms linear both;
 }
 .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-snow{
-  animation:pp-frost-bloom 680ms cubic-bezier(.19,.78,.28,1) both;
+  animation:pp-frost-bloom 680ms linear both;
+}
+/* Six existing SVG arms get a subtle 16ms optical cascade, not six new objects.
+   Only opacity animates, leaving every SVG rotation and facet intact. */
+.pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-branch{
+  animation:pp-frost-facet 510ms cubic-bezier(.23,1,.32,1) var(--pp-frost-delay) both;
+}
+.pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-heart{
+  animation:pp-frost-heartlight 680ms linear both;
 }
 @keyframes pp-frost-fold{
-  0%{opacity:1;transform:scale(1) rotate(0)}
-  13%{opacity:1;transform:scale(.92) rotate(-2deg)}
-  28%,72%{opacity:0;transform:scale(.24) rotate(-17deg)}
-  88%{opacity:.2;transform:scale(.65) rotate(-4deg)}
+  0%{opacity:1;transform:scale(1) rotate(0);animation-timing-function:cubic-bezier(.23,1,.32,1)}
+  12%{opacity:1;transform:scale(.97) rotate(-1deg);animation-timing-function:cubic-bezier(.77,0,.175,1)}
+  31%{opacity:0;transform:scale(.79) rotate(-8deg)}
+  65%{opacity:0;transform:scale(.79) rotate(-8deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
+  87%{opacity:.84;transform:scale(.97) rotate(-1deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
   100%{opacity:1;transform:scale(1) rotate(0)}
 }
 @keyframes pp-frost-bloom{
-  0%,14%{opacity:0;transform:scale(.22) rotate(-20deg)}
-  26%{opacity:.66;transform:scale(.52) rotate(-12deg)}
-  44%{opacity:1;transform:scale(1.14) rotate(1deg)}
-  56%,71%{opacity:1;transform:scale(1.24) rotate(0)}
-  88%{opacity:.3;transform:scale(1.12) rotate(3deg)}
-  100%{opacity:0;transform:scale(.73) rotate(7deg)}
+  0%,10%{opacity:0;transform:scale(.88) rotate(-6deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
+  30%{opacity:1;transform:scale(1.06) rotate(0)}
+  43%,61%{opacity:1;transform:scale(1.10) rotate(0);animation-timing-function:cubic-bezier(.77,0,.175,1)}
+  78%{opacity:.78;transform:scale(1.02) rotate(2deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
+  94%{opacity:0;transform:scale(.9) rotate(5deg)}
+  100%{opacity:0;transform:scale(.88) rotate(6deg)}
 }
-/* Legacy 12 micro-ice flashes are restrained supporting glints, not the snowflake. */
+@keyframes pp-frost-facet{
+  0%,14%{opacity:.48}
+  46%,71%{opacity:1}
+  100%{opacity:.72}
+}
+@keyframes pp-frost-heartlight{
+  0%,23%{opacity:.55}
+  40%,64%{opacity:1}
+  86%,100%{opacity:.62}
+}
+/* Twelve original micro-crystals stay secondary to the six-branch jewel. */
 .pp-layer[data-launcher="enamel"] .pp-haze-spark{
-  stroke:#bbc7d4;
-  fill:#edf8fa;
-  filter:none;
+  stroke:#bbc7d4;fill:#edf8fa;filter:none;
 }
 .pp-layer[data-launcher="enamel"] .pp-haze-spark.is-snow{
-  stroke:#a8d4cf;
-  fill:none;
+  stroke:#a8d4cf;fill:none;
 }
 .pp-layer[data-launcher="enamel"] .pp-haze-burst .pp-haze-spark{
-  animation-duration:640ms;
-  opacity:0;
+  animation:pp-frost-glints 555ms cubic-bezier(.23,1,.32,1) var(--delay) both;
+}
+@keyframes pp-frost-glints{
+  0%,18%{opacity:0;transform:translate(-50%,-50%) scale(.38) rotate(0)}
+  38%{opacity:.56;transform:translate(-50%,-50%) scale(.56) rotate(0)}
+  70%{opacity:.3}
+  100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.48) rotate(var(--spin))}
 }
 @media (prefers-reduced-motion:reduce){
   .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-orb,
   .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-snow,
+  .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-branch,
+  .pp-layer[data-launcher="enamel"] .pp-launcher.pp-haze-burst .pp-frost-heart,
   .pp-layer[data-launcher="enamel"] .pp-haze-burst .pp-haze-spark{
     animation:none!important;
   }
   .pp-layer[data-launcher="enamel"] .pp-frost-orb{opacity:1;transform:none}
   .pp-layer[data-launcher="enamel"] .pp-frost-snow{opacity:0;transform:none}
+  .pp-layer[data-launcher="enamel"] .pp-frost-art{transition:none!important;transform:none!important}
 }

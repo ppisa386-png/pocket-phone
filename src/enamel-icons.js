@@ -1,4 +1,4 @@
-import { frostBloomLauncherArt } from './frost-bloom.js?v=1.2.30';
+import { frostBloomLauncherArt } from './frost-bloom.js?v=1.2.31';
 /*
  * Soft Haze Enamel — opt-in launcher art.
  * Original vector artwork, no third-party asset/license required.

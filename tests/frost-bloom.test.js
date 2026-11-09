@@ -63,3 +63,24 @@ test('animation is scoped to selected launcher and respects reduced motion and k
   assert.match(css,/z-index:3; \/\* keep the six-point bloom visible/);
   assert.match(ui,/event.animationName === 'pp-frost-bloom'/,'the temporary foreground stacking must be cleared on animation end');
 });
+
+
+test('Emil motion refinement is one shared, finite 680ms sequence with staggered crystal detail',()=>{
+  const art=frostBloomLauncherArt();
+  assert.equal((art.match(/--pp-frost-delay:/g)||[]).length,6,'one stagger value on every existing branch');
+  assert.deepEqual([...art.matchAll(/--pp-frost-delay:(\d+)ms/g)].map(m=>Number(m[1])),[0,16,32,48,64,80]);
+  assert.equal((art.match(/class="pp-frost-heart"/g)||[]).length,1,'central inlay is animated, never duplicated');
+  for(const name of ['pp-frost-fold','pp-frost-bloom','pp-frost-facet','pp-frost-heartlight','pp-frost-glints']){
+    assert.match(css,new RegExp('@keyframes '+name));
+  }
+  assert.match(css,/pp-frost-bloom 680ms linear both/);
+  assert.match(css,/pp-frost-fold 680ms linear both/);
+  assert.match(css,/pp-frost-facet 510ms/);
+  assert.match(css,/cubic-bezier\(\.23,1,\.32,1\)/,'press motion responds promptly');
+  assert.match(css,/\[data-launcher="enamel"\] \.pp-haze-burst \.pp-haze-spark/);
+  assert.match(css,/\[data-launcher="enamel"\] \.pp-launcher:active:not\(\.pp-haze-burst\)/);
+  assert.match(css,/prefers-reduced-motion:reduce/);
+  assert.match(css,/\.pp-frost-branch,\s*\n\s*\.pp-layer\[data-launcher="enamel"\] \.pp-launcher\.pp-haze-burst \.pp-frost-heart/);
+  assert.match(ui,/if \(!launcher\.classList\.contains\('pp-haze-burst'\)\)/,'rapid taps do not rewind in-flight motion');
+  assert.doesNotMatch(ui,/void launcher\.offsetWidth/,'no forced reflow to restart the animation');
+});

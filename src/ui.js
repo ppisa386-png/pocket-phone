@@ -16,9 +16,9 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.30';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.31';
 import { icon } from './icons.js?v=1.2';
-import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.30';
+import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.31';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
 import { renderPhoneScreen } from './phone-view.js?v=1.2';
@@ -775,9 +775,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function toggleLauncher() {
         if (settings.launcherStyle === 'enamel' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-            launcher.classList.remove('pp-haze-burst');
-            void launcher.offsetWidth; // reset only this short CSS animation
-            launcher.classList.add('pp-haze-burst');
+            // Do not restart an already-playing jewel reveal on rapid taps.
+            // Opening/closing the phone stays immediate and independent.
+            if (!launcher.classList.contains('pp-haze-burst')) launcher.classList.add('pp-haze-burst');
         }
         opened ? close() : open();
     }

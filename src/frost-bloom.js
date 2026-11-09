@@ -40,7 +40,7 @@ const orbPetal = (degrees, i) => {
 const snowBranch = (degrees, i) => {
   const front = i % 2 ? LILAC : LAKE;
   const back = i % 2 ? MINT : LILAC;
-  return `<g class="pp-frost-branch" transform="rotate(${degrees} 50 50)">
+  return `<g class="pp-frost-branch" style="--pp-frost-delay:${i*16}ms" transform="rotate(${degrees} 50 50)">
     <path d="M50 44.6 47.6 34.4 48.1 20.8 50 8.4 51.9 20.8 52.4 34.4Z" fill="${front}" fill-opacity=".85" stroke="#819aaa" stroke-opacity=".82" stroke-width=".90" stroke-linejoin="round"/>
     <path d="M50 44.6 47.6 34.4 48.1 20.8 50 8.4Z" fill="${ICE}" fill-opacity=".9"/>
     <path d="M50 8.4 51.9 20.8 52.4 34.4 50 44.6Z" fill="${back}" fill-opacity=".61"/>
@@ -97,11 +97,13 @@ function orbSvg() {
 function snowSvg() {
   return `<g class="pp-frost-snow">
     ${Array.from({length:6}, (_,i)=>snowBranch(i*60,i)).join('')}
+    <g class="pp-frost-heart">
     <path d="M50 38.8 60 44.4 60 55.6 50 61.2 40 55.6 40 44.4Z" fill="${METAL}" stroke="#a1a1ad" stroke-width=".8" stroke-linejoin="round"/>
     <path d="M50 40.8 58.2 45.4 58.2 54.6 50 59.2 41.8 54.6 41.8 45.4Z" fill="#f9fbfa" stroke="#fffdf8" stroke-width="1.15"/>
     ${Array.from({length:6}, (_,i)=>`<path d="M50 50 50 40.8 58.2 45.4Z" transform="rotate(${i*60} 50 50)" fill="${[ICE,LAKE,LILAC,MINT,LAKE,LILAC][i]}" fill-opacity=".86" stroke="#fefefa" stroke-width=".55"/>`).join('')}
     <path d="M50 45.9 53.5 47.9 53.5 52.1 50 54.1 46.5 52.1 46.5 47.9Z" fill="${ICE}" fill-opacity=".88" stroke="#c1c7d4" stroke-opacity=".65" stroke-width=".52"/>
     <path d="M50 45.9 53.5 47.9 50 50Z" fill="#fff" fill-opacity=".85"/>
+    </g>
   </g>`;
 }
 
