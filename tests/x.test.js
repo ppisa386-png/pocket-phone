@@ -1075,7 +1075,7 @@ test('NPC home and square posts independently keep optional image descriptions',
  const f=setup();try{
   const home=feedResult({posts:[
     {name:'Alex',handle:'alex',has_account:true,text:'The local record store.',imageDescription:'木制唱片架前摆着一张老黑胶。'},
-    {name:'Bea',handle:'bea',has_account:true,text:'A text-only update.'}
+    {name:'同学1',handle:'fixture_1',authorKind:'npc',has_account:true,npcEvidence:'同学1是校园乐队成员。',text:'A text-only update.'}
   ]});
   f.reply(home);
   ok(await f.x.refresh());
