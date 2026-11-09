@@ -11,7 +11,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const { chromium } = createRequire(import.meta.url)('playwright');
 const output = resolve(root, '..', 'qa-results');
 await mkdir(output, { recursive: true });
-const fixtureHTML = "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>榴莲手机·真实模块视觉验收</title><style>body{margin:0;background:#e9e5e4;font-family:system-ui}main{padding:20px;color:#726c70;font-size:12px}</style></head><body><main>实际 HTML / CSS / SVG 浏览器测试（离线数据）</main><script type=\"module\">\nimport { mountPhone } from '/src/ui.js';\nimport { normalizeSettings } from '/src/config.js';\nconst KEY='pocket_phone_preview_v010';\nlet settings=normalizeSettings(JSON.parse(localStorage.getItem(KEY)||'{}'));\nconst adapter={\n  load:()=>settings,\n  save(next){settings=next;localStorage.setItem(KEY,JSON.stringify(next));},\n  onChange(){},\n  storyChat:()=>[],\n  userName:()=> '用户',\n  diagnostics:{add(error){console.error(error);},text:()=>'',persistent:()=>true},\n  connectionName:()=> '离线视觉验收'\n};\nconst styles=await (await fetch('/style.css')).text()+'\\n'+await (await fetch('/style-enamel.css')).text();\nwindow.controller=mountPhone({adapter,styles});\nwindow.controller.open();\nwindow.ready=true;\n</script></body></html>";
+const fixtureHTML = "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>榴莲手机·真实模块视觉验收</title><style>body{margin:0;background:#e9e5e4;font-family:system-ui}main{padding:20px;color:#726c70;font-size:12px}</style></head><body><main>实际 HTML / CSS / SVG 浏览器测试（离线数据）</main><script type=\"module\">\nimport { mountPhone } from '/src/ui.js';\nimport { normalizeSettings } from '/src/config.js';\nconst KEY='pocket_phone_preview_v010';\nlet settings=normalizeSettings(JSON.parse(localStorage.getItem(KEY)||'{}'));\nconst adapter={\n  load:()=>settings,\n  save(next){settings=next;localStorage.setItem(KEY,JSON.stringify(next));},\n  onChange(){},\n  storyChat:()=>[{is_user:false,mes:'当前时间：2026-11-09 13:13'}],\n  userName:()=> '用户',\n  diagnostics:{add(error){console.error(error);},text:()=>'',persistent:()=>true},\n  connectionName:()=> '离线视觉验收'\n};\nconst styles=await (await fetch('/style.css')).text()+'\\n'+await (await fetch('/style-enamel.css')).text();\nwindow.controller=mountPhone({adapter,styles});\nwindow.controller.open();\nwindow.ready=true;\n</script></body></html>";
 const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -45,6 +45,8 @@ try {
   assert.equal(await page.locator('.pp-haze-art').count(),0);
   assert.equal(await page.locator('.pp-status-time').isHidden(),true,'desktop top-left time is hidden');
   assert.equal(await page.locator('.pp-big-time').isVisible(),true,'desktop central clock remains');
+  assert.equal(await page.locator('.pp-big-time').innerText(),'13:13','preview uses a representative fictional story time, not wall time');
+  assert.match(await page.locator('.pp-date').innerText(),/2026-11-09/,'desktop has a real date layout');
   assert.equal(await page.locator('.pp-island').count(),1,'status island remains for dragging');
   await phone.screenshot({path:resolve(output,'enamel-classic-before.png')});
 
@@ -168,6 +170,7 @@ try {
   assert.equal(await launcher.evaluate(el=>el.classList.contains('pp-haze-burst')),false,'dragging cannot emit particles');
 
   await launcher.click();
+  await page.waitForTimeout(750); // the jewel must finish its 680ms foreground reveal before stable layout capture
   await page.setViewportSize({width:320,height:568});
   assert.ok(await page.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'narrow home has no horizontal overflow');
   await phone.screenshot({path:resolve(output,'enamel-home-320.png')});
