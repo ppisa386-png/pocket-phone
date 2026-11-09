@@ -3,7 +3,7 @@ import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?
 import { readStoryClock } from './story-clock.js?v=1.2';
 const foodText=(s,n=200)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const foodItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
-export const FOOD_SHOP_COUNT=10,FOOD_MENU_MIN=20,FOOD_MENU_MAX=30,FOOD_CATEGORY_MIN=5;
+export const FOOD_SHOP_COUNT=10,FOOD_MENU_MIN=20,FOOD_MENU_MAX=30,FOOD_CATEGORY_MIN=5,FOOD_SPECIAL_COUNT=5,FOOD_SPECIAL_DISCOUNT=20;
 const dishNameKey=s=>String(s||'').normalize('NFKC').trim().toLowerCase();
 const dishPrice=(value,currency)=>{
     const amount=String(value??'');
@@ -22,7 +22,7 @@ export function validateShops(data,ledgerCurrency=null){
     if(ledgerCurrency&&returned!==ledgerCurrency)throw Error('菜单币种与账本不一致，请重新搜索。');
     const currency=ledgerCurrency||returned;
     if(!validCurrency(currency))throw Error('菜单币种无效，请重新搜索。');
-    return shops.map((shop,index)=>{
+    const validated=shops.map((shop,index)=>{
         const name=foodText(shop?.name,100),cuisine=foodText(shop?.cuisine,60),description=foodText(shop?.description,200);
         if(!name)throw Error('店铺信息不完整，请重新搜索。');
         const menu=Array.isArray(shop?.menu)?shop.menu:[];
@@ -39,6 +39,25 @@ export function validateShops(data,ledgerCurrency=null){
         if(categories.size<FOOD_CATEGORY_MIN)throw Error(`${name} 的菜单至少需要 ${FOOD_CATEGORY_MIN} 个有区别的品类，请重新搜索。`);
         return {id:`foodShop:${index}`,type:'foodShop',name,cuisine,description,currency,menu:dishes};
     });
+    return applyDailySpecials(validated);
+}
+function applyDailySpecials(shops){
+    for(const shop of shops)for(const dish of shop.menu||[]){
+        if(dish.specialDiscount&&Number.isSafeInteger(dish.originalPriceMinor)){
+            dish.priceMinor=dish.originalPriceMinor;
+            delete dish.originalPriceMinor;
+            delete dish.specialDiscount;
+        }
+    }
+    for(let i=0;i<FOOD_SPECIAL_COUNT;i++){
+        const shop=shops[Math.floor(i*shops.length/FOOD_SPECIAL_COUNT)];
+        const dish=shop.menu[Math.min(2+i*3,shop.menu.length-1)];
+        const originalPriceMinor=dish.priceMinor;
+        dish.originalPriceMinor=originalPriceMinor;
+        dish.priceMinor=Math.max(1,Math.floor(originalPriceMinor*(100-FOOD_SPECIAL_DISCOUNT)/100));
+        dish.specialDiscount=FOOD_SPECIAL_DISCOUNT;
+    }
+    return shops;
 }
 export function createFood({memory,phone,getContext,getSettings,paymentRequest}){
     const run=work=>phone.appTask(async(view,current,request)=>{
@@ -62,11 +81,22 @@ export function createFood({memory,phone,getContext,getSettings,paymentRequest})
         if(!Number.isInteger(next)||next<0||next>99)throw Error('数量需为 0—99。');
         if(next===0){const index=items.findIndex(i=>i.dishId===dishId);if(index>=0)items.splice(index,1);}
         else if(line)line.quantity=next;
-        else items.push({dishId,shopId,shopName:shop.name,cuisine:shop.cuisine,name:dish.name,category:dish.category,priceMinor:dish.priceMinor,currency:shop.currency,quantity:next});
+        else items.push({dishId,shopId,shopName:shop.name,cuisine:shop.cuisine,name:dish.name,category:dish.category,priceMinor:dish.priceMinor,currency:shop.currency,quantity:next,...(dish.specialDiscount?{originalPriceMinor:dish.originalPriceMinor,specialDiscount:dish.specialDiscount}:{})});
         return [foodSet({...cart,items})];
     }
     return {
-        open:()=>memory.read(),
+        async open(){
+            const view=await memory.read();
+            const shops=foodItems(view.state,'foodShop');
+            const count=shops.reduce((n,shop)=>n+(shop.menu||[]).filter(d=>d.specialDiscount).length,0);
+            if(shops.length&&count!==FOOD_SPECIAL_COUNT){
+                const migrated=applyDailySpecials(shops.map(shop=>structuredClone(shop)));
+                const ticket=await memory.begin(view);
+                await memory.commit(ticket,migrated.map(foodSet));
+                return memory.read();
+            }
+            return view;
+        },
         search(query){return run(async(state,current,request,commit)=>{
             const q=foodText(query,300);if(!q)throw Error('请输入想吃的菜系或菜品。');
             const currency=walletCurrency(state);
@@ -115,7 +145,7 @@ export function createFood({memory,phone,getContext,getSettings,paymentRequest})
                     throw error;
                 }
             }
-            await commit([foodSet({id,type:'foodOrder',shopId,shopName:shop?.name||lines[0].shopName,cuisine:shop?.cuisine||lines[0].cuisine||'',items:lines.map(({dishId,name,category,priceMinor,currency,quantity})=>({dishId,name,category,priceMinor,currency,quantity})),totals,recipient:receiver,createdDay:clock.day,createdHour:clock.hour,sourceIndex:context.chat.length-1,createdAt:Date.now(),paymentMethod:npcPay?'npc':'self',payerName:payer,paymentStatus:'paid'}),
+            await commit([foodSet({id,type:'foodOrder',shopId,shopName:shop?.name||lines[0].shopName,cuisine:shop?.cuisine||lines[0].cuisine||'',items:lines.map(i=>({dishId:i.dishId,name:i.name,category:i.category,priceMinor:i.priceMinor,currency:i.currency,quantity:i.quantity,...(i.specialDiscount?{originalPriceMinor:i.originalPriceMinor,specialDiscount:i.specialDiscount}:{})})),totals,recipient:receiver,createdDay:clock.day,createdHour:clock.hour,sourceIndex:context.chat.length-1,createdAt:Date.now(),paymentMethod:npcPay?'npc':'self',payerName:payer,paymentStatus:'paid'}),
                 foodSet({id:'foodCart',type:'foodCart',items:(state.orders.foodCart?.items||[]).filter(i=>i.shopId!==shopId)}),
                 ...(npcPay?[]:[assetSet(cashRecord('foodOrder:'+id,-total,'榴莲外卖 · '+(shop?.name||lines[0].shopName),{currency,source:'food',orderId:id,day:clock.day}))])]);
             return {id};

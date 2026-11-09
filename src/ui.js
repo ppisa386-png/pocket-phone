@@ -5,7 +5,7 @@ import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.16'
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.14';
-import { createFoodPanel } from './food-view.js?v=1.2';
+import { createFoodPanel } from './food-view.js?v=1.2.17';
 import { bindComposerKeys } from './composer.js?v=1.2';
 import { createXPanel } from './x-view.js?v=1.2.8';
 import { xUnread } from './x.js?v=1.2';
@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.16';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.17';
 import { icon } from './icons.js?v=1.2';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
@@ -295,7 +295,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(next){next.focus({preventScroll:true});if(selection)next.setSelectionRange(...selection);}
     }
     const foodScroll=new Map();
-    const foodPanel=createFoodPanel({adapter,getView:()=>viewFor('food'),redraw:()=>{if(!destroyed&&opened&&route==='app:food')renderFood();},notice});
+    const foodPanel=createFoodPanel({adapter,getView:()=>viewFor('food'),redraw:()=>{if(!destroyed&&opened&&route==='app:food')renderFood();},notice,assetBase:adapter.foodAssetBase||'assets/food/'});
     function renderFood(){
         const active=shadow.activeElement,field=active?.dataset.foodField;
         const selection=field&&active.type==='text'?[active.selectionStart,active.selectionEnd]:null;
@@ -593,7 +593,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             const fields=editHost?Object.fromEntries(Array.from(editHost.querySelectorAll('[data-asset-field]'),input=>[input.dataset.assetField,input.value])):undefined;
             void assetPanel.action(target.dataset.assetAction,target.dataset.assetTab,content.querySelector('[data-asset-rate]')?.value,fields);return;}
         if(target.dataset.shopAction){void shopPanel.action(target.dataset.shopAction,target.dataset.shopId);return;}
-        if(target.dataset.foodAction){void foodPanel.action(target.dataset.foodAction,target.dataset.foodId);return;}
+        if(target.dataset.foodAction){void foodPanel.action(target.dataset.foodAction,target.dataset.foodId,target.dataset.foodShop);return;}
         if (target.dataset.xAction) { void xPanel.action(target.dataset.xAction,target.dataset.xId); return; }
         if (target.dataset.chatAction) { void currentChat()?.action(target.dataset.chatAction,target.dataset.chatId); return; }
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }

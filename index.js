@@ -5,7 +5,7 @@ import { createAssets } from './src/assets.js?v=1.2';
 import { createAssetBridge } from './src/assets-story.js?v=1.2';
 import { createOpinionBridge } from './src/x-opinion.js?v=1.2';
 import { createAmazon } from './src/amazon.js?v=1.2.14';
-import { createFood } from './src/food.js?v=1.2';
+import { createFood } from './src/food.js?v=1.2.17';
 import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
@@ -15,12 +15,12 @@ import { createChatApp } from './src/chat-apps.js?v=1.2';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.16';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.17';
 import { mountPhone } from './src/ui.js?v=1.2.16';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.12';
 import { createPhoneService } from './src/phone.js?v=1.2';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.12';
-import { normalizeSettings } from './src/config.js?v=1.2.16';
+import { normalizeSettings } from './src/config.js?v=1.2.17';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.12';
 
@@ -62,7 +62,7 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const response = await fetch(new URL('./style.css?v=1.2.16', import.meta.url), { cache: 'no-cache' });
+        const response = await fetch(new URL('./style.css?v=1.2.17', import.meta.url), { cache: 'no-cache' });
         if (!response.ok) throw new Error('无法读取榴莲手机样式，请检查安装包是否完整。');
         const styles = await response.text();
         let hostModule=null;
@@ -102,6 +102,7 @@ async function start() {
             const paymentRequest = enabled ? createPaymentRequest({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null;
             const adapter = {
                 weatherAssetBase:new URL('./assets/weather/',import.meta.url).href,
+                foodAssetBase:new URL('./assets/food/',import.meta.url).href,
                 daily:enabled ? createDaily({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 weather:enabled ? createWeather({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,
                 assets:enabled ? createAssets({memory,phone:phoneService,getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null,

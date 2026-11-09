@@ -1,4 +1,4 @@
-import { foodItems } from './food.js?v=1.2';
+import { foodItems } from './food.js?v=1.2.17';
 import { formatMoney } from './currency.js?v=1.2';
 import { dayDate } from './story-clock.js?v=1.2';
 import { foodDeliveryStatus } from './delivery.js?v=1.2';
@@ -19,31 +19,30 @@ const searchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>';
 const arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M13 5l7 7-7 7"/></svg>';
 
-// Small locally rendered food motifs, deliberately not remote images or AI-generated
-// per-dish assets. CSS supplies the color variations; all restaurant data remains real.
-const motifs = [
-    '<circle cx="40" cy="40" r="27"/><circle cx="40" cy="40" r="19"/><path d="M28 40c7-12 17 12 24 0M31 33c5-6 12 3 18-1"/>',
-    '<path d="M16 43h48c-2 18-10 23-24 23s-22-5-24-23Z"/><path d="M23 48h34M31 16c-7 7 5 11-1 19M45 14c-7 9 4 11-2 19M54 19c-6 6 1 10-4 15"/>',
-    '<path d="M20 30h39v23c0 8-8 12-19.5 12S20 61 20 53V30Z"/><path d="M59 35h4c12 0 10 19-3 19M25 25h29M32 17c-3 4 2 7-1 10M45 17c-3 4 2 7-1 10"/>',
-    '<path d="M17 49c2-18 15-28 29-24 9 2 17 12 19 23-6 9-19 17-28 16-9 0-17-6-20-15Z"/><path d="M25 45c8-7 13-6 17-5M39 30c5 6 6 12 8 19M24 54c8 1 13-2 17-7"/>',
-    '<path d="M20 25h40v30a20 20 0 0 1-40 0V25Z"/><path d="M15 25h50M30 18l2-8M40 17V7M50 18l-2-8"/><path d="M26 48c10 8 18 8 28 0"/>',
-    '<circle cx="40" cy="40" r="26"/><path d="M22 48c12-15 24-15 36 0M28 30c8 8 16 8 24 0"/><path d="M40 15v8M40 57v9"/>'
-];
-function restaurantArt(cuisine, index) {
-    const kind = String(cuisine || '').toLowerCase();
-    let choice = index % motifs.length;
-    if (/面|拉面|粉|汤|米线|noodle|ramen|soup/.test(kind)) choice = 1;
-    else if (/奶茶|饮品|茶|咖啡|coffee|tea|drink|cafe/.test(kind)) choice = 2;
-    else if (/面包|烘焙|法式|甜品|bakery|bread|pastry/.test(kind)) choice = 3;
-    else if (/披萨|意大|pizza|italian|pasta/.test(kind)) choice = 0;
-    else if (/寿司|日式|日本|sushi|japan/.test(kind)) choice = 4;
-    return '<svg viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + motifs[choice] + '</svg>';
+function foodImageNumber(dish,index=0){
+    const clue=String((dish?.category||'')+' '+(dish?.name||'')).toLowerCase();
+    const choices=[
+        [/沙拉|蔬菜|素食|salad|vegetable/,1],
+        [/面|粉|意面|拉面|pasta|noodle|lasagne/,2],
+        [/汤|南瓜|浓汤|soup|pumpkin/,3],
+        [/牛|肉|鸡|猪|和牛|烤|beef|meat|chicken|steak|wagyu/,4],
+        [/橄榄|小食|前菜|olive|appetizer/,5],
+        [/鱼|虾|海鲜|fish|seafood|shrimp|salmon/,6]
+    ];
+    const found=choices.find(([pattern])=>pattern.test(clue));
+    return found?found[1]:(Math.abs(Number(index)||0)%6)+1;
 }
 
-export function createFoodPanel({ adapter, getView, redraw, notice }) {
+export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = adapter?.foodAssetBase || 'assets/food/' }) {
     let tab = 'home', selectedShop = null, category = 'all';
     let status = '', working = false, epoch = 0, drafts = {}, buy = null;
     const chat = () => adapter.storyChat?.() || [];
+    const assetRoot=String(assetBase||'assets/food/').replace(/\/?$/,'/');
+    const asset=file=>esc(assetRoot+file);
+    const foodImage=(dish,index=0)=>asset('menu-'+foodImageNumber(dish,index)+'.png');
+    const priceMarkup=(dish,currency)=>dish.specialDiscount&&Number.isSafeInteger(dish.originalPriceMinor)
+        ? '<div class="pp-food-price-row"><b class="pp-food-price">'+esc(money(dish.priceMinor,currency))+'</b><del>'+esc(money(dish.originalPriceMinor,currency))+'</del><span>8折</span></div>'
+        : '<b class="pp-food-price">'+esc(money(dish.priceMinor,currency))+'</b>';
     const disabled = () => working || getView().busy ? ' disabled' : '';
     const cart = state => state.orders?.foodCart?.items || [];
     const lineOf = (state, dishId) => cart(state).find(item => item.dishId === dishId);
@@ -84,9 +83,8 @@ export function createFoodPanel({ adapter, getView, redraw, notice }) {
         const count = qty(shopLines(state, shop.id));
         const prices = (shop.menu || []).map(d => d.priceMinor).filter(Number.isFinite);
         const min = prices.length ? money(Math.min(...prices), shop.currency) : '—';
-        const tint = index % 6;
         return '<article class="pp-food-shop-card"><button type="button" class="pp-food-shop-open" data-food-action="shop" data-food-id="' + esc(shop.id) + '"' + disabled() + '>' +
-            '<div class="pp-food-shop-thumb" data-tint="' + tint + '">' + restaurantArt(shop.cuisine, index) + '</div>' +
+            '<div class="pp-food-shop-thumb" data-tint="' + (index % 6) + '"><img src="' + foodImage({category:shop.cuisine,name:shop.cuisine},index) + '" alt="" loading="lazy" decoding="async"></div>' +
             '<div class="pp-food-shop-content"><div class="pp-food-shop-row"><strong>' + esc(shop.name) + '</strong>' + (count ? '<b class="pp-food-shop-badge" aria-label="已选 ' + count + ' 件">' + count + '</b>' : '') + '</div>' +
             '<small class="pp-food-cuisine">' + esc(shop.cuisine || '精选餐厅') + '</small>' +
             (shop.description ? '<p>' + esc(shop.description) + '</p>' : '') +
@@ -94,14 +92,39 @@ export function createFoodPanel({ adapter, getView, redraw, notice }) {
             '</div><span class="pp-food-shop-chevron">' + chevron + '</span></button></article>';
     }
 
+    function specialCard(entry, index, state) {
+        const {shop,dish}=entry,line=lineOf(state,dish.id);
+        return '<article class="pp-food-special-card">' +
+            '<button type="button" class="pp-food-special-open" data-food-action="shop" data-food-id="' + esc(shop.id) + '"' + disabled() + '>' +
+            '<div class="pp-food-special-photo"><img src="' + foodImage(dish,index) + '" alt="" loading="lazy" decoding="async"><span class="pp-food-special-badge">8折特价</span></div>' +
+            '<div class="pp-food-special-info"><small>' + esc(shop.name) + '</small><strong>' + esc(dish.name) + '</strong>' + priceMarkup(dish,shop.currency) + '</div></button>' +
+            '<button type="button" class="pp-food-special-add" data-food-action="special-add" data-food-id="' + esc(dish.id) + '" data-food-shop="' + esc(shop.id) + '" aria-label="加入购物车：' + esc(dish.name) + '"' + disabled() + '>＋</button>' +
+            (line ? '<small class="pp-food-special-picked">已选 ' + line.quantity + ' 份</small>' : '') +
+            '</article>';
+    }
+
+    function specialsSection(shops,state) {
+        const specials=shops.flatMap(shop=>(shop.menu||[]).filter(d=>d.specialDiscount).map(d=>({shop,dish:d}))).slice(0,5);
+        return '<section class="pp-food-specials"><div class="pp-food-section-heading">' +
+            '<div><span class="pp-food-section-overline">TODAY’S SPECIALS</span><h2>今日特价</h2><img class="pp-food-section-separator" src="' + asset('separator.svg') + '" alt=""></div>' +
+            '<span class="pp-food-section-count">' + specials.length + ' / 5 款</span></div>' +
+            (specials.length ? '<div class="pp-food-special-rail">' + specials.map((entry,i)=>specialCard(entry,i,state)).join('') + '</div>' :
+            '<div class="pp-food-special-empty">搜索餐厅后，这里会从本次菜单中精选五款 8 折菜品。</div>') +
+            '</section>';
+    }
+
     function homePage(state, shops) {
         const previous = state.orders?.foodSearch;
         return '<section class="pp-food-home">' +
-            '<div class="pp-food-intro"><p class="pp-food-kicker">A LITTLE SOMETHING GOOD</p><h1>今天吃点好的<span>。</span></h1><p class="pp-food-intro-note">从熟悉的味道，到今天的新发现。</p></div>' +
+            '<section class="pp-food-hero"><img class="pp-food-hero-photo" src="' + asset('food.jpg') + '" alt="" loading="lazy" decoding="async">' +
+            '<div class="pp-food-hero-shade"></div><img class="pp-food-hero-shape" src="' + asset('shape-5.png') + '" alt="" aria-hidden="true">' +
+            '<div class="pp-food-hero-copy"><span class="pp-food-hero-kicker">GOOD FOOD · GOOD MOOD</span><h1>今天，吃点好的。</h1>' +
+            '<p>把喜欢的味道，送到身边。</p><img class="pp-food-hero-separator" src="' + asset('separator.svg') + '" alt=""></div></section>' +
             '<div class="pp-food-search"><form class="pp-food-search-form" data-food-form="search">' +
             '<label class="pp-food-search-input">' + searchIcon + '<span class="pp-food-sr">想吃的东西</span><input data-food-field="query" name="query" type="search" value="' + esc(drafts.query ?? (previous?.query || '')) + '" placeholder="今天想吃什么呢" autocomplete="off"' + disabled() + '></label>' +
             '<button type="submit" class="pp-food-search-btn" aria-label="搜索餐厅"' + disabled() + '>' + arrow + '</button></form></div>' +
-            '<div class="pp-food-section-heading"><div><span class="pp-food-section-overline">DISCOVER</span><h2>' + (shops.length ? '找到的好味道' : '探索你的下一餐') + '</h2></div>' +
+            specialsSection(shops,state) +
+            '<div class="pp-food-section-heading pp-food-shop-heading"><div><span class="pp-food-section-overline">DISCOVER</span><h2>' + (shops.length ? '发现好味道' : '探索你的下一餐') + '</h2><img class="pp-food-section-separator" src="' + asset('separator.svg') + '" alt=""></div>' +
             (shops.length ? '<span class="pp-food-section-count">' + shops.length + ' 家餐厅</span>' : '') + '</div>' +
             (shops.length ? '<div class="pp-food-shops">' + shops.map((shop, i) => shopCard(shop, i, state)).join('') + '</div>' : empty('food', previous ? '换个口味试试？' : '从喜欢的味道开始', '输入菜系、饮品或任何想吃的东西，寻找合适的餐厅。')) +
             '</section>';
@@ -110,8 +133,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice }) {
     function shopPage(state) {
         const shop = state.orders[selectedShop];
         if (!shop || shop.type !== 'foodShop') { selectedShop = null; return ''; }
-        const names = [];
-        const groups = new Map();
+        const names = [],groups = new Map();
         for (const dish of shop.menu || []) {
             const key = String(dish.category || '其他');
             if (!groups.has(key)) { names.push(key); groups.set(key, []); }
@@ -125,35 +147,37 @@ export function createFoodPanel({ adapter, getView, redraw, notice }) {
                 ? '<div class="pp-food-step"><button type="button" class="pp-food-step-btn" data-food-action="dec" data-food-id="' + esc(dish.id) + '" aria-label="减少 ' + esc(dish.name) + ' 数量"' + disabled() + '>−</button><b aria-label="已选 ' + line.quantity + ' 份">' + line.quantity + '</b><button type="button" class="pp-food-step-btn" data-food-action="inc" data-food-id="' + esc(dish.id) + '" aria-label="增加 ' + esc(dish.name) + ' 数量"' + disabled() + '>+</button></div>'
                 : '<button type="button" class="pp-food-add" data-food-action="inc" data-food-id="' + esc(dish.id) + '" aria-label="加一份 ' + esc(dish.name) + '"' + disabled() + '>+</button>';
         };
-        const dishRow = (dish, i) => '<article class="pp-food-dish"><div class="pp-food-dish-info"><strong>' + esc(dish.name) + '</strong>' +
-            (dish.description ? '<p>' + esc(dish.description) + '</p>' : '') +
-            '<b class="pp-food-price">' + esc(money(dish.priceMinor, shop.currency)) + '</b></div>' + stepper(dish) + '</article>';
+        const dishRow = (dish, i) => '<article class="pp-food-dish"><div class="pp-food-dish-image"><img src="' + foodImage(dish,i) + '" alt="" loading="lazy" decoding="async"></div>' +
+            '<div class="pp-food-dish-info"><div class="pp-food-dish-title"><strong>' + esc(dish.name) + '</strong>' + (dish.specialDiscount ? '<span class="pp-food-dish-badge">今日特价 · 8折</span>' : '') + '</div>' +
+            (dish.description ? '<p>' + esc(dish.description) + '</p>' : '') + priceMarkup(dish,shop.currency) + '</div>' + stepper(dish) + '</article>';
         const sections = names.filter(name => category === 'all' || category === name).map(name =>
             '<section class="pp-food-menu-group"><h4 class="pp-food-cat">' + esc(name) + '<span>' + groups.get(name).length + ' ITEMS</span></h4>' + groups.get(name).map(dishRow).join('') + '</section>'
         ).join('');
         const rail = '<div class="pp-food-category-rail" role="group" aria-label="菜品分类">' +
             [['all', '全部'], ...names.map(n => [n, n])].map(([id, name]) => '<button type="button" data-food-action="category" data-food-id="' + esc(id) + '" aria-pressed="' + (category === id) + '"' + disabled() + '>' + esc(name) + '</button>').join('') + '</div>';
-        return '<section class="pp-food-shoppage">' +
-            '<div class="pp-food-shophead"><button type="button" class="pp-food-back" data-food-action="back"' + disabled() + '><span>‹</span> 返回餐厅</button>' +
-            '<p class="pp-food-shop-overline">CURATED MENU · ' + (shop.menu?.length || 0) + ' ITEMS</p><h2>' + esc(shop.name) + '</h2>' +
-            '<p class="pp-food-shop-subtitle">' + esc([shop.cuisine, shop.description].filter(Boolean).join(' · ')) + '</p></div>' +
+        return '<section class="pp-food-shoppage"><div class="pp-food-detail-cover"><img class="pp-food-detail-photo" src="' + asset('food.jpg') + '" alt="" loading="lazy" decoding="async">' +
+            '<div class="pp-food-detail-shade"></div><img class="pp-food-detail-shape" src="' + asset('shape-5.png') + '" alt="" aria-hidden="true">' +
+            '<button type="button" class="pp-food-detail-back" data-food-action="back"' + disabled() + '>‹ 返回餐厅</button>' +
+            '<div class="pp-food-detail-copy"><p>CURATED MENU · ' + (shop.menu?.length || 0) + ' ITEMS</p><h2>' + esc(shop.name) + '</h2>' +
+            '<span>' + esc([shop.cuisine, shop.description].filter(Boolean).join(' · ')) + '</span><img src="' + asset('separator.svg') + '" alt=""></div></div>' +
             rail + '<div class="pp-food-menu" data-food-menu="shop:' + esc(shop.id) + ':' + esc(category) + '">' + sections + '</div>' +
             (buy ? '<div class="pp-food-buy-popover">' + buyBubble() + '</div>' : '') +
             '<div class="pp-food-bar"><div class="pp-food-bar-total"><small>' + (qty(lines) ? '已选 ' + qty(lines) + ' 份 · 合计' : '尚未选择菜品') + '</small><b>' + (lines.length ? esc(total(lines)) : '—') + '</b></div>' +
-            '<button type="button" class="pp-food-buy" data-food-action="buy"' + (lines.length ? disabled() : ' disabled') + '>结算 ' + arrow + '</button></div></section>';
+            '<button type="button" class="pp-food-buy" data-food-action="buy"' + (lines.length ? disabled() : ' disabled') + '>去结算 ' + arrow + '</button></div></section>';
     }
 
     function ordersPage(state) {
         const orders = foodItems(state, 'foodOrder').slice().reverse();
-        return '<section class="pp-food-orders-page"><div class="pp-food-section-heading"><div><span class="pp-food-section-overline">ORDER HISTORY</span><h2>你的订单</h2></div><span class="pp-food-section-count">' + orders.length + ' 笔</span></div>' +
-            (orders.length ? '<div class="pp-food-orders">' + orders.map(order => {
-                const delivery = foodDeliveryStatus(order, chat());
-                const done = delivery.delivered === true; // 状态以配送状态机的 delivered 字段为准，不猜文案
-                return '<article class="pp-food-order"><header><div class="pp-food-order-heading"><small>' + esc(clockText(order)) + '</small><h3>' + esc(order.shopName) + '</h3></div><span class="pp-food-order-status" data-done="' + done + '">' + esc(delivery.label) + '</span></header>' +
-                    '<div class="pp-food-order-body">' +
-                    '<div class="pp-food-order-meta"><span>送给 ' + esc(order.recipient?.name || 'user') + '</span>' + (order.paymentMethod === 'npc' && order.payerName ? '<span>由 ' + esc(order.payerName) + ' 代付</span>' : '') + '</div>' +
-                    '<div class="pp-food-order-lines">' + (order.items || []).map(item => '<div class="pp-food-order-line"><span>' + esc(item.name) + '<em>× ' + Number(item.quantity || 0) + '</em></span><b>' + esc(money(item.priceMinor * item.quantity, item.currency || order.items?.[0]?.currency)) + '</b></div>').join('') + '</div>' +
-                    '<div class="pp-food-order-total"><span>实付金额</span><b>' + esc(Object.entries(order.totals || {}).map(([c, v]) => money(v, c)).join(' + ')) + '</b></div></div></article>';
+        return '<section class="pp-food-orders-page"><div class="pp-food-section-heading"><div><span class="pp-food-section-overline">ORDER HISTORY</span><h2>我的订单</h2><img class="pp-food-section-separator" src="' + asset('separator.svg') + '" alt=""></div><span class="pp-food-section-count">' + orders.length + ' 笔</span></div>' +
+            (orders.length ? '<div class="pp-food-orders">' + orders.map((order,index) => {
+                const delivery = foodDeliveryStatus(order, chat()),done = delivery.delivered === true;
+                return '<article class="pp-food-order"><header><div class="pp-food-order-top"><img src="' + foodImage(order.items?.[0],index) + '" alt="" loading="lazy" decoding="async"><div class="pp-food-order-heading"><small>' + esc(clockText(order)) + '</small><h3>' + esc(order.shopName) + '</h3></div></div><span class="pp-food-order-status" data-done="' + done + '">' + esc(delivery.label) + '</span></header>' +
+                    '<div class="pp-food-order-body"><div class="pp-food-order-meta"><span>送给 ' + esc(order.recipient?.name || 'user') + '</span>' + (order.paymentMethod === 'npc' && order.payerName ? '<span>由 ' + esc(order.payerName) + ' 代付</span>' : '') + '</div>' +
+                    '<div class="pp-food-order-lines">' + (order.items || []).map(item => {
+                        const amount=money(item.priceMinor*item.quantity,item.currency||order.items?.[0]?.currency);
+                        const old=item.specialDiscount?'<del>'+esc(money(item.originalPriceMinor*item.quantity,item.currency||order.items?.[0]?.currency))+'</del>':'';
+                        return '<div class="pp-food-order-line"><span>' + esc(item.name) + '<em>× ' + Number(item.quantity || 0) + '</em></span><span class="pp-food-order-line-price">' + old + '<b>' + esc(amount) + '</b></span></div>';
+                    }).join('') + '</div><div class="pp-food-order-total"><span>实付金额</span><b>' + esc(Object.entries(order.totals || {}).map(([c, v]) => money(v, c)).join(' + ')) + '</b></div></div></article>';
             }).join('') + '</div>' : empty('parcel', '还没有外卖订单', '下单之后，订单会出现在这里。')) + '</section>';
     }
 
@@ -163,7 +187,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice }) {
         if (selectedShop && !shops.some(s => s.id === selectedShop)) selectedShop = null;
         const body = tab === 'orders' ? ordersPage(state) : selectedShop ? shopPage(state) : homePage(state, shops);
         const visibleStatus = working || state.busy ? '正在处理…' : state.errorKind === 'food' && state.error ? state.error : status;
-        return '<div class="pp-snap pp-food"><header class="pp-food-masthead"><span class="pp-food-masthead-mark"><i></i> ENJOY YOUR MOMENT</span><span class="pp-food-masthead-side">DURIAN · DELIVERY</span></header>' +
+        return '<div class="pp-snap pp-food"><header class="pp-food-masthead"><span class="pp-food-masthead-mark"><i></i> 榴莲外卖</span><span class="pp-food-masthead-side">DURIAN · FOOD DELIVERY</span></header>' +
             '<div class="pp-food-body" data-food-page="' + esc(tab + ':' + (selectedShop || '')) + '">' +
             (visibleStatus ? '<p class="pp-snap-status" role="status">' + esc(visibleStatus) + '</p>' : '') + body + '</div>' +
             '<nav class="pp-snap-tabs pp-food-tabs" aria-label="榴莲外卖页面">' + [['home', '外卖', 'food'], ['orders', '订单', 'parcel']].map(([id, label, symbol]) =>
@@ -207,9 +231,10 @@ export function createFoodPanel({ adapter, getView, redraw, notice }) {
         back() { if (tab === 'home' && selectedShop) { selectedShop = null; category = 'all'; buy = null; redraw(); return true; } return false; },
         reset() { epoch++; tab = 'home'; selectedShop = null; category = 'all'; drafts = {}; status = ''; buy = null; },
         input(el) { drafts[el.dataset.foodField] = el.value; },
-        async action(action, id) {
+        async action(action, id, shopId) {
             if (action === 'tab') { if (!['home', 'orders'].includes(id)) return; tab = id; selectedShop = null; category = 'all'; status = ''; buy = null; redraw(); return; }
             if (action === 'shop') { selectedShop = id; category = 'all'; status = ''; buy = null; redraw(); return; }
+            if (action === 'special-add') { await perform('add', [shopId, id, 1], '已加入购物车'); return; }
             if (action === 'back') { selectedShop = null; category = 'all'; buy = null; redraw(); return; }
             if (action === 'category') { category = id || 'all'; redraw(); return; }
             if (action === 'inc') await perform('add', [selectedShop, id, 1]);

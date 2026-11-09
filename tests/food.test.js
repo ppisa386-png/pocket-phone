@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
-import {createFood,foodItems,validateShops,FOOD_SHOP_COUNT,FOOD_MENU_MIN,FOOD_MENU_MAX} from '../src/food.js';
+import {createFood,foodItems,validateShops,FOOD_SHOP_COUNT,FOOD_MENU_MIN,FOOD_MENU_MAX,FOOD_SPECIAL_COUNT,FOOD_SPECIAL_DISCOUNT} from '../src/food.js';
 import {createFoodPanel} from '../src/food-view.js';
 import {assetRows} from '../src/assets-core.js';
 import {normalizeSettings} from '../src/config.js';
@@ -70,6 +70,43 @@ test('菜单校验拒绝数量、品类、重复名称与价格问题',()=>{
  const unnamed=structuredClone(good);unnamed.shops[1].menu[0].name='  ';assert.throws(()=>validateShops(unnamed));
  const uncategorized=structuredClone(good);uncategorized.shops[1].menu[0].category='';assert.throws(()=>validateShops(uncategorized));
 });
+test('每次菜单缓存生成五款跨店8折特价，折后价进入购物车、订单与账本',async()=>{
+ const f=setup();try{
+  const shops=await fill(f);
+  const specials=shops.flatMap(shop=>shop.menu.filter(d=>d.specialDiscount).map(d=>({shop,dish:d})));
+  assert.equal(specials.length,FOOD_SPECIAL_COUNT);
+  assert.equal(new Set(specials.map(x=>x.shop.id)).size,FOOD_SPECIAL_COUNT);
+  for(const {dish} of specials){
+   assert.equal(dish.specialDiscount,FOOD_SPECIAL_DISCOUNT);
+   assert.ok(dish.originalPriceMinor>dish.priceMinor);
+   assert.equal(dish.priceMinor,Math.max(1,Math.floor(dish.originalPriceMinor*(100-FOOD_SPECIAL_DISCOUNT)/100)));
+  }
+  const {shop,dish}=specials[0];ok(await f.food.add(shop.id,dish.id));
+  const line=f.state().orders.foodCart.items[0];
+  assert.equal(line.priceMinor,dish.priceMinor);assert.equal(line.originalPriceMinor,dish.originalPriceMinor);
+  assert.equal(line.specialDiscount,FOOD_SPECIAL_DISCOUNT);ok(await f.food.checkout(shop.id));
+  const order=foodItems(f.state(),'foodOrder')[0];
+  assert.equal(order.totals.USD,dish.priceMinor);assert.equal(order.items[0].priceMinor,dish.priceMinor);
+  assert.equal(order.items[0].originalPriceMinor,dish.originalPriceMinor);
+  assert.equal(order.items[0].specialDiscount,FOOD_SPECIAL_DISCOUNT);
+  assert.equal(assetRows(f.state(),'cash_transaction')[0].deltaMinor,-dish.priceMinor);
+ }finally{f.close();}
+});
+
+test('旧版已缓存菜单打开时补齐五款特价，不重新请求模型',async()=>{
+ const f=setup();try{
+  await seedWallet(f);
+  const legacy=validateShops(shopsPayload()).map(shop=>({...shop,menu:shop.menu.map(d=>{
+   const {originalPriceMinor,specialDiscount,...rest}=d;return {...rest,priceMinor:originalPriceMinor??d.priceMinor};
+  })}));
+  const ticket=await f.memory.begin();await f.memory.commit(ticket,legacy.map(value=>({collection:'orders',key:value.id,value})));
+  assert.equal(f.count(),0);await f.food.open();
+  const migrated=foodItems(f.state(),'foodShop');
+  assert.equal(migrated.flatMap(shop=>shop.menu.filter(d=>d.specialDiscount)).length,FOOD_SPECIAL_COUNT);
+  assert.equal(f.count(),0);
+ }finally{f.close();}
+});
+
 test('每家店铺独立选菜与结算，本人下单和点给别人都不需要联系人记录',async()=>{
  const f=setup();try{
   const shops=await fill(f);
@@ -184,6 +221,28 @@ test('未建账时按剧情货币浏览，结算前必须建账并重新搜索�
   assert.equal(foodItems(f.state(),'foodOrder').length,1);
  }finally{f.close();}
 });
+test('首页展示五款8折特价菜，特价卡片可加入对应店铺购物车',async()=>{
+ const shops=Array.from({length:5},(_,i)=>({
+  id:'foodShop:'+i,type:'foodShop',name:'Shop '+i,cuisine:'家常菜',description:'Fresh menu',currency:'USD',
+  menu:[{id:'foodShop:'+i+'#2',name:'Special '+i,category:'主食',description:'Fresh and warm',priceMinor:800,originalPriceMinor:1000,specialDiscount:20}]
+ }));
+ const calls=[];let lines=[];
+ const adapter={storyChat:()=>[],userName:()=>'Sam',food:{async add(shopId,dishId,quantity){
+  calls.push([shopId,dishId,quantity]);
+  const shop=shops.find(s=>s.id===shopId),dish=shop.menu.find(d=>d.id===dishId),line=lines.find(x=>x.dishId===dishId);
+  if(line)line.quantity+=quantity;else lines.push({...dish,shopId,shopName:shop.name,currency:shop.currency,quantity});
+  return {ok:true};
+ }}};
+ const state=()=>({busy:false,error:'',errorKind:null,orders:{foodSearch:{query:'test'},...Object.fromEntries(shops.map(s=>[s.id,s])),foodCart:{id:'foodCart',type:'foodCart',items:lines}}});
+ const panel=createFoodPanel({adapter,getView:state,redraw(){},notice:m=>{throw Error('不应出现提示：'+m);},assetBase:'https://local/assets/food/'});
+ const page=panel.html();
+ assert.equal((page.match(/class="pp-food-special-card"/g)||[]).length,5);
+ assert.match(page,/今日特价/);assert.match(page,/8折/);assert.match(page,/https:\/\/local\/assets\/food\/menu-1\.png/);
+ await panel.action('special-add','foodShop:0#2','foodShop:0');
+ assert.deepEqual(calls,[['foodShop:0','foodShop:0#2',1]]);
+ assert.match(panel.html(),/已加入购物车/);assert.match(panel.html(),/已选 1 份/);
+});
+
 test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
  const OriginalFormData=globalThis.FormData;
  let fields=new Map();
