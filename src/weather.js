@@ -373,20 +373,43 @@ export const weatherType = type => TYPES[type] ? TYPES[type].label : '未知';
 export const weatherExtreme = type => !!TYPES[type]?.extreme;
 export const weatherScene = type => TYPES[type]?.family || 'cloud';
 
-// The app's alerts are simulated from its local weather state, not official
-// government notices. Only an extreme condition happening in the current hour
-// produces an active alert card; forecast extremes remain in the forecast list.
+// Simulated warning cards use China's four-level color convention. The
+// tier is derived from the current local weather type and its simulated
+// intensity; it is not an official meteorological warning or live alert feed.
+// Only an extreme condition happening in the current hour produces a card.
 const WEATHER_WARNINGS = {
-    storm: { level: '橙色', color: 'orange', title: '暴雨', detail: '当前出现暴雨天气，留意强降雨和积水。' },
-    severe: { level: '红色', color: 'red', title: '强雷暴', detail: '当前出现强雷暴天气，留意雷电与阵风。' },
-    blizzard: { level: '橙色', color: 'orange', title: '暴风雪', detail: '当前出现暴风雪天气，留意能见度和路面状况。' },
-    dust: { level: '橙色', color: 'orange', title: '沙尘暴', detail: '当前出现沙尘暴天气，空气质量可能明显下降。' },
-    heat: { level: '橙色', color: 'orange', title: '高温', detail: '当前出现热浪天气，留意持续高温。' },
-    cold: { level: '橙色', color: 'orange', title: '寒潮', detail: '当前出现寒潮天气，留意气温骤降。' },
-    typhoon: { level: '红色', color: 'red', title: '台风', detail: '当前出现台风天气，留意强风和强降雨。' },
-    hail: { level: '橙色', color: 'orange', title: '冰雹', detail: '当前出现冰雹天气，留意短时强对流。' },
+    storm: { base: 2, wind: [8, 10], rain: [27], title: '暴雨', detail: '当前出现暴雨天气，留意强降雨和积水。' },
+    severe: { base: 3, wind: [8], title: '强雷暴', detail: '当前出现强雷暴天气，留意雷电与阵风。' },
+    blizzard: { base: 2, wind: [8, 10], title: '暴风雪', detail: '当前出现暴风雪天气，留意能见度和路面状况。' },
+    dust: { base: 1, wind: [7, 9, 11], title: '沙尘暴', detail: '当前出现沙尘暴天气，空气质量可能明显下降。' },
+    heat: { base: 1, hot: [35, 40, 44], title: '高温', detail: '当前出现热浪天气，留意持续高温。' },
+    cold: { base: 1, cold: [-10, -20, -30], title: '寒潮', detail: '当前出现寒潮天气，留意气温骤降。' },
+    typhoon: { base: 2, wind: [8, 10], title: '台风', detail: '当前出现台风天气，留意强风和强降雨。' },
+    hail: { base: 1, wind: [5, 7, 9], title: '冰雹', detail: '当前出现冰雹天气，留意短时强对流。' },
 };
-export const weatherWarning = type => WEATHER_WARNINGS[type] ? { ...WEATHER_WARNINGS[type], type } : null;
+const WARNING_LEVELS = [
+    { level: '蓝色', color: 'blue', grade: 'Ⅳ级' },
+    { level: '黄色', color: 'yellow', grade: 'Ⅲ级' },
+    { level: '橙色', color: 'orange', grade: 'Ⅱ级' },
+    { level: '红色', color: 'red', grade: 'Ⅰ级' },
+];
+export const weatherWarning = (type, state = {}) => {
+    const rule = WEATHER_WARNINGS[type];
+    if (!rule) return null;
+    let severity = rule.base;
+    const wind = Number.isFinite(Number(state.wind)) ? Number(state.wind) : 0;
+    const temp = Number.isFinite(Number(state.temp)) ? Number(state.temp) : 0;
+    const humidity = Number.isFinite(Number(state.humidity)) ? Number(state.humidity) : 50;
+    for (const threshold of rule.wind || []) if (wind >= threshold) severity++;
+    for (const threshold of rule.hot || []) if (temp >= threshold) severity++;
+    for (const threshold of rule.cold || []) if (temp <= threshold) severity++;
+    if (rule.rain) {
+        const rainfall = TYPES[type].precip * (0.75 + Math.min(.6, humidity / 200));
+        for (const threshold of rule.rain) if (rainfall >= threshold) severity++;
+    }
+    const tier = WARNING_LEVELS[clamp(severity, 1, 4) - 1];
+    return { ...tier, type, title: rule.title, detail: rule.detail };
+};
 
 const feelsLike = (temp, wind, humidity) => {
     if (temp <= 10 && wind >= 3) return Math.round(temp - (wind - 2) * 1.2);
@@ -447,7 +470,7 @@ const reportOf = (city, climate, state, absHour, seed, key) => {
     const day = Math.floor(absHour / 24);
     const metrics = environmentMetrics(climate, type, state.temp, state.wind, state.humidity, absHour, seed, key);
     return {
-        city, type, label: t.label, extreme: !!t.extreme, warning: weatherWarning(type),
+        city, type, label: t.label, extreme: !!t.extreme, warning: weatherWarning(type, state),
         temp: state.temp, wind: state.wind, humidity: state.humidity,
         precip: Math.round(t.precip * (0.75 + Math.min(.6, state.humidity / 200)) * 10) / 10,
         feels: feelsLike(state.temp, state.wind, state.humidity),
