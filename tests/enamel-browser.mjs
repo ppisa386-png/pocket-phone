@@ -53,6 +53,12 @@ try {
   const originalWallpaper = await page.locator('.pp-swatch[aria-pressed="true"]').getAttribute('data-wallpaper');
   const launcherChoice=page.locator('[data-setting="launcherStyle"]');
   assert.equal(await launcherChoice.inputValue(),'classic');
+  await page.locator('[data-setting="theme"]').selectOption('enamel');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel','entering enamel selects its Frost Bloom launcher');
+  assert.equal(await launcherChoice.inputValue(),'enamel','the launcher setting reflects the theme default');
+  await page.locator('[data-setting="theme"]').selectOption('dark');
+  await launcherChoice.selectOption('classic');
+  assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'classic','manual classic selection still works');
   await launcherChoice.selectOption('enamel');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'enamel');
