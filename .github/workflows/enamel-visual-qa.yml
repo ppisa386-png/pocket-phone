@@ -32,11 +32,16 @@ jobs:
         run: npm run build:preview
       - name: Browser acceptance and screenshots
         run: node tests/enamel-browser.mjs
+      - name: Collect browser screenshots in workspace
+        if: always()
+        run: |
+          mkdir -p qa-results
+          cp ../qa-results/enamel-*.png qa-results/ 2>/dev/null || true
       - name: Upload actual browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: soft-haze-enamel-browser-evidence
-          path: ../qa-results/enamel-*.png
+          path: qa-results/enamel-*.png
           if-no-files-found: warn
           retention-days: 30
