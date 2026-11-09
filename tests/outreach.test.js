@@ -4,6 +4,8 @@ import {importStoryPhone,buildStoryPhonePrompt} from '../src/story-phone.js';
 import {normalizeSettings,MODULE_KEY} from '../src/config.js';
 import {appendChange,replayJournal,reconcileJournal,revisionsFor,messageSignatures} from '../src/journal.js';
 import {xUnread} from '../src/x.js';
+import {syncCommContext,commMeta} from '../src/comm-context.js';
+import {buildContinuityPrompt} from '../src/continuity.js';
 const context={name1:'Sam Lee',characters:[],extensionSettings:{}};
 const tags=(pairs)=>({mes:pairs.map(([channel,sender])=>{
     const text=channel==='x_mention'?'公开问候 @Sam Lee':'今天有空见面吗？';
@@ -25,6 +27,56 @@ test('one fifth floor imports six independent contacts once, with a public menti
     assert.deepEqual(await capture(chat,journal),journal);
     assert.deepEqual(replayJournal(reconcileJournal(journal,await revisionsFor(messageSignatures(four))).journal).x,{});
 });
+test('proactive notifications store complete private messages without marking them seen in prose',async()=>{
+    const contact=(channel,sender,text,shown=false)=>({
+        channel,sender,recipient:'user',text,media:'text',motive:'实际联系',shown,
+    });
+    const rows=[
+        contact('sms','戊','HIDDEN_SMS_CONTENT'),
+        contact('whatsapp','甲','HIDDEN_WHATSAPP_CONTENT'),
+        contact('wechat','乙','HIDDEN_WECHAT_CONTENT'),
+        contact('x_dm','丙','HIDDEN_X_DM_CONTENT'),
+        contact('x_mention','丁','@Sam Lee 公共提及'),
+        contact('call','己',''),
+    ];
+    const prose='Sam正走在街上，口袋里的手机短暂震动，紧接着传来铃声。';
+    const chat=[...four,{mes:prose+rows.map(row=>'<!--durian-outreach:'+JSON.stringify(row)+'-->').join('')}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    const journal=await capture(chat);
+    const state=replayJournal(syncCommContext(journal,rev,chat).journal);
+    for(const [platform,collection,content] of [
+        ['sms','messages','HIDDEN_SMS_CONTENT'],
+        ['whatsapp','whatsapp','HIDDEN_WHATSAPP_CONTENT'],
+        ['wechat','wechat','HIDDEN_WECHAT_CONTENT'],
+        ['x','x','HIDDEN_X_DM_CONTENT'],
+    ]){
+        const message=Object.values(state[collection]).find(row=>row.text===content);
+        assert.ok(message,platform+' was saved with its full hidden text');
+        assert.equal(commMeta(state,platform,message.id)?.shown,false,platform+' arrival is not narrative reading');
+        assert.ok(!prose.includes(content),platform+' content stays out of prose');
+    }
+    const mention=Object.values(state.x).find(row=>row.type==='post'&&row.outreachMention);
+    assert.ok(mention);
+    assert.equal(commMeta(state,'x',mention.id)?.shown,false,'public mention is not a read notification');
+    const call=Object.values(state.calls)[0];
+    assert.equal(call.status,'ringing');
+    assert.equal(call.turns.length,0,'ringing cannot inject caller dialogue');
+    assert.equal(commMeta(state,'call',call.id)?.shown,true,'the ringing event itself was presented');
+
+    const prompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),chat);
+    assert.match(prompt,/不写消息原文、摘要、话题/);
+    assert.match(prompt,/"shown":false/);
+    const continuity=buildContinuityPrompt(state,{name:'Sam Lee'},{
+        instruction:'衔接实际通信',allParticipants:true,budget:50000,
+    });
+    assert.match(continuity,/user 未在剧情里打开手机查看之前/);
+    assert.match(continuity,/HIDDEN_SMS_CONTENT/,'unshown text remains available to the author, not the character');
+    assert.deepEqual(await capture(chat,journal),journal,'re-reading does not regenerate the incoming notifications');
+    const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
+    assert.equal(Object.keys(rolled.messages).length,0);
+    assert.equal(Object.values(rolled.whatsapp).filter(x=>x.type==='message').length,0);
+});
+
 test('frequency and enabled channels gate the decision, a partial alias excludes both X paths',()=>{
     const state=replayJournal(),chat=[...four,{is_user:true,mes:'user'},{role:'system',mes:'系统'}];
     state.x.profile={alias:'Sam'};
