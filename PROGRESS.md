@@ -4,7 +4,7 @@
 **用户决定**：不得覆盖现有美化；在「设置 → 外观 → 主题」增添「柔雾珐琅」第三个可选项，原有深色、浅色主题和所有 App 既有页面美化保持。该决定替代原 V1.0 全局替换视觉的实施方式。
 **范围**：新增 `src/enamel-icons.js` 和 `style-enamel.css`，珐琅徽章仅用于新主题桌面；悬浮球保留原 36px 点击/拖动与位置持久化，新增约 530ms 雪晶/星屑粒子反馈及减少动效支持。新主题仅修饰公共手机 Shell、桌面、设置；品牌 App 内部按原浅色主题呈现。新主题的 `enamelWallpaper` 独立存储，经典主题的 `wallpaper` 原值不变。
 **保持**：原有业务逻辑、剧情、通信、财务、API、时间、导航、缩放与旧壁纸及已登记视觉参考不变；Snapchat 原先不在已启用桌面名单，未新增虚构应用。新 SVG 为本项目原创，没有外部素材引入，`RESOURCE_SOURCES.md` 无需变更。
-**验证方式**：`tests/enamel-theme.test.js` 检查主题迁移、轮廓差异、资源隔离；`npm test` 与 `npm run build:preview` 交由现有 GitHub Actions CI。独立 `enamel-visual-qa.yml` 运行 Chromium 实际 HTML/CSS/SVG 浏览器测试并上传关闭悬浮球、绽放关键帧、桌面、设置、WhatsApp、经典主题对照和窄屏的截图。待 CI 结果返回后记录实际通过或失败状态；不可将仅写入测试描述为已通过。Termux 真机视觉仍需用户确认。
+**验证结果**：GitHub Actions [回归 run 42571485090](https://github.com/ppisa386-png/pocket-phone/actions/runs/42571485090) 通过 `npm test`（基线核对为 **703/703** 通过）及 `npm run build:preview`；[Chromium 视觉 QA run 42571485142](https://github.com/ppisa386-png/pocket-phone/actions/runs/42571485142) 通过真实 ES 模块浏览器验收，已上传 [7 张真实浏览器截图（artifact 13653905201）](https://github.com/ppisa386-png/pocket-phone/actions/runs/42571485142/artifacts/13653905201)：经典主题对照、珐琅桌面 390/320、系统设置、WhatsApp、悬浮球关闭和绽放关键帧。浏览器验收直接加载项目 ES 模块和实际 CSS/SVG，而不是用 AI 效果图替代。限制：旧的单文件预览拼接器存在 `Identifier 'metric' has already been declared` 运行冲突，故截图用真实模块夹具；`npm run build:preview` 只证明生成完成，不代表那个独立单文件 HTML 可运行。正式 SillyTavern 扩展使用独立模块加载，不经过该拼接器。Termux 真机视觉仍需用户确认。
 
 
 ## v1.2.21 · X 旧帖日期与重复推送（2026-11-09）
