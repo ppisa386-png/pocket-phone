@@ -1929,6 +1929,36 @@ h2, p { margin: 0; }
   background:rgba(140,46,50,.65);box-shadow:none;border-radius:14px;font-size:11px;color:#fff}
 .pp-weather-status{margin:0 0 12px;padding:8px 11px;color:#fff;border-radius:9px;
   background:rgba(17,52,78,.42);font-size:12px}
+.pp-weather-warning{
+  display:flex;align-items:center;gap:10px;position:relative;z-index:1;
+  min-width:0;margin:0 0 11px;padding:11px 13px;
+  border:1px solid rgba(255,190,132,.62);border-radius:18px;
+  background:rgba(132,68,35,.48);color:#fff;
+  box-shadow:0 4px 15px rgba(9,30,57,.10);
+  backdrop-filter:blur(17px) saturate(112%);-webkit-backdrop-filter:blur(17px) saturate(112%);
+}
+.pp-weather-warning-red{border-color:rgba(255,150,154,.66);background:rgba(132,39,49,.5)}
+.pp-weather-warning-symbol{
+  display:grid;place-items:center;flex:0 0 31px;width:31px;height:31px;
+  border:1px solid rgba(255,219,180,.52);border-radius:50%;
+  background:rgba(255,169,91,.2);color:#fff1df;font-size:19px;font-weight:750;line-height:1
+}
+.pp-weather-warning-red .pp-weather-warning-symbol{
+  border-color:rgba(255,195,196,.58);background:rgba(255,116,123,.2);color:#ffe8e8
+}
+.pp-weather-warning-copy{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}
+.pp-weather-warning-head{display:flex;align-items:center;justify-content:space-between;gap:7px}
+.pp-weather-warning-head>small{font-size:10px;line-height:1.3;color:rgba(255,255,255,.82)}
+.pp-weather-warning-head>b{
+  flex:none;padding:3px 7px;border:1px solid rgba(255,220,183,.45);
+  border-radius:20px;background:rgba(255,174,104,.2);color:#fff0dc;
+  font-size:10px;line-height:1.2;font-weight:650
+}
+.pp-weather-warning-red .pp-weather-warning-head>b{
+  border-color:rgba(255,204,204,.48);background:rgba(255,111,120,.22);color:#ffe9e9
+}
+.pp-weather-warning-copy>strong{font-size:14px;line-height:1.35;font-weight:720;color:#fff}
+.pp-weather-warning-copy>p{font-size:10.5px;line-height:1.45;color:rgba(255,255,255,.88);overflow-wrap:anywhere}
 .pp-weather-hourly,.pp-weather-week-section{position:relative;margin:0 0 11px;padding:0;
   background:rgba(98,138,173,.29);border:1px solid rgba(255,255,255,.36);
   border-radius:21px;box-shadow:0 4px 15px rgba(9,30,57,.10);
@@ -2012,6 +2042,9 @@ h2, p { margin: 0; }
   .pp-weather-day-desc{font-size:9.5px}
   .pp-weather-day-temp i,.pp-weather-day-temp b{font-size:11px}
   .pp-weather-loc>b{font-size:19px}
+  .pp-weather-warning{gap:8px;padding:9px 10px}
+  .pp-weather-warning-symbol{flex-basis:28px;width:28px;height:28px}
+  .pp-weather-warning-copy>p{font-size:10px}
 }
 
 /* WhatsApp: compact iOS layout adapted from Galaxies-dev/whatsapp-clone-react-native.
