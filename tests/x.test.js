@@ -1044,3 +1044,59 @@ test('old refresh marker with no floor ledger also permits missed follower catch
   assert.equal((await f.x.refreshPublic()).ok,false);
  }finally{globalThis.qqj_v3_public_bridge_v1=oldBridge;f.close();}
 });
+
+
+test('manual X composer has an optional separate photo description and persists it without altering tweet text',async()=>{
+ const f=setup();try{
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:f.state,redraw(){},notice(){}});
+  const form=panel.html();
+  assert.match(form,/data-x-field="imageDescription"[^>]*placeholder="图片描述，不带也可以～"/);
+  assert.ok(form.indexOf('data-x-field="imageDescription"')<form.indexOf('data-x-field="post"'));
+  const css=(await import('node:fs')).readFileSync(new URL('../style.css',import.meta.url),'utf8');
+  assert.match(css,/textarea\[data-x-field="imageDescription"\]:focus::placeholder\{opacity:0\}/);
+  const description='你拿着黑胶唱片站在暖色灯光下。';
+  const tweet='雨天的黑胶唱片店，听见了最爱的老歌。';
+  ok(await f.x.publish(tweet,description));
+  ok(await f.x.publish('只有文字的随手一帖。'));
+  const [withPicture,withoutPicture]=xItems(f.state(),'post');
+  assert.equal(withPicture.text,tweet);
+  assert.equal(withPicture.imageDescription,description);
+  assert.equal(withoutPicture.text,'只有文字的随手一帖。');
+  assert.equal(Object.hasOwn(withoutPicture,'imageDescription'),false);
+  await panel.action('profile');
+  assert.match(panel.html(),/配图描述/);
+  assert.match(panel.html(),/你拿着黑胶唱片站在暖色灯光下/);
+  assert.equal(f.count(),0,'normal publishing does not add model requests');
+ }finally{f.close();}
+});
+
+test('NPC home and square posts independently keep optional image descriptions',async()=>{
+ const f=setup();try{
+  const home=feedResult({posts:[
+    {name:'Alex',handle:'alex',has_account:true,text:'The local record store.',imageDescription:'木制唱片架前摆着一张老黑胶。'},
+    {name:'Bea',handle:'bea',has_account:true,text:'A text-only update.'}
+  ]});
+  f.reply(home);
+  ok(await f.x.refresh());
+  assert.match(f.prompt(),/imageDescription/);
+  assert.match(f.prompt(),/可按自身习惯、当下内容与情境发布纯文字或附图帖/);
+  const alex=xItems(f.state(),'post').find(p=>p.text==='The local record store.');
+  const bea=xItems(f.state(),'post').find(p=>p.text==='A text-only update.');
+  assert.equal(alex.imageDescription,'木制唱片架前摆着一张老黑胶。');
+  assert.equal(Object.hasOwn(bea,'imageDescription'),false);
+  const rows=squareRows(10);
+  rows[0].imageDescription='路边摄影者拍下了刚开的橱窗。';
+  f.reply({posts:rows,replies:[]});
+  ok(await f.x.refresh('square'));
+  assert.match(f.prompt(),/广场帖子可纯文字，也可附图/);
+  const square=xItems(f.state(),'post').find(p=>p.text===rows[0].text);
+  assert.equal(square.imageDescription,rows[0].imageDescription);
+  assert.equal(Object.hasOwn(xItems(f.state(),'post').find(p=>p.text===rows[1].text),'imageDescription'),false);
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:f.state,redraw(){},notice(){}});
+  assert.match(panel.html(),/木制唱片架前摆着一张老黑胶。/);
+  await panel.action('tab','square');
+  assert.match(panel.html(),/路边摄影者拍下了刚开的橱窗。/);
+ }finally{f.close();}
+});

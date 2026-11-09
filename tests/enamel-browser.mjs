@@ -88,6 +88,20 @@ try {
   const appBackground = await phone.evaluate(el=>getComputedStyle(el).backgroundColor);
   await phone.screenshot({path:resolve(output,'enamel-whatsapp.png')});
   await page.getByRole('button',{name:'回到桌面',exact:true}).click();
+  await page.locator('[data-app="x"]').click();
+  const photoField=page.locator('[data-x-field="imageDescription"]');
+  const postField=page.locator('[data-x-field="post"]');
+  assert.equal(await photoField.getAttribute('placeholder'),'图片描述，不带也可以～');
+  assert.equal(await photoField.isVisible(),true);
+  const photoBox=await photoField.boundingBox(),postBox=await postField.boundingBox();
+  assert.ok(photoBox.y<postBox.y && photoBox.height<postBox.height,'optional image box is slimmer and above the tweet');
+  await phone.screenshot({path:resolve(output,'enamel-x-composer.png')});
+  await photoField.click();
+  assert.equal(await photoField.evaluate(el=>getComputedStyle(el,'::placeholder').opacity),'0','placeholder vanishes on focus');
+  await photoField.fill('橱窗边的黑胶唱片与暖色灯光');
+  await postField.fill('午后在唱片店躲雨。');
+  assert.ok(await page.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'X composer fits phone width');
+  await page.getByRole('button',{name:'回到桌面',exact:true}).click();
   await page.getByRole('button',{name:'收起手机',exact:true}).click();
 
   const launcher = page.locator('.pp-launcher');
