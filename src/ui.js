@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.28';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.29';
 import { icon } from './icons.js?v=1.2';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.26';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
@@ -737,7 +737,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
                 }
             }
             if (['proactiveEnabled'].includes(key)) value = value === 'true';
-            if (persist({ [key]: value })) {
+            if (persist(appearanceSettingsPatch(settings, key, value))) {
                 if(key==='proactiveEnabled')renderContactSettings();
                 if(key==='theme')renderAppearance();
                 const output = shadow.querySelector('[data-output="' + key + '"]');
