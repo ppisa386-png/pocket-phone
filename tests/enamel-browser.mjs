@@ -94,7 +94,7 @@ try {
     const dock=home.querySelector('.pp-dock').getBoundingClientRect();
     return {upper:grid.top-clock.bottom,lower:dock.top-grid.bottom};
   });
-  assert.ok(Math.abs(rhythm.upper-rhythm.lower)<4,'desktop icon grid is optically centered between clock and dock');
+  assert.ok(Math.abs(rhythm.upper-rhythm.lower)<4,`desktop icon grid balances clock and dock (${JSON.stringify(rhythm)})`);
   await phone.screenshot({path:resolve(output,'enamel-home-390.png')});
   await page.setViewportSize({width:360,height:740});
   assert.ok(await page.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'360px home remains within its phone');

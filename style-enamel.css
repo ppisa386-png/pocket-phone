@@ -138,7 +138,7 @@
 @container pp-phone (max-width:360px){
  .pp-layer[data-skin="enamel"] .pp-home{padding-left:13px;padding-right:13px}
  .pp-layer[data-skin="enamel"] .pp-home-clock{padding-bottom:14px}
- .pp-layer[data-skin="enamel"] .pp-home .pp-app-grid{gap:11px 3px;margin-bottom:14px}
+ .pp-layer[data-skin="enamel"] .pp-home .pp-app-grid{gap:11px 3px;margin-bottom:auto}
  .pp-layer[data-skin="enamel"] .pp-home .pp-app-icon{width:54px;height:54px}
  .pp-layer[data-skin="enamel"] .pp-home .pp-app{min-height:69px;gap:4px}
  .pp-layer[data-skin="enamel"] .pp-home .pp-dock{padding:9px 3px 6px}
@@ -148,7 +148,7 @@
 @container pp-phone (max-height:590px){
  .pp-layer[data-skin="enamel"] .pp-home-clock{padding:0 0 8px}
  .pp-layer[data-skin="enamel"] .pp-home .pp-big-time{font-size:45px}
- .pp-layer[data-skin="enamel"] .pp-home .pp-app-grid{gap:8px 3px;margin-bottom:9px}
+ .pp-layer[data-skin="enamel"] .pp-home .pp-app-grid{gap:8px 3px;margin-bottom:auto}
  .pp-layer[data-skin="enamel"] .pp-home .pp-app{min-height:57px}
  .pp-layer[data-skin="enamel"] .pp-home .pp-app-icon{width:45px;height:45px}
  .pp-layer[data-skin="enamel"] .pp-home .pp-dock .pp-app-icon{width:44px;height:44px}
