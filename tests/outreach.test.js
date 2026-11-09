@@ -64,7 +64,7 @@ test('proactive notifications store complete private messages without marking th
     assert.equal(commMeta(state,'call',call.id)?.shown,true,'the ringing event itself was presented');
 
     const prompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),chat);
-    assert.match(prompt,/不写消息原文、摘要、话题/);
+    assert.match(prompt,/不能仅凭消息抵达就写出完整消息、摘要、主题/);
     assert.match(prompt,/"shown":false/);
     const continuity=buildContinuityPrompt(state,{name:'Sam Lee'},{
         instruction:'衔接实际通信',allParticipants:true,budget:50000,
