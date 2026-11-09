@@ -243,7 +243,7 @@ test('首页展示五款8折特价菜，特价卡片可加入对应店铺购物�
  assert.match(panel.html(),/已加入购物车/);assert.match(panel.html(),/已选 1 份/);
 });
 
-test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
+test('店铺页选菜、紧凑状态栏与两步收件气泡',async()=>{
  const OriginalFormData=globalThis.FormData;
  let fields=new Map();
  globalThis.FormData=class{constructor(){return fields;}};
@@ -273,18 +273,21 @@ test('店铺页选菜、底栏合计与两步收件气泡',async()=>{
   await panel.action('shop','foodShop:0');
   page=panel.html();
   assert.match(page,/Carbonara/);assert.match(page,/Egg and guanciale/);assert.match(page,/\$12\.50/);
+  assert.match(page,/pp-food-store-heading/);assert.match(page,/aria-label="返回餐厅"/);
+  assert.match(page,/class="pp-food-bar-status" role="status">尚未选择菜品/);
+  assert.doesNotMatch(page,/pp-food-detail-cover|pp-food-detail-photo|pp-food-masthead|pp-food-tabs|pp-food-bar-total|food\.jpg/);
   assert.match(page,/aria-label="加一份 Carbonara"/);
   assert.doesNotMatch(page,/pp-shop-bubble/);
   await panel.action('inc','foodShop:0#0');
   await panel.action('inc','foodShop:0#0');
   page=panel.html();
   assert.match(page,/aria-label="已选 2 份"/);
-  assert.match(page,/\$25\.00/); // 底栏合计 12.50 × 2
+  assert.match(page,/class="pp-food-bar-status" role="status">已选择1样菜品/); // 相同菜品选两份仍是一种
   await panel.action('inc','foodShop:0#1');
   await panel.action('dec','foodShop:0#0');
   page=panel.html();
   assert.match(page,/aria-label="已选 1 份"/);
-  assert.match(page,/\$19\.00/); // 12.50 + 6.50
+  assert.match(page,/class="pp-food-bar-status" role="status">已选择2样菜品/);
   // 购买先弹收件气泡，再弹付款方式气泡，不直接下单
   await panel.action('buy');
   page=panel.html();

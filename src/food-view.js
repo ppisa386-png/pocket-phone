@@ -48,11 +48,6 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
     const lineOf = (state, dishId) => cart(state).find(item => item.dishId === dishId);
     const shopLines = (state, shopId) => cart(state).filter(item => item.shopId === shopId);
     const qty = lines => lines.reduce((sum, item) => sum + item.quantity, 0);
-    const total = lines => {
-        const sums = Object.create(null);
-        for (const item of lines) sums[item.currency] = (sums[item.currency] || 0) + item.quantity * item.priceMinor;
-        return Object.entries(sums).map(([currency, value]) => money(value, currency)).join(' + ');
-    };
     const empty = (symbol, title, description) => '<div class="pp-food-empty"><span class="pp-food-empty-glyph">' + icon(symbol) + '</span><h3>' + title + '</h3><p>' + description + '</p></div>';
     const bubble = (label, inner) => '<div class="pp-shop-bubble" role="dialog" aria-label="' + esc(label) + '">' + inner + '<span class="pp-shop-bubble-tail" aria-hidden="true"></span></div>';
     const bubbleOption = (action, id, title, note = '') => '<button type="button" class="pp-shop-bubble-option" data-food-action="' + action + '" data-food-id="' + esc(id) + '"' + disabled() + '><b>' + esc(title) + '</b>' + (note ? '<small>' + esc(note) + '</small>' : '') + chevron + '</button>';
@@ -155,14 +150,12 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
         ).join('');
         const rail = '<div class="pp-food-category-rail" role="group" aria-label="菜品分类">' +
             [['all', '全部'], ...names.map(n => [n, n])].map(([id, name]) => '<button type="button" data-food-action="category" data-food-id="' + esc(id) + '" aria-pressed="' + (category === id) + '"' + disabled() + '>' + esc(name) + '</button>').join('') + '</div>';
-        return '<section class="pp-food-shoppage"><div class="pp-food-detail-cover"><img class="pp-food-detail-photo" src="' + asset('food.jpg') + '" alt="" loading="lazy" decoding="async">' +
-            '<div class="pp-food-detail-shade"></div><img class="pp-food-detail-shape" src="' + asset('shape-5.png') + '" alt="" aria-hidden="true">' +
-            '<button type="button" class="pp-food-detail-back" data-food-action="back"' + disabled() + '>‹ 返回餐厅</button>' +
-            '<div class="pp-food-detail-copy"><p>CURATED MENU · ' + (shop.menu?.length || 0) + ' ITEMS</p><h2>' + esc(shop.name) + '</h2>' +
-            '<span>' + esc([shop.cuisine, shop.description].filter(Boolean).join(' · ')) + '</span><img src="' + asset('separator.svg') + '" alt=""></div></div>' +
+        return '<section class="pp-food-shoppage"><header class="pp-food-store-heading">' +
+            '<button type="button" class="pp-food-store-back" data-food-action="back" aria-label="返回餐厅"' + disabled() + '><span aria-hidden="true">‹</span></button>' +
+            '<div class="pp-food-store-title"><h2>' + esc(shop.name) + '</h2><small>' + esc([shop.cuisine, (shop.menu?.length || 0) + ' 道菜品'].filter(Boolean).join(' · ')) + '</small></div></header>' +
             rail + '<div class="pp-food-menu" data-food-menu="shop:' + esc(shop.id) + ':' + esc(category) + '">' + sections + '</div>' +
             (buy ? '<div class="pp-food-buy-popover">' + buyBubble() + '</div>' : '') +
-            '<div class="pp-food-bar"><div class="pp-food-bar-total"><small>' + (qty(lines) ? '已选 ' + qty(lines) + ' 份 · 合计' : '尚未选择菜品') + '</small><b>' + (lines.length ? esc(total(lines)) : '—') + '</b></div>' +
+            '<div class="pp-food-bar"><span class="pp-food-bar-status" role="status">' + (lines.length ? '已选择' + lines.length + '样菜品' : '尚未选择菜品') + '</span>' +
             '<button type="button" class="pp-food-buy" data-food-action="buy"' + (lines.length ? disabled() : ' disabled') + '>去结算 ' + arrow + '</button></div></section>';
     }
 
@@ -187,12 +180,14 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
         if (selectedShop && !shops.some(s => s.id === selectedShop)) selectedShop = null;
         const body = tab === 'orders' ? ordersPage(state) : selectedShop ? shopPage(state) : homePage(state, shops);
         const visibleStatus = working || state.busy ? '正在处理…' : state.errorKind === 'food' && state.error ? state.error : status;
-        return '<div class="pp-snap pp-food"><header class="pp-food-masthead"><span class="pp-food-masthead-mark"><i></i> 榴莲外卖</span><span class="pp-food-masthead-side">DURIAN · FOOD DELIVERY</span></header>' +
+        const isShop = tab === 'home' && !!selectedShop;
+        return '<div class="pp-snap pp-food' + (isShop ? ' is-shop' : '') + '">' +
+            (isShop ? '' : '<header class="pp-food-masthead"><span class="pp-food-masthead-mark"><i></i> 榴莲外卖</span><span class="pp-food-masthead-side">DURIAN · FOOD DELIVERY</span></header>') +
             '<div class="pp-food-body" data-food-page="' + esc(tab + ':' + (selectedShop || '')) + '">' +
             (visibleStatus ? '<p class="pp-snap-status" role="status">' + esc(visibleStatus) + '</p>' : '') + body + '</div>' +
-            '<nav class="pp-snap-tabs pp-food-tabs" aria-label="榴莲外卖页面">' + [['home', '外卖', 'food'], ['orders', '订单', 'parcel']].map(([id, label, symbol]) =>
+            (isShop ? '' : '<nav class="pp-snap-tabs pp-food-tabs" aria-label="榴莲外卖页面">' + [['home', '外卖', 'food'], ['orders', '订单', 'parcel']].map(([id, label, symbol]) =>
                 '<button type="button" data-food-action="tab" data-food-id="' + id + '" aria-pressed="' + (tab === id) + '" aria-label="' + label + '"><span class="pp-food-tab-icon">' + icon(symbol) + '</span><span>' + label + '</span></button>'
-            ).join('') + '</nav></div>';
+            ).join('') + '</nav>') + '</div>';
     }
 
     async function perform(method, args, message = '') {
