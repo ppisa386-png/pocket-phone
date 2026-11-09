@@ -373,21 +373,85 @@ export const weatherType = type => TYPES[type] ? TYPES[type].label : '未知';
 export const weatherExtreme = type => !!TYPES[type]?.extreme;
 export const weatherScene = type => TYPES[type]?.family || 'cloud';
 
+// The app's alerts are simulated from its local weather state, not official
+// government notices. Only an extreme condition happening in the current hour
+// produces an active alert card; forecast extremes remain in the forecast list.
+const WEATHER_WARNINGS = {
+    storm: { level: '橙色', color: 'orange', title: '暴雨', detail: '当前出现暴雨天气，留意强降雨和积水。' },
+    severe: { level: '红色', color: 'red', title: '强雷暴', detail: '当前出现强雷暴天气，留意雷电与阵风。' },
+    blizzard: { level: '橙色', color: 'orange', title: '暴风雪', detail: '当前出现暴风雪天气，留意能见度和路面状况。' },
+    dust: { level: '橙色', color: 'orange', title: '沙尘暴', detail: '当前出现沙尘暴天气，空气质量可能明显下降。' },
+    heat: { level: '橙色', color: 'orange', title: '高温', detail: '当前出现热浪天气，留意持续高温。' },
+    cold: { level: '橙色', color: 'orange', title: '寒潮', detail: '当前出现寒潮天气，留意气温骤降。' },
+    typhoon: { level: '红色', color: 'red', title: '台风', detail: '当前出现台风天气，留意强风和强降雨。' },
+    hail: { level: '橙色', color: 'orange', title: '冰雹', detail: '当前出现冰雹天气，留意短时强对流。' },
+};
+export const weatherWarning = type => WEATHER_WARNINGS[type] ? { ...WEATHER_WARNINGS[type], type } : null;
+
 const feelsLike = (temp, wind, humidity) => {
     if (temp <= 10 && wind >= 3) return Math.round(temp - (wind - 2) * 1.2);
     if (temp >= 28 && humidity >= 60) return Math.round(temp + (humidity - 60) * .15 + (temp - 28) * .1);
     return Math.round(temp);
 };
 
-const reportOf = (city, climate, state, absHour) => {
+const UV_BASE = { af: 12, am: 12, aw: 11, bwh: 11, bsh: 10, csa: 10, cfa: 9, cfb: 7, dfa: 8, dfb: 7, dwa: 9, et: 4, h: 10 };
+const UV_WEATHER_FACTOR = {
+    sunny: 1, partly: .86, overcast: .58, fog: .4, drizzle: .3, rain: .22,
+    heavy: .17, storm: .12, thunder: .2, severe: .12, sleet: .34,
+    lightsnow: .42, snow: .4, heavysnow: .32, blizzard: .18,
+    windy: .88, dust: .58, heat: 1, cold: .62, typhoon: .1, hail: .3,
+};
+const UV_LEVELS = [[2, '低'], [5, '中等'], [7, '高'], [10, '很高'], [Infinity, '极强']];
+const AQI_LEVELS = [[50, '优'], [100, '良'], [150, '轻度污染'], [200, '中度污染'], [300, '重度污染'], [Infinity, '严重污染']];
+const metricLevel = (value, levels) => levels.find(([maximum]) => value <= maximum)?.[1] || levels.at(-1)[1];
+
+// UV follows the story's solar hour, season, climate and cloud cover. AQI uses
+// a saved-seed daily baseline plus deterministic hourly and weather modifiers.
+// Neither metric changes the weather draw or makes a model/API request.
+export function environmentMetrics(climate, type, temp, wind, humidity, absHour, seed, key) {
+    const day = Math.floor(absHour / 24), hour = ((absHour % 24) + 24) % 24;
+    const profile = climate || { archetype: 'cfb' };
+    const ctx = conditions(profile, day, hour);
+    const stableSeed = String(seed || 'weather'), stableKey = String(key || '');
+    const daylight = Math.max(0, Math.sin(Math.PI * (hour - 6) / 12));
+    const seasonal = ctx.season === 'summer' ? 1 : ctx.season === 'winter' ? .42 : .76;
+    const uvNoise = (rngAt(stableSeed, stableKey + '|uv', absHour)() - .5) * 1.2;
+    const uv = clamp(Math.round((UV_BASE[profile.archetype] || 7) * seasonal * daylight *
+        (UV_WEATHER_FACTOR[type] ?? .55) + uvNoise), 0, 11);
+
+    const dailyNoise = rngAt(stableSeed, stableKey + '|aqi-day', day)();
+    const hourlyNoise = rngAt(stableSeed, stableKey + '|aqi-hour', absHour)();
+    const speed = Number.isFinite(Number(wind)) ? Number(wind) : 0;
+    const moisture = Number.isFinite(Number(humidity)) ? Number(humidity) : 50;
+    const temperature = Number.isFinite(Number(temp)) ? Number(temp) : 15;
+    let aqi = 24 + dailyNoise * 38 + (hourlyNoise - .5) * 12;
+    if (['aw', 'bsh', 'bwh'].includes(profile.archetype)) aqi += 8;
+    if (type === 'dust') aqi += 105 + dailyNoise * 55;
+    else if (type === 'fog') aqi += 18;
+    else if (type === 'heat') aqi += 12;
+    else if (type === 'cold') aqi += 8;
+    else if (['drizzle', 'rain', 'heavy', 'storm', 'thunder', 'severe', 'typhoon'].includes(type)) aqi -= 13;
+    else if (['snow', 'heavysnow', 'blizzard'].includes(type)) aqi -= 4;
+    if (speed >= 4) aqi -= Math.min(24, (speed - 3) * 5);
+    else if (speed <= 1) aqi += 8;
+    if (moisture >= 85 && speed <= 2) aqi += 8;
+    if (temperature >= 32) aqi += 6;
+    if (temperature <= -15) aqi += 5;
+    aqi = clamp(Math.round(aqi), 5, 500);
+    return { uv, uvLevel: metricLevel(uv, UV_LEVELS), aqi, aqiLevel: metricLevel(aqi, AQI_LEVELS) };
+}
+
+const reportOf = (city, climate, state, absHour, seed, key) => {
     const type = TYPES[state.type] ? state.type : 'partly';
     const t = TYPES[type];
     const day = Math.floor(absHour / 24);
+    const metrics = environmentMetrics(climate, type, state.temp, state.wind, state.humidity, absHour, seed, key);
     return {
-        city, type, label: t.label, extreme: !!t.extreme,
+        city, type, label: t.label, extreme: !!t.extreme, warning: weatherWarning(type),
         temp: state.temp, wind: state.wind, humidity: state.humidity,
         precip: Math.round(t.precip * (0.75 + Math.min(.6, state.humidity / 200)) * 10) / 10,
         feels: feelsLike(state.temp, state.wind, state.humidity),
+        ...metrics,
         date: dayDate(day), time: String(absHour % 24).padStart(2, '0') + ':00',
         hour: absHour,
     };
@@ -499,8 +563,8 @@ export function weatherAt(record, clock) {
     const key = normCity(record.city);
     const climate = climateFor(record.city, record.climate);
     const current = clock.day * 24 + Math.floor(clock.hour);
-    if (current <= record.hour) return reportOf(record.city, climate, record.state, record.hour);
-    return reportOf(record.city, climate, stateAtHour(record, climate, key, current), current);
+    if (current <= record.hour) return reportOf(record.city, climate, record.state, record.hour, record.seed, key);
+    return reportOf(record.city, climate, stateAtHour(record, climate, key, current), current, record.seed, key);
 }
 
 // Background block for every normal narrative generation. The narrative AI
@@ -593,7 +657,7 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
             if (!location?.city) return { status: 'no-location', clock };
             const record = state?.weather?.[normCity(location.city)];
             if (!record || normCity(record.city) !== normCity(location.city)) return { status: 'pending', city: location.city, clock };
-            if (clock.day == null || clock.hour == null) return { status: 'unknown-time', city: location.city, weather: { ...record.state, label: weatherType(record.state.type) }, date: record.date, clock };
+            if (clock.day == null || clock.hour == null) return { status: 'unknown-time', city: location.city, weather: weatherAt(record, { day: Math.floor(record.hour / 24), hour: record.hour % 24 }), date: record.date, clock };
             return { status: 'ok', city: location.city, report: weatherAt(record, clock), forecast: buildForecast(record, clock), clock };
         },
         // Manual refresh is the only entry point for initial weather. Two ways
