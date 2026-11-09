@@ -148,7 +148,7 @@ try {
   await page.screenshot({path:resolve(output,'enamel-floating-closed.png')});
   // Test-only framing: move the launcher away from the viewport edge so the
   // entire 36px orb and sixfold bloom are visible in un-clipped real captures.
-  await launcher.evaluate(el=>{el.style.left='160px';el.style.top='290px';});
+  await launcher.evaluate(el=>{el.style.left='160px';el.style.top='232px';});
   await launcher.click();
   await page.waitForTimeout(180);
   assert.equal(await page.locator('.pp-haze-spark').count(),12);
