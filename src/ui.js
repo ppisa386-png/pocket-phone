@@ -1,7 +1,7 @@
 import {paperDraft} from './daily-core.js?v=1.2';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2.5';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.16';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.18';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.14';

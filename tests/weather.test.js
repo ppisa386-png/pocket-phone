@@ -11,7 +11,7 @@ import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay, dayDate } from '../src/story-clock.js';
-import { createWeatherPanel, themeFor, nextThemeChange, themeForStory, upcomingHours } from '../src/weather-view.js';
+import { createWeatherPanel, themeFor, nextThemeChange, themeForStory, upcomingHours, rangeStyle } from '../src/weather-view.js';
 import { sceneBackdrop, weatherPhoto } from '../src/weather-art.js';
 
 // Simple deterministic LCG so statistical assertions never flake between runs.
@@ -679,6 +679,17 @@ test('24 real forecast hours continue across midnight and seven-day ranges use s
     }finally{f.close();}
 });
 
+test('seven-day bars clip one shared temperature gradient instead of restarting colors in each row', async () => {
+    assert.equal(rangeStyle({lo:20,hi:35},11,24), 'clip-path:inset(0 0.0% 0 37.5% round 10px)');
+    assert.equal(rangeStyle({lo:12,hi:30},11,24), 'clip-path:inset(0 20.8% 0 4.2% round 10px)');
+    assert.equal(rangeStyle({lo:11,hi:35},11,24), 'clip-path:inset(0 0.0% 0 0.0% round 10px)');
+    assert.equal(rangeStyle({lo:35,hi:35},11,24), 'clip-path:inset(0 0.0% 0 96.0% round 10px)');
+    assert.equal(rangeStyle({lo:11,hi:11},11,24), 'clip-path:inset(0 96.0% 0 0.0% round 10px)');
+    const {readFileSync} = await import('node:fs');
+    const css = readFileSync(new URL('../style.css',import.meta.url),'utf8');
+    assert.match(css,/\.pp-weather-tempbar>span\{[^}]*inset:0;[^}]*width:100%;[^}]*background:linear-gradient\(90deg,/s);
+});
+
 test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour and seven-day forecast with four photo cases',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
@@ -707,6 +718,7 @@ test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour an
             assert.match(html,/pp-weather-hour-now/);
             assert.match(html,/pp-weather-week/);
             assert.match(html,/pp-weather-tempbar/);
+            assert.match(html,/clip-path:inset\(0 [\d.]+% 0 [\d.]+% round 10px\)/);
             assert.match(html,/pp-weather-day-now/);
             assert.match(html,/pp-weather-metrics/);
             for(const label of ['体感温度','降水情况','风力','湿度'])assert.match(html,new RegExp(label));

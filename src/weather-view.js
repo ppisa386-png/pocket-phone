@@ -47,10 +47,17 @@ export function upcomingHours(forecast, nowHour) {
     return [...today.slice(first), ...tomorrow].slice(0, 24).map((h, i) => ({ ...h, isNow: i === 0 }));
 }
 
-function rangeStyle(day, low, span) {
-    const left = Math.max(0, Math.min(100, ((Number(day.lo) - low) / span) * 100));
-    const right = Math.max(left, Math.min(100, ((Number(day.hi) - low) / span) * 100));
-    return 'left:' + left.toFixed(1) + '%;width:' + Math.max(4, right - left).toFixed(1) + '%';
+// Seven-day temperatures share one color scale: clip the full-track gradient
+// to each day's range instead of restarting blue-to-orange in every segment.
+export function rangeStyle(day, low, span) {
+    let left = Math.max(0, Math.min(100, ((Number(day.lo) - low) / span) * 100));
+    let right = Math.max(left, Math.min(100, ((Number(day.hi) - low) / span) * 100));
+    // Keep very small or flat ranges visible without clipping outside the track.
+    if (right - left < 4) {
+        left = Math.max(0, Math.min(96, (left + right) / 2 - 2));
+        right = left + 4;
+    }
+    return 'clip-path:inset(0 ' + (100 - right).toFixed(1) + '% 0 ' + left.toFixed(1) + '% round 10px)';
 }
 
 export function createWeatherPanel({ adapter, getView, redraw, notice, editLocation, now = () => new Date(), assetBase = 'assets/weather/' }) {

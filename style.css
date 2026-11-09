@@ -2169,7 +2169,7 @@ h2, p { margin: 0; }
 .pp-weather-day-temp i{color:rgba(255,255,255,.9)}
 .pp-weather-tempbar{position:relative;display:block;width:100%;height:6px;border-radius:10px;
   background:rgba(255,255,255,.25);overflow:hidden}
-.pp-weather-tempbar>span{position:absolute;top:0;bottom:0;display:block;border-radius:10px;
+.pp-weather-tempbar>span{position:absolute;inset:0;display:block;width:100%;border-radius:10px;
   background:linear-gradient(90deg,#8dd3ff 0%,#ffe378 56%,#ff9958 100%)}
 .pp-weather-day-warn{grid-column:2/-1;font-size:10px;line-height:1.3;color:#ffe2ae;margin:0 0 5px}
 .pp-weather-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
