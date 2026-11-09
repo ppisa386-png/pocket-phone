@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {X_FLOOR_LEDGER,coveredFloors,hasUnsettledFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from '../src/x-floor.js';
+import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,hasUnsettledFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from '../src/x-floor.js';
 
 const chat=()=>[
     {mes:'第一楼已经公开传播。'},
@@ -17,7 +17,8 @@ test('unmarked first use, merged ranges, and only unprocessed assistant floors',
     assert.deepEqual(first,[[0,2]]);
     assert.deepEqual(pendingFloorBatch(messages,first,4).rows.map(x=>x.sourceIndex),[4]);
     assert.deepEqual(coverThrough(first,4),[[0,4]]);
-    assert.equal(hasUnsettledFloors(messages,{id:X_FLOOR_LEDGER,type:'floor-ledger',ranges:[[0,4]]},4),false);
+    assert.equal(hasUnsettledFloors(messages,{id:X_FLOOR_LEDGER,type:'floor-ledger',ranges:[[0,4]]},4),true,'old ledger needs one catch-up');
+    assert.equal(hasUnsettledFloors(messages,{id:X_FLOOR_LEDGER,type:'floor-ledger',version:X_FLOOR_VERSION,ranges:[[0,4]]},4),false);
     assert.deepEqual(coveredFloors([[5,5],[0,1],[2,4]]),[[0,5]]);
 });
 test('limited batches leave later floors available and do not count user/system messages',()=>{
@@ -39,4 +40,12 @@ test('floor follower deltas are incremental, validated and do not alter the orig
     assert.throws(()=>apply([{postId:'p',gained:1,lost:0},{postId:'p',gained:1,lost:0}]));
     assert.throws(()=>apply([{postId:'p',gained:-1,lost:0}]));
     assert.equal(state.x.audience.followers,113);
+});
+
+test('catch-up prioritizes recent prose in a long visible story',()=>{
+    const messages=[{mes:'旧楼 '+('早期闲谈'.repeat(50))},{mes:'后面的推文讨论 '+('大家都在转发'.repeat(16))}];
+    const newest=pendingFloorBatch(messages,[],1,200,true);
+    assert.deepEqual(newest.rows.map(x=>x.sourceIndex),[1]);
+    assert.match(newest.rows[0].text,/大家都在转发/);
+    assert.deepEqual(pendingFloorBatch(messages,[],1,200).rows.map(x=>x.sourceIndex),[0]);
 });

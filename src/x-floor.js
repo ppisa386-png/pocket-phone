@@ -3,6 +3,7 @@ import {xAudience} from './x-audience.js?v=1.2';
 
 // Message indices are zero-based in storage; displayed floor numbers are index + 1.
 export const X_FLOOR_LEDGER='follower-floor-ledger';
+export const X_FLOOR_VERSION=2;
 export function coveredFloors(ranges=[]) {
     const sorted=(Array.isArray(ranges)?ranges:[]).filter(r=>Array.isArray(r)&&r.length===2&&
         Number.isSafeInteger(r[0])&&Number.isSafeInteger(r[1])&&r[0]>=0&&r[1]>=r[0]).sort((a,b)=>a[0]-b[0]);
@@ -16,7 +17,7 @@ export function coveredFloors(ranges=[]) {
 }
 const alreadyCovered=(index,ranges)=>ranges.some(([start,end])=>start<=index&&index<=end);
 export function hasUnsettledFloors(chat,ledger,floor) {
-    if(!ledger||ledger.type!=='floor-ledger')return true;
+    if(!ledger||ledger.type!=='floor-ledger'||ledger.version!==X_FLOOR_VERSION)return true;
     const ranges=coveredFloors(ledger.ranges);
     return (chat||[]).some((message,index)=>index<=floor&&effectiveReply(message)&&!alreadyCovered(index,ranges));
 }
@@ -25,14 +26,19 @@ function visibleProse(message){
         .replace(/<(think|thinking|analysis|script|style)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi,'')
         .replace(/```[\s\S]*?```/g,'').trim();
 }
-export function pendingFloorBatch(chat,ranges,floor,maxChars=32000) {
-    const paid=coveredFloors(ranges),rows=[];let size=0;
+export function pendingFloorBatch(chat,ranges,floor,maxChars=32000,recentFirst=false) {
+    const paid=coveredFloors(ranges),eligible=[];
     for(let i=0;i<=(Math.min(floor,(chat||[]).length-1));i++){
         if(!effectiveReply(chat[i])||alreadyCovered(i,paid))continue;
         const text=visibleProse(chat[i]);if(!text)continue;
-        if(rows.length&&size+text.length+64>maxChars)break;
-        rows.push({sourceIndex:i,floor:i+1,text});size+=text.length+64;
+        eligible.push({sourceIndex:i,floor:i+1,text});
     }
+    const rows=[];let size=0;
+    for(const row of recentFirst?eligible.reverse():eligible){
+        if(rows.length&&size+row.text.length+64>maxChars)break;
+        rows.push(row);size+=row.text.length+64;
+    }
+    rows.sort((a,b)=>a.sourceIndex-b.sourceIndex);
     return {rows,lastIndex:rows.at(-1)?.sourceIndex??null};
 }
 export const coverThrough=(ranges,end)=>end===null?coveredFloors(ranges):coveredFloors([...(ranges||[]),[0,end]]);

@@ -118,7 +118,7 @@ test('X home lock persists on user turns; pencils on home, square, search and on
  const state={x:{'public-refresh':{floor:0},a:{id:'a',type:'account',name:'A',handle:'a'},m:{id:'m',type:'message',accountId:'a',role:'user',text:'private thread'}}};
  const p=createXPanel({getView:()=>state,adapter:{storyChat:()=>chat},redraw(){},notice(){}});
  assert.doesNotMatch(p.html(),/data-x-action="refresh"[^>]*disabled/,'legacy marker does not lock the first floor settlement');
- state.x['follower-floor-ledger']={id:'follower-floor-ledger',type:'floor-ledger',ranges:[[0,0]]};
+ state.x['follower-floor-ledger']={id:'follower-floor-ledger',type:'floor-ledger',version:2,ranges:[[0,0]]};
  assert.match(p.html(),/data-x-action="refresh"[^>]*disabled/);assert.doesNotMatch(p.html(),/data-x-action="edit-page"/);
  assert.deepEqual(p.press({dataset:{press:'x-account',xId:'a'}}).map(a=>a.icon),['edit']);
  chat.push({mes:'new'});assert.doesNotMatch(p.html(),/data-x-action="refresh"[^>]*disabled/);

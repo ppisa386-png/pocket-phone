@@ -988,3 +988,59 @@ test('legacy refreshed chat without a floor ledger is allowed to initialize with
   assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
  }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
 });
+
+test('previous floor ledger is reconciled once for existing discussions of a viral tweet',async()=>{
+ const f=setup(),oldBridge=globalThis.qqj_v3_public_bridge_v1;let reads=0;
+ try{
+  f.context.chat[0].mes='2026-06-01\n很多人正在讨论山姆的公开推文，朋友们不断转发，推文持续走红。';
+  ok(await f.x.publish('山姆发布了公开的演出视频。'));
+  const post=xItems(f.state(),'post')[0];
+  const impact={id:'impact:post:'+post.id,type:'influence',sourceId:'post:'+post.id,
+      start:null,end:null,gained:20,lost:0,total:20,settled:1,expired:true};
+  await f.memory.commit(await f.memory.begin(),[
+   {collection:'x',key:'audience',value:{id:'audience',type:'audience',initialFollowers:100,followers:120}},
+   {collection:'x',key:impact.id,value:impact},
+   {collection:'x',key:'public-refresh',value:{id:'public-refresh',type:'refresh',floor:0}},
+   {collection:'x',key:'follower-floor-ledger',value:{id:'follower-floor-ledger',type:'floor-ledger',ranges:[[0,0]]}}
+  ]);
+  globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('catch-up must skip QQJ');},
+     getPeopleSnapshot(){reads++;throw Error('catch-up must skip QQJ');}};
+  const results=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:38,lost:2}]},
+      {topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('当前任务：X 未结算剧情楼层')){
+     assert.match(quietPrompt,/很多人正在讨论山姆的公开推文/);
+     assert.match(quietPrompt,/不要求正文明确写出/);
+     assert.match(quietPrompt,/"metricsBefore"/);
+   }
+   return JSON.stringify(results.shift());
+  });
+  ok(await f.x.refreshPublic());
+  assert.equal(reads,0);assert.equal(f.state().x.audience.followers,156);
+  assert.equal(f.state().x['follower-floor-ledger'].version,2);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
+  const count=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),count);
+ }finally{globalThis.qqj_v3_public_bridge_v1=oldBridge;f.close();}
+});
+test('old refresh marker with no floor ledger also permits missed follower catch-up',async()=>{
+ const f=setup(),oldBridge=globalThis.qqj_v3_public_bridge_v1;let reads=0;
+ try{
+  f.context.chat[0].mes='2026-06-01\n同学都在聊这条公开推文，热度一直很高。';
+  ok(await f.x.publish('公开的视频片段'));
+  const post=xItems(f.state(),'post')[0];
+  await f.memory.commit(await f.memory.begin(),[
+   {collection:'x',key:'audience',value:{id:'audience',type:'audience',initialFollowers:20,followers:30}},
+   {collection:'x',key:'impact:post:'+post.id,value:{id:'impact:post:'+post.id,type:'influence',sourceId:'post:'+post.id,
+     start:null,end:null,gained:10,lost:0,total:10,settled:1,expired:true}},
+   {collection:'x',key:'public-refresh',value:{id:'public-refresh',type:'refresh',floor:0}}
+  ]);
+  globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('first marked refresh skips QQJ')}};
+  const seq=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:8,lost:1}]},
+      {topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
+  f.reply(()=>JSON.stringify(seq.shift()));
+  ok(await f.x.refreshPublic());
+  assert.equal(reads,0);assert.equal(f.state().x.audience.followers,37);
+  assert.equal(f.state().x['follower-floor-ledger'].version,2);
+  assert.equal((await f.x.refreshPublic()).ok,false);
+ }finally{globalThis.qqj_v3_public_bridge_v1=oldBridge;f.close();}
+});

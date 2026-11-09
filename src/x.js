@@ -1,7 +1,7 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2';
-import {X_FLOOR_LEDGER,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
+import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
 import {readXMemory} from './external-memory.js?v=1.2';
 import {dmDealTask,dealDecision} from './x-business.js?v=1.2.4';
 import {JOURNAL_KEY} from './journal.js?v=1.2';
@@ -408,18 +408,17 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         editPage(scope,edits){return run(async(state,_current,_request,commit)=>{await commit(scope?.kind?objectEdits(state,scope,edits):pageEdits(state,scope,edits));});},
         refreshPublic(){return run(async(state,current,request,commit)=>{
             const context=getContext(),chat=context.chat,floor=refreshFloor(chat);
-            const oldLedger=state.x[X_FLOOR_LEDGER],firstUse=oldLedger?.type!=='floor-ledger';
-            const legacyFloor=firstUse&&Number.isInteger(state.x['public-refresh']?.floor)
-                ?Math.min(floor,state.x['public-refresh'].floor):-1;
-            const baseRanges=firstUse?(legacyFloor>=0?[[0,legacyFloor]]:[]):coveredFloors(oldLedger.ranges);
-            const batch=pendingFloorBatch(chat,baseRanges,floor);
+            const oldLedger=state.x[X_FLOOR_LEDGER],needsCatchUp=oldLedger?.version!==X_FLOOR_VERSION;
+            // Earlier markers did not guarantee that subsequent conversations
+            // about an assessed post were paid. Reconcile visible prose once.
+            const baseRanges=needsCatchUp?[]:coveredFloors(oldLedger.ranges);
+            const batch=pendingFloorBatch(chat,baseRanges,floor,48000,needsCatchUp);
             const newPosts=xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id]);
-            if(floor<0||(!firstUse&&state.x['public-refresh']?.floor===floor&&!batch.rows.length&&!newPosts))
+            if(floor<0||(!needsCatchUp&&state.x['public-refresh']?.floor===floor&&!batch.rows.length&&!newPosts))
                 throw Error('当前楼层没有新的刷新机会。');
-            // A first-use or upgraded journal has no floor ledger. Its first
-            // refresh must work even when the legacy refresh marker matches.
-            // None of this first run may query the QQJ bridge.
-            const refreshRequest=firstUse?(prompt,validate,check,contact,options={})=>
+            // First use and older ledger migrations read visible prose only.
+            // Do not query QQJ until this floor ledger is initialized.
+            const refreshRequest=needsCatchUp?(prompt,validate,check,contact,options={})=>
                 request(prompt,validate,check,contact,{...options,skipExternalMemory:true}):request;
             const persona=context.powerUserSettings?.persona_description;
             const valid=()=>current()&&getContext().powerUserSettings?.persona_description===persona;
@@ -458,19 +457,25 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 const selected=previouslyAssessed.map(p=>{
                     const impact=staged.x['impact:post:'+p.id];
                     return {postId:p.id,text:p.text,imageDescription:p.imageDescription,
-                        metrics:xCounts(staged,p),previouslyAssessed:{gained:impact.gained,lost:impact.lost,settledDays:impact.settled,totalPaid:impact.total}};
+                        postedAtStory:p.postedAtStory,sourceIndex:p.sourceIndex,
+                        metricsBefore:xCounts(state,p),metricsNow:xCounts(staged,p),
+                        previouslyAssessed:{gained:impact.gained,lost:impact.lost,settledDays:impact.settled,totalPaid:impact.total}};
                 });
-                const remembered=firstUse?[]:JSON.parse(readXMemory(context,getSettings(),
+                const remembered=needsCatchUp?[]:JSON.parse(readXMemory(context,getSettings(),
                     {floorIndices:batch.rows.map(row=>row.sourceIndex)}).text||'[]');
                 const contract='只返回 {"effects":[{"postId":"已有 user 推文 ID","gained":非负整数,"lost":非负整数}]}。没有符合条件的新增影响返回 {"effects":[]}；同一帖最多一次，不返回无关字段。';
                 const task='当前任务：X 未结算剧情楼层的新增粉丝影响。'+REACH_CONTEXT+
                     '\n逐楼阅读本次未结算的有效正文，以及同楼已保存的千千结摘要。它们是同一剧情的两种资料，不得重复计数。'+
-                    '判断既有 user 推文在这些新楼层里是否持续获得新传播、讨论、关注或取关。几天前发布的旧帖，只要本段剧情表明热度继续发展，也可以产生新的粉丝变化。'+
-                    '仅估计这批新楼层额外带来的关注与取关，已评估的发帖首日收益及原有七日自然衰减影响已经单独结算，不再次发放。'+
-                    '单纯复述此前热度、不具备新增影响的剧情应返回零。结合公开内容、现实账号身份和剧情里的实际传播情况估计，不采用固定比例。私人事件未公开时不构成粉丝影响。'+
+                    '判断既有 user 推文是否在本批剧情里继续获得传播、围观、分享、讨论、关注或取关。发布几天后的旧帖依然可以涨粉。'+
+                    '正文确实出现许多人谈论、分享或传播一条公开推文时，应把这看作新增曝光与潜在关注的依据，并合理估算新增粉丝；不要求正文明确写出“增加了多少粉丝”或每个人点击关注。'+
+                    '区分有新受众的持续传播与同一批人重复讨论。公开推文被私下谈论不等于那些私谈内容本身已经公开，不推断网友看到了私密细节。'+
+                    '只估计本批剧情额外带来的关注与取关；首次发帖的粉丝收益和已结算的七日自然影响不再次发放。'+
+                    '只有确实没有新增传播或关注影响时才返回空数组。结合讨论人数、传播范围、公开内容吸引力、受众规模和账号身份估计，不使用固定比例。'+
+                    (needsCatchUp?'本次为旧存档补结算：只补此前可能遗漏的后续影响，不能把推文发布时已经计过的首日收益重新发放。':'')+
+                    '\n用户账号：'+JSON.stringify({name:context.name1,alias:profile(staged).alias,bio:profile(staged).bio})+
                     '\n本次楼层和可见正文：'+JSON.stringify(batch.rows)+
                     '\n同楼千千结正式摘要（可能为空）：'+JSON.stringify(remembered)+
-                    '\n此前已评估的 user 推文：'+JSON.stringify(selected)+
+                    '\n此前已评估的 user 推文、首日收益和刷新前后互动数据：'+JSON.stringify(selected)+
                     '\n当前粉丝：'+JSON.stringify(xAudience(staged)?.followers??null)+'\n'+contract;
                 const delta=await refreshRequest(task,d=>floorAudienceChanges(staged,d.effects),valid,null,{
                     skipExternalMemory:true,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
@@ -478,13 +483,13 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             }
             await refreshTrendsStage(staged,valid,refreshRequest,collect,true);
             if(!valid())throw Error('聊天或人设已改变。');
-            // For a brand-new account the initial post assessment provides the
-            // baseline for the visible story. Upgrades use the old refresh
-            // position as their paid baseline and settle newer floors.
-            const baselineOnly=firstUse&&legacyFloor<0&&!previouslyAssessed.length;
-            const endCovered=baselineOnly?floor:batch.lastIndex;
+            // Initialize the floor ledger after one visible-context catch-up.
+            // Later refreshes settle only fresh narrative floors.
+            const endCovered=needsCatchUp?floor:batch.lastIndex;
+            const storedRanges=needsCatchUp?coveredFloors(oldLedger?.ranges):baseRanges;
             collect([{collection:'x',key:X_FLOOR_LEDGER,value:{
-                id:X_FLOOR_LEDGER,type:'floor-ledger',ranges:coverThrough(baseRanges,endCovered)}}]);
+                id:X_FLOOR_LEDGER,type:'floor-ledger',version:X_FLOOR_VERSION,
+                ranges:coverThrough(storedRanges,endCovered)}}]);
             collect([xSet({id:'public-refresh',type:'refresh',floor})]);
             await commit(changes);return {added:home.added};
         });},
