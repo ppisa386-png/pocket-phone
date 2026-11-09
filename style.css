@@ -1937,7 +1937,28 @@ h2, p { margin: 0; }
   box-shadow:0 4px 15px rgba(9,30,57,.10);
   backdrop-filter:blur(17px) saturate(112%);-webkit-backdrop-filter:blur(17px) saturate(112%);
 }
+.pp-weather-warning-blue{border-color:rgba(160,211,255,.7);background:rgba(34,83,132,.58)}
+.pp-weather-warning-yellow{border-color:rgba(255,222,133,.72);background:rgba(112,83,23,.62)}
+.pp-weather-warning-orange{border-color:rgba(255,190,132,.72);background:rgba(132,68,35,.55)}
 .pp-weather-warning-red{border-color:rgba(255,150,154,.66);background:rgba(132,39,49,.5)}
+.pp-weather-warning-blue .pp-weather-warning-symbol{
+  border-color:rgba(190,224,255,.65);background:rgba(104,174,235,.22);color:#e7f4ff
+}
+.pp-weather-warning-yellow .pp-weather-warning-symbol{
+  border-color:rgba(255,231,167,.68);background:rgba(255,208,94,.2);color:#fff4d1
+}
+.pp-weather-warning-orange .pp-weather-warning-symbol{
+  border-color:rgba(255,219,180,.58);background:rgba(255,169,91,.2);color:#fff1df
+}
+.pp-weather-warning-blue .pp-weather-warning-head>b{
+  border-color:rgba(190,224,255,.6);background:rgba(104,174,235,.22);color:#e7f4ff
+}
+.pp-weather-warning-yellow .pp-weather-warning-head>b{
+  border-color:rgba(255,231,167,.64);background:rgba(255,208,94,.2);color:#fff4d1
+}
+.pp-weather-warning-orange .pp-weather-warning-head>b{
+  border-color:rgba(255,220,183,.5);background:rgba(255,174,104,.2);color:#fff0dc
+}
 .pp-weather-warning-symbol{
   display:grid;place-items:center;flex:0 0 31px;width:31px;height:31px;
   border:1px solid rgba(255,219,180,.52);border-radius:50%;
