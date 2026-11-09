@@ -7,7 +7,7 @@ import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.14';
 import { createFoodPanel } from './food-view.js?v=1.2.20';
 import { bindComposerKeys } from './composer.js?v=1.2';
-import { createXPanel } from './x-view.js?v=1.2.27';
+import { createXPanel } from './x-view.js?v=1.2.28';
 import { xUnread } from './x.js?v=1.2';
 import { createChatPanel } from './chat-view.js?v=1.2.13';
 import { chatUnread } from './chat-apps.js?v=1.2';
@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.27';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition } from './config.js?v=1.2.28';
 import { icon } from './icons.js?v=1.2';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.26';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';
@@ -145,6 +145,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         const selection=field&&active.tagName==='TEXTAREA'?[active.selectionStart,active.selectionEnd]:null;
         const old=content.querySelector('.pp-x-body'),scroll=old?.scrollTop||0,page=old?.dataset.xPage,count=old?.dataset.xCount;
         content.innerHTML=xPanel.html();
+        const mediaDraft=content.querySelector('.pp-x-compose [data-x-field="imageDescription"]');
+        if(mediaDraft?.value){
+            mediaDraft.style.height='30px';
+            mediaDraft.style.height=Math.min(110,Math.max(30,mediaDraft.scrollHeight))+'px';
+        }
         const body=content.querySelector('.pp-x-body');
         if(body)body.scrollTop=body.dataset.xThread==='true'&&(page!==body.dataset.xPage||count!==body.dataset.xCount)?body.scrollHeight:page===body.dataset.xPage?scroll:0;
         const next=field?Array.from(content.querySelectorAll('[data-x-field]')).find(el=>el.dataset.xField===field):null;

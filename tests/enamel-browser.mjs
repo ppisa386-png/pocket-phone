@@ -95,11 +95,27 @@ try {
   assert.equal(await photoField.isVisible(),true);
   const photoBox=await photoField.boundingBox(),postBox=await postField.boundingBox();
   assert.ok(photoBox.y<postBox.y && photoBox.height<postBox.height,'optional image box is slimmer and above the tweet');
+  assert.ok(photoBox.height<=36,'image description starts as a compact one-line field');
+  const photoStyle=await photoField.evaluate(el=>{
+    const style=getComputedStyle(el);
+    return {background:style.backgroundColor,borderTop:style.borderTopWidth,borderLeft:style.borderLeftWidth,
+      radius:style.borderTopLeftRadius,font:style.fontFamily,mainFont:getComputedStyle(el.closest('form').querySelector('[data-x-field="post"]')).fontFamily};
+  });
+  assert.equal(photoStyle.background,'rgba(0, 0, 0, 0)','media input has no filled card background');
+  assert.equal(photoStyle.borderTop,'0px');assert.equal(photoStyle.borderLeft,'0px');
+  assert.equal(photoStyle.radius,'0px','media input uses the same borderless X editor');
+  assert.equal(photoStyle.font,photoStyle.mainFont,'both editors share typography');
   await phone.screenshot({path:resolve(output,'enamel-x-composer.png')});
   await photoField.click();
   assert.equal(await photoField.evaluate(el=>getComputedStyle(el,'::placeholder').opacity),'0','placeholder vanishes on focus');
-  await photoField.fill('橱窗边的黑胶唱片与暖色灯光');
+  await photoField.fill('橱窗边的黑胶唱片与暖色灯光\\n黑胶封套与木架\\n玻璃窗外的雨滴');
+  const expanded=await photoField.boundingBox();
+  assert.ok(expanded.height>photoBox.height&&expanded.height<=110,'filled photo description grows only as needed');
   await postField.fill('午后在唱片店躲雨。');
+  await page.setViewportSize({width:320,height:568});
+  assert.ok(await page.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'borderless composer fits a 320px phone');
+  await phone.screenshot({path:resolve(output,'enamel-x-composer-320.png')});
+  await page.setViewportSize({width:390,height:844});
   assert.ok(await page.locator('.pp-x-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'X composer fits phone width');
   await page.getByRole('button',{name:'回到桌面',exact:true}).click();
   await page.getByRole('button',{name:'收起手机',exact:true}).click();

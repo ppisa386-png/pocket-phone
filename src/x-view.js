@@ -105,7 +105,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         else if(tab==='messages')body=inbox(state);
         else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3></div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>squareFeedPost(state,p)).reverse());
         else {
-            const composer='<div class="pp-x-feed-composer"><span class="pp-x-compose-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><form class="pp-snap-form pp-x-compose" data-x-form="post"><label class="pp-field pp-x-compose-image"><span class="pp-x-sr-only">图片描述（可选）</span><textarea name="imageDescription" data-x-field="imageDescription" rows="2" maxlength="2000" aria-label="图片描述（可选）" placeholder="图片描述，不带也可以～">'+xEscape(value('imageDescription'))+'</textarea></label><label class="pp-field"><span class="pp-x-sr-only">新帖内容</span><textarea name="post" data-x-field="post" rows="3" maxlength="6000" placeholder="有什么新鲜事？">'+xEscape(value('post'))+'</textarea></label><div class="pp-x-compose-bottom"><button type="submit" class="pp-snap-primary"'+disabled()+'>发帖</button></div></form></div>';
+            const composer='<div class="pp-x-feed-composer"><span class="pp-x-compose-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><form class="pp-snap-form pp-x-compose" data-x-form="post"><label class="pp-field pp-x-compose-image"><span class="pp-x-sr-only">图片描述（可选）</span><textarea name="imageDescription" data-x-field="imageDescription" rows="1" maxlength="2000" aria-label="图片描述（可选）" placeholder="图片描述，不带也可以～">'+xEscape(value('imageDescription'))+'</textarea></label><label class="pp-field"><span class="pp-x-sr-only">新帖内容</span><textarea name="post" data-x-field="post" rows="3" maxlength="6000" placeholder="有什么新鲜事？">'+xEscape(value('post'))+'</textarea></label><div class="pp-x-compose-bottom"><button type="submit" class="pp-snap-primary"'+disabled()+'>发帖</button></div></form></div>';
             body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||(!!state.x?.[X_FLOOR_LEDGER]&&state.x?.['public-refresh']?.floor===floor&&!hasUnsettledFloors(adapter.storyChat?.()||[],state.x[X_FLOOR_LEDGER],floor)&&!xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id])))+'</div>'+composer+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
         }
         if(editor){
@@ -137,7 +137,14 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     const api = {
         html, back,
         reset(){editor=null;commentHistory.length=0;epoch++;working=false;replyTarget=null;tab='home';page='';selected=null;following=false;results=null;drafts=Object.create(null);status='';},
-        input(el){if(editor){editor.values[Number(el.name.slice(1))]=el.value;return;}drafts[key(el.dataset.xField)]=el.value;},
+        input(el){
+            if(editor){editor.values[Number(el.name.slice(1))]=el.value;return;}
+            drafts[key(el.dataset.xField)]=el.value;
+            if(el.dataset.xField==='imageDescription'){
+                el.style.height='30px';
+                el.style.height=Math.min(110,Math.max(30,el.scrollHeight))+'px';
+            }
+        },
         async readVisible(){
             if(reading||working||getView().busy||!adapter.x)return;
             const postId=page.startsWith('post:')?page.slice(5):null;

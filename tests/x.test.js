@@ -1055,6 +1055,9 @@ test('manual X composer has an optional separate photo description and persists 
   assert.ok(form.indexOf('data-x-field="imageDescription"')<form.indexOf('data-x-field="post"'));
   const css=(await import('node:fs')).readFileSync(new URL('../style.css',import.meta.url),'utf8');
   assert.match(css,/textarea\[data-x-field="imageDescription"\]:focus::placeholder\{opacity:0\}/);
+  assert.match(css,/min-height:30px!important/);
+  assert.match(css,/background:transparent!important;border:0!important/);
+  assert.doesNotMatch(css,/background:#f7f9f9!important;border:1px solid #e1e8ed!important/);
   const description='你拿着黑胶唱片站在暖色灯光下。';
   const tweet='雨天的黑胶唱片店，听见了最爱的老歌。';
   ok(await f.x.publish(tweet,description));
