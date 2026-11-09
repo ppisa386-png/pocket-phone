@@ -115,8 +115,11 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
         const w = info.report || info.weather || {};
         const type = w.type || 'partly';
         const family = weatherScene(type);
-        const photo = weatherPhoto(type, theme);
         const today = info.forecast?.days?.[0] || null;
+        // A sustained rainy-day forecast gets the rain photograph even if
+        // there is a brief cloudy break in the current hour.
+        const photoType = today?.rainyDay && family !== 'rain' ? 'rain' : type;
+        const photo = weatherPhoto(photoType, theme);
         const feels = w.feels == null ? (w.temp == null ? '—' : Math.round(w.temp) + '°') : Math.round(w.feels) + '°';
         const precip = w.precip == null ? '—' : Number(w.precip).toFixed(1).replace(/\.0$/, '') + ' 毫米/时';
         const wind = w.wind == null ? '—' : w.wind + ' 级';
@@ -177,7 +180,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
             : '';
 
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '" data-photo="' + photo + '">' +
-            background(type, theme) + '<div class="pp-weather-scroll">' +
+            background(photoType, theme) + '<div class="pp-weather-scroll">' +
             '<div class="pp-weather-scene">' + hero(w, theme, city, busy, today) + '</div>' +
             statusMarkup() + warningMarkup + hourly + week + metrics +
             '</div></section>';

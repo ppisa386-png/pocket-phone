@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
-import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
+import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
@@ -697,7 +697,8 @@ test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour an
         const state=await f.state();
         const base=f.weather.report(state);
         const make=(hour,type)=>createWeatherPanel({
-            adapter:{weather:{report:()=>({...base,clock:{...base.clock,hour},report:{...base.report,type}})}},
+            adapter:{weather:{report:()=>({...base,clock:{...base.clock,hour},report:{...base.report,type},
+                forecast:{...base.forecast,days:[{...base.forecast.days[0],rainyDay:false},...base.forecast.days.slice(1)]}})}},
             getView:()=>({...state,busy:false}),redraw(){},notice(){},now:()=>new Date(2026,4,1,12),
             assetBase:'https://example.invalid/pocket-phone/assets/weather/'
         });
@@ -830,4 +831,45 @@ test('weather reports expose stable UV/AQI readings and the weather panel render
         assert.match(red, /红色预警 · Ⅰ级/);
         assert.match(red, /台风/);
     } finally { f.close(); }
+});
+
+test('daytime summary does not call a sunny morning heavy rain because of overnight downpours',()=>{
+    const hours=Array.from({length:24},(_,hour)=>({hour,type:hour<6?'heavy':hour<12?'sunny':'drizzle'}));
+    const phases=weatherDayPhases(hours);
+    assert.equal(phases.label,'晴转小雨');
+    assert.equal(phases.rainyDay,false);
+});
+test('continuous heavy-to-light rain has a coherent wet forecast for photography and daily label',()=>{
+    const hours=Array.from({length:24},(_,hour)=>({hour,type:hour<12?'heavy':'drizzle'}));
+    const phases=weatherDayPhases(hours);
+    assert.equal(phases.label,'大雨转小雨');
+    assert.equal(phases.rainyDay,true);
+    const interrupted=hours.map(h=>h.hour>=9&&h.hour<=12?{...h,type:'sunny'}:h);
+    assert.equal(weatherDayPhases(interrupted).label,'间歇性降雨');
+});
+test('rain forecast controls header image during a brief cloudy break without changing now icon',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-07-01 07:00\nSam arrived in Shanghai.','上海'));
+        await f.memory.read();await f.weather.refresh();
+        const state=await f.state(),info=f.weather.report(state);
+        const rainy={...info,report:{...info.report,type:'partly',label:'多云'},
+            forecast:{...info.forecast,days:[{...info.forecast.days[0],rainyDay:true,label:'大雨转小雨'},...info.forecast.days.slice(1)]}};
+        const panel=createWeatherPanel({adapter:{weather:{report:()=>rainy}},getView:()=>state,redraw(){}});
+        const html=panel.html();
+        assert.match(html,/data-photo="rain"/);
+        assert.match(html,/assets\/weather\/rain\.webp/);
+        assert.match(html,/<b class="pp-weather-desc">多云<\/b>/);
+        assert.match(html,/pp-weather-hour-now/);
+    }finally{f.close();}
+});
+test('narrative weather gives actual conditions and a matching near-term hourly forecast',()=>{
+    const {record}=forecastFor('seed-16');
+    const chat=forecastChat(record.date);
+    const state=forecastState(record);
+    const background=weatherBackground(state,chat),forecast=buildForecast(record,{day:dateDay(record.date),hour:10});
+    const current=weatherAt(record,{day:dateDay(record.date),hour:10});
+    assert.ok(background.includes('当前天气：'+current.label));
+    assert.ok(background.includes('10时'+weatherType(forecast.days[0].hours[10].type)));
+    assert.ok(background.includes('11时'+weatherType(forecast.days[0].hours[11].type)));
+    assert.ok(background.includes('当前场景依据“当前天气”'));
 });

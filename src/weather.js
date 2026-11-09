@@ -118,9 +118,9 @@ const TYPES = {
     partly: { label: '多云', precip: 0, wind: .5, humid: -5, temp: .2, family: 'clear', keep: .52 },
     overcast: { label: '阴', precip: 0, wind: .5, humid: 4, temp: -1, family: 'cloud', keep: .5 },
     fog: { label: '雾', precip: 0, wind: -1, humid: 10, temp: -1.5, family: 'cloud', keep: .38 },
-    drizzle: { label: '小雨', precip: .8, wind: 0, humid: 10, temp: -1.5, family: 'rain', level: 1, keep: .48 },
-    rain: { label: '中雨', precip: 4, wind: .5, humid: 14, temp: -2, family: 'rain', level: 2, keep: .45 },
-    heavy: { label: '大雨', precip: 10, wind: 1.5, humid: 16, temp: -3, family: 'rain', level: 3, keep: .4 },
+    drizzle: { label: '小雨', precip: .8, wind: 0, humid: 10, temp: -1.5, family: 'rain', level: 1, keep: .7 },
+    rain: { label: '中雨', precip: 4, wind: .5, humid: 14, temp: -2, family: 'rain', level: 2, keep: .72 },
+    heavy: { label: '大雨', precip: 10, wind: 1.5, humid: 16, temp: -3, family: 'rain', level: 3, keep: .73 },
     storm: { label: '暴雨', precip: 24, wind: 2.5, humid: 18, temp: -3.5, family: 'rain', level: 4, keep: .3, extreme: true },
     thunder: { label: '雷暴', precip: 8, wind: 2, humid: 14, temp: -2.5, family: 'rain', level: 3, keep: .22 },
     severe: { label: '强雷暴', precip: 16, wind: 3.5, humid: 16, temp: -3, family: 'rain', level: 4, keep: .18, extreme: true },
@@ -315,9 +315,9 @@ function transitionWeights(from, ctx) {
         w.push(['drizzle', rp * .68], ['rain', rp * .36], ['heavy', rp * .14]);
         if (ctx.summer) w.push(['thunder', rp * .16], ['severe', rp * .02]);
     } else if (t.family === 'rain') {
-        if (t.level === 1) w.push(['overcast', .32], ['partly', .16], ['drizzle', .18], ['rain', rp * .5 + .14]);
-        else if (t.level === 2) w.push(['drizzle', .3], ['heavy', rp * .36 + .06], ['overcast', .18], ['rain', .24], ['storm', rp * .04 + .008]);
-        else if (t.level === 3) w.push(['rain', .32], ['heavy', .26], ['drizzle', .18], ['overcast', .1], ['storm', rp * .08 + .015]);
+        if (t.level === 1) w.push(['overcast', .1], ['partly', .025], ['drizzle', .38], ['rain', rp * .5 + .2]);
+        else if (t.level === 2) w.push(['drizzle', .34], ['heavy', rp * .36 + .06], ['overcast', .055], ['rain', .32], ['storm', rp * .04 + .008]);
+        else if (t.level === 3) w.push(['rain', .38], ['heavy', .32], ['drizzle', .15], ['overcast', .025], ['storm', rp * .08 + .015]);
         else w.push(['heavy', .42], ['rain', .3], ['overcast', .12]);
         if (ctx.summer) w.push(['thunder', .09], ['severe', .03], ['hail', .008]);
     } else if (t.family === 'snow') {
@@ -539,18 +539,36 @@ const dominant = hours => {
     return best;
 };
 
+// Daily labels come from the daylight hours people can actually see, not from
+// midnight-to-noon counts that can hide a sunny morning behind an early storm.
+export function weatherDayPhases(hours) {
+    const morning=dominant(hours.slice(6,12)),afternoon=dominant(hours.slice(12,20));
+    const wet=type=>['rain','typhoon'].includes(TYPES[type]?.family);
+    const daylight=hours.slice(6,20);
+    let wetHours=0,dryRun=0,longestDry=0;
+    for(const row of daylight){
+        if(wet(row.type)){wetHours++;dryRun=0;}
+        else {dryRun++;longestDry=Math.max(longestDry,dryRun);}
+    }
+    const rainBoth=wet(morning)&&wet(afternoon);
+    const rainyDay=rainBoth&&wetHours>=8;
+    const label=rainBoth&&longestDry>=4?'间歇性降雨':
+        morning===afternoon?weatherType(morning):weatherType(morning)+'转'+weatherType(afternoon);
+    return {morningType:morning,afternoonType:afternoon,rainyDay,label};
+}
+
 const summarizeDay = (record, climate, key, day, today) => {
     const hours = dayHours(record, climate, key, day);
     const temps = hours.map(h => h.temp);
-    const morning = dominant(hours.slice(0, 12)), afternoon = dominant(hours.slice(12));
+    const phases=weatherDayPhases(hours);
     const type = dominant(hours);
     const extremeRows = hours.filter(h => TYPES[h.type]?.extreme);
     const span = !extremeRows.length ? '' : extremeRows.length >= 18 ? '全天'
         : `${String(extremeRows[0].hour).padStart(2, '0')}时至${String((extremeRows.at(-1).hour + 1) % 24).padStart(2, '0')}时`;
     return {
         day, date: dayDate(day), weekday: weekdayOf(day), today: !!today,
-        type, scene: weatherScene(type),
-        label: morning === afternoon ? weatherType(morning) : weatherType(morning) + '转' + weatherType(afternoon),
+        type, scene: weatherScene(type), rainyDay: phases.rainyDay,
+        label: phases.label,
         hi: Math.max(...temps), lo: Math.min(...temps),
         wind: Math.max(...hours.map(h => h.wind)),
         precip: Math.round(hours.filter(h => (TYPES[h.type]?.precip || 0) > 0).length / 24 * 100),
@@ -610,15 +628,19 @@ export function weatherBackground(state, chat) {
     // line: keep the full warning detail inline there instead of repeating it
     // in the future-warnings block, which covers days three to seven only.
     const inlineWarning = day => day.extreme ? `；预计${day.extremeSpan}出现${day.extremeLabel}（${day.extremeStrength}）` : '';
+    const nowHour=Math.floor(clock.hour);
+    const hours=[...today.hours.slice(nowHour),...tomorrow.hours].slice(0,6);
+    const hourlyLine=hours.map((h,i)=>`${String((nowHour+i)%24).padStart(2,'0')}时${weatherType(h.type)}`).join('、');
     const lines = [
         `当前位置：${location.city}；当前剧情时间：${report.date} ${report.time}。`,
-        `今天（${monthDayOf(today.date)}）：${today.label}，最高${today.hi}°C，最低${today.lo}°C，目前${Math.round(report.temp)}°C，风力${report.wind}级${inlineWarning(today)}。`,
+        `今天（${monthDayOf(today.date)}）：${today.label}，最高${today.hi}°C，最低${today.lo}°C；当前天气：${report.label}，${Math.round(report.temp)}°C，风力${report.wind}级${inlineWarning(today)}。`,
+        `未来6小时逐时预报（未发生）：${hourlyLine}。`,
         `明天（${monthDayOf(tomorrow.date)}）：${tomorrow.label}，最高${tomorrow.hi}°C，最低${tomorrow.lo}°C，降水概率${tomorrow.precip}%${inlineWarning(tomorrow)}。`,
     ];
     const warnings = forecast.days.filter((day, index) => day.extreme && index >= 2)
         .map(day => `${monthDayOf(day.date)}${day.extremeLabel}，强度${day.extremeStrength}，预计${day.extremeSpan}影响${forecast.city}`);
     if (warnings.length) lines.push('未来极端天气预警（尚未发生的预报）：' + warnings.join('；') + '。');
-    lines.push('以上天气由手机本地生成：预报不代表已经发生，不得把未来天气写成当前正在发生；区分当前天气、明日天气与未来预警；角色是否知道天气预报取决于剧情中的信息接触，不默认全知；不因预警自动编造事故、伤亡或财产损失；天气仅作场景背景，按需自然体现，不要求每轮描写。');
+    lines.push('以上天气由手机本地生成：当前场景依据“当前天气”，全天概况只描述当日主要变化，不能把“大雨转小雨”等全天预报理解成此刻持续下雨；逐时预报是尚未发生的天气，不得写成已发生；角色是否知道预报取决于剧情中的信息接触，不默认全知；不因预警自动编造事故、伤亡或财产损失；天气仅作场景背景，按需自然体现，不要求每轮描写。');
     return lines.join('\n');
 }
 
