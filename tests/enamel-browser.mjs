@@ -173,6 +173,8 @@ try {
   assert.deepEqual(armValues.map(x=>x.delay),[0,.016,.032,.048,.064,.08],'short optical cascade across six branches');
   assert.ok(armValues.every(x=>x.opacity>.65),'all arms remain legible at 36px bloom peak');
   assert.ok(Number(await page.locator('.pp-frost-heart').evaluate(el=>getComputedStyle(el).opacity))>.8,'center inlay catches light at peak');
+  const bloomScale=await page.locator('.pp-frost-snow').evaluate(el=>new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
+  assert.ok(bloomScale>1.1&&bloomScale<1.23,'36px snowflake peak is visibly expanded without oversized bounce');
   await page.waitForTimeout(360);
   assert.equal(await launcher.evaluate(el=>el.classList.contains('pp-haze-burst')),false,'burst returns to normal stacking and visual state after 680ms');
   assert.equal(await page.locator('.pp-frost-orb').evaluate(el=>getComputedStyle(el).opacity),'1','orb returns to fully visible');

@@ -202,7 +202,10 @@
   transform-origin:50% 50%;
 }
 .pp-layer[data-launcher="enamel"] .pp-frost-orb{opacity:1;transform:none}
-.pp-layer[data-launcher="enamel"] .pp-frost-snow{opacity:0;transform:scale(.88) rotate(-6deg)}
+.pp-layer[data-launcher="enamel"] .pp-frost-snow{
+  opacity:0;transform:scale(.88) rotate(-6deg);
+  filter:drop-shadow(0 1px .8px rgba(72,95,119,.32));
+}
 .pp-layer[data-launcher="enamel"] .pp-frost-art{
   transition:transform 130ms cubic-bezier(.23,1,.32,1);
 }
@@ -238,9 +241,9 @@
 }
 @keyframes pp-frost-bloom{
   0%,10%{opacity:0;transform:scale(.88) rotate(-6deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
-  30%{opacity:1;transform:scale(1.06) rotate(0)}
-  43%,61%{opacity:1;transform:scale(1.10) rotate(0);animation-timing-function:cubic-bezier(.77,0,.175,1)}
-  78%{opacity:.78;transform:scale(1.02) rotate(2deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
+  30%{opacity:1;transform:scale(1.11) rotate(0)}
+  43%,61%{opacity:1;transform:scale(1.17) rotate(0);animation-timing-function:cubic-bezier(.77,0,.175,1)}
+  78%{opacity:.78;transform:scale(1.06) rotate(2deg);animation-timing-function:cubic-bezier(.23,1,.32,1)}
   94%{opacity:0;transform:scale(.9) rotate(5deg)}
   100%{opacity:0;transform:scale(.88) rotate(6deg)}
 }
@@ -266,8 +269,8 @@
 }
 @keyframes pp-frost-glints{
   0%,18%{opacity:0;transform:translate(-50%,-50%) scale(.38) rotate(0)}
-  38%{opacity:.56;transform:translate(-50%,-50%) scale(.56) rotate(0)}
-  70%{opacity:.3}
+  38%{opacity:.66;transform:translate(-50%,-50%) scale(.62) rotate(0)}
+  70%{opacity:.4}
   100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.48) rotate(var(--spin))}
 }
 @media (prefers-reduced-motion:reduce){
