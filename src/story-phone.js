@@ -88,10 +88,14 @@ export function importStoryPhone(raw,revisions,chat,context){
             if(allowed&&typeof row.text==='string'&&row.text.trim())changes=socialContact(state,row,id,storyTime(chat.slice(0,index+1)),(Date.parse(chat[index].send_date)||Date.now())+n,context.name1);
             if(!changes.length)changes=[set('profiles','ignored:'+id,{ignored:true})];
             else{
-                // Outreach records were presented by this narrative floor; the
-                // marker may carry an A/B category and an explicit shown flag.
+                // Outreach creates real phone content. Arrival alone is not
+                // presentation: mark unseen unless the prose actually read it.
                 const message=changes.map(change=>change.value).find(value=>value?.type==='message');
-                if(message)changes.push(...commRecordPatch(row.channel.startsWith('x_')?'x':row.channel,message.id,message.accountId,row.category,row.shown));
+                if(message)changes.push(...commRecordPatch(row.channel.startsWith('x_')?'x':row.channel,message.id,message.accountId,row.category,row.shown===true));
+                else if(row.channel==='x_mention'){
+                    const post=changes.map(change=>change.value).find(value=>value?.type==='post');
+                    if(post)changes.push(...commRecordPatch('x',post.id,post.author,row.category,row.shown===true));
+                }
             }
             journal=appendChange(journal,revisions.slice(0,index+1),changes,id);state=replayJournal(journal);changed=true;
         }
@@ -162,7 +166,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                         if(!state.x?.[account.id]&&state.x?.profile?.alias!==context.name1)
                             account.identityKnown=false;
                     }
-                    changes.push(...commRecordPatch(row.platform,id,message.accountId,row.category,row.platform==='x'?true:row.shown));
+                    changes.push(...commRecordPatch(row.platform,id,message.accountId,row.category,row.shown===false?false:true));
                 }
             }
             journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+id,{ignored:true})],id);
@@ -219,7 +223,7 @@ export function importStoryPhone(raw,revisions,chat,context){
                 // the complete message twice. The valid contact tag carries it.
                 if(typeof row.text!=='string'||!row.text.trim()||row.text.length>6000)continue;
                 changes.push(set('messages',recordId,{id:recordId,contactId:id,participant,name:participant.name,role:outgoing?'user':'assistant',text:row.text.trim(),proactive:incoming,replyable:row.replyable!==false,origin:'narrative',createdAt:now,storyTime:clock,read:outgoing||row.read===true,...(outgoing?{replyStatus:'sent'}:{}),acquisition}));
-                changes.push(...commRecordPatch('sms',recordId,id,row.category||row.sms_category,row.shown));
+                changes.push(...commRecordPatch('sms',recordId,id,row.category||row.sms_category,row.outreachId?row.shown===true:row.shown));
             }else{
                 if(!['ringing','missed','declined','connected','ended'].includes(row.status))continue;
                 const previous=row.call_id?state.calls[row.call_id]:null;
@@ -257,7 +261,7 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     // Shared scene background: location tag rules and current weather go to the
     // narrative model with every normal generation, independent of phone channels.
     const scene=sceneBackground(state,chat,settings);
-    const xDm=settings.apps.x?'\nX 私信与其他通信使用同一已展示/未展示记录机制。只有本楼小说正文实际写出 user 在 X/Twitter 私信中发送或收到的一条新消息，且不是手机里已经保存的历史记录时，才在文尾逐条附 <!--durian-message:{"platform":"x","action":"sent或received（相对user）","sender":"user或对方账号名称","recipient":"对方账号名称或user","accountId":"已知X账号准确ID，未知省略","kind":"text","text":"实际已经发送或收到的完整私信内容","category":"A或B，实际约定、合作或待办填B","shown":true}-->。正文可忠实概述已发送/收到的内容，标记记录完整消息；不得将准备发、草稿、回忆、查询既有私信或对方未实际发送的回复标为新消息，不替user发消息；已经存于X里的消息只在本楼确实引用/展示时用durian-message-shown 标记对应记录ID，不要再次创建。商业邀约已经用durian-business offer、主动联系已经用durian-outreach记录时，不再为同一条私信加durian-message。除真实发信和收信外无消息则不标记。' : '';
+    const xDm=settings.apps.x?'\nX 私信与其他通信使用同一已展示/未展示记录机制。只有本楼小说正文实际写出 user 在 X/Twitter 私信中发送或收到的一条新消息，且不是手机里已经保存的历史记录时，才在文尾逐条附 <!--durian-message:{"platform":"x","action":"sent或received（相对user）","sender":"user或对方账号名称","recipient":"对方账号名称或user","accountId":"已知X账号准确ID，未知省略","kind":"text","text":"实际已经发送或收到的完整私信内容","category":"A或B，实际约定、合作或待办填B","shown":false}-->。正文可忠实概述已发送/收到的内容，标记记录完整消息；不得将准备发、草稿、回忆、查询既有私信或对方未实际发送的回复标为新消息，不替user发消息；已经存于X里的消息只在本楼确实引用/展示时用durian-message-shown 标记对应记录ID，不要再次创建。商业邀约已经用durian-business offer、主动联系已经用durian-outreach记录时，不再为同一条私信加durian-message。除真实发信和收信外无消息则不标记。' : '';
     if(!availableChannels(settings,state,context.name1).length)return x+xDm+business+(scene?'\n'+scene:'');
     const due=(narrativeReplyCount(chat)+1)%5===0;
     const contacts=Object.values(state.contacts).map(c=>({id:c.id,name:c.name}));
@@ -265,12 +269,12 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const group=context.groups?.find(g=>String(g.id)===String(context.groupId));
     const actors=(context.characters||[]).filter((c,i)=>i===Number(context.characterId)||group?.members?.includes(c.avatar));
     const calls=recentPerConversation(Object.values(state.calls).filter(c=>['ringing','connected'].includes(c.status)).sort((a,b)=>a.createdAt-b.createdAt),c=>c.contactId).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
-    const whatsapp=settings.apps.whatsapp?'\nWhatsApp普通正文通信只记录实际发生的新发送或接收，不必制造剧情或回应。无论第几楼、是否开启主动联系，按本楼发生顺序逐条附 <!--durian-message:{"platform":"whatsapp","action":"sent或received（相对user）","sender":"user或对方姓名","recipient":"对方姓名或user","accountId":"已知账号ID，未知省略","kind":"text/image/video/voice","text":"完整已发送内容或实际媒体描述","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B","shown":true}-->。正文可完整写出消息，也可自然概述其内容，标记的 text 保存完整内容；概述不得偏离实际通信事实。user发出的内容必须是user实际发出的消息，不能借标记补写user没发过的消息。回忆、引用、输入中、打算发送、手机里已有的消息都不重记。主动邀约已用durian-outreach标记的同一条消息不再标记。记录不触发自动回复。':'';
-    return x+xDm+whatsapp+(business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+outreachPrompt(settings,state,context.name1,due,exactStoryTime(chat))+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
+    const whatsapp=settings.apps.whatsapp?'\nWhatsApp普通正文通信只记录实际发生的新发送或接收，不必制造剧情或回应。无论第几楼、是否开启主动联系，按本楼发生顺序逐条附 <!--durian-message:{"platform":"whatsapp","action":"sent或received（相对user）","sender":"user或对方姓名","recipient":"对方姓名或user","accountId":"已知账号ID，未知省略","kind":"text/image/video/voice","text":"完整已发送内容或实际媒体描述","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B","shown":false}-->。正文可完整写出消息，也可自然概述其内容，标记的 text 保存完整内容；概述不得偏离实际通信事实。user发出的内容必须是user实际发出的消息，不能借标记补写user没发过的消息。回忆、引用、输入中、打算发送、手机里已有的消息都不重记。主动邀约已用durian-outreach标记的同一条消息不再标记。记录不触发自动回复。':'';
+    return x+xDm+whatsapp+(business?business+'\n':'')+CHINESE_NAME_RULE+settings.prompts.outreach+'\n'+'\n收到新短信、WhatsApp、微信、X私信等消息时，正文可以自然写手机铃声、震动、亮屏和当前人物能感受到的通知，不能仅凭消息抵达就写出完整消息、摘要、主题、隐含意思或user的理解与反应。只有剧情实际描写user打开手机并看到/听到内容，才可在正文呈现内容；不要为了交代通知擅自替user查看手机或打断原本情节。新消息的全文及必要译文完整写入本楼末尾的隐藏标记；仅有通知时标记shown:false，实际展示正文内容时才shown:true。看到通知或发送者名字不等于已阅读内容；来电铃响不等于已接听。此规则同样适用于本轮主动联系和普通新消息。'+outreachPrompt(settings,state,context.name1,due,exactStoryTime(chat))+'\n近期电话短信活动：'+safe(recentContactActivity(state,chat))+
         '\n这是 user 个人的手机。短信与电话标签只记录本轮正文中 user 实际发送或收到的短信、拨出或接到的电话。user 发出的短信也要逐条记录，不能只保存对方回复。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。user 发出的短信必须实际发送且正文已写出（完整原文或忠实概述），标记的 text 保存该消息完整内容，不能借标记补写 user 没发过的消息。无通信不输出标签。号码数字未写出则省略，不能编造。关闭或拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,calls})+
-        '\n按本轮实际通信发生顺序，每条短信及通话状态在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms 或 call","text":"仅 sms：实际发送或收到的完整短信原文，不得改写；正文可完整写出也可自然概述，标记保存完整内容","read":false,"status":"仅 call：ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"replyable":true}-->。短信与通话可附 category（旧写法 sms_category 仍可用）：A=日常问候/闲聊/生活分享/即时状态，B=约定/待办/持续请求/情感纠纷或仍在发展的具体事件；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断。本楼正文实际展示了这条通信时附 "shown":true（省略视为已展示）。短信一条一注释，不抄回旧记录。隐藏号码不可回拨时 replyable:false。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。'+
-        '\n正文概述或提及手机里已有的某条通信（短信、电话、WhatsApp、微信、Snapchat、X 私信/评论/公开互动）后，在本楼末尾附 <!--durian-message-shown:{"platform":"渠道代码 sms/call/whatsapp/wechat/snapchat/x","id":"通信历史资料中给出的准确记录ID"}-->，每条一条。这仅登记展示状态，不修改任何消息；不确定记录ID就省略，不要编造ID。已展示过的记录不重复标记。'+(scene?'\n'+scene:'')+COMMUNICATION_LANGUAGE_RULE;
+        '\n按本轮实际通信发生顺序，每条短信及通话状态在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms 或 call","text":"仅 sms：实际发送或收到的完整短信原文；通知未读时只放在此标记里","read":false,"shown":false,"status":"仅 call：ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"replyable":true}-->。短信与通话可附 category（旧写法 sms_category 仍可用）：A=日常问候/闲聊/生活分享/即时状态，B=约定/待办/持续请求/情感纠纷或仍在发展的具体事件；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断。短信仅有声音、震动、亮屏等通知时shown:false；正文实际阅读到内容才shown:true。接通通话后的真实对白才可写入turns；仅响铃记录ringing。短信一条一注释，不抄回旧记录。隐藏号码不可回拨时 replyable:false。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。'+
+        '\n正文实际阅读、展示或谈及手机里已有的某条通信的具体内容（短信、电话、WhatsApp、微信、Snapchat、X 私信/评论/公开互动）后，在本楼末尾附 <!--durian-message-shown:{"platform":"渠道代码 sms/call/whatsapp/wechat/snapchat/x","id":"通信历史资料中给出的准确记录ID"}-->，每条一条。这仅登记展示状态，不修改任何消息；仅有通知声、震动或未查看内容时不加该标记。不确定记录ID就省略，不要编造ID。已展示过的记录不重复标记。'+(scene?'\n'+scene:'')+COMMUNICATION_LANGUAGE_RULE;
 }
 export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
     const first=getContext(),bus=first?.eventSource,types=first?.event_types??first?.eventTypes??{},hooks=[];
