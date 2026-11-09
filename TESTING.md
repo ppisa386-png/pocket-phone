@@ -1,4 +1,10 @@
 ## v1.2.17 · 榴莲外卖视觉与今日特价（2026-11-09）
+
+## 柔雾珐琅独立主题验收（v1.2.22，2026-11-09）
+- 单元检查：`node --test tests/enamel-theme.test.js`；完整回归：`npm test`；离线 HTML：`npm run build:preview`。
+- 真实 Chromium 验收：`npm install --no-save playwright@1.56.1`，`npx playwright install chromium`，`node tests/enamel-browser.mjs`，截图写入仓库上一级 `qa-results/enamel-*.png`；GitHub Actions「Soft Haze Enamel visual QA」上传实际截图 artifact。
+- 功能范围：新主题必须手动从 设置→外观→主题 选择；经典深/浅与旧壁纸偏好不变；新主题仅桌面/系统控件切换 SVG 与浮球雪晶星屑效果，其他 App 内容仍沿用既有样式。检查 390×844 与 320×568、小窗无横向溢出、触控拖动不误触粒子、浏览器无脚本异常。截图不得冒充实机，需在 Termux 再次确认。
+
 - `tests/food.test.js`：验证每次菜单恰好生成五款、来自五家不同店铺、原价/8折价一致；加购快照、订单总额与现金流水均使用折后价。
 - 旧版菜单缓存打开迁移回归：补齐五款特价，不增加模型请求。
 - 面板回归验证首页五张特价卡、本地图片 URL、特价加购路由及已选数量提示；既有搜索、菜单、结算、代付和配送测试继续执行。
