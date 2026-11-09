@@ -156,13 +156,14 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
             metric('air', '空气质量', aqi, aqiNote) +
             '</section>';
 
-        const warning = weatherWarning(type);
+        const warning = weatherWarning(type, w);
+        const warningText = warning ? warning.level + '预警 · ' + warning.grade : '';
         const warningMarkup = warning
             ? '<section class="pp-weather-warning pp-weather-warning-' + warning.color + '" role="status" aria-label="' +
-                escapeHtml(warning.level + '预警：' + warning.title) + '">' +
+                escapeHtml(warningText + '：' + warning.title) + '">' +
                 '<span class="pp-weather-warning-symbol" aria-hidden="true">!</span>' +
                 '<div class="pp-weather-warning-copy">' +
-                    '<div class="pp-weather-warning-head"><small>气象预警</small><b>' + escapeHtml(warning.level + '预警') + '</b></div>' +
+                    '<div class="pp-weather-warning-head"><small>气象预警</small><b>' + escapeHtml(warningText) + '</b></div>' +
                     '<strong>' + escapeHtml(warning.title) + '</strong>' +
                     '<p>' + escapeHtml(warning.detail) + '</p>' +
                 '</div></section>'
