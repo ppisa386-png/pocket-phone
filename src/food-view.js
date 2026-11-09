@@ -178,7 +178,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
                         const old=item.specialDiscount?'<del>'+esc(money(item.originalPriceMinor*item.quantity,item.currency||order.items?.[0]?.currency))+'</del>':'';
                         return '<div class="pp-food-order-line"><span>' + esc(item.name) + '<em>× ' + Number(item.quantity || 0) + '</em></span><span class="pp-food-order-line-price">' + old + '<b>' + esc(amount) + '</b></span></div>';
                     }).join('') + '</div><div class="pp-food-order-total"><span>实付金额</span><b>' + esc(Object.entries(order.totals || {}).map(([c, v]) => money(v, c)).join(' + ')) + '</b></div></div></article>';
-            }).join('') + '</div>' : empty('parcel', '还没有外卖订单', '下单之后，订单会出现在这里。')) + '</section>';
+            }).join('') + '</div>' : empty('parcel', '你的订单', '下单之后，订单会出现在这里。')) + '</section>';
     }
 
     function html() {

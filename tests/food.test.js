@@ -230,7 +230,7 @@ test('首页展示五款8折特价菜，特价卡片可加入对应店铺购物�
  const adapter={storyChat:()=>[],userName:()=>'Sam',food:{async add(shopId,dishId,quantity){
   calls.push([shopId,dishId,quantity]);
   const shop=shops.find(s=>s.id===shopId),dish=shop.menu.find(d=>d.id===dishId),line=lines.find(x=>x.dishId===dishId);
-  if(line)line.quantity+=quantity;else lines.push({...dish,shopId,shopName:shop.name,currency:shop.currency,quantity});
+  if(line)line.quantity+=quantity;else lines.push({...dish,dishId,shopId,shopName:shop.name,currency:shop.currency,quantity});
   return {ok:true};
  }}};
  const state=()=>({busy:false,error:'',errorKind:null,orders:{foodSearch:{query:'test'},...Object.fromEntries(shops.map(s=>[s.id,s])),foodCart:{id:'foodCart',type:'foodCart',items:lines}}});
