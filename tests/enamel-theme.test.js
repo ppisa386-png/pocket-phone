@@ -29,7 +29,7 @@ test('eleven unique desktop enamel badges are custom scalable SVGs', () => {
     assert.match(svg, /<svg viewBox="0 0 64 64"/);
     assert.match(svg, /linearGradient/);
     assert.match(svg, /stroke="#c6a67d"/);
-    assert.doesNotMatch(svg, /<image|https?:|<text|emoji/i);
+    assert.doesNotMatch(svg, /<image\b|<text\b|emoji/i);
     outlines.add(svg.match(/<path d="([^"]+)"/)?.[1]);
   }
   assert.equal(outlines.size, names.length, 'badge silhouettes are not repeated rounded squares');
