@@ -37,6 +37,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: soft-haze-enamel-browser-evidence
-          path: qa-results/enamel-*.png
+          path: ../qa-results/enamel-*.png
           if-no-files-found: warn
           retention-days: 30
