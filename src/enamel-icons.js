@@ -3,7 +3,7 @@
  * Original vector artwork, no third-party asset/license required.
  * Utility glyphs and branded app interiors keep their existing icons.
  */
-const marks = {
+const ppEnamelArtMarks = {
   phone:['M31 3C48 2 60 15 61 31S49 60 32 61C15 62 3 49 3 32S14 4 31 3Z','#8da99e','#4d756c','<path d="M18 16c-4 0-6 5-5 10 3 13 16 26 29 28 5 1 10-2 10-6l-10-10-6 5c-7-3-12-8-15-15l5-5-8-7Z" fill="#f8f2e7" stroke="#557b70" stroke-width="2" stroke-linejoin="round"/><path d="m18 20 5 5m19 18 5 5" stroke="#ddc4c8" stroke-width="2"/>'],
   messages:['M13 6H49Q61 6 61 18V40Q61 53 47 53H30L13 62 16 49Q3 45 3 32V18Q3 6 13 6Z','#adbcc8','#6d8b9f','<path d="M17 18H47Q53 18 53 24V39Q53 45 47 45H29L18 51 20 43Q12 41 12 34V24Q12 18 17 18Z" fill="#faf6ed" stroke="#788b9b" stroke-width="2"/><path d="M22 27H44M22 34H37" stroke="#8396a9" stroke-width="3" stroke-linecap="round"/>'],
   whatsapp:['M31 4C47 3 60 15 60 31C60 49 46 61 31 60Q24 60 18 57L5 61 9 48A28 28 0 0 1 4 31C4 15 16 4 31 4Z','#83b79b','#397c5f','<path d="M32 14a19 19 0 0 0-17 28l-2 10 10-3A19 19 0 1 0 32 14Z" fill="none" stroke="#faf5e9" stroke-width="4"/><path d="m23 22-3 4c1 8 11 18 20 19l5-4-6-5-4 3c-4-2-7-5-9-9l3-3-6-5Z" fill="#faf5e9"/>'],
@@ -16,9 +16,9 @@ const marks = {
   food:['M30 3 44 9 56 20 61 35 55 51 44 60 19 60 7 50 3 32 11 13Z','#ca9b90','#91645f','<path d="M20 25c-3-6 7-8 5-13m8 13c-3-6 7-8 5-13m8 13c-2-6 5-8 3-13" stroke="#fbe3ca" fill="none" stroke-width="2.2" stroke-linecap="round"/><path d="M10 32h44c-1 14-8 20-22 22C19 52 12 46 10 32Z" fill="#faf0e3" stroke="#906d64" stroke-width="2"/><path d="M11 33h42M22 54h20m-8-24 18-16m-13 17 17-12" stroke="#b68b77" stroke-width="2.3" stroke-linecap="round"/>'],
   settings:['M26 3h12l3 7 7-2 9 9-2 7 7 3v11l-7 3 2 8-9 9-8-3-3 7H26l-3-7-8 3-9-9 3-8-7-3V27l7-3-2-7 9-9 8 2Z','#b8adb9','#7c7183','<path d="m27 14h9l2 6 5 2 6-2 5 8-5 4v6l5 4-5 8-6-2-5 2-2 6h-9l-2-6-5-2-6 2-5-8 5-4v-6l-5-4 5-8 6 2 5-2Z" fill="#f9f2e9" stroke="#84798a" stroke-width="1.8"/><circle cx="32" cy="35" r="11" fill="#afa4b7" stroke="#817386" stroke-width="2"/><circle cx="32" cy="35" r="5.5" fill="#faf1e6"/>']
 };
-export const enamelNames = Object.freeze(Object.keys(marks));
+export const enamelNames = Object.freeze(Object.keys(ppEnamelArtMarks));
 export function enamelIcon(name) {
-  const mark = marks[name];
+  const mark = ppEnamelArtMarks[name];
   if (!mark) return '';
   const [outline,light,dark,detail] = mark;
   const id = 'pp-haze-' + name;
