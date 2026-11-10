@@ -204,16 +204,16 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 try { return await post('generate', config, key, payload, current, onProgress); }
                 catch (error) {
                     if (options.retryEmptyOnce!==true || error.code!=='API_EMPTY_OUTPUT' || !current()) throw error;
-                    // Only X feed refresh opts in. A successful response is never
-                    // repeated; the retry uses identical context and a smaller
-                    // per-request completion budget, without changing settings.
+                    // Only opted-in X tasks use this recovery. A successful response is
+                    // never repeated; the retry keeps the full original context
+                    // with a smaller per-request budget and unchanged settings.
                     const retryPayload={...payload};
                     const field=retryPayload.max_completion_tokens!==undefined?'max_completion_tokens':'max_tokens';
-                    retryPayload[field]=Math.min(4096, Number(retryPayload[field])||4096);
-                    onProgress('X 刷新收到空回复，降低输出上限重试一次');
+                    retryPayload[field]=Math.min(4096, Math.max(1024, Math.floor((Number(retryPayload[field])||8192)/2)));
+                    onProgress('X 请求收到空回复，降低输出上限重试一次');
                     try { return await post('generate', config, key, retryPayload, current, onProgress); }
                     catch (again) {
-                        again.diagnostic=(again.diagnostic?again.diagnostic+'\n':'')+'X 刷新空回复恢复：已执行一次较低上限重试';
+                        again.diagnostic=(again.diagnostic?again.diagnostic+'\n':'')+'X 请求空回复恢复：已执行一次较低上限重试';
                         throw again;
                     }
                 }
