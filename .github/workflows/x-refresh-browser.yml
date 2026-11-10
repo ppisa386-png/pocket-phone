@@ -6,7 +6,7 @@ on:
       - 'src/x.js'
       - 'src/x-view.js'
       - 'style.css'
-      - 'tests/x-audience-browser.mjs'
+      - 'tests/x-refresh-browser.mjs'
       - '.github/workflows/x-refresh-browser.yml'
   workflow_dispatch:
 permissions:
@@ -27,4 +27,4 @@ jobs:
           npm install --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
       - name: X independent refresh browser acceptance
-        run: node tests/x-audience-browser.mjs
+        run: node tests/x-refresh-browser.mjs
