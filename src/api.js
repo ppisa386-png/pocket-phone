@@ -200,8 +200,24 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             if (typeof options.finalOutputContract === 'string' && options.finalOutputContract.trim()) {
                 payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
             }
-            try { return await post('generate', config, key, payload, current, onProgress); }
-            catch (error) {
+            try {
+                try { return await post('generate', config, key, payload, current, onProgress); }
+                catch (error) {
+                    if (options.retryEmptyOnce!==true || error.code!=='API_EMPTY_OUTPUT' || !current()) throw error;
+                    // Only X feed refresh opts in. A successful response is never
+                    // repeated; the retry uses identical context and a smaller
+                    // per-request completion budget, without changing settings.
+                    const retryPayload={...payload};
+                    const field=retryPayload.max_completion_tokens!==undefined?'max_completion_tokens':'max_tokens';
+                    retryPayload[field]=Math.min(4096, Number(retryPayload[field])||4096);
+                    onProgress('X 刷新收到空回复，降低输出上限重试一次');
+                    try { return await post('generate', config, key, retryPayload, current, onProgress); }
+                    catch (again) {
+                        again.diagnostic=(again.diagnostic?again.diagnostic+'\n':'')+'X 刷新空回复恢复：已执行一次较低上限重试';
+                        throw again;
+                    }
+                }
+            } catch (error) {
                 if (error.diagnostic) {
                     const sizes=payload.messages.map(m=>JSON.stringify(m).length);
                     error.diagnostic+='\n手机任务提示字符数：'+prompt.length+'；最终各条消息字符数（按发送顺序，含结构）：'+sizes.join('、');
