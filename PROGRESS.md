@@ -1,8 +1,8 @@
 ## v1.2.35 · X 私信剧情时间与商业邀约回复期限（2026-11-10；基线 ba1b112）
-**视觉基准**：沿用 RESOURCE_SOURCES.md 登记的 https://github.com/ccrsxx/twitter-clone，保持现有 X 白底、灰色辅助文字、灰/蓝消息气泡及紧凑排版；本轮只补私信时间信息，不重做 X 视觉。
+**视觉基准**：沿用 RESOURCE_SOURCES.md 登记的 https://github.com/ccrsxx/twitter-clone。实际检查了其 TweetDate 组件：时间使用次级灰色文字，列表显示紧凑日期，悬浮提示完整日期；该仓库没有私信模块，因此将相同的次级文字层级应用到榴莲手机现有 X 灰/蓝私信气泡，不虚称复刻了不存在的 DM 页面。
 **私信时间**：X 收件箱最后一条消息及会话内每条消息均显示剧情日期/时间；NPC 气泡标为收信时间，user 气泡标为发送时间。直接发送、NPC 回复、自我介绍及正文导入的私信统一保存 storyTime；历史缺失值显示「时间未记录」，不拿设备时间冒充剧情时间。
 **商业合作**：品牌邀约可在私信明确写出回复截止时刻，replyBy 同时保存到消息和企划。仅把明确的回复期限作为截止，不把活动、寄送、交付或见面时间混用。user 首次超时回复时执行一次 50% 婉拒判定；婉拒由品牌发送礼貌拒绝并将企划置为 declined，另一半继续原有协商。结果保存在 business 回退日志中，重试、后续消息和剧情重生成不重复抽取。原邀约门槛、报价、背调、风险、签约和财务逻辑保持。
-**工程与验证**：更新 src/x-view.js、src/x.js、src/x-business.js、style.css、入口缓存版本及对应测试；补充日期解析、50% 概率边界、商业邀约时间持久化、私信时间展示和超时单次判定回归。GitHub Actions 推送后结果待核验；Termux 真机窄屏视觉需进一步验收。
+**工程与验证**：更新 src/x-view.js、src/x.js、src/x-business.js、style.css、入口缓存版本及对应测试；补充日期解析、50% 概率边界、商业邀约时间持久化、私信时间展示和超时单次判定回归。GitHub Actions 已通过：Pocket Phone regression（npm test、npm run build:preview）及 browser-acceptance 均 success；Termux 真机窄屏视觉仍需设备验收。
 
 # 榴莲手机开发进度
 
