@@ -54,7 +54,7 @@ function lastUnanswered(thread){
 // With a story-time anchor, expired messages never re-enter the trigger.
 export function xTriggerCandidates(state,user,now=null){
     if((state.x?.profile?.alias??user)!==user)return [];
-    const posts=Object.values(state.x||{}).filter(p=>p.type==='post'&&(p.author==='user'||p.reposted===true));
+    const posts=Object.values(state.x||{}).filter(p=>p.type==='post'&&p.author==='user');
     if(!posts.length)return [];
     // Expired public posts are no longer fresh narrative material, so they stop
     // serving as a re-outreach trigger or a quoted catalyst.
