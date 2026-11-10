@@ -1,21 +1,13 @@
-## 工作分支检查点 · 天气 App「窗边天气日记」（2026-11-10）
-**分支**：`work/weather-window-diary`；**生产基线**：`main @ aec1d43b55aa201cd2b7560acb286a0f6a78937a`；当前正式版本 `1.2.36`。本次为在线保存的设计/代码审查检查点，未修改任何运行时代码、未更换天气资源、未改入口缓存版本，main 不移动，因此不会影响当前正常天气 App。
-**已完成**：完整阅读 Skill 2 Web Design Engineer 主规范及 Redesign Protocol、Design Calibration、Failure Patterns、Browser Acceptance、Critique Guide；阅读项目 `AGENTS.md`、`REQUIREMENTS.md`、`PROGRESS.md`、`RESOURCE_SOURCES.md`；检查 `src/weather-view.js`、`src/weather.js`、`src/weather-art.js`、`style.css`、`index.js`、`package.json`、`tests/weather.test.js` 和现有天气素材树。用户确认跳过重复效果稿，直接实施。
-**代码现状**：天气页当前仍使用 `assets/weather/day.webp`、`dusk.webp`、`night.webp`、`rain.webp` 四张摄影背景；天气图标由 `src/weather-art.js` 内联 SVG 生成；`src/weather-view.js` 负责主天气、逐小时、七日、六项指标和当前预警 DOM；`src/weather.js` 负责天气数据、剧情时间、城市、预报、预警和确定性 UV/AQI；样式目前集中在全局 `style.css`，需将天气视觉整理为独立、可维护且严格限定作用域的规则。现有六项指标为体感、降水、风力、湿度、UV、AQI。
-**已确认设计**：暖奶油绘本「窗边天气日记」；Manrope + Noto Sans SC 本地字体；五张用户原创天气窗插画作为唯一天气主图；左数据右插画约 60/40，插画 110–126px；天气窗下方、24小时预报上方显示四级预警；随后为横滑24小时、纵向七日及2×3指标网格；夜间保持浅色页面；280–640px 宽小窗适配。完整规则见本分支 `REQUIREMENTS.md` 对应天气章节及 `docs/weather-window-diary/WORKLOG.md`。
-**已完成**：①五张天气窗原图已本地化为 `assets/weather/windows/{sunny,cloudy,rainy-day,snowy,good-night}.webp`；输入原图均为 1122×1402，页面素材保留约 4:5 比例并转换为 320×400 WebP（quality 78），保留原奶油画布与水彩边缘，不进行破坏性抠图。②Manrope Variable 与 Noto Sans SC Variable 已本地打包，包含 Manrope 6 个子集、Noto Sans SC 101 个字形子集、Fontsource unicode-range CSS 及两份 OFL 许可证；字体文件总计约 5.7MB，浏览器按需加载，无运行时字体 CDN 请求。
-**待完成**：③重构天气页 DOM 与 CSS；④核对多预警展示与现有数据模型，不改变天气引擎语义；⑤更新预览构建器与测试；⑥浏览器截图验收 280/330/360/390/640px 及短高容器；⑦完整 `npm test` 与预览构建。每完成一个独立里程碑，立即提交到本工作分支保存。所有阶段完成且用户确认后才合并/推送到 `main`。
-**限制**：此检查点只保存已完成的研究、审查和确认方案；尚未整合插画/字体，尚未改造 UI，尚未运行本轮回归测试。不得把这些项目记作已完成。
- 
-
-## 工作分支检查点 · 天气 App「窗边天气日记」（2026-11-10）
-**分支**：`work/weather-window-diary`；**生产基线**：`main @ aec1d43b55aa201cd2b7560acb286a0f6a78937a`；当前正式版本 `1.2.36`。本次为在线保存的设计/代码审查检查点，未修改任何运行时代码、未更换天气资源、未改入口缓存版本，main 不移动，因此不会影响当前正常天气 App。
-**已完成**：完整阅读 Skill 2 Web Design Engineer 主规范及 Redesign Protocol、Design Calibration、Failure Patterns、Browser Acceptance、Critique Guide；阅读项目 `AGENTS.md`、`REQUIREMENTS.md`、`PROGRESS.md`、`RESOURCE_SOURCES.md`；检查 `src/weather-view.js`、`src/weather.js`、`src/weather-art.js`、`style.css`、`index.js`、`package.json`、`tests/weather.test.js` 和现有天气素材树。用户确认跳过重复效果稿，直接实施。
-**代码现状**：天气页当前仍使用 `assets/weather/day.webp`、`dusk.webp`、`night.webp`、`rain.webp` 四张摄影背景；天气图标由 `src/weather-art.js` 内联 SVG 生成；`src/weather-view.js` 负责主天气、逐小时、七日、六项指标和当前预警 DOM；`src/weather.js` 负责天气数据、剧情时间、城市、预报、预警和确定性 UV/AQI；样式目前集中在全局 `style.css`，需将天气视觉整理为独立、可维护且严格限定作用域的规则。现有六项指标为体感、降水、风力、湿度、UV、AQI。
-**已确认设计**：暖奶油绘本「窗边天气日记」；Manrope + Noto Sans SC 本地字体；五张用户原创天气窗插画作为唯一天气主图；左数据右插画约 60/40，插画 110–126px；天气窗下方、24小时预报上方显示四级预警；随后为横滑24小时、纵向七日及2×3指标网格；夜间保持浅色页面；280–640px 宽小窗适配。完整规则见本分支 `REQUIREMENTS.md` 对应天气章节及 `docs/weather-window-diary/WORKLOG.md`。
-**待完成**：①从本对话附件提取并本地化五张原图，评估透明化/底色融合；②从 Fontsource 获取 Manrope 与 Noto Sans SC 适量字重/字符集并本地打包；③重构天气页 DOM 与 CSS；④核对多预警展示与现有数据模型，不改变天气引擎语义；⑤更新预览构建器与测试；⑥浏览器截图验收 280/330/360/390/640px 及短高容器；⑦完整 `npm test` 与预览构建。每完成一个独立里程碑，立即提交到本工作分支保存。所有阶段完成且用户确认后才合并/推送到 `main`。
-**限制**：此检查点只保存已完成的研究、审查和确认方案；尚未整合插画/字体，尚未改造 UI，尚未运行本轮回归测试。不得把这些项目记作已完成。
- 
+## v1.2.38 · 窗边天气日记回归修复与浏览器验收（2026-11-10；仅开发分支）
+**开发分支**：`work/weather-window-diary`；代码修复提交 `ad7d07a922790e20b5c0f67ae83947329674c48b`。**版本**：`1.2.38`，仅开发分支版本，不代表已发布。
+**修复内容**：
+- 当天预报 `rainyDay=true` 时，即使当前小时短暂转晴/多云，天气窗优先显示 Rainy Day；当前温度、天气描述和逐小时当前读数仍取当前实况；当前雨雪天气分别保持 Rainy Day / Snowy。
+- 修正三项旧验收断言：主图资源路径已从摄影 WebP 迁移到五张本地天气窗插画；七日温度条 CSS 已迁入 `style-weather.css`；雨日主图使用 `data-weather-window`，不再依赖旧摄影层的 `data-photo`。
+- 补强 Chromium 验收：加入 330px 宽度、320×590 短高度；逐宽度核对无横向溢出、插画已加载且不超过 126px、温度与插画不重叠、24 小时横向独立滚动、七日行与六项指标完整、双预警存在；补测多云间歇时雨日插画与夜间 Good Night 场景。
+- 离线浏览器夹具补齐 phone subscription 与 weather.open 空操作适配，避免与天气无关的 API 提示遮挡验收截图；插画淡入完成后再截图。运行时天气 API、模拟数据和预警生成逻辑未改。
+**最终验收**：GitHub Actions `42765053515` 成功；`npm test` **736/736 通过**；`npm run build:preview` 成功；Chromium visual QA 成功，视口为 **280、320、330、360、390、640px** 及 **320×590px**。Manrope / Noto Sans SC 均加载成功；双预警、夜间 Good Night、雨日多云间歇场景均通过；无浏览器运行时错误、无外部字体/图片请求。生成 9 张截图，已复核 280、330、640、320×590、夜间及雨日间歇画面。
+**发布边界**：未合并、未发布、未改动 `main`。本开发分支与当前 `main` 仍分叉，merge base 为 `aec1d43b55aa201cd2b7560acb286a0f6a78937a`；后续如需合并，先重新比较届时的 main 并整合其近期提交，不得直接覆盖。
+**设备限制**：本次验收为 GitHub Chromium 离线预览；尚未在用户 Termux / 酒馆实际运行环境做真机触控验收。
 
 ## v1.2.36 · X 独立 API 刷新空回复恢复（2026-11-10）
 **定位**：用户截图中 X 刷新调用 robin-3.8-flash，酒馆代理返回 HTTP 200，但 choices[0].message.content 为空、completion_tokens=0、finish_reason=stop，触发 API_EMPTY_OUTPUT。请求含约 3.0 万输入 token，且从宿主预设继承了 70000 的输出 token 上限；空回复不必然由此造成，但 X 有限量 JSON 刷新无需如此高的输出上限。
