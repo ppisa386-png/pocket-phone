@@ -161,9 +161,8 @@ test('each relevant channel keeps at most three records; ordinary and anonymous 
  }
  state.messages.other={contactId:'card:bea.png',role:'user',text:'BEA_PRIVATE',createdAt:50};
  const prompt=buildContinuityPrompt(state,{avatar:'alex.png',name:'Alex',nameIsUnique:true},{instruction:'Remember',userName:'Sam',budget:50000}),records=JSON.parse(prompt.split('\n').at(-2)).records;
- for(const channel of ['短信','电话','Snapchat','X 私信'])assert.equal(records.filter(r=>r.channel===channel).length,3);
- assert.match(prompt,/X casual 14/);assert.doesNotMatch(prompt,/X casual 0"|ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/);
- const anon=records.find(r=>r.channel==='X 私信');assert.equal(anon.identityKnown,false);assert.equal(anon.speaker,'Moon');
+ for(const channel of ['短信','电话','Snapchat'])assert.equal(records.filter(r=>r.channel===channel).length,3);
+ assert.doesNotMatch(prompt,/X casual|X 私信|ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/,'narrative continuity excludes all X DM records');
 });
 
 
