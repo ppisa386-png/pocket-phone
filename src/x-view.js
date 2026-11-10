@@ -6,7 +6,7 @@ import {X_FLOOR_LEDGER,hasUnsettledFloors} from './x-floor.js?v=1.2';
 import { icon } from './icons.js?v=1.2';
 import { squareStatus, squareExpiry } from './square-core.js?v=1.2';
 import { displayStoryTime } from './story-clock.js?v=1.2';
-import { xItems, xProfile, xCounts } from './x.js?v=1.2';
+import { xItems, xProfile, xCounts } from './x.js?v=1.2.37';
 import { xAudience } from './x-audience.js?v=1.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
@@ -22,7 +22,8 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     const button=(action,label,id='',extra='')=>'<button type="button" class="pp-snap-button" data-x-action="'+action+'" data-x-id="'+xEscape(id)+'" aria-label="'+xEscape(label)+'" title="'+xEscape(label)+'" '+extra+disabled()+'>'+(actionIcons[action]?icon(actionIcons[action])+(action==='profile'?'':'<span>'+xEscape(label.split(' ').at(-1))+'</span>'):xEscape(label))+'</button>';
     const field=(name,label,fallback='',long=false)=>'<label class="pp-field"><span>'+label+'</span>'+(long?'<textarea rows="3" maxlength="6000"':'<input type="text" maxlength="100"')+' name="'+name+'" data-x-field="'+name+'"'+(long?'>'+xEscape(value(name,fallback))+'</textarea>':' value="'+xEscape(value(name,fallback))+'">')+'</label>';
     const form=(name,body,label)=>'<form class="pp-snap-form" data-x-form="'+name+'">'+body+'<button type="submit" class="pp-snap-primary"'+disabled()+'>'+label+'</button></form>';
-    const refreshButton=(locked)=>'<button type="button" class="pp-snap-button pp-x-refresh" data-x-action="refresh" aria-label="综合刷新" title="综合刷新"'+(locked?' disabled':disabled())+'><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg></button>';
+    // Heroicons ArrowPathIcon outline; standalone control rather than a text pill.
+    const refreshButton=(action,label,locked=false)=>'<button type="button" class="pp-x-refresh'+(working?' is-loading':'')+'" data-x-action="'+action+'" aria-label="'+label+'" title="'+label+'"'+(locked?' disabled':disabled())+'><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg></button>';
     const empty=text=>'<p class="pp-snap-empty">'+text+'</p>';
     function person(a) {
         return '<div class="pp-snap-person"><span class="pp-snap-avatar">'+xEscape(a.name.slice(0,1))+'</span><div><strong>'+xEscape(a.name)+'</strong><small>@'+xEscape(a.handle)+'</small></div></div>';
@@ -67,7 +68,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     }
     function trendsHTML(state) {
         const edition=state.x?.['trend-edition'];
-        return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions"><h3>趋势</h3></div>'+
+        return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions pp-x-section-actions"><h3>趋势</h3>'+refreshButton('refresh-trends','刷新趋势')+'</div>'+
             (edition?'<small>上次刷新结果</small>':'')+
             (edition?.topics?.length?edition.topics.map((topic,i)=>'<article class="pp-x-trend" data-x-trend="'+i+'" data-press="x-trend" data-x-id="'+i+'"><small>'+ (i+1)+(topic.scope?' · '+xEscape(topic.scope):'')+'</small><h4>'+xEscape(topic.title)+'</h4><p class="pp-snap-copy">'+xEscape(topic.summary)+'</p>'+
                 '<div class="pp-snap-actions">'+(topic.injected?'<span class="pp-x-trend-on">已注入</span>':'')+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
@@ -115,10 +116,10 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             body=form('search',field('query','搜索用户'),'搜索')+(results===null?trendsHTML(state)+accounts:accounts+trendsHTML(state));
         }
         else if(tab==='messages')body=inbox(state);
-        else if(tab==='square')body='<div class="pp-snap-actions"><h3>广场</h3></div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>squareFeedPost(state,p)).reverse());
+        else if(tab==='square')body='<div class="pp-snap-actions pp-x-section-actions"><h3>广场</h3>'+refreshButton('refresh-square','刷新广场')+'</div>'+squareHeader(state)+postsHTML(state,xItems(state,'post').filter(p=>squareFeedPost(state,p)).reverse());
         else {
             const composer='<div class="pp-x-feed-composer"><span class="pp-x-compose-avatar" aria-hidden="true">'+xEscape((p.alias||'用户').slice(0,1))+'</span><form class="pp-snap-form pp-x-compose" data-x-form="post"><label class="pp-field pp-x-compose-image"><span class="pp-x-sr-only">图片描述（可选）</span><textarea name="imageDescription" data-x-field="imageDescription" rows="1" maxlength="2000" aria-label="图片描述（可选）" placeholder="图片描述，不带也可以～">'+xEscape(value('imageDescription'))+'</textarea></label><label class="pp-field"><span class="pp-x-sr-only">新帖内容</span><textarea name="post" data-x-field="post" rows="3" maxlength="6000" placeholder="有什么新鲜事？">'+xEscape(value('post'))+'</textarea></label><div class="pp-x-compose-bottom"><button type="submit" class="pp-snap-primary"'+disabled()+'>发帖</button></div></form></div>';
-            body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton(floor<0||(!!state.x?.[X_FLOOR_LEDGER]&&state.x?.['public-refresh']?.floor===floor&&!hasUnsettledFloors(adapter.storyChat?.()||[],state.x[X_FLOOR_LEDGER],floor)&&!xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id])))+'</div>'+composer+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
+            body='<div class="pp-snap-actions pp-x-feed-tabs">'+button('all','为你推荐','', 'aria-pressed="'+!following+'"')+button('following','正在关注','','aria-pressed="'+following+'"')+refreshButton('refresh','刷新首页动态与粉丝',floor<0||(!!state.x?.[X_FLOOR_LEDGER]&&state.x?.['public-refresh']?.floor===floor&&!hasUnsettledFloors(adapter.storyChat?.()||[],state.x[X_FLOOR_LEDGER],floor)&&!xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id])))+'</div>'+composer+postsHTML(state,xItems(state,'post').filter(p=>xFeedArea(state,p)==='home'&&(!following||p.author==='user'||state.x[p.author]?.following)).reverse());
         }
         if(editor){
             const inputs=editor.fields.map((f,i)=>'<label class="pp-field"><span>'+xEscape(f.label)+'</span>'+(f.number?'<input type="number" min="0" max="1000000000"':'<textarea rows="2" maxlength="6000"')+' name="f'+i+'" data-x-field="f'+i+'"'+(f.number?' value="'+xEscape(editor.values[i])+'">':'>'+xEscape(editor.values[i])+'</textarea>')+'</label>').join('');
@@ -207,7 +208,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             }
             if(action==='all'||action==='following'){commentHistory.length=0;following=action==='following';page='';redraw();return;}
             if(action==='reset-followers'){await perform('resetFollowers',[],'已还原初始粉丝');return;}
-            const map={inject:['toggleInjection',[id]],refresh:['refreshPublic',[],'本楼公开内容已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]],'trend-inject':['toggleTrendInjection',[id]]};
+            const map={inject:['toggleInjection',[id]],refresh:['refreshPublic',[],'首页动态与粉丝已刷新'],'refresh-trends':['refreshTrends',[],'趋势已刷新'],'refresh-square':['refresh',['square'],'广场已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]],'trend-inject':['toggleTrendInjection',[id]]};
             if(map[action])await perform(...map[action]);
         },
         press(element){

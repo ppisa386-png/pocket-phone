@@ -5,6 +5,9 @@ https://github.com/emilkowalski/skills
 
 ## X
 https://github.com/ccrsxx/twitter-clone
+https://github.com/tailwindlabs/heroicons
+
+X 新刷新图标参照已登记项目中的 Heroicons ArrowPathIcon（24px Outline），内联本地 SVG。
 
 ## WhatsApp
 https://github.com/Galaxies-dev/whatsapp-clone-react-native

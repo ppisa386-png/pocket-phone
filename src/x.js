@@ -442,8 +442,8 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 if(!staged.x[row.key]&&row.value?.type==='comment'){row.value.sourceIndex=chat.length-1;row.value.postedAtStory=clock;}
                 staged.x[row.key]=row.value;changes.push(row);
             }};
+            // Homepage owns its feed and follower/engagement settlement only.
             const home=await refreshFeedStage(staged,valid,refreshRequest,collect,false,true);
-            await refreshFeedStage(staged,valid,refreshRequest,collect,'square',true);
             const pending=xItems(staged,'post').filter(p=>p.author==='user'&&!staged.x['impact:post:'+p.id]);
             if(pending.length||!xAudience(staged)){
                 const contract='只返回一个 JSON 对象，stats 数组必须恰好覆盖列出的每个 postId，各一次。每项只填 postId、likes、reposts、replies、gained、lost，均为非负整数。初始粉丝未知时另填 initialFollowers。无需理由、等级、传播预测或分类。';
@@ -495,7 +495,6 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     skipExternalMemory:true,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
                 collect(delta);
             }
-            await refreshTrendsStage(staged,valid,refreshRequest,collect,true);
             if(!valid())throw Error('聊天或人设已改变。');
             // Initialize the floor ledger after one visible-context catch-up.
             // Later refreshes settle only fresh narrative floors.

@@ -18,6 +18,19 @@ test('X timeline retains its composer and original interaction hooks',()=>{
     for(const value of ['pp-x-feed-composer','data-x-form="post"','data-x-field="post"','pp-x-post-avatar','pp-x-reactions'])assert.ok(html.includes(value),value);
     for(const action of ['comments','repost','like','refresh','profile','tab'])assert.match(html,new RegExp('data-x-action="'+action+'"'));
 });
+test('X separate refresh buttons are scoped to each page and styled as icon controls',async()=>{
+ const {panel}=fixture();
+ const home=panel.html();assert.match(home,/data-x-action="refresh" aria-label="刷新首页动态与粉丝"/);
+ assert.doesNotMatch(home,/data-x-action="refresh-square"|data-x-action="refresh-trends"/);
+ await panel.action('tab','search');
+ const search=panel.html();assert.match(search,/data-x-action="refresh-trends" aria-label="刷新趋势"/);
+ assert.doesNotMatch(search,/data-x-action="refresh-square"|data-x-action="refresh" /);
+ await panel.action('tab','square');
+ const square=panel.html();assert.match(square,/data-x-action="refresh-square" aria-label="刷新广场"/);
+ assert.doesNotMatch(square,/data-x-action="refresh-trends"|data-x-action="refresh" /);
+ const css=readFileSync(new URL('../style.css',import.meta.url),'utf8');
+ assert.match(css,/pp-x-refresh:focus-visible/);
+});
 test('X profile retains editable data, audience controls, and account actions',async()=>{
     const {panel}=fixture();
     await panel.action('profile');

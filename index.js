@@ -10,17 +10,17 @@ import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
-import { createX } from './src/x.js?v=1.2.36';
+import { createX } from './src/x.js?v=1.2.37';
 import { createChatApp } from './src/chat-apps.js?v=1.2.34';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.36';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.36';
-import { mountPhone } from './src/ui.js?v=1.2.36';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.37';
+import { mountPhone } from './src/ui.js?v=1.2.37';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.25';
 import { createPhoneService } from './src/phone.js?v=1.2.36';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.32';
-import { normalizeSettings } from './src/config.js?v=1.2.36';
+import { normalizeSettings } from './src/config.js?v=1.2.37';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.32';
 
@@ -63,7 +63,7 @@ async function start() {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
         const [response, enamelResponse, foodResponse, wechatResponse] = await Promise.all([
-            fetch(new URL('./style.css?v=1.2.35', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style.css?v=1.2.37', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),

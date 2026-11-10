@@ -510,14 +510,14 @@ test('atomic refresh saves the five numbers without review, never asks for other
   f.context.chat[0].mes='2026-06-01';ok(await f.x.publish('A player singing.'));
   const p=xItems(f.state(),'post')[0],stat={postId:p.id,likes:850,reposts:96,replies:43,gained:58,lost:3};
   const trends={topics:worldTopics(),evaluations:[{postId:p.id,eligible:false}]};
-  const replies=stats=>[feedResult(),{posts:[]},{initialFollowers:5,stats},trends];
+  const replies=stats=>[feedResult(),{initialFollowers:5,stats}];
   let seq=replies([{...stat,likes:-5}]);f.reply(()=>JSON.stringify(seq.shift()));assert.equal((await f.x.refreshPublic()).ok,false);
   assert.equal(f.state().x['public-refresh'],undefined);
   seq=replies([stat]);f.reply(()=>JSON.stringify(seq.shift()));ok(await f.x.refreshPublic());
   assert.equal(f.state().x.audience.followers,60);assert.deepEqual(f.state().x[p.id].metrics,{likes:850,reposts:96,replies:43});
   const calls=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),calls);
   f.context.chat.push({mes:'same day'});ok(await f.x.publish('Second post'));const q=xItems(f.state(),'post').at(-1);
-  seq=[feedResult(),{posts:[]},{stats:[{...stat,postId:q.id,likes:1,gained:0,lost:1}]},{effects:[]},{topics:worldTopics(),evaluations:[...trends.evaluations,{postId:q.id,eligible:false,reason:'daily'}]}];
+  seq=[feedResult(),{stats:[{...stat,postId:q.id,likes:1,gained:0,lost:1}]},{effects:[]}];
   f.reply(({quietPrompt})=>{
    if(quietPrompt.includes('逐条独立估计')){assert.doesNotMatch(quietPrompt,/A player singing|"likes":850|传播理由|trendEvaluations/);assert.ok(quietPrompt.includes(q.id));}
    return JSON.stringify(seq.shift());
@@ -578,9 +578,9 @@ test('initial post stats include visible source prose without reading QQJ on the
    if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]});
    return JSON.stringify(quietPrompt.includes('当前任务：X 广场')?{posts:[],replies:[]}:feedResult());
   });
-  ok(await f.x.refreshPublic());assert.equal(f.count(),4);assert.equal(f.state().x.audience.followers,43);
+  ok(await f.x.refreshPublic());assert.equal(f.count(),2);assert.equal(f.state().x.audience.followers,43);
   assert.equal(lookups.length,0,'first floor assessment uses visible story only');
-  assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),4);assert.equal(lookups.length,0);
+  assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),2);assert.equal(lookups.length,0);
  }finally{globalThis.qqj_v3_public_bridge_v1=previous;f.close();}
 });
 
@@ -700,7 +700,7 @@ test('duplicate-only recommended batches report the duplicate reason and keep th
  }finally{f.close();}
 });
 
-test('combined refresh saves full recommendations and ten world trends, locks and rolls back atomically',async()=>{
+test('home refresh saves recommendations and follower data without touching square or trends',async()=>{
  const f=setup();
  try{
   f.context.chat[0].mes='2026-11-05 10:00';await f.memory.read();
@@ -715,17 +715,37 @@ test('combined refresh saves full recommendations and ten world trends, locks an
    return JSON.stringify(batch);
   });
   ok(await f.x.refreshPublic());
-  assert.equal(f.count(),4);
+  assert.equal(f.count(),2);
   const home=xItems(f.state(),'post').filter(p=>p.feed==='home'),square=xItems(f.state(),'post').filter(p=>p.feed==='square');
   assert.equal(home.length,10);assert.equal(new Set(home.map(p=>p.author)).size,10);
-  assert.equal(square.length,10);assert.ok(!square.some(p=>p.text==='错误分区'),'npc-in-square is rejected');
-  assert.deepEqual(f.state().x['trend-edition'].topics,trends);assert.ok(trends.every(t=>!t.sourcePostIds.length));
-  const snapshot=structuredClone(f.state().x);assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),4);assert.deepEqual(f.state().x,snapshot);
+  assert.equal(square.length,0,'home refresh must not create square posts');
+  assert.equal(f.state().x['trend-edition'],undefined,'home refresh must not create trends');
+  const snapshot=structuredClone(f.state().x);assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),2);assert.deepEqual(f.state().x,snapshot);
   f.context.chat.pop();await f.memory.read();assert.equal(xItems(f.state(),'post').length,0);assert.equal(f.state().x['public-refresh'],undefined);
   f.context.chat.push({mes:'2026-11-05 12:00 revised'});ok(await f.x.publish('A plain lunch.'));
   f.reply(()=>JSON.stringify({posts:[{name:'虚构网友',handle:'random',text:'无依据'}]}));const failed=await f.x.refreshPublic();
-  assert.equal(failed.ok,false);assert.match(failed.error,/有效新增 0 条/);assert.equal(f.count(),5);
+  assert.equal(failed.ok,false);assert.match(failed.error,/有效新增 0 条/);assert.equal(f.count(),3);
   assert.equal(f.state().x['public-refresh'],undefined);assert.equal(xItems(f.state(),'account').length,0);
+ }finally{f.close();}
+});
+
+test('X home, square and search trend refresh have isolated data',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-11-06 09:00';await f.memory.read();
+  const prompts=[];f.reply(({quietPrompt})=>{prompts.push(quietPrompt);return JSON.stringify(quietPrompt.includes('逐条独立估计')?{initialFollowers:12,stats:[]}:feedResult());});
+  ok(await f.x.refreshPublic());assert.equal(f.count(),2);
+  assert.equal(f.state().x.audience.followers,12);
+  assert.equal(f.state().x['square-edition'],undefined);assert.equal(f.state().x['trend-edition'],undefined);
+  const homeIds=xItems(f.state(),'post').map(p=>p.id),audience=structuredClone(f.state().x.audience);
+  f.reply({posts:squareRows(10)});ok(await f.x.refresh('square'));assert.equal(f.count(),3);
+  const squareEdition=structuredClone(f.state().x['square-edition']);assert.equal(squareEdition.postIds.length,10);
+  assert.equal(f.state().x['trend-edition'],undefined);assert.deepEqual(f.state().x.audience,audience);
+  assert.deepEqual(xItems(f.state(),'post').filter(p=>p.feed==='home').map(p=>p.id),homeIds);
+  f.reply({topics:worldTopics(),evaluations:[]});ok(await f.x.refreshTrends());assert.equal(f.count(),4);
+  assert.equal(f.state().x['trend-edition'].topics.length,10);
+  assert.deepEqual(f.state().x['square-edition'],squareEdition);assert.deepEqual(f.state().x.audience,audience);
+  assert.deepEqual(xItems(f.state(),'post').filter(p=>p.feed==='home').map(p=>p.id),homeIds);
+  assert.ok(prompts.every(s=>!s.includes('当前任务：X 广场')&&!s.includes('趋势评估资料')));
  }finally{f.close();}
 });
 
@@ -786,11 +806,11 @@ test('narrative 4000 replies remain visible through both first stats and later r
   });
   ok(await f.x.refreshPublic());
   assert.deepEqual(f.state().x[post.id].metrics,{likes:120,reposts:15,replies:4000});assert.equal(f.state().x[other.id].metrics.replies,35);
-  assert.equal(f.state().x.audience.followers,106);assert.equal(estimates,1);assert.equal(f.count(),4);
+  assert.equal(f.state().x.audience.followers,106);assert.equal(estimates,1);assert.equal(f.count(),2);
   const impact=structuredClone(xItems(f.state(),'influence'));
   f.context.chat.push({mes:'Still the same day.'});ok(await f.x.refreshPublic());
   assert.deepEqual(f.state().x[post.id].metrics,{likes:140,reposts:20,replies:4000});
-  assert.equal(f.state().x.audience.followers,106);assert.deepEqual(xItems(f.state(),'influence'),impact);assert.equal(estimates,1);assert.equal(f.count(),8);
+  assert.equal(f.state().x.audience.followers,106);assert.deepEqual(xItems(f.state(),'influence'),impact);assert.equal(estimates,1);assert.equal(f.count(),4);
   f.reply(feedResult({posts:[],engagementUpdates:[{postId:post.id,metrics:{likes:150,reposts:25,replies:5000}}]}));ok(await f.x.refresh());
   assert.equal(f.state().x[post.id].metrics.replies,5000);assert.equal(f.state().x.audience.followers,106);
   f.context.chat.pop();await f.memory.read();assert.equal(f.state().x[post.id].metrics.replies,4000);
@@ -1004,7 +1024,7 @@ test('first floor refresh ignores QQJ, upgrades work on the same legacy floor, a
  try{
   f.context.chat[0].mes='2026-06-01\nA first public X post.';
   ok(await f.x.publish('A song is released.'));const post=xItems(f.state(),'post')[0];
-  const results=[feedResult(),{posts:[]},{initialFollowers:100,stats:[{postId:post.id,likes:120,reposts:14,replies:5,gained:20,lost:0}]},{topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
+  const results=[feedResult(),{initialFollowers:100,stats:[{postId:post.id,likes:120,reposts:14,replies:5,gained:20,lost:0}]}];
   f.reply(()=>JSON.stringify(results.shift()));
   globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('First refresh must not read QQJ');},
    getPeopleSnapshot(){reads++;throw Error('First refresh must not read QQJ');}};
@@ -1012,7 +1032,7 @@ test('first floor refresh ignores QQJ, upgrades work on the same legacy floor, a
   assert.equal(f.state().x.audience.followers,120);
   assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
   f.context.chat.push({mes:'2026-06-02\nThe song remains viral. More people follow its singer.'});await f.memory.read();
-  const update=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:17,lost:2}]},{topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
+  const update=[feedResult(),{effects:[{postId:post.id,gained:17,lost:2}]}];
   f.reply(()=>JSON.stringify(update.shift()));
   ok(await f.x.refreshPublic());
   assert.equal(f.state().x.audience.followers,149); // 120 + 14 scheduled day-two reach + 15 new floor impact
@@ -1032,7 +1052,7 @@ test('legacy refreshed chat without a floor ledger is allowed to initialize with
    {collection:'x',key:'public-refresh',value:{id:'public-refresh',type:'refresh',floor:0}}
   ]);
   globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('QQJ must be skipped');}};
-  const seq=[feedResult(),{posts:[]},{topics:worldTopics(),evaluations:[]}];
+  const seq=[feedResult()];
   f.reply(()=>JSON.stringify(seq.shift()));
   ok(await f.x.refreshPublic());assert.equal(reads,0);
   assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
@@ -1055,8 +1075,7 @@ test('previous floor ledger is reconciled once for existing discussions of a vir
   ]);
   globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('catch-up must skip QQJ');},
      getPeopleSnapshot(){reads++;throw Error('catch-up must skip QQJ');}};
-  const results=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:38,lost:2}]},
-      {topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
+  const results=[feedResult(),{effects:[{postId:post.id,gained:38,lost:2}]}];
   f.reply(({quietPrompt})=>{
    if(quietPrompt.includes('当前任务：X 未结算剧情楼层')){
      assert.match(quietPrompt,/很多人正在讨论山姆的公开推文/);
@@ -1085,8 +1104,7 @@ test('old refresh marker with no floor ledger also permits missed follower catch
    {collection:'x',key:'public-refresh',value:{id:'public-refresh',type:'refresh',floor:0}}
   ]);
   globalThis.qqj_v3_public_bridge_v1={getSnapshot(){reads++;throw Error('first marked refresh skips QQJ')}};
-  const seq=[feedResult(),{posts:[]},{effects:[{postId:post.id,gained:8,lost:1}]},
-      {topics:worldTopics(),evaluations:[{postId:post.id,eligible:false}]}];
+  const seq=[feedResult(),{effects:[{postId:post.id,gained:8,lost:1}]}];
   f.reply(()=>JSON.stringify(seq.shift()));
   ok(await f.x.refreshPublic());
   assert.equal(reads,0);assert.equal(f.state().x.audience.followers,37);
