@@ -114,4 +114,4 @@
 - 正式目标版本：`1.2.41`。
 - 移植方式：未 merge/cherry-pick 整个开发分支；从 main 当前文件出发，仅移植天气页面、天气专属样式/字体/插画、天气测试、离线预览构建、天气验收工作流和天气文档。共享文件只做必要天气片段补丁；`style.css` 只移除旧天气专属的两个样式区块，保留 main 新增的 X 刷新样式。
 - 天气引擎 `src/weather.js` 未改；X、微信、其他 App、设置和桌面业务逻辑未移植或覆盖。
-- 正式分支 GitHub Actions 验收结果将在推送后补录。
+- 正式 main 部署提交：`6155998020fd131240bd8153ce3003b4deff0fa5`（v1.2.41）。GitHub Actions 回归 `42773204239`：743/743 通过，preview build 成功；天气 Chromium QA `42773204404`：success，覆盖 280/320/330/360/390/640px 与 320×590px，Manrope/Noto Sans SC 均加载、双预警与 Rainy Day 间歇及 Good Night 场景通过；X 浏览器 QA `42773204362`：success。Soft Haze Enamel 独立视觉 QA `42773204316` 当时仍在运行，非天气发布阻断项。
