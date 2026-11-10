@@ -10,8 +10,8 @@ test('legacy automatic opinion and story-square tags are inert without deleting 
  assert.equal(imported.journal,raw);assert.equal(imported.changed,false);assert.deepEqual(replayJournal(raw).x,{});
 });
 
-test('injected trends ride along as optional background material',()=>{
- const state={x:{'trend-edition':{topics:[{title:'乐评人转向',summary:'本地乐评人开始讨论新专辑',scope:'city',injected:true}]}}};
- const prompt=buildOpinionPrompt(state,[],'');
- assert.match(prompt,/趋势话题/);assert.match(prompt,/乐评人转向/);assert.match(prompt,/可以完全不提/);assert.match(prompt,/完全由当前剧情决定/);
+test('selected trends and square posts never enter the story AI',()=>{
+ const state={x:{'trend-edition':{topics:[{title:'LEAKED_TREND',summary:'私人话题',injected:true}]},square:{id:'square',type:'post',author:'npc',text:'SQUARE_CONTENT',feed:'square',publication:{selected:true}}}};
+ assert.equal(buildOpinionPrompt(state,[],'selector text'),'', 'narrative output contains neither selected trends nor square content');
+ assert.equal(state.x['trend-edition'].topics[0].injected,true,'selection state stays preserved in save data');
 });
