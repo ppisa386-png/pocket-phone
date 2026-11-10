@@ -23,6 +23,23 @@ test('narrative X catalog contains only user original posts, excluding comments,
  assert.equal(buildContinuityPrompt({contacts:{},messages:{},calls:{},x:state.x},{name:'Alex',nameIsUnique:true},{instruction:'Remember'}),'');
 });
 
+test('X launcher unread counts only incoming unread direct messages, never public mentions or comments',()=>{
+ const state={x:{
+  mention:{id:'mention',type:'post',author:'npc',outreachMention:true,read:false},
+  reply:{id:'reply',type:'comment',author:'npc',postId:'mention',text:'Public reply',read:false},
+  userMessage:{id:'userMessage',type:'message',accountId:'npc',role:'user',read:false},
+  alreadyRead:{id:'alreadyRead',type:'message',accountId:'npc',role:'assistant',read:true}
+ }};
+ assert.equal(xUnread(state),0,'public mentions, comments and sent DMs never light the desktop badge');
+ state.x.incoming={id:'incoming',type:'message',accountId:'npc',role:'assistant',text:'Unread DM',read:false};
+ assert.equal(xUnread(state),1,'one unread incoming DM lights the desktop badge');
+ state.x.anotherIncoming={id:'anotherIncoming',type:'message',accountId:'npc',role:'assistant',text:'Second DM',read:false};
+ assert.equal(xUnread(state),2,'badge reflects the number of unread incoming DMs');
+ state.x.incoming.read=true;
+ state.x.anotherIncoming.read=true;
+ assert.equal(xUnread(state),0,'reading both DMs clears the badge while public activity is still unread');
+});
+
 function setup(getGenerationState,independent=false){
  const bus=new EventEmitter();let response={},count=0,lastPrompt='';
  const context={chatId:'x-test',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:fixtureCast}],chat:[{mes:'Alex uses X.',name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;lastPrompt=o.quietPrompt;return typeof response==='function'?response(o):JSON.stringify(response);}};
