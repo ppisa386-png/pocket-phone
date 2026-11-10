@@ -100,3 +100,15 @@
  .pp-weather-warning{gap:7px;padding:8px 9px}.pp-weather-warning-symbol{flex-basis:25px;width:25px;height:25px}
 }
 @media(prefers-reduced-motion:reduce){.pp-weather-mini-refresh,.pp-weather-window img{transition:none;animation:none}.pp-weather-mini-refresh.is-busy svg{animation:none}}
+
+
+/* Short phone windows: keep the hero compact and let the forecast remain scrollable. */
+@container pp-phone (max-height:590px){
+ .pp-weather-scroll{padding-top:6px;padding-bottom:14px}
+ .pp-weather-top{min-height:38px;margin-bottom:2px}
+ .pp-weather-hero{min-height:132px;padding-bottom:7px}
+ .pp-weather-hero-copy>strong>span{font-size:clamp(50px,16vw,58px)}
+ .pp-weather-window{max-width:112px}
+ .pp-weather-heading{margin-top:10px;margin-bottom:6px}
+ .pp-weather-hourly,.pp-weather-week-section{margin-bottom:10px}
+}
