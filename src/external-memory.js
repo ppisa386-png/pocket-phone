@@ -201,14 +201,14 @@ function postQuery(context,post,people,accounts){
     const related=scene.split(/[。！？!?\n]/).find(sentence=>sentence.trim()&&[...labels].some(([n,ids])=>ids.size===1&&resolved.has([...ids][0])&&norm(sentence).includes(n)));
     return {actors,names,topic:[...names,postText.slice(0,1000),related?.trim().slice(0,220)].filter(Boolean).join('\n')};
 }
-export async function postMemoryPrompt(context,settings,posts,current,bridge=globalThis.qqj_v3_public_bridge_v1,accounts=[]){
+export async function postMemoryPrompt(context,settings,posts,current,bridge=globalThis.qqj_v3_public_bridge_v1,accounts=[],maxCharacters=32000){
     if(!posts.length||settings.api?.memorySource==='none'||!bridge)return '';
     let people;
     try{people=bridge.getPeopleSnapshot?.();}catch{/* formal summaries may still be available */}
     const ready=people?.status==='ready'&&people.people?.status==='ready'&&sameIdentity(hostIdentity(context),people.identity);
     let snapshot;
     try{snapshot=bridge.getSnapshot?.();}catch{/* actor lookup can still succeed */}
-    const blocks=[];let remaining=20,chars=32000;
+    const blocks=[];let remaining=20,chars=Math.max(1000,Math.min(32000,Number(maxCharacters)||32000));
     for(const [index,post] of posts.entries()){
         if(!remaining||!chars||!current())break;
         const q=postQuery(context,post,ready?people.people.items||[]:[],accounts);
