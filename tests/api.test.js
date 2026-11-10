@@ -28,6 +28,43 @@ test('all X refresh routes append feed schema, preserve old posts on syntax fail
  }finally{f.close();}
 });
 
+test('X feed refresh limits inherited 70k output ceiling and retries a blank provider completion once',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ const limits=[];
+ try {
+  f.reply(options=>{
+   const payload=JSON.parse(options.body);
+   limits.push(payload.max_completion_tokens??payload.max_tokens);
+   assert.equal(payload.messages.at(-1).role,'system');
+   if(limits.length===1)return {ok:true,status:200,json:async()=>({choices:[{message:{content:''},finish_reason:'stop'}],usage:{prompt_tokens:30155,completion_tokens:0}})};
+   return JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',has_account:true,text:'A quiet afternoon.'}]}));
+  });
+  const result=await x.refresh();
+  assert.equal(result.ok,true,result.error);
+  assert.deepEqual(limits,[8192,4096]);
+  assert.equal(xItems(f.phone.snapshot(),'post').length,1,'one successful model result is saved once');
+  assert.equal(f.settings.api.maxTokens,2048,'the saved API configuration is not changed');
+ }finally{f.close();}
+});
+
+test('X feed stops after one empty-output recovery and preserves existing posts',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ const limits=[];
+ try{
+  f.reply(options=>{
+   const payload=JSON.parse(options.body);
+   limits.push(payload.max_completion_tokens??payload.max_tokens);
+   return {ok:true,status:200,json:async()=>({choices:[{message:{content:''},finish_reason:'stop'}],usage:{prompt_tokens:30155,completion_tokens:0}})};
+  });
+  const before=structuredClone(f.phone.snapshot().x);
+  const result=await x.refresh();
+  assert.equal(result.ok,false);
+  assert.equal(result.code,'API_EMPTY_OUTPUT');
+  assert.deepEqual(limits,[8192,4096]);
+  assert.deepEqual(f.phone.snapshot().x,before,'empty model responses never alter X state');
+ }finally{f.close();}
+});
+
 test('independent X discovery appends account schema after host preparation and saves a trailing-comma result once',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
  try{
