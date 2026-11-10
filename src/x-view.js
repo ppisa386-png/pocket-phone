@@ -37,7 +37,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
     function squareHeader(state) {
         const edition=state.x?.['square-edition'];if(!edition)return '';
         const status=squareExpiry(edition,adapter.storyChat?.()||[]);
-        return '<div class="pp-square-edition">'+(status==='expired'?'<span class="pp-square-expired">已过期</span>':status==='unknown'?'<span>剧情时间不明确 · 暂不可注入</span>':'<span>24 小时内的广场</span>')+'</div>';
+        return '<div class="pp-square-edition">'+(status==='expired'?'<span class="pp-square-expired">已过期</span>':status==='unknown'?'<span>剧情时间不明确</span>':'<span>24 小时内的广场</span>')+'</div>';
     }
     function commentAuthor(state,c) {
         const account=state.x[c.author],self=c.author==='user';
@@ -71,7 +71,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         return '<section class="pp-x-trends" aria-label="趋势"><div class="pp-snap-actions pp-x-section-actions"><h3>趋势</h3>'+refreshButton('refresh-trends','刷新趋势')+'</div>'+
             (edition?'<small>上次刷新结果</small>':'')+
             (edition?.topics?.length?edition.topics.map((topic,i)=>'<article class="pp-x-trend" data-x-trend="'+i+'" data-press="x-trend" data-x-id="'+i+'"><small>'+ (i+1)+(topic.scope?' · '+xEscape(topic.scope):'')+'</small><h4>'+xEscape(topic.title)+'</h4><p class="pp-snap-copy">'+xEscape(topic.summary)+'</p>'+
-                '<div class="pp-snap-actions">'+(topic.injected?'<span class="pp-x-trend-on">已注入</span>':'')+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
+                '<div class="pp-snap-actions">'+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
                 empty(edition?'当前暂无趋势话题':'刷新后查看当前话题趋势'))+'</section>';
     }
     function messageTimestamp(m,extraClass=''){
@@ -208,7 +208,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             }
             if(action==='all'||action==='following'){commentHistory.length=0;following=action==='following';page='';redraw();return;}
             if(action==='reset-followers'){await perform('resetFollowers',[],'已还原初始粉丝');return;}
-            const map={inject:['toggleInjection',[id]],refresh:['refreshPublic',[],'首页动态与粉丝已刷新'],'refresh-trends':['refreshTrends',[],'趋势已刷新'],'refresh-square':['refresh',['square'],'广场已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]],'trend-inject':['toggleTrendInjection',[id]]};
+            const map={refresh:['refreshPublic',[],'首页动态与粉丝已刷新'],'refresh-trends':['refreshTrends',[],'趋势已刷新'],'refresh-square':['refresh',['square'],'广场已刷新'],follow:['follow',[id,true]],unfollow:['follow',[id,false]],block:['block',[id,true]],unblock:['block',[id,false]],like:['react',[id,'liked']],repost:['react',[id,'reposted']],reveal:['reveal',[id]],retry:['retryMessage',[id]]};
             if(map[action])await perform(...map[action]);
         },
         press(element){
@@ -217,11 +217,6 @@ export function createXPanel({adapter,getView,redraw,notice}) {
                 const post=state.x?.[id];
                 if(post?.type!=='post')return [];
                 const actions=[{icon:'edit',label:'修改推文',disabled:busy,run:()=>openEditor({kind:'post',id})}];
-                if(post.feed==='square'){
-                    const status=squareStatus(post,state,adapter.storyChat?.()||[]),selected=post.publication?.selected===true;
-                    actions.push({icon:'inject',label:selected?'取消注入这篇推文':'注入这篇推文',active:status==='active'&&selected,
-                        disabled:busy||status!=='active',run:()=>api.action('inject',id)});
-                }
                 actions.push({icon:'delete',label:'删除推文',danger:true,disabled:busy,run:()=>api.action('delete-post',id)});
                 return actions;
             }
@@ -230,9 +225,7 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             if(kind==='x-trend'){
                 const topic=state.x?.['trend-edition']?.topics?.[Number(id)];
                 if(!topic)return [];
-                return [{icon:'edit',label:'修改趋势话题',disabled:busy,run:()=>openEditor({kind:'trend',id})},
-                    {icon:'inject',label:topic.injected?'取消注入这个趋势':'注入这个趋势',active:topic.injected===true,
-                        disabled:busy,run:()=>api.action('trend-inject',id)}];
+                return [{icon:'edit',label:'修改趋势话题',disabled:busy,run:()=>openEditor({kind:'trend',id})}];
             }
             if(kind==='x-message'){
                 const message=state.x?.[id],account=state.x?.[message?.accountId];
