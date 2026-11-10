@@ -1,8 +1,5 @@
 import {recentPerConversation} from './proactive-pacing.js?v=1.2';
 import { majorAmount } from './currency.js?v=1.2';
-import {xFeedArea} from './x-feed.js?v=1.2';
-import { xComments } from './x-comments.js?v=1.2';
-import { xPostTiming } from './x-story.js?v=1.2.21';
 import { smsForAI } from './sms-context.js?v=1.2';
 import { syncCommContext, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2';
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
@@ -125,49 +122,6 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
             if(item.liked){
                 const meta=commMetaOrInfer(state,app,item.id+'#liked',item,{kind:'like'});
                 if(shouldInject(meta,currentStoryTime))entries.push({time:Number(item.likedAt||item.createdAt)||0,data:{channel:label+' 动态互动',platform:app,recordId:item.id+'#liked',shown:meta.shown===true,...who,speaker:who.otherParty,action:'点赞',post:item.text}});
-            }
-        }
-    }
-    const xRecords=[...Object.values(state.x||{}).filter(r=>r.type!=='comment'),...xComments(state)],xAccounts=new Map(xRecords.filter(matchesAccount).map(a=>[a.id,a]));
-    for(const record of xRecords){
-        const a=xAccounts.get(record.accountId),who=a?identity(a,state.x?.profile?.alias):null;
-        if(record.type==='message'&&a){
-            const meta=commMetaOrInfer(state,'x',record.id,record);
-            if(shouldInject(meta,currentStoryTime))entries.push({time:Number(record.createdAt)||0,data:{channel:'X 私信',platform:'x',recordId:record.id,shown:meta.shown===true,...who,speaker:record.role==='user'?who.otherParty:a.name,storyTime:record.storyTime||null,text:a.inboundRequest&&!a.dmAccepted&&['image','video'].includes(record.kind)?'[请求中的媒体已隐藏]':record.text}});
-        }
-        if(record.type==='comment'){
-            // Backfilled sample comments obey the unified rules too: whenever a
-            // sample actually targets user's thread it enters the same
-            // shown/expiry path; samples on other accounts' posts stay private.
-            const post=state.x[record.postId],parent=state.x[record.replyTo],fromUser=record.author==='user';
-            const counterpart=fromUser?(parent?.author||post?.author):record.author;
-            const addressedUser=!fromUser&&(parent?.author==='user'||!parent&&post?.author==='user');
-            const account=xAccounts.get(counterpart);
-            if(post&&account&&(fromUser||addressedUser)){
-                const meta=commMetaOrInfer(state,'x',record.id,record);
-                if(shouldInject(meta,currentStoryTime)){
-                    const who2=identity(account,record.alias||state.x?.profile?.alias);
-                    const postMeta=commMetaOrInfer(state,'x',post.id,post);
-                    const timing=xPostTiming(post,currentStoryTime,postMeta);
-                    entries.push({time:Number(record.createdAt)||0,data:{channel:'X 公开评论',platform:'x',recordId:record.id,shown:meta.shown===true,...who2,storyTime:record.storyTime||null,speaker:fromUser?who2.otherParty:account.name,text:record.text,
-                        ...(timing.postedDate?{postDate:timing.postedDate}:{}),
-                        ...(timing.postDaysAgo!==null?{postDaysAgo:timing.postDaysAgo}:{}),
-                        post:xFeedArea(state,post)==='square'||timing.stale||!shouldInject(postMeta,currentStoryTime)?undefined:post.text}});
-                }
-            }
-        }
-        if(record.type==='post'&&xFeedArea(state,record)!=='square'&&xAccounts.has(record.author)){
-            const who2=identity(xAccounts.get(record.author),state.x?.profile?.alias);
-            for(const kind of ['liked','reposted'])if(record[kind]){
-                const meta=commMetaOrInfer(state,'x',record.id+'#'+kind,record,{kind});
-                if(shouldInject(meta,currentStoryTime)){
-                    const postMeta=commMetaOrInfer(state,'x',record.id,record);
-                    const timing=xPostTiming(record,currentStoryTime,postMeta);
-                    entries.push({time:Number(record[kind+'At']||record.createdAt)||0,data:{channel:'X 公开互动',platform:'x',recordId:record.id+'#'+kind,shown:meta.shown===true,...who2,speaker:who2.otherParty,action:kind==='liked'?'点赞':'转发',
-                        ...(timing.postedDate?{postDate:timing.postedDate}:{}),
-                        ...(timing.postDaysAgo!==null?{postDaysAgo:timing.postDaysAgo}:{}),
-                        post:!timing.stale&&shouldInject(postMeta,currentStoryTime)?record.text:undefined}});
-                }
             }
         }
     }
