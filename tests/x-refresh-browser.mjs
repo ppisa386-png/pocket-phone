@@ -15,7 +15,7 @@ setExtensionPrompt(){},generateQuietPrompt:async o=>{window.calls++;window.lastP
 if(window.publicData){
  const r=window.publicData;
  if(o.quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[{name:'Walker',handle:'walker',text:'Park report',publicBasis:{access:'background',summary:'Public park',involvesCharacters:false}},...Array.from({length:9},(_,i)=>({name:'Walker '+i,handle:'walker_'+i,text:'Local park update '+i,publicBasis:{access:'background',summary:'Public park',involvesCharacters:false}}))]});
- if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[{title:'Public project discussion',summary:'Local news',scope:'Local',sourcePostIds:[r.id]},...Array.from({length:7},(_,i)=>({title:'World topic '+i,summary:'Public life',scope:'Local',sourcePostIds:[]}))],evaluations:[{postId:r.id,eligible:true,reason:'public interest'}]});
+ if(o.quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:[{title:'Public project discussion',summary:'Local news',scope:'Local',sourcePostIds:[r.id]},...Array.from({length:9},(_,i)=>({title:'World topic '+i,summary:'Public life',scope:'Local',sourcePostIds:[]}))],evaluations:[{postId:r.id,eligible:true,reason:'public interest'}]});
  if(o.quietPrompt.includes('逐条独立估计'))return JSON.stringify({stats:[{postId:r.id,likes:100,reposts:20,replies:0,gained:25,lost:5}]});
 }
 return typeof window.result==='string'?window.result:'<think>Plan</think><content>'+JSON.stringify(window.result)+'</content>';}};
