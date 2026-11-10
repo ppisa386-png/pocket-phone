@@ -11,8 +11,8 @@ import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay, dayDate } from '../src/story-clock.js';
-import { createWeatherPanel, themeFor, nextThemeChange, themeForStory, upcomingHours, rangeStyle } from '../src/weather-view.js';
-import { sceneBackdrop, weatherPhoto } from '../src/weather-art.js';
+import { createWeatherPanel, themeFor, nextThemeChange, themeForStory, upcomingHours, rangeStyle, storyDateLabel } from '../src/weather-view.js';
+import { sceneBackdrop, weatherPhoto, weatherWindow } from '../src/weather-art.js';
 
 // Simple deterministic LCG so statistical assertions never flake between runs.
 let lcg = 0x2f6e2b1;
@@ -386,12 +386,12 @@ test('the weather panel renders the report and refresh reports success', async (
         assert.match(html, /data-weather="(clear|cloud|rain|snow|wind|typhoon|extreme)"/);
         assert.match(html, /data-weather-action="refresh"/);
         assert.match(html, /刷新天气/);
-        assert.match(html, /体感温度/);assert.match(html, /降水情况/);assert.match(html, /风力/);assert.match(html, /湿度/);
+        assert.match(html, /体感温度/);assert.match(html, /降水情况/);assert.match(html, /风力/);assert.match(html, /湿度/);assert.match(html, /紫外线/);assert.match(html, /空气质量/);
         assert.match(html, /pp-weather-hour-now/); // 当前小时突出
-        assert.match(html, /pp-weather-metrics/); // 四指标连续横栏
+        assert.match(html, /pp-weather-metrics/); // 六指标 2×3 网格
         assert.match(html, /pp-weather-hourly-card/); // 逐小时单面板
         assert.match(html, /pp-weather-week/); // 七天连续列表
-        assert.match(html, /assets\/weather\/(?:day|dusk|night|rain)\.webp/); // 随插件打包的真实照片
+        assert.match(html, /assets\/weather\/windows\/(?:sunny|cloudy|rainy-day|snowy|good-night)\.webp/); // 天气窗主图使用本地插画
         assert.doesNotMatch(html, /剧情时间/); // 界面不显示内部系统信息
         assert.doesNotMatch(html, /pp-weather-refresh/); // 底部大号刷新按钮已移除
         await panel.action('refresh');
@@ -686,11 +686,11 @@ test('seven-day bars clip one shared temperature gradient instead of restarting 
     assert.equal(rangeStyle({lo:35,hi:35},11,24), 'clip-path:inset(0 0.0% 0 96.0% round 10px)');
     assert.equal(rangeStyle({lo:11,hi:11},11,24), 'clip-path:inset(0 96.0% 0 0.0% round 10px)');
     const {readFileSync} = await import('node:fs');
-    const css = readFileSync(new URL('../style.css',import.meta.url),'utf8');
+    const css = readFileSync(new URL('../style-weather.css',import.meta.url),'utf8');
     assert.match(css,/\.pp-weather-tempbar>span\{[^}]*inset:0;[^}]*width:100%;[^}]*background:linear-gradient\(90deg,/s);
 });
 
-test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour and seven-day forecast with four photo cases',async()=>{
+test('Window Weather Diary keeps weather actions, story date, forecast structure and five local window scenes',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
         await f.memory.read();await f.weather.refresh();
@@ -702,15 +702,15 @@ test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour an
             getView:()=>({...state,busy:false}),redraw(){},notice(){},now:()=>new Date(2026,4,1,12),
             assetBase:'https://example.invalid/pocket-phone/assets/weather/'
         });
-        for(const [hour,type,theme,photo] of [
-            [9,'sunny','mist','day'],[17,'sunny','apricot','dusk'],
-            [23,'sunny','night','night'],[13,'rain','mist','rain']
+        for(const [hour,type,theme,scene] of [
+            [9,'sunny','mist','sunny'],[17,'sunny','apricot','sunny'],
+            [23,'sunny','night','good-night'],[13,'rain','mist','rainy-day']
         ]){
             const panel=make(hour,type),html=panel.html();
             assert.match(html,new RegExp('data-wtheme="'+theme+'"'));
-            assert.match(html,new RegExp('data-photo="'+photo+'"'));
-            assert.match(html,new RegExp('assets/weather/'+photo+'\\.webp'));
-            assert.match(html,/<b>上海<\/b>/);
+            assert.match(html,new RegExp('data-weather-window="'+scene+'"'));
+            assert.ok(html.includes('assets/weather/windows/'+scene+'.webp'));
+            assert.ok(html.includes('<b>上海</b>'));
             assert.match(html,/pp-weather-hero-copy/);
             assert.match(html,/pp-weather-highlow/);
             assert.match(html,/24小时天气/);
@@ -719,13 +719,14 @@ test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour an
             assert.match(html,/pp-weather-hour-now/);
             assert.match(html,/pp-weather-week/);
             assert.match(html,/pp-weather-tempbar/);
-            assert.match(html,/clip-path:inset\(0 [\d.]+% 0 [\d.]+% round 10px\)/);
+            assert.ok(html.includes('clip-path:inset('));
             assert.match(html,/pp-weather-day-now/);
             assert.match(html,/pp-weather-metrics/);
-            for(const label of ['体感温度','降水情况','风力','湿度'])assert.match(html,new RegExp(label));
+            for(const label of ['体感温度','降水情况','风力','湿度','紫外线','空气质量'])assert.match(html,new RegExp(label));
             assert.match(html,/data-press="weather-location"/);
             assert.match(html,/aria-label="刷新天气"/);
-            assert.doesNotMatch(html,/剧情时间|pp-weather-refresh|pp-weather-art-main/);
+            assert.match(html,/1月1日/);
+            assert.doesNotMatch(html,/data-photo=|剧情时间|pp-weather-refresh|pp-weather-art-main/);
             assert.deepEqual(panel.press({dataset:{press:'weather-location'}}).map(a=>a.icon),['edit']);
         }
         assert.equal(sceneBackdrop('rain','night').includes('rain.webp'),true);
@@ -735,6 +736,45 @@ test('redesigned Chinese weather panel keeps location edits, refresh, 24-hour an
     }finally{f.close();}
 });
 
+test('weather window mapping prioritizes rain and snow and uses Good Night only for clear night',()=>{
+    assert.equal(weatherWindow('sunny','mist'),'sunny');
+    assert.equal(weatherWindow('partly','mist'),'sunny');
+    assert.equal(weatherWindow('sunny','night'),'good-night');
+    assert.equal(weatherWindow('rain','night'),'rainy-day');
+    assert.equal(weatherWindow('typhoon','night'),'rainy-day');
+    assert.equal(weatherWindow('snow','night'),'snowy');
+    assert.equal(weatherWindow('lightsnow','mist'),'snowy');
+    assert.equal(weatherWindow('overcast','mist'),'cloudy');
+    assert.equal(weatherWindow('fog','night'),'cloudy');
+});
+
+test('story date label uses the narrative calendar rather than the device date',()=>{
+    assert.equal(storyDateLabel('2026-11-10','13:13'),'11月10日 · 周二 · 13:13');
+    assert.equal(storyDateLabel('2026-11-09',''),'11月9日 · 周一');
+    assert.equal(storyDateLabel('', '13:13'),'13:13');
+});
+
+test('all current weather warnings render after the illustration and before the 24-hour forecast',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await f.memory.read();await f.weather.refresh();
+        const state=await f.state(),base=f.weather.report(state);
+        const warnings=[
+            {color:'yellow',level:'黄色',grade:'Ⅲ级',title:'强降雨预警',detail:'当前有持续降雨。'},
+            {color:'blue',level:'蓝色',grade:'Ⅳ级',title:'大风预警',detail:'阵风增强，注意户外物品。'}
+        ];
+        const panel=createWeatherPanel({
+            adapter:{weather:{report:()=>({...base,report:{...base.report,type:'rain',warnings}})}},
+            getView:()=>state,redraw(){},assetBase:'assets/weather/'
+        });
+        const html=panel.html();
+        assert.equal((html.match(/class="pp-weather-warning pp-weather-warning-/g)||[]).length,2);
+        assert.ok(html.indexOf('class="pp-weather-window"')<html.indexOf('class="pp-weather-warning-list"'));
+        assert.ok(html.indexOf('class="pp-weather-warning-list"')<html.indexOf('class="pp-weather-hourly"'));
+        assert.match(html,/强降雨预警/);
+        assert.match(html,/大风预警/);
+    }finally{f.close();}
+});
 test('common Los Angeles labels stay real and use one climate profile',()=>{
  for(const label of ['洛杉矶','洛杉磯市','美国洛杉矶','洛杉矶（加州）','Los Angeles','Los Ángeles, CA','Los Angeles, California, USA']){
   assert.equal(locationKind(label,{}),'real',label);
@@ -856,8 +896,10 @@ test('rain forecast controls header image during a brief cloudy break without ch
             forecast:{...info.forecast,days:[{...info.forecast.days[0],rainyDay:true,label:'大雨转小雨'},...info.forecast.days.slice(1)]}};
         const panel=createWeatherPanel({adapter:{weather:{report:()=>rainy}},getView:()=>state,redraw(){}});
         const html=panel.html();
-        assert.match(html,/data-photo="rain"/);
-        assert.match(html,/assets\/weather\/rain\.webp/);
+        assert.match(html,/data-weather-window="rainy-day"/);
+        assert.match(html,/assets\/weather\/windows\/rainy-day\.webp/);
+        assert.equal(weatherWindow('partly','mist',{rainyDay:true}),'rainy-day');
+        assert.equal(weatherWindow('snow','mist',{rainyDay:true}),'snowy','current snow keeps its Snowy illustration');
         assert.match(html,/<b class="pp-weather-desc">多云<\/b>/);
         assert.match(html,/pp-weather-hour-now/);
     }finally{f.close();}

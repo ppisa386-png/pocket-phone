@@ -43,3 +43,8 @@ https://github.com/lucide-icons/lucide
 ## X 社媒生成批次工程对照（2026-11-10）
 - https://github.com/hey8v0/ST-iPhonie — 查看 `core/forum.js`、`core/moments.js` 中每次最多5条的帖数上限与帖子结构，借鉴有界输入/输出设计原则；不复制代码、素材或现有主题。
 - https://github.com/Yasmin211/silly-tavern-phone-extension — 查看 `modules/data_modules/forumData.js`，只对照论坛帖子存储与显示结构，不复制素材或代码。
+
+
+## 窗边天气日记 · 天气窗插画与字体（2026-11-10）
+- 五张天气窗插画（Sunny、Cloudy、Rainy Day、Snowy、Good Night）由用户在本项目对话中提供，为用户原创素材；不来自第三方图库或仓库，文件及说明位于 `assets/weather/windows/`。
+- Manrope Variable 与 Noto Sans SC Variable 字体来自 Fontsource 的 `font-files` 仓库（commit `5a72889057f592bb0659629e38337359f94d53b2`），字体文件、CSS 与 SIL Open Font License 1.1 许可均随插件本地打包，见 `assets/weather/fonts/README.md`。
