@@ -56,7 +56,7 @@ test('X feed stops after one empty-output recovery and preserves existing posts'
    limits.push(payload.max_completion_tokens??payload.max_tokens);
    return {ok:true,status:200,json:async()=>({choices:[{message:{content:''},finish_reason:'stop'}],usage:{prompt_tokens:30155,completion_tokens:0}})};
   });
-  const before=structuredClone(f.phone.snapshot().x);
+  const before=structuredClone(f.phone.snapshot().x||{});
   const result=await x.refresh();
   assert.equal(result.ok,false);
   assert.equal(result.code,'API_EMPTY_OUTPUT');
