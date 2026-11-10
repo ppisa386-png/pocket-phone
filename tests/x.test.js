@@ -61,7 +61,7 @@ test('same friend reply in both refresh channels is one thread and one counted r
   assert.equal(Object.values(state.x).filter(c=>c.type==='comment').length,2);
   const first=comments.find(c=>c.author===id);assert.equal(comments.find(c=>c.text==='我也是。').replyTo,first.id);
   assert.deepEqual(xCounts(state,state.x[post.id]),{likes:28,reposts:3,replies:2});
-  assert.equal(xUnread(state),1);
+  assert.equal(xUnread(state),0,'public replies no longer light the X desktop icon');
  }finally{f.close();}
 });
 test('X account discovery accepts trailing commas once and keeps existing accounts on other syntax failures',async()=>{
