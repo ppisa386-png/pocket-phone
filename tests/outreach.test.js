@@ -23,7 +23,7 @@ test('one fifth floor imports six independent contacts once, with a public menti
     for(const app of ['wechat','whatsapp','x'])assert.equal(Object.values(state[app]).find(a=>a.type==='message').role,'assistant');
     assert.equal(Object.values(state.whatsapp).find(a=>a.type==='account').friend,'incoming');
     assert.equal(Object.values(state.x).filter(a=>a.type==='post').length,1);
-    assert.equal(xUnread(state),2);assert.equal(Object.keys(state.messages).length,1);assert.equal(Object.values(state.calls)[0].status,'ringing');
+    assert.equal(xUnread(state),1,'public X mention does not increment desktop unread');assert.equal(Object.keys(state.messages).length,1);assert.equal(Object.values(state.calls)[0].status,'ringing');
     assert.deepEqual(await capture(chat,journal),journal);
     assert.deepEqual(replayJournal(reconcileJournal(journal,await revisionsFor(messageSignatures(four))).journal).x,{});
 });
