@@ -1,7 +1,7 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.25';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.39';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.4';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.32';
-import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2.32';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.39';
+import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2.39';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
 import { smsReplyClassification } from './sms-context.js?v=1.2';
