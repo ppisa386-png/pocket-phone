@@ -31,6 +31,25 @@ test('X separate refresh buttons are scoped to each page and styled as icon cont
  const css=readFileSync(new URL('../style.css',import.meta.url),'utf8');
  assert.match(css,/pp-x-refresh:focus-visible/);
 });
+test('X refresh actions call only their matching independent service',async()=>{
+    const called=[];
+    const state={busy:false,x:{profile:{id:'profile',type:'profile',alias:'Robin',bio:''}}};
+    const panel=createXPanel({adapter:{
+        storyChat:()=>[{mes:'2026-11-10 10:00'}],
+        x:{
+            refreshPublic:async()=>{called.push('home');return {ok:true,value:{added:2}};},
+            refreshTrends:async()=>{called.push('trends');return {ok:true};},
+            refresh:async mode=>{called.push(mode);return {ok:true};}
+        }
+    },getView:()=>state,redraw(){},notice(){}});
+    await panel.action('refresh');
+    await panel.action('tab','search');
+    await panel.action('refresh-trends');
+    await panel.action('tab','square');
+    await panel.action('refresh-square');
+    assert.deepEqual(called,['home','trends','square']);
+});
+
 test('X profile retains editable data, audience controls, and account actions',async()=>{
     const {panel}=fixture();
     await panel.action('profile');
