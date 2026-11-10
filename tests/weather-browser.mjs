@@ -113,17 +113,38 @@ try {
     });
     assert.deepEqual(fonts,{manrope:true,noto:true},'local Manrope and Noto Sans SC load');
 
-    for (const width of [640,390,360,320,280]) {
+    for (const width of [640,390,360,330,320,280]) {
         const height = 820;
         await page.setViewportSize({width:width+24,height:height+40});
         await phone.evaluate((el,size)=>{el.style.width=size.width+'px';el.style.height=size.height+'px';},{width,height});
-        const layout = await page.locator('.pp-weather-scroll').evaluate(el => ({
-            width:el.clientWidth,scrollWidth:el.scrollWidth,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,
-            imageWidth:el.querySelector('.pp-weather-window img')?.getBoundingClientRect().width || 0
-        }));
+        const layout = await page.locator('.pp-weather').evaluate(el => {
+            const scroll=el.querySelector('.pp-weather-scroll');
+            const copy=el.querySelector('.pp-weather-hero-copy')?.getBoundingClientRect();
+            const window=el.querySelector('.pp-weather-window')?.getBoundingClientRect();
+            const image=el.querySelector('.pp-weather-window img');
+            const hourly=el.querySelector('.pp-weather-hours');
+            return {
+                width:scroll.clientWidth,scrollWidth:scroll.scrollWidth,scrollHeight:scroll.scrollHeight,clientHeight:scroll.clientHeight,
+                pageWidth:el.clientWidth,pageScrollWidth:el.scrollWidth,
+                imageWidth:image?.getBoundingClientRect().width||0,imageLoaded:!!image&&image.complete&&image.naturalWidth>0,
+                heroOverlap:!!copy&&!!window&&copy.right>window.left+1,
+                hourlyCount:el.querySelectorAll('.pp-weather-hour').length,
+                hourlyScrolls:!!hourly&&hourly.scrollWidth>hourly.clientWidth,
+                dayCount:el.querySelectorAll('.pp-weather-day').length,
+                metricCount:el.querySelectorAll('.pp-weather-metric').length,
+                warningCount:el.querySelectorAll('.pp-weather-warning').length
+            };
+        });
         assert.ok(layout.width>0,'weather scroll has a measurable width at '+width);
-        assert.ok(layout.scrollWidth<=layout.width+1,'no page-level horizontal overflow at '+width+': '+JSON.stringify(layout));
+        assert.ok(layout.scrollWidth<=layout.width+1&&layout.pageScrollWidth<=layout.pageWidth+1,'no page-level horizontal overflow at '+width+': '+JSON.stringify(layout));
+        assert.ok(layout.imageLoaded,'local illustration is loaded at '+width);
         assert.ok(layout.imageWidth<=126.5,'illustration remains compact at '+width);
+        assert.equal(layout.heroOverlap,false,'temperature and illustration do not overlap at '+width);
+        assert.equal(layout.hourlyCount,24,'all 24 hours remain available at '+width);
+        assert.equal(layout.hourlyScrolls,true,'hourly strip scrolls independently at '+width);
+        assert.equal(layout.dayCount,7,'all seven forecast days remain available at '+width);
+        assert.equal(layout.metricCount,6,'all six weather metrics remain visible at '+width);
+        assert.equal(layout.warningCount,2,'all current warnings remain present at '+width);
         await phone.screenshot({path:resolve(output,'weather-window-'+width+'.png')});
     }
 
@@ -137,10 +158,25 @@ try {
     await phone.screenshot({path:resolve(output,'weather-window-320x590.png')});
 
     await page.evaluate(() => {
+        window.fixtureWeather.clock.hour=13;
+        window.fixtureWeather.report.type='partly';
+        window.fixtureWeather.report.label='多云';
+        window.fixtureWeather.forecast.days[0].rainyDay=true;
+    });
+    await page.locator('[data-action="home"]').click();
+    await page.locator('.pp-app[data-app="weather"]').click();
+    assert.equal(await page.locator('.pp-weather-window').getAttribute('data-weather-window'),'rainy-day',
+        'the daily rain illustration remains during a brief cloudy break');
+    assert.equal(await page.locator('.pp-weather-desc').textContent(),'多云',
+        'the current conditions label still describes the current hour');
+    await page.screenshot({path:resolve(output,'weather-window-rainy-day-cloud-break.png')});
+
+    await page.evaluate(() => {
         window.fixtureWeather.clock.hour=22;
         window.fixtureWeather.report.type='sunny';
         window.fixtureWeather.report.label='晴';
         window.fixtureWeather.report.warnings=[];
+        window.fixtureWeather.forecast.days[0].rainyDay=false;
     });
     await page.locator('[data-action="home"]').click();
     await page.locator('.pp-app[data-app="weather"]').click();

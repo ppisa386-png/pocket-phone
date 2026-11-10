@@ -15,8 +15,18 @@ const WEATHER_WINDOW_BY_TYPE = {
     sleet:'snowy', lightsnow:'snowy', snow:'snowy', heavysnow:'snowy', blizzard:'snowy',
     cold:'cloudy',
 };
-export const weatherWindow=(type,theme='mist') =>
-    theme==='night' && type==='sunny' ? 'good-night' : (WEATHER_WINDOW_BY_TYPE[type] || 'cloudy');
+const RAIN_WINDOW_TYPES = new Set(['drizzle','rain','heavy','storm','thunder','severe','typhoon','hail']);
+const SNOW_WINDOW_TYPES = new Set(['sleet','lightsnow','snow','heavysnow','blizzard']);
+export const weatherWindow = (type, theme = 'mist', forecast = null) => {
+    // Keep Rainy Day during a brief clear/cloudy break when today's forecast is rainy.
+    // Current temperature, description and hourly readings remain current conditions.
+    const forecastRain = forecast?.rainyDay === true &&
+        !RAIN_WINDOW_TYPES.has(type) && !SNOW_WINDOW_TYPES.has(type);
+    const sceneType = forecastRain ? 'rain' : type;
+    return theme === 'night' && sceneType === 'sunny'
+        ? 'good-night'
+        : (WEATHER_WINDOW_BY_TYPE[sceneType] || 'cloudy');
+};
 
 const CLOUD = '<path d="M18 46c-2-12 7-21 19-21 6-16 31-19 42-5 14-2 25 8 25 21 13 1 20 9 20 20H27c-8 0-13-6-13-14 0-5 1-8 4-11Z"/>';
 const WEATHER_SCENES = {

@@ -20,12 +20,18 @@ test('five user supplied window illustrations are bundled locally at the expecte
 
 test('weather-only styles and Fontsource files are wired into runtime and preview builds', () => {
     const index = read('index.js');
+    const ui = read('src/ui.js');
+    const config = read('src/config.js');
+    const browser = read('tests/weather-browser.mjs');
     const builder = read('tools/build_preview.mjs');
     const styles = read('style-weather.css');
     const base = read('style.css');
     const fonts = read('assets/weather/fonts/weather-fonts.css');
-    assert.match(index, /style-weather\.css\?v=1\.2\.37/);
+    assert.match(index, /style-weather\.css\?v=1\.2\.38/);
     assert.match(index, /assets\/weather\/fonts\/weather-fonts\.css/);
+    assert.match(ui, /weather-view\.js\?v=1\.2\.38/);
+    assert.match(config, /VERSION = '1\.2\.38'/);
+    assert.match(browser, /\[640,390,360,330,320,280\]/);
     assert.match(index, /replaceAll\('__WEATHER_FONT_BASE__\/', weatherFontBase\)/);
     assert.match(builder, /style-weather\.css/);
     assert.match(builder, /weather-fonts\.css/);
@@ -40,8 +46,8 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     assert.ok(readdirSync(join(root, 'assets', 'weather', 'fonts')).includes('LICENSE-Manrope-OFL.txt'));
     assert.ok(readdirSync(join(root, 'assets', 'weather', 'fonts')).includes('LICENSE-Noto-Sans-SC-OFL.txt'));
     assert.doesNotMatch(base, /\.pp-weather(?:[\s.#:[,{>]|$)/, 'legacy weather CSS is removed from the shared sheet');
-    assert.match(read('manifest.json'), /1\.2\.37/);
-    assert.match(read('package.json'), /1\.2\.37/);
+    assert.match(read('manifest.json'), /1\.2\.38/);
+    assert.match(read('package.json'), /1\.2\.38/);
 });
 
 test('weather CSS uses a light fixed page and keeps layout classes scoped to the weather view', () => {

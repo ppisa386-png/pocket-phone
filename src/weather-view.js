@@ -89,7 +89,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
             ? '<strong><span>—</span></strong>'
             : '<strong><span>' + temp + '</span><i>°</i></strong>';
         const note = w?.temp == null ? emptyNote : '体感 ' + feels + '°';
-        const illustration = weatherWindow(type, theme);
+        const illustration = weatherWindow(type, theme, today);
         const imageBase = String(assetBase).replace(/\/?$/, '/');
         const imageSrc = imageBase + 'windows/' + illustration + '.webp';
         return '<div class="pp-weather-scene">' + top(city, busy, dateLabel) +

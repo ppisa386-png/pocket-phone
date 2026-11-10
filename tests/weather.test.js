@@ -386,12 +386,12 @@ test('the weather panel renders the report and refresh reports success', async (
         assert.match(html, /data-weather="(clear|cloud|rain|snow|wind|typhoon|extreme)"/);
         assert.match(html, /data-weather-action="refresh"/);
         assert.match(html, /刷新天气/);
-        assert.match(html, /体感温度/);assert.match(html, /降水情况/);assert.match(html, /风力/);assert.match(html, /湿度/);
+        assert.match(html, /体感温度/);assert.match(html, /降水情况/);assert.match(html, /风力/);assert.match(html, /湿度/);assert.match(html, /紫外线/);assert.match(html, /空气质量/);
         assert.match(html, /pp-weather-hour-now/); // 当前小时突出
-        assert.match(html, /pp-weather-metrics/); // 四指标连续横栏
+        assert.match(html, /pp-weather-metrics/); // 六指标 2×3 网格
         assert.match(html, /pp-weather-hourly-card/); // 逐小时单面板
         assert.match(html, /pp-weather-week/); // 七天连续列表
-        assert.match(html, /assets\/weather\/(?:day|dusk|night|rain)\.webp/); // 随插件打包的真实照片
+        assert.match(html, /assets\/weather\/windows\/(?:sunny|cloudy|rainy-day|snowy|good-night)\.webp/); // 天气窗主图使用本地插画
         assert.doesNotMatch(html, /剧情时间/); // 界面不显示内部系统信息
         assert.doesNotMatch(html, /pp-weather-refresh/); // 底部大号刷新按钮已移除
         await panel.action('refresh');
@@ -686,7 +686,7 @@ test('seven-day bars clip one shared temperature gradient instead of restarting 
     assert.equal(rangeStyle({lo:35,hi:35},11,24), 'clip-path:inset(0 0.0% 0 96.0% round 10px)');
     assert.equal(rangeStyle({lo:11,hi:11},11,24), 'clip-path:inset(0 96.0% 0 0.0% round 10px)');
     const {readFileSync} = await import('node:fs');
-    const css = readFileSync(new URL('../style.css',import.meta.url),'utf8');
+    const css = readFileSync(new URL('../style-weather.css',import.meta.url),'utf8');
     assert.match(css,/\.pp-weather-tempbar>span\{[^}]*inset:0;[^}]*width:100%;[^}]*background:linear-gradient\(90deg,/s);
 });
 
@@ -722,7 +722,7 @@ test('Window Weather Diary keeps weather actions, story date, forecast structure
             assert.ok(html.includes('clip-path:inset('));
             assert.match(html,/pp-weather-day-now/);
             assert.match(html,/pp-weather-metrics/);
-            for(const label of ['体感温度','降水情况','风力','湿度'])assert.match(html,new RegExp(label));
+            for(const label of ['体感温度','降水情况','风力','湿度','紫外线','空气质量'])assert.match(html,new RegExp(label));
             assert.match(html,/data-press="weather-location"/);
             assert.match(html,/aria-label="刷新天气"/);
             assert.match(html,/1月1日/);
@@ -896,8 +896,10 @@ test('rain forecast controls header image during a brief cloudy break without ch
             forecast:{...info.forecast,days:[{...info.forecast.days[0],rainyDay:true,label:'大雨转小雨'},...info.forecast.days.slice(1)]}};
         const panel=createWeatherPanel({adapter:{weather:{report:()=>rainy}},getView:()=>state,redraw(){}});
         const html=panel.html();
-        assert.match(html,/data-photo="rain"/);
-        assert.match(html,/assets\/weather\/rain\.webp/);
+        assert.match(html,/data-weather-window="rainy-day"/);
+        assert.match(html,/assets\/weather\/windows\/rainy-day\.webp/);
+        assert.equal(weatherWindow('partly','mist',{rainyDay:true}),'rainy-day');
+        assert.equal(weatherWindow('snow','mist',{rainyDay:true}),'snowy','current snow keeps its Snowy illustration');
         assert.match(html,/<b class="pp-weather-desc">多云<\/b>/);
         assert.match(html,/pp-weather-hour-now/);
     }finally{f.close();}
