@@ -20,7 +20,7 @@ test('all X refresh routes append feed schema, preserve old posts on syntax fail
  try{
   f.reply(()=>JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',has_account:true,text:'Old post'}]})));assert.equal((await x.refresh()).ok,true);
   const a=xItems(f.phone.snapshot(),'account')[0];await x.follow(a.id,true);
-  const before=structuredClone(f.phone.snapshot().x);
+  const before=structuredClone(f.phone.snapshot().x||{});
   f.reply(options=>{calls++;const last=JSON.parse(options.body).messages.at(-1);assert.equal(last.role,'system');assert.match(last.content,/本次为X刷新/);assert.match(last.content,/字符串内部/);return '{"posts":[{"text":"PRIVATE\nsecret"}]}';});
   for(const mode of [false,true,'square']){const result=await x.refresh(mode);assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_SYNTAX');assert.match(result.error,/未转义换行/);assert.doesNotMatch(result.error,/PRIVATE|secret/);assert.deepEqual(f.phone.snapshot().x,before);}
   assert.equal(calls,3);
@@ -42,7 +42,7 @@ test('X feed refresh limits inherited 70k output ceiling and retries a blank pro
   const result=await x.refresh();
   assert.equal(result.ok,true,result.error);
   assert.deepEqual(limits,[8192,4096]);
-  assert.equal(xItems(f.phone.snapshot(),'post').length,1,'one successful model result is saved once');
+  assert.equal(xItems(f.phone.snapshot(),'post').length,10,'the successful batch is saved once, without duplicates from the blank attempt');
   assert.equal(f.settings.api.maxTokens,2048,'the saved API configuration is not changed');
  }finally{f.close();}
 });
@@ -61,7 +61,7 @@ test('X feed stops after one empty-output recovery and preserves existing posts'
   assert.equal(result.ok,false);
   assert.equal(result.code,'API_EMPTY_OUTPUT');
   assert.deepEqual(limits,[8192,4096]);
-  assert.deepEqual(f.phone.snapshot().x,before,'empty model responses never alter X state');
+  assert.deepEqual(f.phone.snapshot().x||{},before,'empty model responses never alter X state');
  }finally{f.close();}
 });
 
