@@ -203,7 +203,8 @@ test('X private messages show pending without retry and failed messages with ret
   await panel.action('thread',id);
   const html=panel.html();
   for(const [status,label] of [['pending','等待回复…'],['failed','回复失败']]){
-   const article=html.split('data-x-id="status-'+status+'"')[1]?.split('</article>')[0];
+   const offset=html.indexOf('data-x-id="status-'+status+'"');
+   const article=offset>=0?html.slice(html.lastIndexOf('<article',offset),html.indexOf('</article>',offset)+10):'';
    assert.ok(article,status+' bubble exists');
    assert.ok(article.includes(label),status+' status text is visible');
    if(status==='pending')assert.ok(!article.includes('<button'),status+' does not render a retry control');
