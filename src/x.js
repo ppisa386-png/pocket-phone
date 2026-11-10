@@ -19,7 +19,9 @@ import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
-export const xUnread = state => xItems(state,'post').filter(p=>p.outreachMention&&!p.read&&!state.x[p.author]?.blocked).length + xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length + xItems(state,'comment').filter(c=>c.author!=='user'&&!c.read&&!c.ambient).length;
+// The desktop X badge represents unread incoming DMs only. Public mentions and
+// comments remain in the X app but never raise its launcher badge.
+export const xUnread = state => xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length;
 const metric = n => Number.isFinite(Number(n)) ? Math.min(Number.MAX_SAFE_INTEGER,Math.max(0,Math.floor(Number(n)))) : 0;
 export function xCounts(state,post) {
     const comments=xItems(state,'comment').filter(c=>c.postId===post.id);
