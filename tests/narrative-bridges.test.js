@@ -37,7 +37,7 @@ async function fixture(factory) {
     return {c,bus,settings,bridge,errors,copied:()=>copied};
 }
 
-for (const [name, factory, key] of [['daily',createDailyBridge,DAILY_KEY],['balance',createAssetBridge,ASSETS_KEY],['delivery',createDeliveryBridge,DELIVERY_KEY],['opinion',createOpinionBridge,OPINION_KEY],['phone facts',createStoryPhoneBridge,STORY_PHONE_KEY]]) {
+for (const [name, factory, key] of [['daily',createDailyBridge,DAILY_KEY],['balance',createAssetBridge,ASSETS_KEY],['delivery',createDeliveryBridge,DELIVERY_KEY],['phone facts',createStoryPhoneBridge,STORY_PHONE_KEY]]) {
     test(name+' reaches outgoing messages even when preset omits the extension slot; no duplication or stale injection',async()=>{
         const f=await fixture(factory); try {
             await f.bridge.prepare('normal'); const prompt=f.c.extensionPrompts[key].value; assert.ok(prompt);
@@ -56,3 +56,17 @@ for (const [name, factory, key] of [['daily',createDailyBridge,DAILY_KEY],['bala
         } finally {f.bridge.destroy();}
     });
 }
+
+
+test('X opinion bridge leaves selected square and trends out of outgoing narrative messages',async()=>{
+ const f=await fixture(createOpinionBridge);
+ try {
+  await f.bridge.prepare('normal');
+  assert.equal(f.c.extensionPrompts[OPINION_KEY]?.value||'','');
+  const data={chat:[{role:'user',content:'继续'}]};
+  await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',data);
+  assert.doesNotMatch(JSON.stringify(data.chat),/Local park opens/);
+  await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',{type:'normal',messages:data.chat});
+  assert.doesNotMatch(JSON.stringify(data.chat),/Local park opens/);
+ }finally{f.bridge.destroy();}
+});
