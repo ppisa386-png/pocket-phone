@@ -250,9 +250,9 @@ test('late replies to X commercial invitations store one 50% decision and apply 
 test('X anonymous private replies stay scoped; failed messages retry once; rename preserves disclosure',async()=>{
  const f=setup(),id=await account(f,'open');f.reply(()=>{throw Error('offline');});assert.equal((await f.x.send(id,'Hi')).ok,false);let m=xItems(f.state(),'message')[0];assert.equal(m.status,'failed');
  f.reply({status:'reply',text:'Hello Moon'});ok(await f.x.retryMessage(m.id));assert.equal(xItems(f.state(),'message').length,2);assert.match(f.prompt(),/不知道此网名是谁/);assert.equal(xUnread(f.state()),1);
- const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/\"identityKnown\":false/);
+ const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.equal(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),'','private X DM stays within the phone');
  ok(await f.x.markRead(id));assert.equal(xUnread(f.state()),0);ok(await f.x.reveal(id));ok(await f.x.saveProfile({alias:'New alias',bio:''}));assert.equal(f.state().x[id].identityKnown,true);
- assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
+ assert.equal(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),'');assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
 });
 
 test('closed and blocked X accounts cannot receive messages; pending requests do not invent replies',async()=>{
@@ -1011,7 +1011,7 @@ test('square and user posts can be deleted the same way and trend injection togg
   let topics=f.state().x['trend-edition'].topics;
   assert.equal(topics[0].injected,true);
   const {buildOpinionPrompt}=await import('../src/x-opinion.js');
-  assert.match(buildOpinionPrompt(f.state(),[{mes:'2026-01-01'}],''),/注入测试话题/);
+  assert.equal(buildOpinionPrompt(f.state(),[{mes:'2026-01-01'}],''),'','selected trends are stored but never injected into narrative');
   ok(await f.x.toggleTrendInjection(0));
   assert.equal(f.state().x['trend-edition'].topics[0].injected,false);
   assert.doesNotMatch(buildOpinionPrompt(f.state(),[{mes:'2026-01-01'}],''),/注入测试话题/);
