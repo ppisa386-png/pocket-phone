@@ -1,7 +1,7 @@
 import {paperDraft} from './daily-core.js?v=1.2';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2.5';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.18';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.37';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.14';
@@ -247,12 +247,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         content.innerHTML=weatherPanel.html();
         const next=content.querySelector('.pp-weather-scroll');
         if(next)next.scrollTop=scroll;
-        const backdrop=content.querySelector('.pp-weather-background img');
-        const photo=content.querySelector('.pp-weather')?.dataset.photo||'day';
-        phone.dataset.weatherPhoto=photo;
-        // Inline shadow styles resolve CSS url() against SillyTavern, not the
-        // extension folder. Use the fully qualified asset URL from index.js.
-        if(backdrop)phone.style.setProperty('--weather-photo','url("'+backdrop.src.replace(/"/g,'%22')+'")');
+        phone.removeAttribute('data-weather-photo');
+        phone.style.removeProperty('--weather-photo');
         scheduleWeatherTheme();
     }
     function pressActions(target){

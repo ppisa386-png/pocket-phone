@@ -4,6 +4,20 @@ const PHOTO_BY_THEME={mist:'day',apricot:'dusk',night:'night'};
 const PHOTO_BY_TYPE={drizzle:true,rain:true,heavy:true,storm:true,thunder:true,severe:true};
 export const weatherPhoto=(type,theme='mist')=>PHOTO_BY_TYPE[type]?'rain':(PHOTO_BY_THEME[theme]||'day');
 
+// Five user-supplied window illustrations. Rain and snow take precedence;
+// only a clear night uses the Good Night scene.
+const WEATHER_WINDOW_BY_TYPE = {
+    sunny:'sunny', partly:'sunny', heat:'sunny',
+    overcast:'cloudy', fog:'cloudy', windy:'cloudy', dust:'cloudy',
+    drizzle:'rainy-day', rain:'rainy-day', heavy:'rainy-day',
+    storm:'rainy-day', thunder:'rainy-day', severe:'rainy-day',
+    typhoon:'rainy-day', hail:'rainy-day',
+    sleet:'snowy', lightsnow:'snowy', snow:'snowy', heavysnow:'snowy', blizzard:'snowy',
+    cold:'cloudy',
+};
+export const weatherWindow=(type,theme='mist') =>
+    theme==='night' && type==='sunny' ? 'good-night' : (WEATHER_WINDOW_BY_TYPE[type] || 'cloudy');
+
 const CLOUD = '<path d="M18 46c-2-12 7-21 19-21 6-16 31-19 42-5 14-2 25 8 25 21 13 1 20 9 20 20H27c-8 0-13-6-13-14 0-5 1-8 4-11Z"/>';
 const WEATHER_SCENES = {
     partly: '<g fill="#F4BF5E" stroke="#F4BF5E" stroke-width="2.4"><circle cx="86" cy="32" r="17"/><path d="M86 7v8M86 49v9M61 32h8M103 32h8M68 14l6 6M104 14l-6 6" fill="none"/></g><path d="M26 74c-9 0-16-6-16-14 0-9 7-15 16-15 4-13 16-21 30-20 10 1 18 7 21 16 13-1 24 7 24 20 0 8-7 13-18 13H26Z" fill="#BDD0DF" stroke="#F4F9FC" stroke-width="2.5"/>',

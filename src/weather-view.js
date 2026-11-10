@@ -1,10 +1,8 @@
-import { weatherScene, weatherType, weatherExtreme, weatherWarning } from './weather.js?v=1.2.16';
-import { sceneIcon, sceneBackdrop, metricIcon, weatherPhoto } from './weather-art.js?v=1.2.15';
+import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.16';
+import { sceneIcon, metricIcon, weatherWindow } from './weather-art.js?v=1.2.37';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-// The old public theme contract stays intact; the story's hour is preferred
-// when it is known, so this fictional weather follows fictional story time.
 export function themeFor(date = new Date()) {
     const hour = date.getHours();
     return hour >= 6 && hour < 16 ? 'mist' : hour >= 16 && hour < 20 ? 'apricot' : 'night';
@@ -27,6 +25,15 @@ export function themeForStory(clock, now = new Date()) {
     return themeFor(simulated);
 }
 
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+export function storyDateLabel(date, time = '') {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
+    if (!match) return time ? String(time) : '天气日记';
+    const [, year, month, day] = match;
+    const weekday = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).getUTCDay();
+    return Number(month) + '月' + Number(day) + '日 · 周' + WEEKDAYS[weekday] + (time ? ' · ' + time : '');
+}
+
 const PIN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>';
 const MINI_REFRESH = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.9 15M20 5v6h-6"/></svg>';
 const CLOCK = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>';
@@ -47,12 +54,9 @@ export function upcomingHours(forecast, nowHour) {
     return [...today.slice(first), ...tomorrow].slice(0, 24).map((h, i) => ({ ...h, isNow: i === 0 }));
 }
 
-// Seven-day temperatures share one color scale: clip the full-track gradient
-// to each day's range instead of restarting blue-to-orange in every segment.
 export function rangeStyle(day, low, span) {
     let left = Math.max(0, Math.min(100, ((Number(day.lo) - low) / span) * 100));
     let right = Math.max(left, Math.min(100, ((Number(day.hi) - low) / span) * 100));
-    // Keep very small or flat ranges visible without clipping outside the track.
     if (right - left < 4) {
         left = Math.max(0, Math.min(96, (left + right) / 2 - 2));
         right = left + 4;
@@ -63,43 +67,52 @@ export function rangeStyle(day, low, span) {
 export function createWeatherPanel({ adapter, getView, redraw, notice, editLocation, now = () => new Date(), assetBase = 'assets/weather/' }) {
     let working = false, status = '', epoch = 0;
 
-    function top(cityName, busy) {
+    function top(cityName, busy, dateLabel) {
         return '<header class="pp-weather-top">' +
-            '<div class="pp-weather-loc" data-press="weather-location" tabindex="0" role="button" aria-label="长按修改天气地点" title="长按修改地点"><span class="pp-weather-pin" aria-hidden="true">' + PIN + '</span>' +
-            '<b>' + escapeHtml(cityName) + '</b><span class="pp-weather-loc-chevron" aria-hidden="true">⌄</span></div>' +
+            '<div class="pp-weather-top-main">' +
+                '<div class="pp-weather-loc" data-press="weather-location" tabindex="0" role="button" aria-label="长按修改天气地点" title="长按修改地点"><span class="pp-weather-pin" aria-hidden="true">' + PIN + '</span>' +
+                '<b>' + escapeHtml(cityName) + '</b><span class="pp-weather-loc-chevron" aria-hidden="true">⌄</span></div>' +
+                '<small class="pp-weather-date">' + escapeHtml(dateLabel || '天气日记') + '</small>' +
+            '</div>' +
             '<button type="button" class="pp-weather-mini-refresh' + (busy ? ' is-busy' : '') + '" data-weather-action="refresh" aria-label="刷新天气" title="刷新天气"' + (busy ? ' disabled' : '') + '>' + MINI_REFRESH + '</button>' +
             '</header>';
     }
 
-    function hero(w, theme, city, busy, today = null, emptyText = '', emptyNote = '') {
-        const type = w?.type || 'partly';
+    function hero(w, theme, city, busy, today = null, emptyText = '', emptyNote = '', dateLabel = '') {
+        const type = w?.type || 'overcast';
         const temp = w?.temp == null ? '—' : Math.round(w.temp);
         const label = w?.label || (w?.type ? weatherType(w.type) : emptyText || '天气待更新');
         const feels = w?.feels == null ? (w?.temp == null ? '—' : Math.round(w.temp)) : Math.round(w.feels);
-        const extreme = !!(w?.extreme || weatherExtreme(type));
-        const alert = extreme ? '<span class="pp-weather-alert">' + escapeHtml(label) + '</span>' : '';
         const highs = today && Number.isFinite(Number(today.hi)) && Number.isFinite(Number(today.lo))
-            ? '<div class="pp-weather-highlow">最高 ' + Math.round(today.hi) + '° / 最低 ' + Math.round(today.lo) + '°</div>' : '';
-        return '<section class="pp-weather-hero">' + top(city, busy) +
-            '<div class="pp-weather-hero-copy">' + alert +
-            '<strong><span>' + temp + '</span><i>°</i></strong>' +
-            '<b class="pp-weather-desc">' + escapeHtml(label) + '</b>' +
-            highs +
-            (w?.temp == null ? '<small class="pp-weather-hero-note">' + escapeHtml(emptyNote) + '</small>'
-                : '<small class="pp-weather-hero-note">体感温度 ' + feels + '°</small>') +
-            '</div></section>';
+            ? '<span class="pp-weather-highlow">最高 ' + Math.round(today.hi) + '° / 最低 ' + Math.round(today.lo) + '°</span>' : '';
+        const tempMarkup = w?.temp == null
+            ? '<strong><span>—</span></strong>'
+            : '<strong><span>' + temp + '</span><i>°</i></strong>';
+        const note = w?.temp == null ? emptyNote : '体感 ' + feels + '°';
+        const illustration = weatherWindow(type, theme);
+        const imageBase = String(assetBase).replace(/\/?$/, '/');
+        const imageSrc = imageBase + 'windows/' + illustration + '.webp';
+        return '<div class="pp-weather-scene">' + top(city, busy, dateLabel) +
+            '<section class="pp-weather-hero">' +
+                '<div class="pp-weather-hero-copy">' +
+                    '<small class="pp-weather-current-label">当前天气</small>' +
+                    tempMarkup +
+                    '<b class="pp-weather-desc">' + escapeHtml(label) + '</b>' +
+                    '<div class="pp-weather-hero-meta">' +
+                        (note ? '<span class="pp-weather-hero-note">' + escapeHtml(note) + '</span>' : '') +
+                        highs +
+                    '</div>' +
+                '</div>' +
+                '<figure class="pp-weather-window"><img src="' + escapeHtml(imageSrc) + '" alt="' + escapeHtml(label + '天气窗插画') + '" loading="eager" decoding="async" draggable="false"></figure>' +
+            '</section></div>';
     }
 
-    function background(type, theme) {
-        const photo = weatherPhoto(type, theme);
-        return '<div class="pp-weather-background" aria-hidden="true">' + sceneBackdrop(type, theme, assetBase) + '</div>';
-    }
     const statusMarkup = () => status ? '<p class="pp-weather-status" role="status">' + escapeHtml(status) + '</p>' : '';
 
     function emptyPage(theme, city, busy, title, note) {
-        return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud" data-photo="' + weatherPhoto('partly', theme) + '">' +
-            background('partly', theme) + '<div class="pp-weather-scroll"><div class="pp-weather-scene">' +
-            hero(null, theme, city, busy, null, title, note) + '</div>' + statusMarkup() + '</div></section>';
+        return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="cloud">' +
+            '<div class="pp-weather-scroll">' + hero(null, theme, city, busy, null, title, note) +
+            statusMarkup() + '</div></section>';
     }
 
     function html() {
@@ -116,10 +129,6 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
         const type = w.type || 'partly';
         const family = weatherScene(type);
         const today = info.forecast?.days?.[0] || null;
-        // A sustained rainy-day forecast gets the rain photograph even if
-        // there is a brief cloudy break in the current hour.
-        const photoType = today?.rainyDay && family !== 'rain' ? 'rain' : type;
-        const photo = weatherPhoto(photoType, theme);
         const feels = w.feels == null ? (w.temp == null ? '—' : Math.round(w.temp) + '°') : Math.round(w.feels) + '°';
         const precip = w.precip == null ? '—' : Number(w.precip).toFixed(1).replace(/\.0$/, '') + ' 毫米/时';
         const wind = w.wind == null ? '—' : w.wind + ' 级';
@@ -166,23 +175,32 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
             metric('air', '空气质量', aqi, aqiNote) +
             '</section>';
 
-        const warning = weatherWarning(type, w);
-        const warningText = warning ? warning.level + '预警 · ' + warning.grade : '';
-        const warningMarkup = warning
-            ? '<section class="pp-weather-warning pp-weather-warning-' + warning.color + '" role="status" aria-label="' +
+        const warningItems = Array.isArray(w.warnings)
+            ? w.warnings.filter(Boolean)
+            : w.warning ? [w.warning] : [];
+        if (!Array.isArray(w.warnings) && !w.warning) {
+            const computed = weatherWarning(type, w);
+            if (computed) warningItems.push(computed);
+        }
+        const warningMarkup = warningItems.map(warning => {
+            const color = ['blue', 'yellow', 'orange', 'red'].includes(warning.color) ? warning.color : 'orange';
+            const warningText = (warning.level || '天气') + '预警 · ' + (warning.grade || '');
+            return '<section class="pp-weather-warning pp-weather-warning-' + color + '" role="status" aria-label="' +
                 escapeHtml(warningText + '：' + warning.title) + '">' +
                 '<span class="pp-weather-warning-symbol" aria-hidden="true">!</span>' +
                 '<div class="pp-weather-warning-copy">' +
                     '<div class="pp-weather-warning-head"><small>气象预警</small><b>' + escapeHtml(warningText) + '</b></div>' +
                     '<strong>' + escapeHtml(warning.title) + '</strong>' +
                     '<p>' + escapeHtml(warning.detail) + '</p>' +
-                '</div></section>'
-            : '';
+                '</div></section>';
+        }).join('');
 
-        return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '" data-photo="' + photo + '">' +
-            background(photoType, theme) + '<div class="pp-weather-scroll">' +
-            '<div class="pp-weather-scene">' + hero(w, theme, city, busy, today) + '</div>' +
-            statusMarkup() + warningMarkup + hourly + week + metrics +
+        const dateLabel = storyDateLabel(w.date || info.date || '', w.time || '');
+        return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '">' +
+            '<div class="pp-weather-scroll">' +
+            hero(w, theme, city, busy, today, '', '', dateLabel) +
+            statusMarkup() + (warningMarkup ? '<div class="pp-weather-warning-list">' + warningMarkup + '</div>' : '') +
+            hourly + week + metrics +
             '</div></section>';
     }
 
