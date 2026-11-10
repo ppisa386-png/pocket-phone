@@ -124,7 +124,7 @@ test('narrative shown markers flip existing records only, ignore invented ids, r
     assert.equal(commMeta(rolled,'whatsapp','旧消息1'),undefined,'rollback removes the marker with its floor');
 });
 
-test('continuity omits shown records on every communication channel, including X replies',()=>{
+test('continuity omits all X records and shown records from other channels',()=>{
     const state=channelState(),who={id:'card:alex.png',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
     state.messages.unshown={id:'unshown',contactId:who.id,role:'assistant',text:'UNSHOWN_SMS',createdAt:1};
     state.messages.shown={id:'shown',contactId:who.id,role:'assistant',text:'SHOWN_SMS',createdAt:2};
@@ -146,8 +146,8 @@ test('continuity omits shown records on every communication channel, including X
     state.commContext['x:comment']={shown:false};
     const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
     assert.match(prompt,/UNSHOWN_SMS/);
-    for(const app of ['whatsapp','wechat','snapchat','x'])assert.match(prompt,new RegExp('UNSHOWN_'+app));
-    assert.match(prompt,/UNSHOWN_X_COMMENT/);
+    for(const app of ['whatsapp','wechat','snapchat'])assert.match(prompt,new RegExp('UNSHOWN_'+app));
+    assert.doesNotMatch(prompt,/UNSHOWN_X_COMMENT|UNSHOWN_x/,'X comments and DMs remain phone-only');
     assert.doesNotMatch(prompt,/"text":"SHOWN_SMS"|"text":"SHOWN_(?:whatsapp|wechat|snapchat|x)"|SHOWN_CALL|SHOWN_X_POST/);
     const records=JSON.parse(prompt.split('\n').at(-2)).records;
     assert.ok(records.every(record=>record.shown===false),'only unshown records enter the payload');
@@ -247,18 +247,17 @@ test('home-feed X posts and backfilled samples join the sidecar; square posts st
     assert.ok(ids.includes('x:friendReply'));
     assert.equal(commMeta(state,'x','home1').shown,false,'phone-side posts default to unshown');
     assert.equal(commMeta(state,'x','sample').classification,'pending');
-    // Samples targeting user's thread are provided to the narrative as optional
-    // references; samples on other accounts' posts never enter the history.
+    // X comments remain saved in the sidecar but never enter narrative history.
     const prompt=buildContinuityPrompt({...state,contacts:{'name:u1':{id:'name:u1',name:'U1'}},profiles:{}},{name:'U1',nameIsUnique:true},{instruction:'参考',currentStoryTime:stamp('2026-11-02')});
-    assert.match(prompt,/reply to user thread/,'sample on user thread is provided');
+    assert.doesNotMatch(prompt,/reply to user thread/,'user-thread X comments are not sent to narrative');
     assert.doesNotMatch(prompt,/backfilled sample/,'samples on other threads stay out of the history');
 });
 
 test('the narrative catalog keeps every reference but degrades expired or shown post content',async()=>{
     const state=channelState();
-    state.x.fresh={id:'fresh',type:'post',author:'u1',feed:'home',text:'未过期的帖子完整内容应该出现在目录里供正文参考',createdAt:1,liked:false,reposted:false};
-    state.x.old={id:'old',type:'post',author:'u1',feed:'home',text:'已过期的帖子内容不应该再提供给正文AI',createdAt:2,liked:false,reposted:false};
-    state.x.shown={id:'shown',type:'post',author:'u1',feed:'home',text:'已展示的帖子正文只需梗概其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉',createdAt:3,liked:false,reposted:false};
+    state.x.fresh={id:'fresh',type:'post',author:'user',feed:'home',text:'未过期的帖子完整内容应该出现在目录里供正文参考',createdAt:1,liked:false,reposted:false};
+    state.x.old={id:'old',type:'post',author:'user',feed:'home',text:'已过期的帖子内容不应该再提供给正文AI',createdAt:2,liked:false,reposted:false};
+    state.x.shown={id:'shown',type:'post',author:'user',feed:'home',text:'已展示的帖子正文只需梗概其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉',createdAt:3,liked:false,reposted:false};
     state.commContext={
         'x:fresh':{version:1,category:'B',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:false,shown:false},
         'x:old':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','09:00'),anchorSource:'source-floor',expired:true,shown:false},
@@ -338,7 +337,7 @@ test('X narrative replies are shown, while app-only X replies remain unshown',as
     assert.equal(inferShown({platform:'x',id:unshown.id,record:unshown}),false);
     const continuity=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true});
     assert.doesNotMatch(continuity,/周二见。/,'shown reply is absent');
-    assert.match(continuity,/Later followup/,'app-only reply stays available');
+    assert.doesNotMatch(continuity,/Later followup/,'app-only private messages stay inside X');
     const entryPrompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),context.chat);
     assert.match(entryPrompt,/X 私信与其他通信使用同一已展示\/未展示记录机制/);
     assert.match(entryPrompt,/"platform":"x"/);
@@ -412,9 +411,8 @@ test('X comment references use the original post date, not the comment timestamp
  state.x.c={id:'c',type:'comment',postId:'p',author:'a',text:'这是一条刚发出的旧帖评论',createdAt:2};
  state.commContext['x:c']={shown:false};
  const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,currentStoryTime:stamp('2026-11-09','12:00')});
- const row=JSON.parse(prompt.split('\n').at(-2)).records.find(r=>r.channel==='X 公开评论');
- assert.equal(row.postDate,'2026-10-04');assert.equal(row.postDaysAgo,36);
- assert.equal(row.post,undefined);assert.equal(row.storyDaysAgo,undefined);
+ assert.doesNotMatch(prompt,/这是一条刚发出的旧帖评论/);
+ assert.equal(prompt,'','X comments have no continuity injection even when dated');
 });
 
 test('notification-only incoming X and WhatsApp messages stay unshown until prose actually reads them',async()=>{
@@ -437,7 +435,7 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
         saved.push({platform,id:message.id});
     }
     const before=buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000});
-    assert.match(before,/HIDDEN_X_PRIVATE/);
+    assert.doesNotMatch(before,/HIDDEN_X_PRIVATE/,'X private messages stay local');
     assert.match(before,/HIDDEN_WA_PRIVATE/);
     assert.match(before,/user 未在剧情里打开手机查看之前/);
     context.chat.push({mes:'Sam实际打开手机阅读了这两条信息。'+saved.map(row=>
