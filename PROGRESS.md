@@ -1,10 +1,16 @@
+# 榴莲手机开发进度
+
+## v1.2.36 · X 独立 API 刷新空回复恢复（2026-11-10）
+**定位**：用户截图中 X 刷新调用 robin-3.8-flash，酒馆代理返回 HTTP 200，但 choices[0].message.content 为空、completion_tokens=0、finish_reason=stop，触发 API_EMPTY_OUTPUT。请求含约 3.0 万输入 token，且从宿主预设继承了 70000 的输出 token 上限；空回复不必然由此造成，但 X 有限量 JSON 刷新无需如此高的输出上限。
+**修复**：X 首页推荐／关注流／广场的独立 API 刷新仅使用每次 8192 输出 token 上限；遇到 API_EMPTY_OUTPUT 且同一任务仍有效时保留上下文，用 4096 上限额外重试一次。正常成功不重试，两次为空仍按原错误提示并保留既有数据；其他 X 操作、其他 App、跟随酒馆模式及用户保存的 API 设置不改变。复用原剧情、人设、账号和公开范围注入，未强制删减上下文或改写 JSON 校验。
+**验证**：新增 X 刷新成功一次保存、空响应恢复一次、两次空响应原记录不变、请求上限和配置不变的回归测试。GitHub Actions 完整 npm test **730/730 通过**、npm run build:preview 成功：https://github.com/ppisa386-png/pocket-phone/actions/runs/42752073121 ；Chromium browser-acceptance 成功：https://github.com/ppisa386-png/pocket-phone/actions/runs/42752012343 。未能直接调用用户的 robin-3.8-flash 提供方或 Termux 实机，无法保证供应商不会再次返回空回复。
+
 ## v1.2.35 · X 私信剧情时间与商业邀约回复期限（2026-11-10；基线 ba1b112）
 **视觉基准**：沿用 RESOURCE_SOURCES.md 登记的 https://github.com/ccrsxx/twitter-clone。实际检查了其 TweetDate 组件：时间使用次级灰色文字，列表显示紧凑日期，悬浮提示完整日期；该仓库没有私信模块，因此将相同的次级文字层级应用到榴莲手机现有 X 灰/蓝私信气泡，不虚称复刻了不存在的 DM 页面。
 **私信时间**：X 收件箱最后一条消息及会话内每条消息均显示剧情日期/时间；NPC 气泡标为收信时间，user 气泡标为发送时间。直接发送、NPC 回复、自我介绍及正文导入的私信统一保存 storyTime；历史缺失值显示「时间未记录」，不拿设备时间冒充剧情时间。
 **商业合作**：品牌邀约可在私信明确写出回复截止时刻，replyBy 同时保存到消息和企划。仅把明确的回复期限作为截止，不把活动、寄送、交付或见面时间混用。user 首次超时回复时执行一次 50% 婉拒判定；婉拒由品牌发送礼貌拒绝并将企划置为 declined，另一半继续原有协商。结果保存在 business 回退日志中，重试、后续消息和剧情重生成不重复抽取。原邀约门槛、报价、背调、风险、签约和财务逻辑保持。
 **工程与验证**：更新 src/x-view.js、src/x.js、src/x-business.js、style.css、入口缓存版本及对应测试；补充日期解析、50% 概率边界、商业邀约时间持久化、私信时间展示和超时单次判定回归。GitHub Actions 已通过：Pocket Phone regression（npm test、npm run build:preview）及 browser-acceptance 均 success；Termux 真机窄屏视觉仍需设备验收。
 
-# 榴莲手机开发进度
 
 ## v1.2.34 · 微信 RNWeChat 四栏、朋友圈与音乐分享（2026-11-09；基线 bd80be1）
 **参考基准**：继续用仓库已登记的 yubo725/rn-wechat（dev），检查真实的 TabNavConfigs.js / FindScreen / ContactsScreen / MeScreen / MomentScreen / PublishMomentScreen。实际 UI 按微信四栏、分组列表、灰色标题、白色内容与绿色互动细节实现；未做全新视觉方向。好友添加、单聊、通话、黑名单、转账等既有功能保持。
