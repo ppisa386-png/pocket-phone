@@ -47,6 +47,55 @@ test('X feed refresh limits inherited 70k output ceiling and retries a blank pro
  }finally{f.close();}
 });
 
+test('independent X DM retries only one blank output with a 4096-to-2048 budget and saves one reply',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ try{
+  f.reply(()=>JSON.stringify({accounts:[{name:'Alex',handle:'alex',has_account:true,dm_policy:'open'}]}));
+  const discovered=await x.discover('Alex');assert.equal(discovered.ok,true,discovered.error);
+  const id=discovered.value.ids[0],limits=[];
+  f.reply(options=>{
+   const body=JSON.parse(options.body);
+   limits.push(body.max_completion_tokens??body.max_tokens);
+   assert.match(body.messages.at(-1).content,/当前是 X 应用结构化任务/);
+   if(limits.length===1)return {ok:true,status:200,json:async()=>({choices:[{message:{content:''},finish_reason:'stop'}],usage:{completion_tokens:0}})};
+   return JSON.stringify({status:'reply',text:'消息收到。'});
+  });
+  const result=await x.send(id,'今晚方便吗？');
+  assert.equal(result.ok,true,result.error);
+  assert.deepEqual(limits,[4096,2048]);
+  const thread=xItems(f.phone.snapshot(),'message').filter(m=>m.accountId===id);
+  assert.equal(thread.filter(m=>m.role==='user').length,1);
+  assert.equal(thread.filter(m=>m.role==='assistant').length,1);
+  assert.equal(thread.find(m=>m.role==='user').status,'answered');
+  assert.equal(thread.find(m=>m.role==='assistant').text,'消息收到。');
+  assert.equal(f.settings.api.maxTokens,2048);
+ }finally{f.close();}
+});
+
+test('X DM double-empty leaves the original failed message for a one-click manual retry',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ try{
+  f.reply(()=>JSON.stringify({accounts:[{name:'Alex',handle:'alex',has_account:true,dm_policy:'open'}]}));
+  const discovered=await x.discover('Alex');assert.equal(discovered.ok,true,discovered.error);
+  const id=discovered.value.ids[0],limits=[];
+  f.reply(options=>{const body=JSON.parse(options.body);limits.push(body.max_completion_tokens??body.max_tokens);
+   return {ok:true,status:200,json:async()=>({choices:[{message:{content:''},finish_reason:'stop'}],usage:{completion_tokens:0}})};
+  });
+  const failed=await x.send(id,'请确认我上一条私信。');
+  assert.equal(failed.ok,false);assert.equal(failed.code,'API_EMPTY_OUTPUT');
+  assert.deepEqual(limits,[4096,2048]);
+  const before=xItems(f.phone.snapshot(),'message').filter(m=>m.accountId===id);
+  assert.equal(before.length,1);assert.equal(before[0].status,'failed');
+  f.reply(()=>JSON.stringify({status:'reply',text:'已经确认。'}));
+  const recovered=await x.retryMessage(before[0].id);
+  assert.equal(recovered.ok,true,recovered.error);
+  const after=xItems(f.phone.snapshot(),'message').filter(m=>m.accountId===id);
+  assert.equal(after.filter(m=>m.role==='user').length,1);
+  assert.equal(after.filter(m=>m.role==='assistant').length,1);
+  assert.equal(after.find(m=>m.role==='user').status,'answered');
+ }finally{f.close();}
+});
+
 test('X feed stops after one empty-output recovery and preserves existing posts',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
  const limits=[];
