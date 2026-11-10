@@ -1,4 +1,20 @@
-# 榴莲手机开发进度
+## 工作分支检查点 · 天气 App「窗边天气日记」（2026-11-10）
+**分支**：`work/weather-window-diary`；**生产基线**：`main @ aec1d43b55aa201cd2b7560acb286a0f6a78937a`；当前正式版本 `1.2.36`。本次为在线保存的设计/代码审查检查点，未修改任何运行时代码、未更换天气资源、未改入口缓存版本，main 不移动，因此不会影响当前正常天气 App。
+**已完成**：完整阅读 Skill 2 Web Design Engineer 主规范及 Redesign Protocol、Design Calibration、Failure Patterns、Browser Acceptance、Critique Guide；阅读项目 `AGENTS.md`、`REQUIREMENTS.md`、`PROGRESS.md`、`RESOURCE_SOURCES.md`；检查 `src/weather-view.js`、`src/weather.js`、`src/weather-art.js`、`style.css`、`index.js`、`package.json`、`tests/weather.test.js` 和现有天气素材树。用户确认跳过重复效果稿，直接实施。
+**代码现状**：天气页当前仍使用 `assets/weather/day.webp`、`dusk.webp`、`night.webp`、`rain.webp` 四张摄影背景；天气图标由 `src/weather-art.js` 内联 SVG 生成；`src/weather-view.js` 负责主天气、逐小时、七日、六项指标和当前预警 DOM；`src/weather.js` 负责天气数据、剧情时间、城市、预报、预警和确定性 UV/AQI；样式目前集中在全局 `style.css`，需将天气视觉整理为独立、可维护且严格限定作用域的规则。现有六项指标为体感、降水、风力、湿度、UV、AQI。
+**已确认设计**：暖奶油绘本「窗边天气日记」；Manrope + Noto Sans SC 本地字体；五张用户原创天气窗插画作为唯一天气主图；左数据右插画约 60/40，插画 110–126px；天气窗下方、24小时预报上方显示四级预警；随后为横滑24小时、纵向七日及2×3指标网格；夜间保持浅色页面；280–640px 宽小窗适配。完整规则见本分支 `REQUIREMENTS.md` 对应天气章节及 `docs/weather-window-diary/WORKLOG.md`。
+**待完成**：①从本对话附件提取并本地化五张原图，评估透明化/底色融合；②从 Fontsource 获取 Manrope 与 Noto Sans SC 适量字重/字符集并本地打包；③重构天气页 DOM 与 CSS；④核对多预警展示与现有数据模型，不改变天气引擎语义；⑤更新预览构建器与测试；⑥浏览器截图验收 280/330/360/390/640px 及短高容器；⑦完整 `npm test` 与预览构建。每完成一个独立里程碑，立即提交到本工作分支保存。所有阶段完成且用户确认后才合并/推送到 `main`。
+**限制**：此检查点只保存已完成的研究、审查和确认方案；尚未整合插画/字体，尚未改造 UI，尚未运行本轮回归测试。不得把这些项目记作已完成。
+ 
+
+## 工作分支检查点 · 天气 App「窗边天气日记」（2026-11-10）
+**分支**：`work/weather-window-diary`；**生产基线**：`main @ aec1d43b55aa201cd2b7560acb286a0f6a78937a`；当前正式版本 `1.2.36`。本次为在线保存的设计/代码审查检查点，未修改任何运行时代码、未更换天气资源、未改入口缓存版本，main 不移动，因此不会影响当前正常天气 App。
+**已完成**：完整阅读 Skill 2 Web Design Engineer 主规范及 Redesign Protocol、Design Calibration、Failure Patterns、Browser Acceptance、Critique Guide；阅读项目 `AGENTS.md`、`REQUIREMENTS.md`、`PROGRESS.md`、`RESOURCE_SOURCES.md`；检查 `src/weather-view.js`、`src/weather.js`、`src/weather-art.js`、`style.css`、`index.js`、`package.json`、`tests/weather.test.js` 和现有天气素材树。用户确认跳过重复效果稿，直接实施。
+**代码现状**：天气页当前仍使用 `assets/weather/day.webp`、`dusk.webp`、`night.webp`、`rain.webp` 四张摄影背景；天气图标由 `src/weather-art.js` 内联 SVG 生成；`src/weather-view.js` 负责主天气、逐小时、七日、六项指标和当前预警 DOM；`src/weather.js` 负责天气数据、剧情时间、城市、预报、预警和确定性 UV/AQI；样式目前集中在全局 `style.css`，需将天气视觉整理为独立、可维护且严格限定作用域的规则。现有六项指标为体感、降水、风力、湿度、UV、AQI。
+**已确认设计**：暖奶油绘本「窗边天气日记」；Manrope + Noto Sans SC 本地字体；五张用户原创天气窗插画作为唯一天气主图；左数据右插画约 60/40，插画 110–126px；天气窗下方、24小时预报上方显示四级预警；随后为横滑24小时、纵向七日及2×3指标网格；夜间保持浅色页面；280–640px 宽小窗适配。完整规则见本分支 `REQUIREMENTS.md` 对应天气章节及 `docs/weather-window-diary/WORKLOG.md`。
+**待完成**：①从本对话附件提取并本地化五张原图，评估透明化/底色融合；②从 Fontsource 获取 Manrope 与 Noto Sans SC 适量字重/字符集并本地打包；③重构天气页 DOM 与 CSS；④核对多预警展示与现有数据模型，不改变天气引擎语义；⑤更新预览构建器与测试；⑥浏览器截图验收 280/330/360/390/640px 及短高容器；⑦完整 `npm test` 与预览构建。每完成一个独立里程碑，立即提交到本工作分支保存。所有阶段完成且用户确认后才合并/推送到 `main`。
+**限制**：此检查点只保存已完成的研究、审查和确认方案；尚未整合插画/字体，尚未改造 UI，尚未运行本轮回归测试。不得把这些项目记作已完成。
+ 
 
 ## v1.2.36 · X 独立 API 刷新空回复恢复（2026-11-10）
 **定位**：用户截图中 X 刷新调用 robin-3.8-flash，酒馆代理返回 HTTP 200，但 choices[0].message.content 为空、completion_tokens=0、finish_reason=stop，触发 API_EMPTY_OUTPUT。请求含约 3.0 万输入 token，且从宿主预设继承了 70000 的输出 token 上限；空回复不必然由此造成，但 X 有限量 JSON 刷新无需如此高的输出上限。
