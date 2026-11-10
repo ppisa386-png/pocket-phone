@@ -8,9 +8,10 @@ import {dateDay,dayDate,readStoryClock,exactStoryTime,storyTime} from './story-c
 
 const write=(key,value)=>({collection:'business',key,value});
 const projects=state=>Object.values(state.business||{}).filter(p=>p.id);
-const publicPlan=({id,brand,project,terms,status,investigated,riskRate,mitigations,replyBy})=>({
+const publicPlan=({id,brand,project,terms,status,investigated,riskRate,mitigations,replyBy,lateReplyDecision})=>({
     id,brand,project,terms,status,investigated,
     ...(replyBy?{replyBy}:{}),
+    ...(lateReplyDecision==='open'?{lateReplyDecision:'open'}:{}),
     ...(investigated&&Number.isInteger(riskRate)?{riskRate}:{}),
     ...(mitigations?.length?{mitigations:mitigations.slice(-5)}:{})
 });
@@ -81,7 +82,7 @@ export function dealDecision(p,kind,turn,day,risky,terms,details={},roll=null){
 }
 export function dmDealTask(state,id){
     const plans=projects(state).filter(p=>p.accountId===id&&p.status==='invited').map(publicPlan);
-    return plans.length?'\n本账号的合作邀约：'+JSON.stringify(plans)+'。若本条user私信明确同意并实际成立合作或明确拒绝，在JSON加 deal:{id,kind:"accept或reject",terms:"实际约定"}。询价、意向、回复和接受私信请求不等于合作。replyBy仅表示明确的回复截止时间；是否逾期及逾期后的50%婉拒由程序按剧情时间一次性判定，模型不得自行抽签、重复判定或因截止时间自行改写结果。':'';
+    return plans.length?'\n本账号的合作邀约：'+JSON.stringify(plans)+'。若本条user私信明确同意并实际成立合作或明确拒绝，在JSON加 deal:{id,kind:"accept或reject",terms:"实际约定"}。询价、意向、回复和接受私信请求不等于合作。replyBy仅表示明确的回复截止时间；是否逾期及逾期后的50%婉拒由程序按剧情时间一次性判定，模型不得自行抽签、重复判定或因截止时间自行改写结果。若企划字段 lateReplyDecision 为 open，说明程序已判定逾期后仍保留机会，应继续正常协商，不得再以逾期为由婉拒。':'';
 }
 export function businessPrompt(state,settings,chat,user,privateDraws={}){
     if(!settings.apps.x)return '';
@@ -92,7 +93,7 @@ export function businessPrompt(state,settings,chat,user,privateDraws={}){
         const records=Object.values(state.x);
         const posts=records.filter(p=>p.type==='post'&&p.author==='user').slice(-20).map(({text,metrics})=>({text,metrics}));
         const accounts=records.filter(a=>a.type==='account').map(({name,id,blocked,dmAccepted,inboundRequest})=>({name,id,blocked,dmAccepted,inboundRequest}));
-        parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬；可结合真实档期在私信中明确设置回复截止时间，但不必每次都设置。若正文明确写出“请于某日某时前回复”或“报价有效至某日某时”等回复期限，必须在正文写清完整日期和时刻，并在标记中附 replyBy:"YYYY-MM-DD HH:mm"。replyBy只表示回复截止时间，不得把活动举办、样品寄送、交付或见面时间误当成回复期限；相对表达须依据当前剧情时刻换算为完整日期，正文与字段一致；没有明确回复期限或无法确定日期时分则省略。截止时间不得早于邀约发出时刻。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文","replyBy":"YYYY-MM-DD HH:mm（仅明确回复期限时填写）"}-->。只用商业标签。当前剧情时刻：'+currentClock+'。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
+        parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬；可结合真实档期在私信中明确设置回复截止时间，但不必每次都设置。若正文明确写出“请于某日某时前回复”或“报价有效至某日某时”等回复期限，必须在正文写清完整日期和时刻，并在标记中附 replyBy:"YYYY-MM-DD HH:mm"。replyBy只表示回复截止时间，不得把活动举办、样品寄送、交付或见面时间误当成回复期限；相对表达须依据当前剧情时刻换算为完整日期，正文与字段一致；没有明确回复期限或无法确定日期时分则省略。截止时间不得早于邀约发出时刻。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文"}-->；只有正文明确给出回复期限时，才在该JSON对象额外添加 replyBy:"YYYY-MM-DD HH:mm"。只用商业标签。当前剧情时刻：'+currentClock+'。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
     }
     const open=plans.filter(p=>p.status==='invited');
     if(open.length)parts.push('隐藏商业背调事实（仅供本次正文模型在user实际完成背调时写出结果，绝不可在背调前向角色泄漏或自动替user调查）：'+JSON.stringify(open.map(p=>({id:p.id,problematic:privateDraws?.[p.id]===true})))+'。problematic=true 的商家经真实完成的背调会查出与合作相关的实质隐患，后台翻车率为100%；problematic=false 的商家不属于预设高风险对象，但合作正式成立时仍有1%翻车率。此处只决定故事内合作风险，不代表现实品牌的经核实事实。调查完成后正文应自然呈现实际发现，不要把后台随机机制写入正文，文尾按规则记录。');
