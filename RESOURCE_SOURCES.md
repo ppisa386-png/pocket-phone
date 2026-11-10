@@ -40,3 +40,6 @@ https://github.com/lucide-icons/lucide
 https://github.com/fontsource/fontsource
 https://fontsource.org/fonts/manrope
 https://fontsource.org/fonts/noto-sans-sc
+
+## 天气 App · 字体二进制来源（2026-11-10）
+https://github.com/fontsource/font-files
