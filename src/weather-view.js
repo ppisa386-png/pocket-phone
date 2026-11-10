@@ -103,7 +103,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
                         highs +
                     '</div>' +
                 '</div>' +
-                '<figure class="pp-weather-window"><img src="' + escapeHtml(imageSrc) + '" alt="' + escapeHtml(label + '天气窗插画') + '" loading="eager" decoding="async" draggable="false"></figure>' +
+                '<figure class="pp-weather-window" data-weather-window="' + illustration + '"><img src="' + escapeHtml(imageSrc) + '" alt="' + escapeHtml(label + '天气窗插画') + '" loading="eager" decoding="async" draggable="false"></figure>' +
             '</section></div>';
     }
 
@@ -199,8 +199,8 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '">' +
             '<div class="pp-weather-scroll">' +
             hero(w, theme, city, busy, today, '', '', dateLabel) +
-            statusMarkup() + (warningMarkup ? '<div class="pp-weather-warning-list">' + warningMarkup + '</div>' : '') +
-            hourly + week + metrics +
+            (warningMarkup ? '<div class="pp-weather-warning-list">' + warningMarkup + '</div>' : '') +
+            statusMarkup() + hourly + week + metrics +
             '</div></section>';
     }
 
