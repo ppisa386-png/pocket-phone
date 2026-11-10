@@ -1,45 +1,15 @@
-# GitHub 参考项目来源
+# Weather photograph credits
+All four photographs are free to use under the respective Unsplash or Pexels license.
+Full-size originals are fetched directly at asset-generation time; bundled derivatives are not hotlinked.
+Target crop is 1000 × 1780 pixels (~9:16) at WebP quality 89 (method 6).
 
-## 悬浮球动效设计规范（Emil Design Engineering）
-https://github.com/emilkowalski/skills
+- **day.webp**: Abeer H — https://www.pexels.com/photo/a-white-clouds-against-blue-sky-16459932/ (source 2916 × 5184; WebP 68,092 bytes)
+- **dusk.webp**: Hannah Reding — https://unsplash.com/photos/pink-sunset-over-a-calm-ocean-beach-vrhEQC0CC5Q (source 3024 × 4028; WebP 153,156 bytes)
+- **night.webp**: Nacho Rochon — https://unsplash.com/photos/a-large-cloud-with-stars-in-the-sky-CG7YwmRDGvI (source 4608 × 3072; WebP 287,324 bytes)
+- **rain.webp**: Betül Batmaz — https://www.pexels.com/photo/a-close-up-of-rain-drops-on-a-window-27378397/ (source 4000 × 6000; WebP 184,830 bytes)
 
-## X
-https://github.com/ccrsxx/twitter-clone
+## 窗边天气日记 · 用户原创天气窗插画（2026-11-10）
+五张素材由用户在本项目对话中提供；不来自外部图库或第三方仓库。文件与映射记录于 `assets/weather/windows/README.md`。
 
-## WhatsApp
-https://github.com/Galaxies-dev/whatsapp-clone-react-native
-
-## 微信
-https://github.com/yubo725/rn-wechat
-
-## Amazon
-https://github.com/salihabrik/Amazon-Clone
-https://github.com/tejasbadone/flutterzon_provider
-https://github.com/microsoft/fluentui-emoji
-
-## 天气
-https://github.com/j-labbe/weather-app-clone
-
-## 榴莲外卖
-https://github.com/itswadesh/foodfire
-https://github.com/codewithsadee/grilli
-
-## 榴莲外卖 · 鲜味日常 Fresh Bite V2.0
-https://github.com/microsoft/fluentui-emoji
-https://github.com/jdecked/twemoji
-https://github.com/lucide-icons/lucide
-
-## 微信 · 朋友圈与音乐分享（继续采用原来源）
-https://github.com/yubo725/rn-wechat
-https://github.com/microsoft/fluentui-emoji
-https://github.com/lucide-icons/lucide
-
-音乐卡片 CD 对应 Fluent UI Emoji Flat 的 `assets/Optical disk/Flat/optical_disk_flat.svg`；许可保留于 `assets/food/LICENSE-fluentui-emoji.txt`。
-
-## 天气 App · 窗边天气日记（用户指定，2026-11-10）
-https://github.com/fontsource/fontsource
-https://fontsource.org/fonts/manrope
-https://fontsource.org/fonts/noto-sans-sc
-
-## 天气 App · 字体二进制来源（2026-11-10）
-https://github.com/fontsource/font-files
+## 新版天气窗插画
+五张用户原创图：`assets/weather/windows/`。无外部图库来源；旧版摄影图仍保留作回退资源，原摄影来源见本文件上文。
