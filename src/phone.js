@@ -86,7 +86,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const conversation=social||['phone','messages','incoming'].includes(app);
         if(!options.establishedImport&&!options.skipExternalMemory&&app!=='daily'){
             if(app==='x'&&options.postQueries?.length){
-                prompt+=await postMemoryPrompt(context,getSettings(),options.postQueries,isCurrent,undefined,Object.values(state.x||{}).filter(a=>a.type==='account'&&!a.crowd));
+                prompt+=await postMemoryPrompt(context,getSettings(),options.postQueries,isCurrent,undefined,Object.values(state.x||{}).filter(a=>a.type==='account'&&!a.crowd),options.memoryChars);
             }else if(conversation){
                 const actors=contact&&contact.contactKind!=='location'?[contact]:[];
                 const query=options.memoryQuery||{actors,names:contact?[contact.name,...(contact.aliases||[])]:[],topic:options.memoryTopic||''};
