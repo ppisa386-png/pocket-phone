@@ -7,7 +7,21 @@ import {createPhoneService} from '../src/phone.js';
 import {createX,xItems,xUnread,xCounts} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
+import {xStoryPrompt} from '../src/x-story.js';
 import {xAudience, audienceChanges} from '../src/x-audience.js';
+
+test('narrative X catalog contains only user original posts, excluding comments, NPC posts, private messages and trends',()=>{
+ const state={x:{profile:{alias:'Moon'},mine:{id:'mine',type:'post',author:'user',text:'MY_PUBLISHED_POST',imageDescription:'MY_IMAGE',createdAt:1},
+  npc:{id:'npc',type:'post',author:'another',text:'NPC_FEED_SECRET',createdAt:2},
+  square:{id:'square',type:'post',author:'crowd',text:'SQUARE_SECRET',feed:'square',createdAt:3},
+  reply:{id:'reply',type:'comment',postId:'mine',author:'another',text:'MY_COMMENTS_SECRET'},
+  dm:{id:'dm',type:'message',accountId:'another',role:'assistant',text:'DM_SECRET'},
+  'trend-edition':{id:'trend-edition',type:'trends',topics:[{title:'TREND_SECRET',injected:true}]}}};
+ const prompt=xStoryPrompt(state);
+ assert.match(prompt,/MY_PUBLISHED_POST/);assert.match(prompt,/MY_IMAGE/);
+ for(const secret of ['NPC_FEED_SECRET','SQUARE_SECRET','MY_COMMENTS_SECRET','DM_SECRET','TREND_SECRET'])assert.doesNotMatch(prompt,new RegExp(secret));
+ assert.equal(buildContinuityPrompt({contacts:{},messages:{},calls:{},x:state.x},{name:'Alex',nameIsUnique:true},{instruction:'Remember'}),'');
+});
 
 function setup(getGenerationState,independent=false){
  const bus=new EventEmitter();let response={},count=0,lastPrompt='';
