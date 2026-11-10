@@ -117,7 +117,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 checkEnabled();
                 const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; job.progress = value; emit(); } };
                 report(independent ? '正在准备独立 API 请求' : '正在等待酒馆生成回复');
-                const text = independent ? await modelClient.generate(prompt, contact, isCurrent, report, { finalOutputContract: options.finalOutputContract, maxTokens: options.maxTokens }) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
+                const text = independent ? await modelClient.generate(prompt, contact, isCurrent, report, { finalOutputContract: options.finalOutputContract, maxTokens: options.maxTokens, retryEmptyOnce: app==='x' && options.retryEmptyOnce===true }) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 checkEnabled();
                 responseLength = typeof text === 'string' ? text.length : null;
