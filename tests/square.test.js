@@ -76,7 +76,7 @@ test('expired selected posts remain readable but cannot inject; deleting time ju
   const panel=createXPanel({adapter:{storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});await panel.action('tab','square');
   assert.match(panel.html(),/pp-square-expired/);assert.doesNotMatch(panel.html(),/aria-label="已过期"/);assert.match(panel.html(),/The park is quiet/);
   const actions=panel.press({dataset:{press:'x-post',xId:p.id}});
-  assert.deepEqual(actions.map(a=>a.icon),['edit','inject','delete']);assert.equal(actions.find(a=>a.icon==='inject').disabled,true);assert.ok(actions.find(a=>a.icon==='delete').danger,'delete is marked danger');
+  assert.deepEqual(actions.map(a=>a.icon),['edit','delete'],'square no longer offers nonfunctional story injection');assert.ok(actions.find(a=>a.icon==='delete').danger,'delete is marked danger');
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.match(buildSquarePrompt(f.state(),f.c.chat),/The park is quiet/);
   f.c.chat.push({mes:'2003-07-25'});await f.memory.read();assert.equal(buildSquarePrompt(f.state(),f.c.chat),'');assert.match(panel.html(),/时间不明确/);assert.equal(f.calls(),1);
  }finally{f.close();}
