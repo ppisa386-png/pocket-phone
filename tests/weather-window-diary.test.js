@@ -33,6 +33,7 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     assert.match(config, /VERSION = '1\.2\.38'/);
     assert.match(browser, /\[640,390,360,330,320,280\]/);
     assert.match(browser, /phone:\{subscribe:\(\)=>\(\)=>\{\},markCallsRead:\(\)=>\{\},markMessagesRead:\(\)=>\{\}\}/);
+    assert.match(browser, /weather:\{report:\(\)=>window\.fixtureWeather,open:\(\)=>\{\},refresh:/);
     assert.match(browser, /viewports:\[640,390,360,330,320,280,'320x590'\]/);
     assert.match(index, /replaceAll\('__WEATHER_FONT_BASE__\/', weatherFontBase\)/);
     assert.match(builder, /style-weather\.css/);

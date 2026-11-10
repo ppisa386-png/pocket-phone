@@ -27,7 +27,7 @@ const fixtureHTML = [
 ' load:()=>settings, save(next){Object.assign(settings,next);}, onChange(){return ()=>{};},',
 ' storyChat:()=>[{is_user:false,mes:"2026-11-10 13:13"}], userName:()=>"用户",',
 ' weatherAssetBase:location.origin+"/assets/weather/",',
-' weather:{report:()=>window.fixtureWeather,refresh:async()=>({ok:true}),editLocation:async()=>({ok:true})},',
+' weather:{report:()=>window.fixtureWeather,open:()=>{},refresh:async()=>({ok:true}),editLocation:async()=>({ok:true})},',
 ' phone:{subscribe:()=>()=>{},markCallsRead:()=>{},markMessagesRead:()=>{}},',
 ' diagnostics:{add(error){console.error(error);},text:()=>"",persistent:()=>true},',
 ' connectionName:()=>"离线天气视觉验收"',
@@ -81,6 +81,7 @@ try {
     await phone.waitFor({state:'visible',timeout:12000});
     await page.locator('.pp-app[data-app="weather"]').click();
     await page.waitForFunction(() => { const toast=document.querySelector('#personal-pocket-phone-root')?.shadowRoot?.querySelector('.pp-toast'); return !toast || toast.hidden; });
+    assert.equal(await page.locator('.pp-toast').isVisible(),false,'no unrelated API toast overlays the weather screen');
     const heroImage = page.locator('.pp-weather-window img');
     await heroImage.waitFor({state:'visible'});
     await page.waitForFunction(() => {
@@ -171,6 +172,7 @@ try {
         'the daily rain illustration remains during a brief cloudy break');
     assert.equal(await page.locator('.pp-weather-desc').textContent(),'多云',
         'the current conditions label still describes the current hour');
+    assert.equal(await page.locator('.pp-toast').isVisible(),false,'no communication toast overlays the rainy-day scene');
     await page.waitForTimeout(300);
     await page.screenshot({path:resolve(output,'weather-window-rainy-day-cloud-break.png')});
 
@@ -185,6 +187,7 @@ try {
     await page.locator('.pp-app[data-app="weather"]').click();
     assert.equal(await page.locator('.pp-weather').getAttribute('data-wtheme'),'night');
     assert.equal(await page.locator('.pp-weather-window').getAttribute('data-weather-window'),'good-night');
+    assert.equal(await page.locator('.pp-toast').isVisible(),false,'no unrelated toast overlays the night scene');
     await page.waitForTimeout(300);
     assert.equal(await phone.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(253, 244, 235)','night stays on the light cream page');
     await phone.screenshot({path:resolve(output,'weather-window-night.png')});
