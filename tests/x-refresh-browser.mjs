@@ -49,6 +49,8 @@ try{
  assert.equal(await homeButton.getAttribute('aria-label'),'刷新首页动态与粉丝');
  assert.equal(await p.locator('[data-x-action="refresh-square"],[data-x-action="refresh-trends"]').count(),0);
  await homeButton.tap();
+ await p.waitForTimeout(900);
+ console.log('X HOME DEBUG',JSON.stringify({calls:await p.evaluate(()=>window.calls),status:await p.locator('.pp-snap-status').allInnerTexts(),body:(await p.locator('.pp-x-body').innerText()).slice(0,1200),errors}));
  await p.getByText('A campus concert.（校园音乐会。）',{exact:true}).waitFor();
  assert.equal(await p.locator('[data-x-post]').count(),11);
  assert.equal(await p.evaluate(()=>window.calls),3,'home refresh does not call square or trends');
