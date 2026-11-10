@@ -44,13 +44,11 @@ try{
  await p.locator('[data-x-form="post"] button').tap();
  await p.getByText('My public project',{exact:true}).waitFor();
  const postId=await p.locator('[data-x-post]').first().getAttribute('data-x-post');
- await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'Alex',handle:'alex',text:'A campus concert.（校园音乐会。）'},...Array.from({length:9},(_,i)=>({name:'Local '+i,handle:'local_'+i,text:'Local public update '+i,has_account:true,authorKind:'npc',npcEvidence:'Local '+i+' is a band member.'}))]};},postId);
+ await p.evaluate(id=>{window.publicData={id};window.result={posts:[{name:'Alex',handle:'alex',has_account:true,authorKind:'npc',text:'A campus concert.（校园音乐会。）'},...Array.from({length:9},(_,i)=>({name:'Local '+i,handle:'local_'+i,text:'Local public update '+i,has_account:true,authorKind:'npc',npcEvidence:'Local '+i+' is a band member.'}))]};},postId);
  const homeButton=p.locator('[data-x-action="refresh"]');
  assert.equal(await homeButton.getAttribute('aria-label'),'刷新首页动态与粉丝');
  assert.equal(await p.locator('[data-x-action="refresh-square"],[data-x-action="refresh-trends"]').count(),0);
  await homeButton.tap();
- await p.waitForTimeout(900);
- console.log('X HOME DEBUG',JSON.stringify({calls:await p.evaluate(()=>window.calls),status:await p.locator('.pp-snap-status').allInnerTexts(),body:(await p.locator('.pp-x-body').innerText()).slice(0,1200),errors}));
  await p.getByText('A campus concert.（校园音乐会。）',{exact:true}).waitFor();
  assert.equal(await p.locator('[data-x-post]').count(),11);
  assert.equal(await p.evaluate(()=>window.calls),3,'home refresh does not call square or trends');
