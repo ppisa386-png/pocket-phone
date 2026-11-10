@@ -28,7 +28,7 @@ const fixtureHTML = [
 ' storyChat:()=>[{is_user:false,mes:"2026-11-10 13:13"}], userName:()=>"用户",',
 ' weatherAssetBase:location.origin+"/assets/weather/",',
 ' weather:{report:()=>window.fixtureWeather,refresh:async()=>({ok:true}),editLocation:async()=>({ok:true})},',
-' phone:{markCallsRead:()=>{},markMessagesRead:()=>{}},',
+' phone:{subscribe:()=>()=>{},markCallsRead:()=>{},markMessagesRead:()=>{}},',
 ' diagnostics:{add(error){console.error(error);},text:()=>"",persistent:()=>true},',
 ' connectionName:()=>"离线天气视觉验收"',
 '};',
