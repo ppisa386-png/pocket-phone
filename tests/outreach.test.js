@@ -196,7 +196,7 @@ test('recovering an earlier split quote leaves legacy exact-match IDs intact; in
 
 // X-activity re-outreach: the program verifies facts only (an unanswered
 // NPC message on SMS/WhatsApp/WeChat followed by user's public original post
-// or repost from the non-anonymous account); romance stays a narrative
+// from the non-anonymous account); NPC reposts do not enter the narrative
 // judgment and the trigger widens only low and medium frequencies.
 import {xTriggerCandidates} from '../src/outreach.js';
 import {dateDay} from '../src/story-clock.js';
@@ -232,21 +232,17 @@ test('low and medium frequencies list an unanswered SMS thread after a non-anony
     assert.match(buildStoryPhonePrompt(build(),context,settings,four),/不设冷却/);
 });
 
-test('reposts after unanswered WhatsApp/WeChat messages qualify without any X account or follow; candidates stay pure facts',()=>{
+test('NPC reposts never become X narrative triggers for WhatsApp or WeChat',()=>{
     for(const app of ['whatsapp','wechat']){
         const state=xState();
         state.x.n1={...npcPost('n1',DAY1),reposted:true,repostedAt:4000,repostedDay:DAY2};
         state[app].acc1=chatAccount();
         state[app].w1=appMessage('w1','assistant',1000,stamp('2026-11-01'));
         const candidates=xTriggerCandidates(state,'Sam Lee');
-        assert.equal(candidates.length,1);
-        assert.equal(candidates[0].channel,app);
-        assert.equal(candidates[0].name,'乙');
-        assert.deepEqual(Object.keys(candidates[0]),['channel','name','unanswered','posts']);
-        assert.equal(candidates[0].posts[0].kind,'转发');
+        assert.deepEqual(candidates,[],'another author\'s repost is not a user-authored post');
         const prompt=buildStoryPhonePrompt(state,context,normalizeSettings({proactiveFrequency:'medium'}),four);
-        assert.match(prompt,/特殊再次联系契机/);
-        assert.match(prompt,new RegExp('"channel":"'+app+'"'));
+        assert.doesNotMatch(prompt,/特殊再次联系契机/);
+        assert.doesNotMatch(prompt,/乙的帖子n1/);
     }
 });
 
