@@ -189,7 +189,7 @@ test('X private messages save and display their story-local send and receive tim
  }finally{f.close();}
 });
 
-test('X private messages show pending and failure as text without retry buttons',async()=>{
+test('X private messages show pending without retry and failed messages with retry',async()=>{
  const f=setup();
  try{
   const id=await account(f,'open');
@@ -206,9 +206,10 @@ test('X private messages show pending and failure as text without retry buttons'
    const article=html.split('data-x-id="status-'+status+'"')[1]?.split('</article>')[0];
    assert.ok(article,status+' bubble exists');
    assert.ok(article.includes(label),status+' status text is visible');
-   assert.ok(!article.includes('<button'),status+' does not render a retry control');
+   if(status==='pending')assert.ok(!article.includes('<button'),status+' does not render a retry control');
+   else assert.match(article,/重试回复/,'failed bubble retries the existing message');
   }
-  assert.ok(!html.includes('>重试</button>'));
+  assert.match(html,/data-x-action="retry"/);
   assert.match(html,/消息请求已发送/);
   assert.match(html,/查看回应/);
   assert.match(html,/已发送/);
