@@ -3,10 +3,23 @@ import assert from 'node:assert/strict';
 import {appendChange,replayJournal,reconcileJournal} from '../src/journal.js';
 import {storyAnnotations,buildStoryPhonePrompt} from '../src/story-phone.js';
 import {normalizeSettings} from '../src/config.js';
-import {businessPrompt,importBusiness,dmDealTask,dealDecision,initialHighRiskForRoll} from '../src/x-business.js';
+import {businessPrompt,importBusiness,dmDealTask,dealDecision,initialHighRiskForRoll,parseBusinessReplyDeadline,isLateBusinessReply,businessLateReplyOutcome} from '../src/x-business.js';
 
 const settings=normalizeSettings({proactiveEnabled:false}),off={...settings,apps:{...settings.apps,x:false}};
 const offer={kind:'offer',brand:'Green Tea',project:'Spring tasting',terms:'一条体验推文，200元',text:'您好，想邀请您体验春茶并发一条推文，报酬200元。'};
+test('business reply deadlines require a valid exact scene date and time and use a precise 50% cutoff',()=>{
+    assert.equal(parseBusinessReplyDeadline('2026-02-30 18:00'),null);
+    assert.equal(parseBusinessReplyDeadline('2026-02-28 24:00'),null);
+    assert.equal(parseBusinessReplyDeadline('2026-02-28 18:00'),'2026-02-28 18:00');
+    const deadline='2026-02-28 18:00';
+    assert.equal(isLateBusinessReply(deadline,{date:'2026-02-28',time:'18:00'}),false);
+    assert.equal(isLateBusinessReply(deadline,{date:'2026-02-28',time:'18:01'}),true);
+    assert.equal(isLateBusinessReply(deadline,{date:'2026-03-01',time:''}),true);
+    assert.equal(isLateBusinessReply(deadline,{date:'2026-02-28',time:''}),false);
+    assert.equal(businessLateReplyOutcome(deadline,{date:'2026-02-28',time:'18:01'},32767),'declined');
+    assert.equal(businessLateReplyOutcome(deadline,{date:'2026-02-28',time:'18:01'},32768),'open');
+    assert.equal(businessLateReplyOutcome(deadline,{date:'2026-02-28',time:'18:00'},0),null);
+});
 const plan='plan:'+JSON.stringify(['green tea','spring tasting']);
 const floor=(...rows)=>({mes:'品牌和我完成了这次沟通。'+rows.map(r=>'<!--durian-business:'+JSON.stringify({...r,evidence:'完成了这次沟通'})+'-->').join('')});
 function sim(followers=1000){
@@ -16,21 +29,30 @@ function sim(followers=1000){
     return {chat,rev,get journal(){return journal},set journal(v){journal=v},state:()=>replayJournal(journal),
         push(msg=floor(),cfg=settings){chat.push(msg);rev.push('r'+chat.length);journal=importBusiness(journal,rev,chat,cfg,storyAnnotations).journal;},
         wait(n,cfg=settings){for(let i=0;i<n;i++)this.push(floor(),cfg);},
-        invite(){this.wait(14);this.push(floor(offer,offer));},
+        invite(row=offer){this.wait(14);this.push(floor(row,row));},
         prompt(){return businessPrompt(this.state(),settings,chat,'真人名');}};
 }
 test('eligibility, fifteen effective floors, privacy, public post limit and quote inputs',()=>{
     const low=sim(999);low.invite();assert.equal(low.state().business[plan],undefined);
-    const s=sim();s.push({is_user:true,mes:'hi'});s.push({mes:'<!--retry-->'});s.wait(13);s.push(floor(offer));
+    const s=sim();s.chat[0]={mes:'2026-01-01 09:00'};s.push({is_user:true,mes:'hi'});s.push({mes:'<!--retry-->'});s.wait(13);s.push(floor(offer));
     assert.equal(s.state().business[plan],undefined);
     const state=s.state();for(let i=0;i<25;i++)state.x['p'+i]={type:'post',author:'user',text:'post_'+i+'_',metrics:{likes:i}};
     const prompt=buildStoryPhonePrompt(state,{name1:'真人名'},settings,s.chat);
     assert.match(prompt,/X专项商业邀约/);assert.match(prompt,/post_5_/);assert.doesNotMatch(prompt,/post_4_/);
-    assert.match(prompt,/影响力提高/);s.push(floor(offer,offer));
+    assert.match(prompt,/影响力提高/);assert.match(prompt,/replyBy/);assert.match(prompt,/2026-01-01 09:00/);s.push(floor(offer,offer));
     const p=s.state().business[plan],a=s.state().x[p.accountId];assert.equal(a.inboundRequest,'pending');assert.equal(a.identityKnown,false);
     assert.equal(p.status,'invited');assert.deepEqual(s.state().assets,{});
     assert.equal(Object.values(s.state().x).filter(v=>v.type==='message').length,1);
     assert.doesNotMatch(s.prompt(),/靠谱|tracking|隐藏商业风险/);
+});
+test('commercial invitation stores its explicit reply deadline on both the plan and received message',()=>{
+    const s=sim();s.chat[0]={mes:'2026-01-01 09:00'};
+    s.invite({...offer,replyBy:'2026-01-02 18:00'});
+    const state=s.state(),p=state.business[plan],message=Object.values(state.x).find(row=>row.type==='message');
+    assert.equal(p.replyBy,'2026-01-02 18:00');
+    assert.equal(message.replyBy,'2026-01-02 18:00');
+    assert.deepEqual(message.storyTime,{date:'2026-01-01',time:'09:00',precision:'scene'});
+    assert.match(dmDealTask(state,p.accountId),/2026-01-02 18:00/);
 });
 test('fixed draw survives reload, deleted invitation and reimport; same brand distinct project',()=>{
     const s=sim();s.invite();const mark=s.journal.businessDraws[plan],roll=s.journal.businessRolls[plan];

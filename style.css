@@ -832,6 +832,10 @@ h2, p { margin: 0; }
 .pp-x .pp-snap-message.is-user{background:#1d9bf0;color:#fff;border-radius:20px 20px 4px 20px;margin-left:auto;margin-right:0}
 .pp-x .pp-snap-message.is-user small{color:#fff}
 .pp-x .pp-snap-message .pp-snap-copy{margin:3px 0;line-height:1.55;font-size:14px}
+.pp-x .pp-x-message-time{display:block;margin-top:5px;text-align:right;color:#536471;font-size:10px;line-height:1.35;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pp-x .pp-snap-message.is-user .pp-x-message-time{color:rgba(255,255,255,.82)}
+.pp-x .pp-x-message-deadline{display:block;margin-top:6px;color:#7a6847;font-size:10px;line-height:1.4}
+.pp-x .pp-x-message-time.pp-x-inbox-time{margin-top:4px;text-align:left}
 .pp-x [data-x-form="message"]{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--pp-line);border-bottom:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;padding:10px 0}
 .pp-x [data-x-form="message"] .pp-field>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .pp-x [data-x-form="message"] textarea{height:42px;min-height:42px;line-height:21px;padding:10px 12px}

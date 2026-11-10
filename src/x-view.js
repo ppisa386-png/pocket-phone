@@ -73,15 +73,27 @@ export function createXPanel({adapter,getView,redraw,notice}) {
                 '<div class="pp-snap-actions">'+(topic.injected?'<span class="pp-x-trend-on">已注入</span>':'')+topic.sourcePostIds.filter(id=>state.x[id]?.type==='post'&&state.x[id].author==='user').map((id,n)=>button('comments','查看你的推文'+(topic.sourcePostIds.length>1?' '+(n+1):''),id)).join('')+'</div></article>').join(''):
                 empty(edition?'当前暂无趋势话题':'刷新后查看当前话题趋势'))+'</section>';
     }
+    function messageTimestamp(m,extraClass=''){
+        const date=/^\d{4}-\d{2}-\d{2}$/.test(m.storyTime?.date||'')?m.storyTime.date:'';
+        const time=/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(m.storyTime?.time||'')?m.storyTime.time:'';
+        const value=date&&time?date+' '+time:date||time||'时间未记录';
+        const datetime=date&&time?' datetime="'+date+'T'+time+'"':'';
+        const role=m.role==='user'?'发送时间':'收信时间';
+        return '<time class="pp-x-message-time'+(extraClass?' '+extraClass:'')+'" title="'+role+'"'+datetime+'>'+xEscape(value)+'</time>';
+    }
+    function messageDeadline(m){
+        const match=String(m.replyBy||'').match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})$/);
+        return match?'<small class="pp-x-message-deadline">回复截止：'+xEscape(match[1]+' '+match[2])+'</small>':'';
+    }
     function inbox(state) {
         const accounts=xItems(state,'account').filter(a=>xItems(state,'message').some(m=>m.accountId===a.id));
         const mentions=xItems(state,'post').filter(p=>p.outreachMention&&!state.x[p.author]?.blocked);
         const notices=mentions.map(p=>button('comments','公开提及 · '+(state.x[p.author]?.name||'用户'),p.id)).join('');
-        return notices+accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&last.kind&&last.kind!=='text'?'[请求中的媒体已隐藏]':last.text)+'</p>'+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
+        return notices+accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id).sort((x,y)=>x.createdAt-y.createdAt);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&last.kind&&last.kind!=='text'?'[请求中的媒体已隐藏]':last.text)+'</p>'+messageDeadline(last)+messageTimestamp(last,'pp-x-inbox-time')+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
     }
     function threadHTML(state,a) {
         const messages=xItems(state,'message').filter(m=>m.accountId===a.id).sort((a,b)=>a.createdAt-b.createdAt);
-        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'" data-press="x-message" data-x-id="'+xEscape(m.id)+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text)+'</p>'+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):m.status==='pending'?'<small>等待回复…</small>':m.status==='failed'?'<small>回复失败</small>':m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
+        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'" data-press="x-message" data-x-id="'+xEscape(m.id)+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text)+'</p>'+messageDeadline(m)+messageTimestamp(m)+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):m.status==='pending'?'<small>等待回复…</small>':m.status==='failed'?'<small>回复失败</small>':m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
             (a.blocked?empty('已拉黑'):a.inboundRequest==='pending'?button('accept-request','接受私信',a.id)+button('inbox','暂不处理')+button('decline-request','拒绝请求',a.id)+button('block','拉黑',a.id):a.inboundRequest==='declined'?empty('已拒绝'):a.dmPolicy==='closed'?empty('此账号暂不接收私信'):form('message',field('message','消息','',true),'发送'));
     }
     function html() {

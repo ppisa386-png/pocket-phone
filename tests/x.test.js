@@ -169,6 +169,26 @@ test('X opens locally; account search deduplicates and never imports phone or Sn
 });
 
 
+test('X private messages save and display their story-local send and receive times',async()=>{
+ const f=setup();try{
+  f.context.chat.push({mes:'2026-11-10 09:30'});
+  const id=await account(f,'open');
+  f.reply({status:'reply',text:'收到。'});ok(await f.x.send(id,'你好'));
+  const messages=xItems(f.state(),'message').filter(m=>m.accountId===id).sort((a,b)=>a.createdAt-b.createdAt);
+  assert.equal(messages.length,2);
+  assert.deepEqual(messages[0].storyTime,{date:'2026-11-10',time:'09:30',precision:'scene'});
+  assert.deepEqual(messages[1].storyTime,{date:'2026-11-10',time:'09:30',precision:'scene'});
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>f.state(),redraw(){},notice(){}});
+  await panel.action('tab','messages');
+  assert.match(panel.html(),/pp-x-inbox-time/);
+  await panel.action('thread',id);
+  const html=panel.html();
+  assert.match(html,/pp-x-message-time/);
+  assert.equal((html.match(/2026-11-10 09:30/g)||[]).length,2);
+ }finally{f.close();}
+});
+
 test('X private messages show pending and failure as text without retry buttons',async()=>{
  const f=setup();
  try{
@@ -192,6 +212,36 @@ test('X private messages show pending and failure as text without retry buttons'
   assert.match(html,/消息请求已发送/);
   assert.match(html,/查看回应/);
   assert.match(html,/已发送/);
+ }finally{f.close();}
+});
+
+test('late replies to X commercial invitations store one 50% decision and apply a polite refusal when selected',async()=>{
+ const f=setup();try{
+  const id=await account(f,'open'),planId='plan:late-reply';
+  const accountRecord=f.state().x[id];
+  await f.memory.commit(await f.memory.begin(),[
+   {collection:'x',key:id,value:{...accountRecord,dmAccepted:true,inboundRequest:'accepted'}},
+   {collection:'business',key:planId,value:{id:planId,brand:'茶商',project:'春茶合作',terms:'一条品鉴推文',accountId:id,status:'invited',investigated:false,replyBy:'2026-11-10 18:00'}}
+  ]);
+  f.context.chat.push({mes:'2026-11-10 18:01'});
+  const before=f.count();
+  f.reply({status:'reply',text:'我愿意合作。'});
+  ok(await f.x.send(id,'我愿意合作。'));
+  const plan=f.state().business[planId],userMessage=xItems(f.state(),'message').find(m=>m.role==='user'&&m.text==='我愿意合作。');
+  assert.ok(['declined','open'].includes(plan.lateReplyDecision));
+  assert.ok(userMessage);
+  const reply=f.state().x['reply:'+userMessage.id];assert.ok(reply);
+  if(plan.lateReplyDecision==='declined'){
+   assert.equal(plan.status,'declined');
+   assert.match(reply.text,/回复期限|档期/);
+   assert.equal(f.count(),before,'a deterministic refusal does not make a model request');
+  }else{
+   assert.equal(plan.status,'invited');
+   assert.equal(f.count(),before+1,'the open half follows the normal DM reply path');
+  }
+  const decision=plan.lateReplyDecision;
+  f.reply({status:'reply',text:'继续沟通。'});ok(await f.x.send(id,'再确认一下。'));
+  assert.equal(f.state().business[planId].lateReplyDecision,decision,'later messages do not reroll the same invitation');
  }finally{f.close();}
 });
 

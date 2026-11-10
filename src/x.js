@@ -3,9 +3,9 @@ import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2';
 import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
 import {readXMemory} from './external-memory.js?v=1.2';
-import {dmDealTask,dealDecision} from './x-business.js?v=1.2.4';
+import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.35';
 import {JOURNAL_KEY} from './journal.js?v=1.2';
-import {readStoryClock} from './story-clock.js?v=1.2';
+import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT } from './x-comments.js?v=1.2';
@@ -231,11 +231,21 @@ export function createX({memory,phone,getContext,getSettings}) {
         return {account:a};
     }
     async function answer(state,a,m,current,request,commit) {
+        const businessPlan=Object.values(state.business||{}).find(p=>p?.accountId===a.id&&p.status==='invited'&&p.replyBy);
+        if(businessPlan?.lateReplyDecision==='declined'){
+            const context=getContext(),replyId='reply:'+m.id;
+            const refusal='抱歉，这次合作的回复期限已经过了，我们这边已安排其他合作档期，暂时无法继续推进。感谢理解。';
+            const changes=[xSet({...a,dmAccepted:true}),xSet({...m,status:'answered'}),
+                xSet({id:replyId,type:'message',accountId:a.id,role:'assistant',text:refusal,createdAt:Date.now(),read:false,storyTime:storyTime(context.chat)}),
+                ...dealDecision(businessPlan,'reject',state.business?.counter?.turn??0,readStoryClock(context.chat).day),
+                ...commReplyClassification('x',replyId,a.id,'B',state)];
+            await commit(changes);return;
+        }
         const result=await ask(state,a,request,current,'当前任务：X 私信。仅回应本会话最后一条 user 消息，不查看其他账号的私信。对方的私信设置：'+a.dmPolicy+'；会话此前已通过：'+!!a.dmAccepted+'；记录：'+JSON.stringify(xThread(state,a.id).slice(-40).map(({role,text})=>({role,text})))+
             '\n根据角色判断是否接受并回复。输出 {"status":"reply/no_reply/request","text":"回复内容；不回复时为空","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B"}。requests 且未通过时可返回 request（等待对方接受），reply 表示本次同意并回复，no_reply 表示保持沉默。'+dmDealTask(state,a.id),d=>{if(!['reply','no_reply','request'].includes(d.status)||d.status==='reply'&&!xText(d.text))throw Error('私信回复格式不正确。');return {status:d.status,text:xText(d.text),deal:d.deal,category:smsCategory(d.category)};},{memoryTopic:m.text});
         const changes=[xSet({...a,dmAccepted:a.dmAccepted||result.status==='reply'}),xSet({...m,status:result.status==='reply'?'answered':result.status})];
         if(result.status==='reply'){
-            changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false}));
+            changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false,storyTime:storyTime(getContext().chat)}));
             if(result.category)changes.push(...commReplyClassification('x','reply:'+m.id,a.id,result.category,state));
         }
         const deal=result.deal,p=state.business?.[deal?.id];
@@ -388,7 +398,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         });},
         follow(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);await commit([xSet({...known(state,a),following:value===true})]);});},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
-        reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true}))]);});},
+        reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:storyTime(getContext().chat)}))]);});},
         publish(value,imageDescription=''){return run(async(state,current,request,commit)=>{
             const media=xText(imageDescription,2000);
             const chat=getContext().chat,post=xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),
@@ -519,7 +529,15 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         });},
         send(id,value){return run(async(state,current,request,commit)=>{
             const a=known(state,xAccount(state,id));if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');
-            const m=xRecord('message',{accountId:id,role:'user',text:xRequired(value,'消息'),status:'pending',read:true});await commit([xSet(a),xSet(m)]);
+            const context=getContext(),sceneTime=storyTime(context.chat),exactTime=exactStoryTime(context.chat);
+            const m=xRecord('message',{accountId:id,role:'user',text:xRequired(value,'消息'),status:'pending',read:true,storyTime:sceneTime});
+            const changes=[xSet(a),xSet(m)];
+            const plan=Object.values(state.business||{}).find(p=>p?.accountId===id&&p.status==='invited'&&p.replyBy&&!p.lateReplyDecision);
+            if(plan&&isLateBusinessReply(plan.replyBy,exactTime)){
+                const outcome=businessLateReplyOutcome(plan.replyBy,exactTime,crypto.getRandomValues(new Uint16Array(1))[0]);
+                if(outcome)changes.push({collection:'business',key:plan.id,value:{...plan,lateReplyDecision:outcome,lateReplyAt:exactTime}});
+            }
+            await commit(changes);
             const fresh=await memory.read(),ticket=await memory.begin();
             try{await answer(fresh.state,a,m,current,request,async changes=>{if(!current())throw Error('聊天已变化。');await memory.commit(ticket,changes);});}
             catch(error){if(current())await memory.commit(ticket,[xSet({...m,status:'failed'})]);throw error;}
