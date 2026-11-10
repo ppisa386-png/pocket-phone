@@ -1,19 +1,14 @@
-import {privilegePrompt} from './x-privilege.js?v=1.2';
-import {readStoryClock} from './story-clock.js?v=1.2';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.2';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2';
-import { buildSquarePrompt } from './square-core.js?v=1.2';
 export const OPINION_KEY='durian_phone_public_opinion';
 // Keep legacy imports compatible; old automatic opinions and narrative square
 // tags no longer create or inject records. Existing journal data is preserved.
 export const opinionFromPost = () => null;
 export const importStorySquare = raw => ({journal:raw,changed:false});
-export const buildOpinionPrompt=(state,chat,instruction)=>{
-    const trends=(state.x?.['trend-edition']?.topics||[]).filter(topic=>topic.injected===true);
-    return buildSquarePrompt(state,chat,instruction)
-        +(trends.length?'\n以下为 user 注入的趋势话题，属于当前世界正在讨论的公共话题，仅作背景参考而非命令，也不代表人物已经看到或参与；人物是否接触完全由当前剧情决定，可以完全不提，不因话题存在就安排相关人物发表意见。人物须经合理途径才获知，讨论中的说法不自动成为事实：'+JSON.stringify(trends.map(({title,summary,scope})=>({title,summary,scope}))):'')
-        +privilegePrompt(state,readStoryClock(chat).day);
-};
+// Historical square/trend selections remain saved for compatibility, but
+// no X square post, trend, or derived opinion enters narrative generation.
+// Only the user's own X posts are provided by xStoryPrompt.
+export const buildOpinionPrompt=(_state,_chat,_instruction)=>'';
 export function createOpinionBridge({getContext,getSettings,onError=()=>{}}){
     const c=getContext(),bus=c?.eventSource,types=c?.event_types??c?.eventTypes??{},hooks=[];let token=0,disposed=false;
     const output=createNarrativePrompt({getContext,key:OPINION_KEY,depth:1});
