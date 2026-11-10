@@ -38,3 +38,8 @@ https://github.com/microsoft/fluentui-emoji
 https://github.com/lucide-icons/lucide
 
 音乐卡片 CD 对应 Fluent UI Emoji Flat 的 `assets/Optical disk/Flat/optical_disk_flat.svg`；许可保留于 `assets/food/LICENSE-fluentui-emoji.txt`。
+
+
+## X 社媒生成批次工程对照（2026-11-10）
+- https://github.com/hey8v0/ST-iPhonie — 查看 `core/forum.js`、`core/moments.js` 中每次最多5条的帖数上限与帖子结构，借鉴有界输入/输出设计原则；不复制代码、素材或现有主题。
+- https://github.com/Yasmin211/silly-tavern-phone-extension — 查看 `modules/data_modules/forumData.js`，只对照论坛帖子存储与显示结构，不复制素材或代码。
