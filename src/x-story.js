@@ -23,8 +23,8 @@ export function xPostTiming(post, now = null, meta = null) {
 }
 
 export function xStoryPrompt(state, now = null) {
-    const allPosts = Object.values(state.x || {}).filter(p => p.type === 'post');
-    const targets = [...new Map([...allPosts.slice(-20),...allPosts.filter(p=>p.author==='user').slice(-10)].map(p=>[p.id,p])).values()]
+    const allPosts = Object.values(state.x || {}).filter(p => p.type === 'post' && p.author === 'user');
+    const targets = allPosts.slice(-10)
         .map(p=>{
             const meta=commMetaOrInfer(state,'x',p.id,p);
             const timing=xPostTiming(p,now,meta);
@@ -51,7 +51,7 @@ export function xStoryPrompt(state, now = null) {
         '正文第一次明确展示或提及手机中已有、尚未在正文展示的 X 帖子时，末尾附 <!--durian-message-shown:{"platform":"x","id":"该帖准确的已有ID"}-->；已经展示过的不重复标记。' +
         '目录中 shown 为 true 的帖子仅保留定位与互动元数据，不再注入正文或配图，也不得再次作为新发布内容出现；没有 text 且未标记 shown 的旧帖仅作定位引用，不再同步其互动数。' +
         '根据原帖内容、作者、发布时间和本楼指代确认目标，postId 和 postText 必须对应同一帖，不能只凭作者选最新一条；指代有歧义就不记。数字不能来自预期、假设、草稿、他帖或旧数的回忆，不因同步数字编写可见评论或粉丝变化。' +
-        '回忆、转述旧帖、草稿、打算发布、转发他人帖子、私信均不记。没有发生就不输出，不为标记安排发帖或回复。已保存帖子（reply只用于user帖，metrics可用于user及NPC帖）：' +
+        '回忆、转述旧帖、草稿、打算发布、转发他人帖子、私信均不记。没有发生就不输出，不为标记安排发帖或回复。已保存的 user 本人帖子（不提供评论、NPC 帖子、广场、趋势及私信）：' +
         JSON.stringify(targets).replace(/\{\{/g,'\\u007b\\u007b') + '\n';
 }
 
