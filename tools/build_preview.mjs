@@ -57,6 +57,7 @@ const bundledStyles = [
     fs.readFileSync(path.join(root, 'style-wechat.css'), 'utf8'),
     fs.readFileSync(path.join(root, 'style-weather.css'), 'utf8'),
     weatherFonts,
+    fs.readFileSync(path.join(root, 'style-daily.css'), 'utf8'),
 ].join('\n').replace(/\r\n/g, '\n');
 let script = chunks.join('\n') + '\nconst PREVIEW_STYLES = ' + JSON.stringify(bundledStyles) + ';\n' + bootstrap;
 script = script.replaceAll('</script', '<\\/script');
