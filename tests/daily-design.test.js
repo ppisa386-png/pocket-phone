@@ -60,6 +60,6 @@ test('日报视觉样式独立加载并覆盖窄屏单栏',()=>{
     assert.match(css,/--pp-daily-red:#A33832/);
     assert.match(css,/@media\(max-width:340px\)/);
     assert.match(css,/grid-template-columns:minmax\(0,1fr\)/);
-    assert.match(index,/style-daily\.css\?v=1\.2\.42/);
+    assert.match(index,/style-daily\.css\?v=1\.2\.43/);
     assert.match(preview,/style-daily\.css/);
 });

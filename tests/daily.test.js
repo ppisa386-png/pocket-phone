@@ -17,7 +17,7 @@ const article=(headline='城市音乐节开幕',placement='lead')=>({headline,pl
 const complete = data => {
  const rows=data.articles||[],lead=rows[0];
  const fillers=lead?Array.from({length:Math.max(0,9-rows.length)},(_,i)=>({
-  ...article(lead.headline+' · 独立补充事件 '+(i+1)),subject:'world'
+  ...article(lead.headline+' · 独立补充事件 '+(i+1)),subject:'world',section:'生活旅游与消费'
  })):[]; 
  const articles=[...rows,...fillers].map((row,index)=>({...row,placement:index===0?'lead':index<=5?'feature':'brief'}));
  return {publication:'城中日报',...data,articles};
@@ -370,11 +370,12 @@ test('the fourteen columns normalize, count over a seven-edition ring and keep c
  const data=complete({location:'本地',articles:rows});
  const changes=dailyChanges(data,{prose:[{index:0,role:'assistant',text:'剧情。'}],day:dateDay('2008-10-14'),sourceIndex:0,existing:[],chat:[{mes:'2008-10-14'}]});
  const sections=changes.filter(c=>c.value?.type==='article').map(c=>c.value.section);
- assert.deepEqual(sections,['文化与娱乐','治安与司法','体育','文化与娱乐']);
+ assert.deepEqual(sections.slice(0,4),['文化与娱乐','治安与司法','体育','文化与娱乐']);
  assert.ok(sections.every(name=>DAILY_SECTIONS.includes(name)),'every article lands in one of the fourteen columns');
  assert.deepEqual(DAILY_SECTIONS.length,14);assert.equal(new Set(DAILY_SECTIONS).size,14);
  const state={daily:Object.fromEntries(changes.filter(c=>c.collection==='daily').map(c=>[c.key,c.value]))};
  assert.equal(dailySectionCounts(state)['文化与娱乐'],2);
+ assert.equal(dailySectionCounts(state)['生活旅游与消费'],5);
  assert.equal(dailySectionCounts(state)['治安与司法'],1);
  assert.equal(dailySectionCounts(state)['体育'],1);
  assert.equal(dailySectionCounts(state)['政治与公共事务'],0);
@@ -393,7 +394,7 @@ test('the rotation ring keeps the last seven editions and rolls back with its fl
   const log=f.state().daily.archiveSchema.sectionLog;
   assert.equal(log.length,7,'older editions roll out of the window');
   const counts=dailySectionCounts(f.state());
-  assert.equal(counts['治安与司法'],7);assert.equal(counts['体育'],7);assert.equal(counts['文化与娱乐'],14);
+  assert.equal(counts['治安与司法'],7);assert.equal(counts['体育'],7);assert.equal(counts['文化与娱乐'],0);assert.equal(counts['生活旅游与消费'],49);
   assert.equal(counts['政治与公共事务'],0);
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();
   const rolled=f.state().daily.archiveSchema.sectionLog;
@@ -413,7 +414,7 @@ test('the editorial prompt carries the historical-material contract, columns and
   assert.equal(payload.date,'2008-10-15');
   assert.deepEqual(payload.columns,DAILY_SECTIONS);
   assert.deepEqual(payload.history,{mode:'model-knowledge',external:null},'reserved seam for a future external history feed');
-  assert.equal(payload.recentSections['文化与娱乐'],4,'the window reflects the editions before this one');
+  assert.equal(payload.recentSections['文化与娱乐'],1,'the window reflects the editions before this one');
   assert.equal(payload.recentSections['治安与司法'],0);
   assert.equal(payload.recentSections['政治与公共事务'],0);
   assert.match(f.prompt(),/现实历史素材/);
@@ -496,7 +497,7 @@ test('2024 Los Angeles date and location select the real-history editorial branc
   assert.ok(prompt.includes(dailyHistoryRules('real')),'historical branch is in the actual quietPrompt');
   assert.match(prompt,/现实地点从模型已有的历史知识中回忆/);
   assert.match(prompt,/确定事件以后再分配唯一头条/);
-  assert.match(prompt,/不先按栏目寻找素材/);
+  assert.match(prompt,/不先按栏目凑新闻/);
   assert.equal(f.calls(),1,'no extra request added');
  }finally{f.close();}
 });
