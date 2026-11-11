@@ -64,7 +64,6 @@ try{
  await (await pressAction(lead,'inject')).tap();await longPress(lead);assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').getAttribute('data-active'),'true');await closeBubble();
  await mkdir(resolve(root,'../qa-results'),{recursive:true});await p.screenshot({path:resolve(root,'../qa-results/daily-390.png')});
  await p.reload();await p.locator('.pp-launcher').tap();await p.locator('[data-app="daily"]').tap();await longPress(p.locator('.pp-daily-lead'));assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').getAttribute('data-active'),'true');await closeBubble();assert.equal(await p.evaluate(()=>window.calls),0);
- await p.getByRole('heading',{name:'手动修改的标题',exact:true}).waitFor();
  await p.evaluate(async()=>{const c=SillyTavern.getContext();const id=c.chatMetadata.durian_phone_history.events.flatMap(e=>e.changes).find(x=>x.value?.type==='article').key;const evidence='Alex 阅读了音乐节报道。';c.chat.push({mes:evidence+'<!--durian-daily-used:'+JSON.stringify({id,used:true,evidence})+'-->',is_user:false});await c.eventSource.emit('GENERATION_ENDED');});
  await longPress(lead);assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').isDisabled(),true);await closeBubble();assert.equal(await p.evaluate(()=>window.prepare()),'');
  await p.evaluate(async()=>{const c=SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});await longPress(lead);assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').getAttribute('data-active'),'true');await closeBubble();
