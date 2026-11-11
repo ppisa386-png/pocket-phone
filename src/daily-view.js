@@ -67,7 +67,7 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
             (archived?'<div class="pp-daily-toolbar pp-daily-toolbar--archive"><button type="button" class="pp-daily-back-button" data-daily-action="archive-back">‹ 返回报纸夹</button><b class="pp-daily-expired">已过期 · 仅供回看</b></div>':
                 '<div class="pp-daily-toolbar"><button type="button" class="pp-daily-folder-button" data-daily-action="archive" aria-label="过往报纸夹" title="过往报纸夹"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h7l2 3h9v11H3zM3 6V4h7l2 2h8v3"/></svg><span>报纸档案</span></button><span class="pp-daily-toolbar-current">'+currentLabel+'</span><button type="button" class="pp-daily-refresh" data-daily-action="update"'+(busy?' disabled':'')+'>看看新闻 <span aria-hidden="true">›</span></button></div>')+
             '<p class="pp-daily-status" role="status">'+dailyEscape(working?'正在取阅…':status)+'</p>'+content+
-            '<div class="pp-daily-end"><span>'+dailyEscape(publication)+'</span><span> · </span><span>'+dailyEscape(location)+'</span></div></section>';
+            '<div class="pp-daily-end"><span>榴莲日报</span><span> · </span><span>'+dailyEscape(location)+'</span></div></section>';
     }
     const api={html,back,reset(){epoch++;working=false;status='';folder=false;archiveId=null;expanded.clear();},
         press(element){
