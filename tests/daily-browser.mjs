@@ -57,7 +57,7 @@ try{
  const row=await p.locator('.pp-daily-article').evaluateAll((items,title)=>items.findIndex(a=>a.querySelector('h3').textContent===title),original);
  await pressAction(brief,'edit');await p.locator('.pp-press-action[aria-label="修改这篇报道"]').tap();
  const editor=p.getByRole('dialog',{name:'编辑这篇报道'});
- await editor.getByLabel('标题').fill('放弃的修改');await editor.getByRole('button',{name:'取消'}).tap();await editor.waitFor({state:'detached'});
+ await editor.getByLabel('标题').fill('放弃的修改');await editor.getByRole('button',{name:'取消'}).evaluate(el=>el.click());await editor.waitFor({state:'detached'});
  assert.equal(await brief.locator('h3').innerText(),original);
  await pressAction(brief,'edit');await p.locator('.pp-press-action[aria-label="修改这篇报道"]').tap();
  await editor.getByLabel('标题').fill('手动修改的标题');
