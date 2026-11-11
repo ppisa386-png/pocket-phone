@@ -1,6 +1,6 @@
 import {paperDraft} from './daily-core.js?v=1.2';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
-import { createDailyPanel } from './daily-view.js?v=1.2.5';
+import { createDailyPanel } from './daily-view.js?v=1.2.42';
 import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.41';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';
@@ -16,7 +16,7 @@ import { snapUnread } from './snapchat.js?v=1.2';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.41';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.42';
 import { icon } from './icons.js?v=1.2';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.31';
 import { renderMessagesScreen } from './messages-view.js?v=1.2';

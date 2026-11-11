@@ -15,8 +15,8 @@ import { createChatApp } from './src/chat-apps.js?v=1.2.34';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.38';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.41';
-import { mountPhone } from './src/ui.js?v=1.2.41';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.42';
+import { mountPhone } from './src/ui.js?v=1.2.42';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.25';
 import { createPhoneService } from './src/phone.js?v=1.2.39';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.39';
@@ -62,22 +62,23 @@ async function start() {
         if (!context?.extensionSettings || typeof context.saveSettingsDebounced !== 'function') {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
-        const [response, enamelResponse, foodResponse, wechatResponse, weatherStyleResponse, weatherFontsResponse] = await Promise.all([
-            fetch(new URL('./style.css?v=1.2.41', import.meta.url), { cache: 'no-cache' }),
+        const [response, enamelResponse, foodResponse, wechatResponse, weatherStyleResponse, weatherFontsResponse, dailyStyleResponse] = await Promise.all([
+            fetch(new URL('./style.css?v=1.2.42', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-weather.css?v=1.2.41', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./assets/weather/fonts/weather-fonts.css', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-daily.css?v=1.2.42', import.meta.url), { cache: 'no-cache' }),
         ]);
         if (!response.ok || !enamelResponse.ok || !foodResponse.ok || !wechatResponse.ok ||
-            !weatherStyleResponse.ok || !weatherFontsResponse.ok)
+            !weatherStyleResponse.ok || !weatherFontsResponse.ok || !dailyStyleResponse.ok)
             throw new Error('无法读取榴莲手机样式或天气字体，请检查安装包是否完整。');
         const weatherFontBase = new URL('./assets/weather/fonts/', import.meta.url).href;
         const weatherFonts = (await weatherFontsResponse.text()).replaceAll('__WEATHER_FONT_BASE__/', weatherFontBase);
         const styles = await response.text() + '\n' + await enamelResponse.text() +
             '\n' + await foodResponse.text() + '\n' + await wechatResponse.text() +
-            '\n' + await weatherStyleResponse.text() + '\n' + weatherFonts;
+            '\n' + await weatherStyleResponse.text() + '\n' + weatherFonts + '\n' + await dailyStyleResponse.text();
         let hostModule=null;
         try { hostModule=await import(new URL('../../../../script.js',import.meta.url).href); }
         catch { /* Keep compatibility with hosts without public generation exports. */ }
