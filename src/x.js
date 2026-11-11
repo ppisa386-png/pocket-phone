@@ -13,7 +13,7 @@ import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
-import { parseModelObject } from './model-json.js?v=1.2';
+import { parseModelObject } from './model-json.js?v=1.2.47';
 import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.2';
 // Story-local X simulation. No real social-network API or account is used.
