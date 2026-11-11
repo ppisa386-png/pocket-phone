@@ -1,3 +1,7 @@
+## Web Design Engineer · 视觉设计工程流程参考
+https://github.com/ConardLi/garden-skills
+- 本轮阅读并采用 `skills/web-design-engineer/SKILL.md`、`references/redesign-protocol.md`、`references/design-calibration.md`、`references/failure-patterns.md` 与 `references/style-recipes/nyt-the-daily.md` 的保留式精修、版面层级、容器级响应和编辑设计方法；仅借鉴排版原则，不复制 NYT 品牌资产、代码或素材。
+
 # GitHub 参考项目来源
 
 ## 悬浮球动效设计规范（Emil Design Engineering）

@@ -30,7 +30,7 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     assert.match(index, /style-weather\.css\?v=1.2.41/);
     assert.match(index, /assets\/weather\/fonts\/weather-fonts\.css/);
     assert.match(ui, /weather-view\.js\?v=1.2.41/);
-    assert.match(config, /VERSION = '1.2.44'/);
+    assert.match(config, /VERSION = '1.2.45'/);
     assert.match(browser, /\[640,390,360,330,320,280\]/);
     assert.match(browser, /phone:\{subscribe:\(\)=>\(\)=>\{\},markCallsRead:\(\)=>\{\},markMessagesRead:\(\)=>\{\}\}/);
     assert.match(browser, /weather:\{report:\(\)=>window\.fixtureWeather,open:\(\)=>\{\},refresh:/);
@@ -49,8 +49,8 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     assert.ok(readdirSync(join(root, 'assets', 'weather', 'fonts')).includes('LICENSE-Manrope-OFL.txt'));
     assert.ok(readdirSync(join(root, 'assets', 'weather', 'fonts')).includes('LICENSE-Noto-Sans-SC-OFL.txt'));
     assert.doesNotMatch(base, /\.pp-weather(?:[\s.#:[,{>]|$)/, 'legacy weather CSS is removed from the shared sheet');
-    assert.match(read('manifest.json'), /1.2.44/);
-    assert.match(read('package.json'), /1.2.44/);
+    assert.match(read('manifest.json'), /1.2.45/);
+    assert.match(read('package.json'), /1.2.45/);
 });
 
 test('weather CSS uses a light fixed page and keeps layout classes scoped to the weather view', () => {

@@ -1,4 +1,4 @@
-import { dailyArticles, dailyExpiry, dailyStatus, dailyArchives } from './daily-core.js?v=1.2.43';
+import { dailyArticles, dailyExpiry, dailyStatus, dailyArchives } from './daily-core.js?v=1.2.45';
 import { dayDate } from './story-clock.js?v=1.2';
 const dailyEscape = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
@@ -31,14 +31,20 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
         const articles=archived?[...archived.articles]:dailyArticles(state),order=new Map((edition?.articleIds||[]).map((id,i)=>[id,i]));
         articles.sort((a,b)=>(order.get(a.id)??Infinity)-(order.get(b.id)??Infinity));
         const publication=edition?.publication||articles[0]?.outlet||'今日选编';
-        const date=!edition?'日期待明确':(edition.printDate||dayDate(edition.day)||'日期待明确').replaceAll('-',' / ');
+        const dateValue=edition?String(edition.printDate||dayDate(edition.day)||''):'';
+        const date=dateValue?dateValue.replaceAll('-',' / '):'日期待明确';
+        const parsedDate=/^\d{4}-\d{2}-\d{2}$/.test(dateValue)?new Date(dateValue+'T00:00:00Z'):null;
+        const validDate=parsedDate&&!Number.isNaN(parsedDate.getTime())&&parsedDate.toISOString().slice(0,10)===dateValue;
+        const weekday=validDate?'星期'+['日','一','二','三','四','五','六'][parsedDate.getUTCDay()]:'';
         const location=edition?.location||'地区待明确';
         const renderArticle=a=>{
             const placement=a.placement==='lead'?'lead':a.placement==='brief'?'brief':'feature';
             const isExpanded=expanded.has(a.id);
             const label=a.section||(placement==='lead'?'要闻':placement==='brief'?'简讯':'报道');
+            const outletName=String(a.outlet||'').trim();
+            const outletMarkup=outletName&&outletName!==String(publication||'').trim()?'<span class="pp-daily-outlet">'+dailyEscape(outletName)+'</span>':'';
             return '<article class="pp-daily-article pp-daily-'+placement+(isExpanded?' pp-daily-expanded':'')+'" data-daily-article="'+dailyEscape(a.id)+'" data-press="daily-article" data-daily-id="'+dailyEscape(a.id)+'">'+
-                '<div class="pp-daily-article-copy"><div class="pp-daily-byline"><span class="pp-daily-section-label">'+dailyEscape(label)+'</span><span class="pp-daily-outlet">'+dailyEscape(a.outlet||publication)+'</span></div>'+
+                '<div class="pp-daily-article-copy"><div class="pp-daily-byline"><span class="pp-daily-section-label">'+dailyEscape(label)+'</span>'+outletMarkup+'</div>'+
                 '<h3>'+dailyEscape(a.headline)+'</h3><p class="pp-daily-deck">'+dailyEscape(a.summary)+'</p>'+
                 (isExpanded?'<div class="pp-daily-body">'+dailyEscape(a.body)+'</div>':'')+'</div>'+
                 '<footer><button type="button" data-daily-action="read" data-daily-id="'+dailyEscape(a.id)+'" aria-expanded="'+isExpanded+'"><span>'+(isExpanded?'收起全文':'阅读全文')+'</span><span aria-hidden="true">'+(isExpanded?'⌃':'›')+'</span></button></footer></article>';
@@ -55,13 +61,13 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
             '</div>';
         const currentLabel=edition?(expiry==='expired'?'已过期':expiry==='unknown'?'日期未明确':'本日刊'):'尚未出刊';
         return '<section class="pp-daily"><header class="pp-daily-masthead">'+
-            '<div class="pp-daily-masthead-top"><span>榴莲日报<br>现代中文日报</span><span>关注世界<br>深度思考</span></div>'+
-            '<h2 data-press="daily-meta" data-daily-field="publication" title="长按修改报头">'+dailyEscape(publication)+'</h2>'+
-            '<div class="pp-daily-date-line"><span data-press="daily-meta" data-daily-field="date" title="长按修改刊登日期">'+dailyEscape(date)+'</span><span class="pp-daily-date-divider" aria-hidden="true">|</span><span data-press="daily-meta" data-daily-field="location" title="长按修改地区">'+dailyEscape(location)+'</span></div></header>'+
+            '<div class="pp-daily-masthead-top"><span class="pp-daily-publication-meta"><span>现代中文日报</span><strong class="pp-daily-publication-name" data-press="daily-meta" data-daily-field="publication" title="长按修改出版物">'+dailyEscape(publication)+'</strong></span><span>关注世界<br>深度思考</span></div>'+
+            '<h2>榴莲日报</h2>'+
+            '<div class="pp-daily-date-line"><span data-press="daily-meta" data-daily-field="date" title="长按修改刊登日期">'+dailyEscape(date)+'</span>'+(weekday?'<span class="pp-daily-weekday">'+weekday+'</span>':'')+'<span class="pp-daily-date-divider" aria-hidden="true">|</span><span data-press="daily-meta" data-daily-field="location" title="长按修改地区">'+dailyEscape(location)+'</span></div></header>'+
             (archived?'<div class="pp-daily-toolbar pp-daily-toolbar--archive"><button type="button" class="pp-daily-back-button" data-daily-action="archive-back">‹ 返回报纸夹</button><b class="pp-daily-expired">已过期 · 仅供回看</b></div>':
                 '<div class="pp-daily-toolbar"><button type="button" class="pp-daily-folder-button" data-daily-action="archive" aria-label="过往报纸夹" title="过往报纸夹"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h7l2 3h9v11H3zM3 6V4h7l2 2h8v3"/></svg><span>报纸档案</span></button><span class="pp-daily-toolbar-current">'+currentLabel+'</span><button type="button" class="pp-daily-refresh" data-daily-action="update"'+(busy?' disabled':'')+'>看看新闻 <span aria-hidden="true">›</span></button></div>')+
             '<p class="pp-daily-status" role="status">'+dailyEscape(working?'正在取阅…':status)+'</p>'+content+
-            '<div class="pp-daily-end"><span>'+dailyEscape(publication)+'</span><span> · </span><span>'+dailyEscape(location)+'</span></div></section>';
+            '<div class="pp-daily-end"><span>榴莲日报</span><span> · </span><span>'+dailyEscape(location)+'</span></div></section>';
     }
     const api={html,back,reset(){epoch++;working=false;status='';folder=false;archiveId=null;expanded.clear();},
         press(element){
@@ -80,7 +86,7 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
             if(!edition)return [];
             if(element.dataset.dailyField){
                 const field=element.dataset.dailyField;
-                const label={publication:'报头',date:'刊登日期',location:'地区'}[field]||'报纸信息';
+                const label={publication:'出版物',date:'刊登日期',location:'地区'}[field]||'报纸信息';
                 return [{icon:'edit',label:'修改'+label,disabled:busy,run:()=>editPart?.(edition.editionId,{kind:'meta',field})}];
             }
             const id=element.dataset.dailyId;

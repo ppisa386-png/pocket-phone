@@ -38,6 +38,23 @@ test('日报首页采用报头、日期线、头条、双栏报道和简讯版�
     assert.match(html,/data-daily-action="archive"/);
 });
 
+test('榴莲日报品牌报头固定，真实出版物可编辑且相同刊源不重复',()=>{
+    const lead=makeArticle('lead','lead','国际与外交');
+    const feature=makeArticle('feature','feature','经济与商业');
+    const state={daily:{edition:{editionId:'edition-1',day:null,printDate:'2026-11-11',
+        publication:'洛杉矶时报',location:'洛杉矶',articleIds:['lead','feature']},lead,feature}};
+    const html=panelFor(state).html();
+    assert.match(html,/<h2>榴莲日报<\/h2>/);
+    assert.match(html,/class="pp-daily-publication-name" data-press="daily-meta" data-daily-field="publication"/);
+    assert.match(html,/星期三/);
+    assert.equal((html.match(/class="pp-daily-outlet"/g)||[]).length,0);
+    assert.equal(panelFor(state).press({dataset:{press:'daily-meta',dailyField:'publication'}})[0].label,'修改出版物');
+    const invalidDate=panelFor({daily:{...state.daily,edition:{...state.daily.edition,printDate:'not-a-date'}}}).html();
+    assert.doesNotMatch(invalidDate,/class="pp-daily-weekday"/);
+    const alternate={...feature,outlet:'美联社'};
+    const mixed=panelFor({daily:{...state.daily,feature:alternate}}).html();
+    assert.match(mixed,/class="pp-daily-outlet">美联社<\/span>/);
+});
 test('日报历史档案仍只展示真实过期刊期，不生成虚构期号或版号',async()=>{
     const article=makeArticle('lead','lead','国际与外交');
     const state={daily:{edition:{editionId:'edition-1',day:dateDay('2026-11-11'),printDate:'2026-11-11',
@@ -56,15 +73,19 @@ test('日报排版按纸张容器宽度响应，窄屏单栏、宽屏平衡双�
     const css=readFileSync(new URL('../style-daily.css',import.meta.url),'utf8');
     const index=readFileSync(new URL('../index.js',import.meta.url),'utf8');
     const preview=readFileSync(new URL('../tools/build_preview.mjs',import.meta.url),'utf8');
+    const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
     assert.ok(css.includes('--pp-daily-paper:#F2F0E9'));
     assert.ok(css.includes('--pp-daily-red:#A33832'));
     assert.ok(css.includes('container-type:inline-size;container-name:daily-paper;'));
+    assert.ok(css.includes('font-size:clamp(28px,10cqw,42px)'));
+    assert.ok(css.includes('@container daily-paper (max-width:280px)'));
     assert.ok(css.includes('@container daily-paper (max-width:460px)'));
     assert.ok(css.includes('column-count:2;column-gap:18px;column-rule'));
     assert.ok(css.includes('break-inside:avoid'));
     assert.ok(css.includes('column-span:all'));
     assert.ok(css.includes('.pp-daily-brief-section{grid-template-columns:minmax(0,1fr)'));
     assert.ok(css.includes('.pp-daily-brief{display:block'));
-    assert.ok(index.includes('style-daily.css?v=1.2.44'));
+    assert.ok(index.includes('style-daily.css?v=1.2.45'));
     assert.match(preview,/style-daily\.css/);
+    assert.ok(ui.includes('daily-view.js?v=1.2.45'));
 });

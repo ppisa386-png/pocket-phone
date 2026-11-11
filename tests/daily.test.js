@@ -152,7 +152,7 @@ test('creative world news only needs a genuine context keyword, not a previously
   ok(await f.daily.toggle(first(f).id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/"fictionalWorldNews":true/);
   assert.match(f.prompt(),/不能凭空说 user/);assert.match(f.prompt(),/不是只能报道/);
   const panel=createDailyPanel({adapter:{storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
-  assert.match(panel.html(),/<h2[^>]*>Los Angeles Times<\/h2>/);assert.doesNotMatch(panel.html(),/<h2[^>]*>榴莲日报/);
+   assert.match(panel.html(),/<h2>榴莲日报<\/h2>/);assert.match(panel.html(),/class="pp-daily-publication-name"[^>]*>Los Angeles Times<\/strong>/);
  }finally{f.close();}
 });
 
@@ -174,10 +174,10 @@ test('new editions require exactly nine valid unique stories and a newspaper tit
  }finally{f.close();}
 });
 
-test('legacy editions remain readable, with their recorded outlet as the masthead',()=>{
+test('legacy editions remain readable, with their recorded outlet retained as publication metadata',()=>{
  const old={daily:{edition:{editionId:'old',day:dateDay('2003-07-24'),articleIds:['a']},a:{...article(),id:'a',type:'article',editionId:'old'}}};
  const panel=createDailyPanel({adapter:{storyChat:()=>[{mes:'2003-07-24'}]},getView:()=>old,redraw(){},notice(){}});
- assert.match(panel.html(),/<h2[^>]*>城中日报<\/h2>/);
+  assert.match(panel.html(),/<h2>榴莲日报<\/h2>/);assert.match(panel.html(),/class="pp-daily-publication-name"[^>]*>城中日报<\/strong>/);
  assert.match(panel.html(),/城市音乐节开幕/);assert.equal(dailyArticles(old).length,1);
 });
 
