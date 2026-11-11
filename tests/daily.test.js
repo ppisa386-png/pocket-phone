@@ -174,7 +174,7 @@ test('new editions require exactly nine valid unique stories and a newspaper tit
  }finally{f.close();}
 });
 
-test('legacy editions remain readable, with their recorded outlet as the masthead',()=>{
+test('legacy editions remain readable, with their recorded outlet retained as publication metadata',()=>{
  const old={daily:{edition:{editionId:'old',day:dateDay('2003-07-24'),articleIds:['a']},a:{...article(),id:'a',type:'article',editionId:'old'}}};
  const panel=createDailyPanel({adapter:{storyChat:()=>[{mes:'2003-07-24'}]},getView:()=>old,redraw(){},notice(){}});
  assert.match(panel.html(),/<h2[^>]*>城中日报<\/h2>/);
