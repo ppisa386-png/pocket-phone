@@ -19,6 +19,12 @@ import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
 export const xProfile = (state,name='user') => state.x?.profile || {id:'profile',type:'profile',alias:name,bio:''};
+// Public actions are first-class X facts, not private messages or instructions
+// addressed to one NPC. A deterministic key keeps only the latest unconsumed
+// state change of each kind for each public post or account.
+export const xPendingPublicActivities = state => xItems(state,'public-activity')
+    .filter(row => row.shown !== true)
+    .sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)||a.id.localeCompare(b.id));
 // The desktop X badge represents unread incoming DMs only. Public mentions and
 // comments remain in the X app but never raise its launcher badge.
 export const xUnread = state => xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length;
@@ -82,6 +88,30 @@ const X_SEARCH_OUTPUT = '本次任务是搜索/添加 X 角色账号，不续写
 
 export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
+    const socialEvent=(slot,target,action,fields={})=>({
+        id:'public-activity:'+slot+':'+target,
+        type:'public-activity',action,shown:false,createdAt:Date.now(),
+        storyTime:squareClock(getContext().chat||[]),...fields,
+    });
+    function publicActivityPrompt(state,rows) {
+        if(!rows.length)return '';
+        const events=rows.map(item=>{
+            const post=item.postId?state.x?.[item.postId]:null;
+            const author=post?.author==='user'?{name:profile(state).alias,handle:null}:state.x?.[item.accountId];
+            if(item.accountId!=='user'&&(!author||author.type!=='account'||author.blocked))return null;
+            return {action:item.action,
+                targetAccount:author?{name:author.name,handle:author.handle||null}:null,
+                ...(post?.type==='post'?{post:{id:post.id,text:xText(post.text,360),imageDescription:xText(post.imageDescription,160)}}:{}),
+                storyTime:item.storyTime||null};
+        }).filter(Boolean);
+        if(!events.length)return '';
+        return '\n本次首页刷新新增的一次性公开社交动态（只有本次可作为新鲜事件，已展示后不再注入）：'+
+            JSON.stringify({userAlias:profile(state).alias,events})+
+            '。这不是发送给某个NPC的私信，而是公开社交行为：人物或其他知情网友可能注意、回应、猜测、讨论、改变印象，也可能无人在意。' +
+            '根据人物性格、关注范围、社交关系、事件意义和公开可见程度自然决定反应；允许吃瓜但不强制吃瓜，不要求每个NPC回应或每条事件都被提及。' +
+            '匿名账号仅可按公开网名识别，除非已知身份，不得凭私人剧情认出真人。' +
+            '事件发生过不等于事件当前仍在发生；旧帖子和既有关注状态也不代表刚刚点赞、转发或关注，不可把历史动态反复当新闻。';
+    }
     const known=(state,a)=>({...a,identityKnown:a.identityKnown===true||profile(state).alias===getContext().name1});
     const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd});
     function publicConversation(state, maxComments=40, maxChars=24000) {
@@ -109,7 +139,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             '\n人物认知连续性：先结合有效正文、已提供的千千结记忆和本帖既有评论，逐人区分已经亲历/目击/被明确告知的事实、只见过的公开内容及尚未知情的事。已确认账号身份的熟人应延续自己已有认知，不因换到 X 就把见过的物品、已获知的关系或计划当成首次听说。可以对新变化作反应（例如订婚不等于已经结婚、计划出行不等于已经抵达），不重复首次惊讶或已经回答的问题。私下已知可以影响措辞或选择沉默，不等于把私密细节公开，也不等于其他网友知道。未知身份账号仍不得利用私下经历认人；无记录不能断言从未发生。'+
             '\n身份基线：'+(p.alias===getContext().name1?'user 当前使用已设置的真实姓名，按原有真名账号规则识别；是否熟悉以及知道哪些事仍须逐人有依据。':'user 使用网名；只有明确 identityKnown 的账号可关联真人，其他账号保持匿名边界。')+
             (a?'\n当前对方：'+JSON.stringify({name:a.name,handle:a.handle})+'。'+(a.identityKnown?'此前已确认 user 账号对应的真实身份，改网名不会遗忘。':'对方不知道此网名是谁。不能凭后台 user 对应关系、角色卡、人设、正文中的私人称呼或私下经历认出 user；只知道网名及本账号公开过或本私信提供的信息。'):'\n逐个人物区分知情范围，不把后台账号对应关系当作人物已知。')+
-            '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15).map(({id,text,imageDescription})=>({id,text,imageDescription})))+'\nuser 最近公开转发（不代表赞同）：'+JSON.stringify(xItems(state,'post').filter(p=>p.reposted&&p.author!=='user').slice(-10).map(p=>({author:state.x[p.author]?.name,text:p.text})))+'\n'+task;
+            '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15).map(({id,text,imageDescription})=>({id,text,imageDescription})))+'\n'+task;
     }
     const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task,options?.combined),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
         retries:0,parseResponse:text=>parseXObject(text,{arrayKey:options?.arrayKey}),formatRetryOnce:true,memoryQuery:{actors:a?[a]:[],names:a?[a.name,...(a.aliases||[])]:[],topic:options?.memoryTopic||''},finalOutputContract:X_JSON_OUTPUT,
@@ -303,6 +333,10 @@ export function createX({memory,phone,getContext,getSettings}) {
         const edition=square?{id:'square-edition',type:'edition',editionId:crypto.randomUUID(),clock:squareClock(chat),postIds:[]}:null;
         const accounts=xItems(state,'account').filter(a=>!a.blocked&&(!following||a.following));
         if(following&&!accounts.length)return {added:0};
+        // Only the HOME refresh path consumes this global public activity pulse.
+        // Square, trends, comments, DMs and standalone followed feeds do not.
+        const pendingActivity=combined&&!square&&!following?xPendingPublicActivities(state):[];
+        const activityPrompt=publicActivityPrompt(state,pendingActivity);
         // Give the model the identity roster the program can already verify,
         // so it does not have to guess which account IDs are eligible.
         const identityAid=!square?(()=>{
@@ -343,7 +377,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
 `+JSON.stringify({followers:xAudience(state)?.followers??null,posts:reachPosts}) : '';
         const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT(recommended,square)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须填写。':'');
         const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
-        const results=await ask(state,null,request,current,task+reachTask+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
+        const results=await ask(state,null,request,current,task+reachTask+activityPrompt+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
             '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10)),memoryChars:8000,maxTokens:8192,retryEmptyOnce:true,arrayKey:'posts'});
         if(square&&!combined&&results.posts.length<10)throw Error('本批广场帖子只有 '+results.posts.length+' 条，广场刷新需要 10～15 条，本次未保存。');
         state=structuredClone(state);const changes=[],authors=new Set();let added=0,repeatedSquare=false;
@@ -398,6 +432,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         }
         if(!combined)changes.push(...audienceChanges(state,results.audience));
         if(square){if(results.posts.length&&!added&&!repeatedSquare)throw Error('本批没有同时符合广场作者与公开依据要求的新帖'+(breaks?'（'+breaks+'）':'')+'，原广场已保留。');if(added||!repeatedSquare)changes.push(xSet(edition));}
+        // Consume in the same atomic home-refresh commit as the generated feed:
+        // a later failed follower/reach stage must leave every pulse pending.
+        if(pendingActivity.length)changes.push(...pendingActivity.map(row=>xSet({...row,shown:true})));
         await commit(changes);return {added};
         }
     return {
@@ -419,7 +456,12 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             for(const item of results){if(item?.has_account!==true)continue;const a=register(state,item,changes);if(a&&!ids.includes(a.id))ids.push(a.id);}
             await commit(changes);return {ids};
         });},
-        follow(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);await commit([xSet({...known(state,a),following:value===true})]);});},
+        follow(id,value){return run(async(state,_c,_r,commit)=>{
+            const a=xAccount(state,id),next=value===true;
+            if(!!a.following===next)return;
+            await commit([xSet({...known(state,a),following:next}),
+                xSet(socialEvent('follow',id,next?'follow':'unfollow',{accountId:id}))]);
+        });},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:storyTime(getContext().chat)}))]);});},
         publish(value,imageDescription=''){return run(async(state,current,request,commit)=>{
@@ -451,7 +493,8 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const baseRanges=needsCatchUp?[]:coveredFloors(oldLedger.ranges);
             const batch=pendingFloorBatch(chat,baseRanges,floor,48000,needsCatchUp);
             const newPosts=xItems(state,'post').some(p=>p.author==='user'&&!state.x['impact:post:'+p.id]);
-            if(floor<0||(!needsCatchUp&&state.x['public-refresh']?.floor===floor&&!batch.rows.length&&!newPosts))
+            const newPublicActivity=xPendingPublicActivities(state).length>0;
+            if(floor<0||(!needsCatchUp&&state.x['public-refresh']?.floor===floor&&!batch.rows.length&&!newPosts&&!newPublicActivity))
                 throw Error('当前楼层没有新的刷新机会。');
             // First use and older ledger migrations read visible prose only.
             // Do not query QQJ until this floor ledger is initialized.
@@ -529,7 +572,14 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             collect([xSet({id:'public-refresh',type:'refresh',floor})]);
             await commit(changes);return {added:home.added};
         });},
-        react(id,kind){return run(async(state,_c,_r,commit)=>{const p=state.x[id];if(p?.type!=='post'||!['liked','reposted'].includes(kind))throw Error('帖子不可用。');if(p.author!=='user')xAccount(state,p.author);await commit([xSet({...p,[kind]:!p[kind],[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})})]);});},
+        react(id,kind){return run(async(state,_c,_r,commit)=>{
+            const p=state.x[id];
+            if(p?.type!=='post'||!['liked','reposted'].includes(kind))throw Error('帖子不可用。');
+            if(p.author!=='user')xAccount(state,p.author);
+            const next=!p[kind],action=kind==='liked'?(next?'like':'unlike'):(next?'repost':'unrepost');
+            await commit([xSet({...p,[kind]:next,[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})}),
+                xSet(socialEvent(kind,id,action,{accountId:p.author,postId:id}))]);
+        });},
         comment(id,value,replyTo=null){return run(async(state,current,request,commit)=>{
             const p=state.x[id];if(p?.type!=='post')throw Error('帖子不存在。');
             if(p.author!=='user')xAccount(state,p.author);
