@@ -25,7 +25,7 @@ export function narratedXSentDms(message, state) {
         const send = /(?:点击(?:了)?|按下(?:了)?|点(?:下|了)?|按(?:了)?)\s*(?:[“「])?发送(?:键|按钮)?|发送成功|(?:私信.{0,12})?[“「]?已送达[”」]?/g.exec(tail);
         if (!send) continue;
         const before = tail.slice(Math.max(0, send.index - 16), send.index);
-        if (/(?:并未|还没|尚未|没有|未能|无法|没|未|不曾|准备|打算|计划|差点|想要).{0,10}$/.test(before)) continue;
+        if (/(?:并未|还没|尚未|没有|未能|无法|没|未|不曾|准备|打算|计划|差点|想要)\s*$/.test(before)) continue;
         const after = tail.slice(send.index + send[0].length, send.index + send[0].length + 35);
         if (/(?:发送失败|未送达|未发送|没发出去|发送不出去|撤回|取消发送)/.test(after)) continue;
         if (!result.some(row => row.accountId === matches[0].id && row.text === text))
