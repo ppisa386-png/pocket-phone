@@ -1,8 +1,8 @@
 ## v1.2.45 · 榴莲日报品牌报头与刊源层级精修（2026-11-11；基线 1eb25fd7f92cb8b8dfbb3051ea1d2002ff9a7c95）
 **Skill 2**：阅读 ConardLi/garden-skills 的完整 `web-design-engineer/SKILL.md`，并按任务读取 redesign-protocol、design-calibration、failure-patterns、critique-guide 与 `nyt-the-daily` 编辑风格配方。采用 Redesign · Preserve；五项校准为视觉变化 2、动效 1、信息密度 7、素材依赖 2、品牌保留 9。保留 Modern Broadsheet 的奶油新闻纸、墨黑宋体标题、朱红标识和既有版面，不做风格推翻。
 **实测审查**：调取并查看 v1.2.44 Chromium 390px／320px 真实截图。窄屏单栏和简讯宽度已修复；仍有报头层级偏差：主标题错误显示为动态 publication（如 Los Angeles Times），品牌「榴莲日报」只出现在小字；相同 publication 又在每篇报道重复，造成无效信息噪声。
-**实现**：主报头固定为「榴莲日报」；真实 publication 移到左上「现代中文日报」下方，继续支持长按编辑；仅当文章 outlet 与本期 publication 不同才显示单篇来源。有效 ISO 刊期日期推导星期，UTC 计算避免设备时区偏移；无效日期不显示星期。主报头及头条标题字号改用纸张容器宽度单位，补充 280px 纸张下日期、工具栏紧凑规则。九篇新闻、生成提示词、编辑/全文/注入/归档和其他 App 业务保持。
-**验证**：GitHub Actions「Daily newspaper layout QA」成功（run 42966255787）：完整项目回归 **747/747 通过**，`npm run build:preview` 成功；Chromium 验收通过：390px／320px 手机纸张单栏、520px 纸张双栏、今日简讯全宽、头条全文展开，无横向溢出或脚本错误。浏览器证据 artifact `daily-newspaper-browser-evidence`（390px、320px）；验收工作流：https://github.com/ppisa386-png/pocket-phone/actions/runs/42966255787。
+**实现**：主报头与页脚固定为「榴莲日报」；真实 publication 移到左上「现代中文日报」下方，继续支持长按编辑；仅当文章 outlet 与本期 publication 不同才显示单篇来源。有效 ISO 刊期日期推导星期，UTC 计算避免设备时区偏移；无效日期不显示星期。主报头及头条标题字号改用纸张容器宽度单位，补充 280px 纸张下日期、工具栏紧凑规则。九篇新闻、生成提示词、编辑/全文/注入/归档和其他 App 业务保持。
+**验证**：最终日报浏览器验收 run 42966421832 全部通过：`npm test` **747/747**、离线预览构建成功；Chromium 验证 390px／320px 手机纸张单栏、520px 纸张双栏、简讯全宽、头条全文展开、无横向溢出或脚本错误。实测截图 artifact `daily-newspaper-browser-evidence`（390px、320px，artifact 13831007704），已人工检查品牌报头、刊源层级、星期和窄屏排版。合并后 main 回归 run 42966658952 **747/747**；天气 QA 42966659039 与珐琅 QA 42966659082 均 success。PR #7 已 squash 合并至 main，提交 `d027c17e0145ca7433e8451ea6ad7c59c49faec0`。
 **资源**：本轮只借鉴 NYT 编辑层级原则，不引入 NYT 品牌资产、新闻图片或新字体文件；Skill 来源及采用范围已登记到 `RESOURCE_SOURCES.md`。
 
 ## v1.2.44 · 榴莲日报纸张容器自适应排版修正（2026-11-11；基线 a1dd1d3a3aa194280d9dbd700e03ae05abc08556）
