@@ -1,5 +1,5 @@
 import {paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources} from '../src/daily-core.js';
-import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from '../src/daily-prompts.js';
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -16,10 +16,11 @@ const article=(headline='城市音乐节开幕',placement='lead')=>({headline,pl
 
 const complete = data => {
  const rows=data.articles||[],lead=rows[0];
- const fillers=lead?Array.from({length:Math.max(0,4-rows.length)},(_,i)=>({
-  ...article(lead.headline+' · 其他栏目 '+i,'brief'),subject:lead.subject,publicBasis:lead.publicBasis,contextAnchor:lead.contextAnchor
- })):[];
- return {publication:'城中日报',...data,articles:[...rows,...fillers]};
+ const fillers=lead?Array.from({length:Math.max(0,9-rows.length)},(_,i)=>({
+  ...article(lead.headline+' · 独立补充事件 '+(i+1)),subject:'world'
+ })):[]; 
+ const articles=[...rows,...fillers].map((row,index)=>({...row,placement:index===0?'lead':index<=5?'feature':'brief'}));
+ return {publication:'城中日报',...data,articles};
 };
 function setup(){
  const bus=new EventEmitter();let response=complete({location:'本地',articles:[article()]}),calls=0,lastPrompt='';
@@ -59,9 +60,21 @@ test('private declarations and invalid summaries cannot be reported; all-invalid
   assert.equal(f.calls(),5);f.reply(()=>{throw Error('offline');});assert.equal((await f.daily.update()).ok,false);assert.equal(f.calls(),6);assert.deepEqual(f.state().daily.edition,before);
  }finally{f.close();}
 });
-test('headlines, feature and short mention preserve editorial hierarchy; private rows are filtered',async()=>{
- const f=setup();try{f.reply({articles:[article('小歌手的新单曲','brief'),article('地区活动','lead'),article('行业消息','feature'),article('城市简讯','brief'),{...article('私事'),publicBasis:{...background,access:'private'}}]});ok(await f.daily.update());assert.deepEqual(dailyArticles(f.state()).map(a=>a.placement),['lead','feature','brief','brief']);
-  const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});assert.match(panel.html(),/pp-daily-lead/);assert.match(panel.html(),/pp-daily-brief/);assert.doesNotMatch(panel.html(),/私事/);await panel.action('read',first(f).id);assert.match(panel.html(),/主办方公布/);assert.equal(f.calls(),1);
+test('each edition has six main stories and three briefs in the newspaper hierarchy',async()=>{
+ const f=setup();try{
+  f.reply({articles:[
+   article('地区活动'),article('行业消息'),article('城市交通更新'),
+   article('国际谈判进展'),article('体育赛事结果'),article('科研项目突破'),
+   article('小歌手的新单曲'),article('城市简讯'),article('社区活动预告')
+  ]});ok(await f.daily.update());
+  const rows=dailyArticles(f.state());
+  assert.equal(rows.length,9);
+  assert.deepEqual(rows.map(a=>a.placement),['lead','feature','feature','feature','feature','feature','brief','brief','brief']);
+  const panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
+  assert.match(panel.html(),/pp-daily-lead/);assert.match(panel.html(),/pp-daily-brief/);
+  assert.equal((panel.html().match(/class="pp-daily-article pp-daily-feature/g)||[]).length,5);
+  assert.equal((panel.html().match(/class="pp-daily-article pp-daily-brief/g)||[]).length,3);
+  await panel.action('read',first(f).id);assert.match(panel.html(),/主办方公布/);assert.equal(f.calls(),1);
  }finally{f.close();}
 });
 test('declared character news keep their source floor without attaching original prose',async()=>{
@@ -132,7 +145,7 @@ test('creative world news only needs a genuine context keyword, not a previously
     {...base,headline:'医疗人才培训项目启动',placement:'feature'},
     {...base,headline:'社区健康项目开放预约',placement:'brief'},
     {...base,headline:'公共医疗设施建设计划发布',placement:'brief'}]});
-  ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,4);
+  ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,9);
   assert.equal(f.state().daily.edition.publication,'Los Angeles Times');
   assert.equal(first(f).publicBasis.fictional,true);
   assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.deepEqual(f.state().assets,{});
@@ -143,7 +156,7 @@ test('creative world news only needs a genuine context keyword, not a previously
  }finally{f.close();}
 });
 
-test('new editions require four to six valid unique stories and a newspaper title, with no partial replacement',async()=>{
+test('new editions require exactly nine valid unique stories and a newspaper title, with no partial replacement',async()=>{
  const f=setup();try{
   ok(await f.daily.update());const before=f.state().daily.edition;
   const valid=complete({articles:[article('新的世界新闻')]});
@@ -168,14 +181,16 @@ test('legacy editions remain readable, with their recorded outlet as the masthea
  assert.match(panel.html(),/城市音乐节开幕/);assert.equal(dailyArticles(old).length,1);
 });
 
-test('world newspaper accepts four finished stories without technical selection metadata',async()=>{
+test('world newspaper accepts nine finished stories without technical selection metadata',async()=>{
  const f=setup();try{
-  const rows=Array.from({length:4},(_,i)=>({headline:'世界新闻 '+i,body:'根据城市与行业背景展开的新事件。'.repeat(25)}));
+  const rows=Array.from({length:9},(_,i)=>({headline:'世界新闻 '+i,body:'根据城市与行业背景展开的新事件。'.repeat(25)}));
   f.reply(()=>JSON.stringify({publication:'Los Angeles Times',articles:rows}));
-  ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,4);
+  ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,9);
   assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='lead').length,1);
+  assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='feature').length,5);
+  assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='brief').length,3);
   assert.equal(f.calls(),1);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
-  assert.match(f.prompt(),/至少4条/);
+  assert.match(f.prompt(),/恰好9条/);
  }finally{f.close();}
 });
 
@@ -183,7 +198,7 @@ test('world articles survive optional metadata mistakes and long text without si
  const f=setup();try{
   const data=complete({articles:[article('较长新闻')]});
   data.articles=data.articles.map(a=>({...a,topic:'地方资讯',newsValue:undefined,contextAnchor:{keyword:'并非逐字摘录'},summary:'介绍'.repeat(200),body:'报道'.repeat(1500),placement:'普通版面'}));
-  f.reply(data);ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,4);assert.equal(first(f).body.length,3000);assert.equal(f.calls(),1);
+  f.reply(data);ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,9);assert.equal(first(f).body.length,3000);assert.equal(f.calls(),1);
  }finally{f.close();}
 });
 
@@ -211,7 +226,7 @@ test('archive keeps three expired dates, same-day refresh replaces rather than a
    f.reply({articles:[article('第'+d+'日新闻')]});ok(await f.daily.update());
   }
   let old=dailyArchives(f.state(),f.c.chat);assert.deepEqual(old.map(e=>e.day),[27,26,25].map(d=>dateDay('2003-07-'+d)));
-  assert.equal(Object.values(f.state().daily).filter(a=>a.type==='article').length,4,'current state removes superseded article entries');
+  assert.equal(Object.values(f.state().daily).filter(a=>a.type==='article').length,9,'current state removes superseded article entries');
   assert.equal(Object.values(f.state().daily).filter(a=>a.type==='archive').length,3);
   const count=f.calls(),panel=createDailyPanel({adapter:{daily:f.daily,storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
   await panel.action('archive');assert.match(panel.html(),/过往报纸夹/);assert.equal((panel.html().match(/data-daily-action="archive-edition"/g)||[]).length,3);
@@ -292,7 +307,7 @@ test('editorial context labels adopted, selected pending and unselected; followu
   ok(await f.daily.update());const rows=dailyArticles(f.state());ok(await f.daily.toggle(rows[0].id));ok(await f.daily.toggle(rows[1].id));
   const evidence='Alex 读了报纸，对报道中的传闻保持怀疑。';f.c.chat.push({mes:evidence+'<!--durian-daily-used:'+JSON.stringify({id:rows[0].id,used:true,evidence})+'-->'});await f.memory.read();
   f.c.chat.push({mes:'2003-07-25'});await f.memory.read();
-  const history=dailyEditorialHistory(f.state(),f.c.chat);assert.deepEqual(history[0].articles.map(a=>a.adoption),['adopted','selected_pending','unselected','unselected']);
+  const history=dailyEditorialHistory(f.state(),f.c.chat);assert.deepEqual(history[0].articles.map(a=>a.adoption),['adopted','selected_pending',...Array(7).fill('unselected')]);
   f.reply({articles:[article('音乐节新进展')]});ok(await f.daily.update());
   const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split('\n')[0]);assert.equal(payload.previousEditions[0].articles[0].adoption,'adopted');assert.match(f.prompt(),/无新进展不换标题重报，也不编造调查结果或人物行动/);assert.match(f.prompt(),/新旧选题比例由新闻价值决定/);assert.match(f.prompt(),/报道语言遵循当前预设/);
   assert.equal(first(f).selected,false);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
@@ -489,6 +504,7 @@ test('2024 Los Angeles date and location select the real-history editorial branc
 test('event-first editorial rule follows saved custom preferences and older defaults migrate',async()=>{
  const migrated=normalizeSettings({prompts:{daily:PREVIOUS_DAILY_EDITORIAL_DEFAULT}});
  assert.equal(migrated.prompts.daily,DAILY_EDITORIAL_PROMPT);
+ const previousEditorial=normalizeSettings({prompts:{daily:PREVIOUS_DAILY_EDITORIAL_PROMPT}});assert.equal(previousEditorial.prompts.daily,DAILY_EDITORIAL_PROMPT);
  const custom='只按近期学校、机构和行业线索编写简报';
  const f=setup();try{
   f.settings.prompts.daily=custom;
@@ -497,7 +513,7 @@ test('event-first editorial rule follows saved custom preferences and older defa
   assert.ok(prompt.indexOf(custom)>=0 && prompt.indexOf(custom)<prompt.indexOf('当前任务：为榴莲日报 App'));
   assert.match(prompt,/最近7期统计只在选定事件后辅助版面多样性/);
   assert.match(prompt,/机构政策、学校管理、道路维修、企业流程及行业审核只在具有/);
-  assert.match(prompt,/选出4～6个最值得刊登的不同事件/);
+  assert.match(prompt,/随机抽取9个互不重复、最值得刊登的事件/);
   assert.equal(normalizeSettings({prompts:{daily:custom}}).prompts.daily,custom);
   assert.equal(f.calls(),1);
  }finally{f.close();}

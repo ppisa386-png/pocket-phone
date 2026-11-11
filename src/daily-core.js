@@ -123,8 +123,8 @@ export function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[
     const fail = (code, message, detail='') => { throw Object.assign(Error(message), {
         code, diagnostic:'任务：日报选编；错误代码：'+code+'；收到篇数：'+(Array.isArray(rows)?rows.length:'非数组')+(detail?'；'+detail:''),
     }); };
-    if (!Array.isArray(rows) || rows.length < 4 || rows.length > 6)
-        fail('DAILY_ARTICLE_COUNT','模型实际返回的新闻数量不是4～6条，本次未替换报纸。');
+    if (!Array.isArray(rows) || rows.length !== 9)
+        fail('DAILY_ARTICLE_COUNT','模型实际返回的新闻数量不是9条（6条主要新闻、3条今日简讯），本次未替换报纸。');
     const publication=dailyText(data.publication,100);
     if (!publication || /^(榴莲日报|durian\s*daily)$/i.test(publication)) fail('DAILY_PUBLICATION','缺少本期实际报刊名称，上一期已保留。');
     const editionId = crypto.randomUUID(), articles = [], seen = new Set(), rejected=[];
@@ -145,10 +145,9 @@ export function dailyChanges(data, {prose, day, sourceIndex, existing=[], chat=[
             publicBasis:basis, selected:!!prior&&(dailyUsed(prior,chat)||(prior.selected===true&&existing.some(e=>e.type==='edition'&&e.editionId===prior.editionId&&e.day===day))),
             ...(Number.isInteger(prior?.selectedIndex)?{selectedIndex:prior.selectedIndex}:{}),sourceIndex});
     }
-    if (articles.length < 4) fail('DAILY_ARTICLE_FIELDS','模型返回了'+rows.length+'条，其中'+rejected.length+'条有内容问题，本次未替换报纸。',rejected.join('；'));
-    // Placement is presentation, not a reason to discard news.
-    const lead = articles.find(a=>a.placement==='lead') || articles[0];
-    for(const a of articles) a.placement=a===lead?'lead':a.placement==='brief'?'brief':a.placement==='feature'?'feature':a.body.length<160?'brief':'feature';
+    if (articles.length !== 9) fail('DAILY_ARTICLE_FIELDS','模型应返回9条完整新闻，但其中'+rejected.length+'条内容无效，本次未替换报纸。',rejected.join('；'));
+    // Array order fixes the newspaper hierarchy: one lead, five features, three briefs.
+    for (const [index, article] of articles.entries()) article.placement = index === 0 ? 'lead' : index <= 5 ? 'feature' : 'brief';
     const rank = {lead:0, feature:1, brief:2}; articles.sort((a,b) => rank[a.placement] - rank[b.placement]);
     const schemaRecord = (existing, editionArticles) => {
         const previous = existing.find(e => e.type === 'archive_schema');

@@ -16,7 +16,9 @@ function panelFor(state,chat=[]){
 
 test('日报首页采用报头、日期线、头条、双栏报道和简讯版式，同时保留真实编辑字段',()=>{
     const articles=[makeArticle('lead','lead','国际与外交'),makeArticle('feature-a','feature','经济与商业'),
-        makeArticle('feature-b','feature','社会新闻'),makeArticle('brief-a','brief','体育'),makeArticle('brief-b','brief','科技与科学')];
+        makeArticle('feature-b','feature','社会新闻'),makeArticle('feature-c','feature','科技与科学'),
+        makeArticle('feature-d','feature','体育'),makeArticle('feature-e','feature','环境与自然'),
+        makeArticle('brief-a','brief','生活旅游与消费'),makeArticle('brief-b','brief','文化与娱乐'),makeArticle('brief-c','brief','城市建设与交通')];
     const state={daily:{edition:{editionId:'edition-1',day:null,printDate:'2026-11-11',
         publication:'洛杉矶时报',location:'洛杉矶',articleIds:articles.map(a=>a.id)},
         ...Object.fromEntries(articles.map(a=>[a.id,a]))}};
@@ -28,8 +30,8 @@ test('日报首页采用报头、日期线、头条、双栏报道和简讯版�
     assert.match(html,/2026 \/ 11 \/ 11/);
     assert.match(html,/洛杉矶时报/);
     assert.equal((html.match(/class="pp-daily-article pp-daily-lead/g)||[]).length,1);
-    assert.equal((html.match(/class="pp-daily-article pp-daily-feature/g)||[]).length,2);
-    assert.equal((html.match(/class="pp-daily-article pp-daily-brief/g)||[]).length,2);
+    assert.equal((html.match(/class="pp-daily-article pp-daily-feature/g)||[]).length,5);
+    assert.equal((html.match(/class="pp-daily-article pp-daily-brief/g)||[]).length,3);
     assert.match(html,/pp-daily-feature-grid/);
     assert.match(html,/pp-daily-brief-heading/);
     assert.match(html,/data-daily-action="update"/);

@@ -1,7 +1,10 @@
 {
   "name": "st-pocket-phone",
-  "version": "1.2.42",
+  "version": "1.2.43",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/*.test.js", "build:preview": "node tools/build_preview.mjs" }
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build:preview": "node tools/build_preview.mjs"
+  }
 }

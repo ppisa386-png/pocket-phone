@@ -1,7 +1,7 @@
-import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.3';
+import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.43';
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
 import { storyEvidenceRows } from './square-core.js?v=1.2';
-import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2';
+import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.43';
 import { parseModelObject } from './model-json.js?v=1.2';
 import { locationKind } from './weather.js?v=1.2.6';
 import { establishedSources } from './contacts.js?v=1.2';
@@ -14,7 +14,7 @@ const DAILY_RULES_CORE = '当前任务：为榴莲日报 App 编选一期故事�
     + '选题以当期新闻价值为准：优先报道具体发生了什么、涉及哪些人物或机构、产生什么结果、为什么值得关注；事件可以有冲突、争议、失败、突破、胜负、调查进展、意外变化和持续后果，但不强制制造负面事件或戏剧性。机构日常业务调整（启动工作、完善机制、优化流程、调整审核标准、推进规范管理、开展专项整治等）只在具备相应新闻价值时刊登；不用抽象的部门工作内容填补没有实际选题的栏目，不为体现当地特色让普通地方事务挤掉重大国内和国际事件，也不虚构某条真实历史事件的精确人物、时间或结果来制造新闻感。'
     + '不是所有公开见闻都有报道价值。普通人开车、吃饭、约会、穿着醒目等日常目击属于广场尺度，排除出报刊；只有确实具公共影响、行业价值或有知名度人物的公开进展才可入报。小歌手的新作品若确实已发行可用短讯，不能占据本应属于大新闻的头条。选题在本次生成请求内部完成：先决定事件，后定栏目和版位；不要输出选题资格评估或技术字段。'
     + '公众知情与作者全知隔离：私聊、内心、隐藏身份、未公开关系不可传播；私密场景默认不入报。窗帘、露台只是可能可见，不意味着已目击或认出。limited 的报道只能写实际发生的外部可见部分，不能只写可能被看见。现实人物/媒体仅用符合剧情年代的身份与设定，故事内的原创消息不能冒充真实查证，不编真实链接。'
-    + '版面为一条 lead 头条、若干 feature 报道和 brief 短讯，题材多样，长短有差别。建议头条正文400～900字、导语100～180字；普通报道150～400字、导语60～120字；短讯50～150字、导语30～60字，按内容合理调整。头条必须是本期最有报道价值的事件，不因与 user 职业相关或某栏目近期出现较少就自动上头条。标题体现具体事件、主要主体和新闻进展，避免大量使用“启动”“推进”“优化”“完善”“细化”等公文式结构；可以有简短有力的头条、信息密集的普通报道和简洁短讯，不强求统一长度或句式；真实重大事件可以有相应的标题分量，但不得夸大事实。不要重复一个事件拆成多条凑数。旧报纸的跟进与事实边界遵守新闻选编规则，不能因为之前生成过就当作已发生。'
+    + '版面固定为9篇，按顺序分为6条主要新闻和3条今日简讯：第1篇为唯一 lead 头条，第2～6篇为5篇 feature 普通报道，第7～9篇为3篇 brief 今日简讯。每期重新随机选择符合新闻价值的选题组合，题材尽量多样；简讯必须是独立事件，不得拆分或重复主要新闻。建议头条正文400～900字、导语100～180字；普通报道150～400字、导语60～120字；短讯50～150字、导语30～60字，按内容合理调整。头条必须是本期最有报道价值的事件，不因与 user 职业相关或某栏目近期出现较少就自动上头条。标题体现具体事件、主要主体和新闻进展，避免大量使用“启动”“推进”“优化”“完善”“细化”等公文式结构；可以有简短有力的头条、信息密集的普通报道和简洁短讯，不强求统一长度或句式；真实重大事件可以有相应的标题分量，但不得夸大事实。不要重复一个事件拆成多条凑数。旧报纸的跟进与事实边界遵守新闻选编规则，不能因为之前生成过就当作已发生。'
     + '先确定有新闻价值的具体事件，再把选中的报道归入14个固定栏目：政治与公共事务、国际与外交、社会新闻、治安与司法、体育、经济与商业、城市建设与交通、教育、医疗与健康、科技与科学、环境与自然、文化与娱乐、农业能源与产业、生活旅游与消费。每篇文章的 section 必须从这14个栏目中选最贴切的一个；返回任何栏目以外的名称时，程序会按文章实际内容归入最合适的正式栏目，不会因此丢弃新闻。剧情资料中的 recentSections 是最近7期各栏目的刊登次数，仅用于选定新闻事件后辅助版面多样性：新闻价值优先，栏目多样性辅助——不为补齐冷门栏目制造低价值报道，同一期存在多项重要的政治、社会或体育新闻时可以自然出现多篇同类报道，持续发展的重要事件不因轮换统计被刻意放弃，也不要求每期覆盖固定数量的不同栏目。';
 // History material rules depend on where the story takes place: real cities use
 // real-world history, fictional worlds treat real history as prototype only.
@@ -40,7 +40,7 @@ function worldSettingMaterial(city, context, max = 4000) {
     const primary = texts.filter(text => text.includes(city)), rest = texts.filter(text => !text.includes(city));
     return [...primary, ...rest].join('\n').slice(0, max);
 }
-const DAILY_OUTPUT = '本次必须完成一期报纸：至少4条、最多6条不同新闻。在同一次请求内先寻找截至剧情日期已经发生、值得刊登的具体历史事件，同时考虑世界书公共事件和原创事件；按新闻价值选出4～6个不同事件后，再分配栏目、头条与长短版位，最后写出完整报道。不先按栏目寻找素材，不拿普通机构业务凑够篇数。模型缺少可靠历史知识时用符合时代与世界观的原创公共事件补足，不编造可核实的真实历史事实。不要虚构 user 的行为和经历。只返回一个 JSON：{"publication":"本期实际报刊名","location":"地区","articles":[{"headline":"标题","section":"14个栏目之一，与剧情资料 columns 完全一致","placement":"lead/feature/brief","summary":"导语","body":"完整新闻","subject":"world"}]}。上述数组须实际写出4～6项，不是只写一个示例。世界新闻无需 topic、newsValue、contextAnchor、楼号或 publicBasis。只有报道 user/char 等剧情人物已发生的进展时用 subject=character，并附 publicBasis:{access:"public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知可省略}；人物没有可报道事件就改写世界新闻，不能少交文章。以一条头条加长短报道编排，返回前自查篇数并在本次回复内补齐。不要输出推理、HTML 或隐藏注释。';
+const DAILY_OUTPUT = '本次必须完成一期报纸，恰好9条不同新闻：6条主要新闻和3条今日简讯。每次刷新重新选择符合新闻价值的不同事件组合，尽量轮换题材；随机只用于合格候选之间，不得降低新闻价值标准或编造事实。先寻找截至剧情日期已经发生、值得刊登的具体历史事件，同时考虑世界书公共事件和原创事件；先选事件，再分配栏目与版位。6条主要新闻由1条唯一头条（lead）和5条普通报道（feature）组成，另有3条独立简讯（brief）；简讯不得拆分、改写或重复主要新闻事件。数组严格按顺序排列：第1项 placement=lead，第2～6项 placement=feature，第7～9项 placement=brief。不同文章须对应不同事件，不拿普通机构工作简报凑数。模型缺少可靠历史知识时用符合时代与世界观的原创公共事件补足，不编造可核实的真实历史事实。不要虚构 user 的行为和经历。只返回一个 JSON：{"publication":"本期实际报刊名","location":"地区","articles":[{"headline":"标题","section":"14个栏目之一，与剧情资料 columns 完全一致","placement":"lead/feature/brief","summary":"导语","body":"完整新闻","subject":"world"}]}。articles 数组必须实际写出9个对象，不是只写一个示例。世界新闻无需 topic、newsValue、contextAnchor、楼号或 publicBasis。只有报道 user/char 等剧情人物已发生的进展时用 subject=character，并附 publicBasis:{access:"public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知可省略}；人物没有可报道事件就改写世界新闻，不能少交文章。头条必须是本期最有新闻价值的事件；feature 是有完整进展的普通报道；brief 是短小、独立且值得刊登的消息。返回前自查数量、版位和事件重复，必须恰好9项且分布为1 lead、5 feature、3 brief。不要输出推理、HTML 或隐藏注释。';
 
 export function createDaily({memory, phone, getContext, getSettings}) {
     return {

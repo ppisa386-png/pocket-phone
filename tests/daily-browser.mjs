@@ -13,8 +13,14 @@ const basis={access:'background',summary:'Local public events, no private story 
 window.response={location:'洛杉矶',articles:[
 {headline:'城市音乐节公布周末演出阵容',outlet:'洛城晚报',section:'城市 / 文化',placement:'lead',summary:'从公园舞台到街区小剧场，今年的音乐节将迎来更多本地创作者。',body:'主办方公布了本周末的完整节目安排。\\n演出将在多个公共场地举行，部分场次免费向市民开放。',publicBasis:basis},
 {headline:'独立唱片店迎来暑期客流',outlet:'城市商业周刊',section:'商业',placement:'feature',summary:'几家街区唱片店延长营业时间，并计划举办小型试听活动。',body:'店主们希望通过现场交流吸引附近的听众。',publicBasis:basis},
-{headline:'新人歌手推出首支单曲',outlet:'南岸音乐通讯',section:'音乐短讯',placement:'brief',summary:'本地创作者的首支作品开始在小范围听众中流传。',body:'作品上线后，几位乐迷分享了自己的试听感受。',publicBasis:basis},{headline:'社区诊所增设周末门诊',outlet:'洛城晚报',section:'健康',placement:'feature',summary:'预约窗口将在周五开放，新增时段面向附近街区居民。医院同时计划加强与社区机构的合作，为夜间工作者提供更灵活的就诊选择。',body:'相关安排将先试行一个月，后续根据居民反馈调整。',publicBasis:basis},
-{headline:'滨河步道修缮完成',outlet:'洛城晚报',section:'城市短讯',placement:'brief',summary:'沿河步道重新开放，新增指示牌。',body:'维护人员提醒市民爱护沿线设施。',publicBasis:basis}]};
+{headline:'社区诊所增设周末门诊',outlet:'洛城晚报',section:'健康',placement:'feature',summary:'预约窗口将在周五开放，新增时段面向附近街区居民。',body:'相关安排将先试行一个月，后续根据居民反馈调整。',publicBasis:basis},
+{headline:'区域铁路增加晚间班次',outlet:'洛城晚报',section:'交通',placement:'feature',summary:'通勤线路将在周末延长运营时间，方便夜间活动散场后的乘客。',body:'交通部门表示，新增班次将先运行六周，再依据客流决定是否保留。',publicBasis:basis},
+{headline:'研究团队公布新型储能测试结果',outlet:'科学周刊',section:'科技',placement:'feature',summary:'实验室称新材料在连续循环测试中保持了较稳定的性能。',body:'研究人员计划扩大样本规模，并在下一阶段评估实际应用条件。',publicBasis:basis},
+{headline:'城市足球杯决赛周末举行',outlet:'洛城晚报',section:'体育',placement:'feature',summary:'两支本地球队将在主场争夺本届赛事冠军，门票已开始发售。',body:'赛事组织方预计决赛将吸引来自周边社区的观众。',publicBasis:basis},
+{headline:'新人歌手推出首支单曲',outlet:'南岸音乐通讯',section:'音乐短讯',placement:'brief',summary:'本地创作者的首支作品开始在小范围听众中流传。',body:'作品上线后，几位乐迷分享了自己的试听感受。',publicBasis:basis},
+{headline:'滨河步道修缮完成',outlet:'洛城晚报',section:'城市短讯',placement:'brief',summary:'沿河步道重新开放，新增指示牌。',body:'维护人员提醒市民爱护沿线设施。',publicBasis:basis},
+{headline:'周末社区艺术市集开放报名',outlet:'洛城晚报',section:'文化短讯',placement:'brief',summary:'手工艺摊位和小型现场演出开始接受申请。',body:'主办方将在周五公布最终摊位名单。',publicBasis:basis}
+]};
 window.response.publication='Los Angeles Times';
 window.response.articles=window.response.articles.map(({publicBasis,...a})=>a);
 const handlers={};const c={chatId:'daily',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'a'}],mainApi:'openai',onlineStatus:'connected',
@@ -43,9 +49,9 @@ try{
  const pressAction=async(locator,kind)=>{await longPress(locator);return p.locator('.pp-press-action[data-kind="'+kind+'"]');};
  const closeBubble=async()=>{await p.locator('.pp-daily-masthead h2').tap();await p.locator('.pp-press-bubble').waitFor({state:'detached'});};
  await p.getByRole('button',{name:'看看新闻',exact:true}).tap();await p.getByText('城市音乐节公布周末演出阵容',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
- assert.equal(await p.locator('.pp-daily-lead').count(),1);assert.equal(await p.locator('.pp-daily-feature').count(),2);assert.equal(await p.locator('.pp-daily-brief').count(),2);
+ assert.equal(await p.locator('.pp-daily-lead').count(),1);assert.equal(await p.locator('.pp-daily-feature').count(),5);assert.equal(await p.locator('.pp-daily-brief').count(),3);
  assert.equal(await p.locator('.pp-daily-masthead h2').textContent(),'Los Angeles Times');
- assert.equal(await p.locator('.pp-daily-article').count(),5);
+ assert.equal(await p.locator('.pp-daily-article').count(),9);
  const brief=p.locator('.pp-daily-brief').first();
  const original=await brief.locator('h3').innerText();
  const row=await p.locator('.pp-daily-article').evaluateAll((items,title)=>items.findIndex(a=>a.querySelector('h3').textContent===title),original);
@@ -81,7 +87,7 @@ try{
  await p.evaluate(async()=>{const c=SillyTavern.getContext();c.chat.push({mes:'2003-07-25',is_user:false});await c.eventSource.emit('GENERATION_ENDED');});await p.locator('.pp-daily-expired').waitFor();assert.equal(await p.locator('.pp-daily-inject').count(),0);assert.equal(await p.evaluate(()=>window.prepare()),'');
  await p.setViewportSize({width:320,height:740});assert.ok(await p.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await p.screenshot({path:resolve(root,'../qa-results/daily-expired-320.png')});
  assert.equal(await p.getByText('城市音乐节公布周末演出阵容',{exact:true}).count(),1);
- await p.evaluate(()=>window.fail=true);await p.getByRole('button',{name:'看看新闻',exact:true}).tap();await p.getByText('测试失败，原报纸保留',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);assert.equal(await p.locator('.pp-daily-article').count(),5);
+ await p.evaluate(()=>window.fail=true);await p.getByRole('button',{name:'看看新闻',exact:true}).tap();await p.getByText('测试失败，原报纸保留',{exact:true}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);assert.equal(await p.locator('.pp-daily-article').count(),9);
  await p.evaluate(async()=>{const c=SillyTavern.getContext();c.chat.pop();await c.eventSource.emit('MESSAGE_DELETED');});await longPress(lead);assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').getAttribute('data-active'),'true');await closeBubble();
  // App switch is independent; re-enabling preserves the edition and selection.
  await p.locator('[data-action="home"]').tap();await p.locator('[data-app="settings"]').tap();await p.locator('[data-section="apps"]').tap();await p.locator('[data-enabled="daily"]').uncheck();await p.locator('[data-action="home"]').tap();assert.equal(await p.locator('[data-app="daily"]').count(),0);assert.equal(await p.locator('[data-app="x"]').count(),1);assert.equal(await p.evaluate(()=>window.prepare()),'');
@@ -91,7 +97,7 @@ try{
  await p.evaluate(async()=>{window.fail=false;const c=SillyTavern.getContext();c.chat.push({mes:'2003-07-25',is_user:false});await c.eventSource.emit('GENERATION_ENDED');});
  const callsBeforeFolder=await p.evaluate(()=>window.calls);
  await p.getByRole('button',{name:'过往报纸夹',exact:true}).tap();await p.locator('[data-daily-action="archive-edition"]').tap();
- assert.equal(await p.locator('.pp-daily-article').count(),5);assert.equal(await p.locator('.pp-daily-inject').count(),0);await longPress(p.locator('.pp-daily-lead'));assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').isDisabled(),true);await closeBubble();
+ assert.equal(await p.locator('.pp-daily-article').count(),9);assert.equal(await p.locator('.pp-daily-inject').count(),0);await longPress(p.locator('.pp-daily-lead'));assert.equal(await p.locator('.pp-press-action[data-kind="inject"]').isDisabled(),true);await closeBubble();
  await p.locator('.pp-daily-lead').getByRole('button',{name:'阅读全文',exact:true}).tap();await p.getByText('主办方公布了本周末的完整节目安排。',{exact:false}).waitFor();assert.equal(await p.evaluate(()=>window.calls),callsBeforeFolder);assert.equal(await p.evaluate(()=>window.prepare()),'');
  await p.locator('[data-action="back"]').tap();await p.getByRole('heading',{name:'过往报纸夹',exact:true}).waitFor();await p.locator('[data-action="back"]').tap();await p.getByRole('button',{name:'看看新闻',exact:true}).waitFor();
  await p.evaluate(()=>{window.response.articles=window.response.articles.map(a=>({...a,headline:'新一期 '+a.headline}));});await p.getByRole('button',{name:'看看新闻',exact:true}).tap();await p.getByText('新一期 城市音乐节公布周末演出阵容',{exact:true}).waitFor();
