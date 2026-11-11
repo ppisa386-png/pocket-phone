@@ -49,8 +49,8 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     assert.ok(readdirSync(join(root, 'assets', 'weather', 'fonts')).includes('LICENSE-Manrope-OFL.txt'));
     assert.ok(readdirSync(join(root, 'assets', 'weather', 'fonts')).includes('LICENSE-Noto-Sans-SC-OFL.txt'));
     assert.doesNotMatch(base, /\.pp-weather(?:[\s.#:[,{>]|$)/, 'legacy weather CSS is removed from the shared sheet');
-    assert.match(read('manifest.json'), /1.2.42/);
-    assert.match(read('package.json'), /1.2.42/);
+    assert.match(read('manifest.json'), /1.2.43/);
+    assert.match(read('package.json'), /1.2.43/);
 });
 
 test('weather CSS uses a light fixed page and keeps layout classes scoped to the weather view', () => {
