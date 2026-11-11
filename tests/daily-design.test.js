@@ -44,13 +44,13 @@ test('榴莲日报品牌报头固定，真实出版物可编辑且相同刊源�
     const state={daily:{edition:{editionId:'edition-1',day:null,printDate:'2026-11-11',
         publication:'洛杉矶时报',location:'洛杉矶',articleIds:['lead','feature']},lead,feature}};
     const html=panelFor(state).html();
-    assert.match(html,/<h2>榴莲日报<\\/h2>/);
+    assert.match(html,/<h2>榴莲日报<\/h2>/);
     assert.match(html,/class="pp-daily-publication-name" data-press="daily-meta" data-daily-field="publication"/);
     assert.match(html,/星期三/);
     assert.equal((html.match(/class="pp-daily-outlet"/g)||[]).length,0);
     const alternate={...feature,outlet:'美联社'};
     const mixed=panelFor({daily:{...state.daily,feature:alternate}}).html();
-    assert.match(mixed,/class="pp-daily-outlet">美联社<\\/span>/);
+    assert.match(mixed,/class="pp-daily-outlet">美联社<\/span>/);
 });
 test('日报历史档案仍只展示真实过期刊期，不生成虚构期号或版号',async()=>{
     const article=makeArticle('lead','lead','国际与外交');
@@ -82,4 +82,5 @@ test('日报排版按纸张容器宽度响应，窄屏单栏、宽屏平衡双�
     assert.ok(css.includes('.pp-daily-brief{display:block'));
     assert.ok(index.includes('style-daily.css?v=1.2.45'));
     assert.match(preview,/style-daily\.css/);
+    assert.ok(ui.includes('daily-view.js?v=1.2.45'));
 });
