@@ -15,12 +15,12 @@ import { createChatApp } from './src/chat-apps.js?v=1.2.34';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.38';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.44';
-import { mountPhone } from './src/ui.js?v=1.2.43';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.45';
+import { mountPhone } from './src/ui.js?v=1.2.45';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.25';
 import { createPhoneService } from './src/phone.js?v=1.2.39';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.39';
-import { normalizeSettings } from './src/config.js?v=1.2.44';
+import { normalizeSettings } from './src/config.js?v=1.2.45';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.39';
 
@@ -69,7 +69,7 @@ async function start() {
             fetch(new URL('./style-wechat.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-weather.css?v=1.2.41', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./assets/weather/fonts/weather-fonts.css', import.meta.url), { cache: 'no-cache' }),
-            fetch(new URL('./style-daily.css?v=1.2.44', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-daily.css?v=1.2.45', import.meta.url), { cache: 'no-cache' }),
         ]);
         if (!response.ok || !enamelResponse.ok || !foodResponse.ok || !wechatResponse.ok ||
             !weatherStyleResponse.ok || !weatherFontsResponse.ok || !dailyStyleResponse.ok)
