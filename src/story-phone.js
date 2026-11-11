@@ -1,4 +1,5 @@
 import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.39';
+import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.4';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.39';
 import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2.39';
@@ -172,6 +173,29 @@ export function importStoryPhone(raw,revisions,chat,context){
             journal=appendChange(journal,revisions.slice(0,index+1),changes.length?changes:[set('profiles','ignored:'+id,{ignored:true})],id);
             state=replayJournal(journal);changed=true;
         }
+        // Recover an unannotated but unambiguously sent X DM from this very
+        // assistant floor. A matching native durian-message import takes priority.
+        // No inferred recipient, no unquoted body, no new model request.
+        if(settings.apps.x&&effectiveReply(chat[index])){
+            for(const [n,row] of narratedXSentDms(chat[index],state).entries()){
+                const id='narrative-x-sent:'+revisions[index]+':'+n;
+                if(journal?.events.some(e=>e.id===id))continue;
+                const duplicate=Object.values(state.x||{}).some(m=>m.type==='message'&&m.role==='user'&&
+                    m.accountId===row.accountId&&m.text===row.text&&
+                    (m.id?.startsWith('narrative-message:'+revisions[index]+':')||
+                     m.id?.startsWith('narrative-x-sent:'+revisions[index]+':')));
+                if(duplicate)continue;
+                const changes=socialContact(state,{channel:'x_dm',sender:row.name,accountId:row.accountId,
+                    media:'text',text:row.text},id,storyTime(chat.slice(0,index+1)),
+                    (Date.parse(chat[index].send_date)||Date.now())+n,context.name1,'user');
+                if(changes.length!==2)continue;
+                changes[0].value.dmAccepted=true;
+                changes[1].value.origin='narrative';
+                changes.push(...commRecordPatch('x',id,row.accountId,null,true,state));
+                journal=appendChange(journal,revisions.slice(0,index+1),changes,id);
+                state=replayJournal(journal);changed=true;
+            }
+        }
         for(let n=0;n<rows.length;n++){
             const row=rows[n],eventId=row.outreachId||'story-phone:'+revisions[index]+':'+n;
             const saved=journal?.events.find(e=>e.id===eventId);
@@ -261,7 +285,7 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     // Shared scene background: location tag rules and current weather go to the
     // narrative model with every normal generation, independent of phone channels.
     const scene=sceneBackground(state,chat,settings);
-    const xDm=settings.apps.x?'\nX 私信与其他通信使用同一已展示/未展示记录机制。只有本楼小说正文实际写出 user 在 X/Twitter 私信中发送或收到的一条新消息，且不是手机里已经保存的历史记录时，才在文尾逐条附 <!--durian-message:{"platform":"x","action":"sent或received（相对user）","sender":"user或对方账号名称","recipient":"对方账号名称或user","accountId":"已知X账号准确ID，未知省略","kind":"text","text":"实际已经发送或收到的完整私信内容","category":"A或B，实际约定、合作或待办填B","shown":false}-->。只有本楼明确写出user实际阅读消息时，正文才可呈现收到的私信内容；只出现通知时正文不透露内容，标记仍保存全文。user实际发送的内容按已发送处理；不得将准备发、草稿、回忆、查询既有私信或对方未实际发送的回复标为新消息，不替user发消息；已经存于X里的消息只在本楼确实引用/展示时用durian-message-shown 标记对应记录ID，不要再次创建。商业邀约已经用durian-business offer、主动联系已经用durian-outreach记录时，不再为同一条私信加durian-message。除真实发信和收信外无消息则不标记。' : '';
+    const xDm=settings.apps.x?'\n【X 私信文尾同步是必需步骤】只要本楼明确描写 user 在 X 私信对话框输入回复、点击发送并显示已发出/已送达，即使场景随后切换到其他事件，也必须在正文末尾逐条输出 durian-message 标记；正文的【消息原文】不是标记，不能代替它。X 私信与其他通信使用同一已展示/未展示记录机制。只有本楼小说正文实际写出 user 在 X/Twitter 私信中发送或收到的一条新消息，且不是手机里已经保存的历史记录时，才在文尾逐条附 <!--durian-message:{"platform":"x","action":"sent或received（相对user）","sender":"user或对方账号名称","recipient":"对方账号名称或user","accountId":"已知X账号准确ID，未知省略","kind":"text","text":"实际已经发送或收到的完整私信内容","category":"A或B，实际约定、合作或待办填B","shown":false}-->。只有本楼明确写出user实际阅读消息时，正文才可呈现收到的私信内容；只出现通知时正文不透露内容，标记仍保存全文。user实际发送的内容按已发送处理；不得将准备发、草稿、回忆、查询既有私信或对方未实际发送的回复标为新消息，不替user发消息；已经存于X里的消息只在本楼确实引用/展示时用durian-message-shown 标记对应记录ID，不要再次创建。商业邀约已经用durian-business offer、主动联系已经用durian-outreach记录时，不再为同一条私信加durian-message。除真实发信和收信外无消息则不标记。' : '';
     if(!availableChannels(settings,state,context.name1).length)return x+xDm+business+(scene?'\n'+scene:'');
     const due=(narrativeReplyCount(chat)+1)%5===0;
     const contacts=Object.values(state.contacts).map(c=>({id:c.id,name:c.name}));
