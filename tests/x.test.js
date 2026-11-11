@@ -1238,7 +1238,7 @@ test('X wrong-shape array is retried once, repeated bad results are not saved or
   const failed=await f.x.refresh();
   assert.equal(failed.ok,false);assert.equal(failed.code,'MODEL_JSON_MISSING');
   assert.equal(n,2);assert.equal(f.count(),4);
-  assert.match(failed.diagnostic||'',/本次请求次数：2/);
+  assert.match(failed.error,/未返回 JSON/);
   assert.equal(JSON.stringify(f.state().x),prior);
  }finally{f.close();}
 });
