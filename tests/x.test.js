@@ -1252,3 +1252,94 @@ test('X truncated or syntactically invalid JSON is not repaired by guessing or e
   }
  }finally{f.close();}
 });
+
+
+test('public X follow, unfollow, like and repost form non-directed one-shot home pulse',async()=>{
+ const {xPendingPublicActivities}=await import('../src/x.js');
+ const f=setup();try{
+  f.context.chat[0].mes='2026-11-05 10:00';await f.memory.read();
+  const id=await account(f);const initialCount=f.count();
+  ok(await f.x.follow(id,true));
+  const initial=xPendingPublicActivities(f.state());
+  assert.equal(initial.length,1);assert.equal(initial[0].action,'follow');
+  assert.equal(initial[0].shown,false);assert.equal(f.count(),initialCount,'following never calls a model');
+  const seen=[];
+  f.reply(({quietPrompt})=>{
+    seen.push(quietPrompt);
+    if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:10,stats:[]});
+    return JSON.stringify(feedResult());
+  });
+  ok(await f.x.refreshPublic());
+  assert.equal(xPendingPublicActivities(f.state()).length,0);
+  assert.ok(seen[0].includes('本次首页刷新新增的一次性公开社交动态'));
+  assert.ok(seen[0].includes('"action":"follow"'));
+  assert.match(seen[0],/不是发送给某个NPC的私信/);
+  assert.ok(!seen[0].includes('user 最近公开转发'), 'old public reposts must not be repeated in every generic X task');
+  const displayed=Object.values(f.state().x).find(row=>row.type==='public-activity');
+  assert.equal(displayed.shown,true);
+  assert.equal((await f.x.refreshPublic()).ok,false,'same floor has no new story or public activity');
+  const oldCalls=f.count();
+  const post=xItems(f.state(),'post')[0];
+  ok(await f.x.react(post.id,'liked'));
+  ok(await f.x.react(post.id,'reposted'));
+  ok(await f.x.follow(id,false));
+  assert.equal(f.count(),oldCalls,'actions are local until next home refresh');
+  assert.deepEqual(xPendingPublicActivities(f.state()).map(x=>x.action).sort(),['like','repost','unfollow']);
+  const panel=(await import('../src/x-view.js')).createXPanel({adapter:{userName:()=>f.context.name1,storyChat:()=>f.context.chat},getView:f.state,redraw(){},notice(){}});
+  const button=panel.html().match(/<button[^>]+data-x-action="refresh"[^>]*>/)?.[0];
+  assert.ok(button);assert.doesNotMatch(button,/\sdisabled\b/,'activity unlocks home refresh on an already refreshed floor');
+  const before=seen.length;
+  ok(await f.x.refreshPublic());
+  assert.ok(seen[before].includes('"action":"unfollow"'));
+  assert.ok(seen[before].includes('"action":"like"'));
+  assert.ok(seen[before].includes('"action":"repost"'));
+  assert.ok(!seen[before].includes('向 Alex 发私信'));
+  assert.equal(xPendingPublicActivities(f.state()).length,0);
+  const count=f.count();
+  assert.equal((await f.x.refreshPublic()).ok,false);
+  assert.equal(f.count(),count);
+  // Reversing an already-shown action starts a fresh public pulse.
+  ok(await f.x.react(post.id,'liked'));
+  ok(await f.x.react(post.id,'reposted'));
+  assert.deepEqual(xPendingPublicActivities(f.state()).map(x=>x.action).sort(),['unlike','unrepost']);
+ }finally{f.close();}
+});
+
+test('public X social pulse cannot be consumed by square, trends, followed feed or a failed home refresh',async()=>{
+ const {xPendingPublicActivities}=await import('../src/x.js');
+ const f=setup();try{
+  f.context.chat[0].mes='2026-11-06 09:00';await f.memory.read();
+  const id=await account(f);
+  ok(await f.x.follow(id,true));
+  const captured=[];
+  f.reply(({quietPrompt})=>{
+    captured.push(quietPrompt);
+    if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:worldTopics(),evaluations:[]});
+    if(quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:squareRows(10)});
+    return JSON.stringify({posts:[]});
+  });
+  ok(await f.x.refresh('square'));ok(await f.x.refreshTrends());ok(await f.x.refresh(true));
+  assert.equal(xPendingPublicActivities(f.state()).length,1);
+  assert.ok(captured.every(p=>!p.includes('本次首页刷新新增的一次性公开社交动态')));
+  const story=xStoryPrompt(f.state());
+  assert.doesNotMatch(story,/public-activity|新关注|本次首页刷新新增的一次性公开社交动态/);
+  f.reply(()=>'{posts:');
+  const failed=await f.x.refreshPublic();assert.equal(failed.ok,false);assert.equal(failed.code,'MODEL_JSON_TRUNCATED');
+  assert.equal(xPendingPublicActivities(f.state()).length,1);
+  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:5,stats:[]}):JSON.stringify({posts:[]}));
+  ok(await f.x.refreshPublic());
+  assert.equal(xPendingPublicActivities(f.state()).length,0);
+  assert.ok(Object.values(f.state().x).some(row=>row.type==='public-activity'&&row.shown===true));
+ }finally{f.close();}
+});
+
+test('multiple changes to one public X action before the next home refresh only expose latest state',async()=>{
+ const {xPendingPublicActivities}=await import('../src/x.js');
+ const f=setup();try{
+  const id=await account(f);
+  ok(await f.x.follow(id,true));ok(await f.x.follow(id,false));ok(await f.x.follow(id,true));
+  assert.deepEqual(xPendingPublicActivities(f.state()).map(x=>x.action),['follow']);
+  const current=f.count();ok(await f.x.follow(id,true));
+  assert.equal(f.count(),current);assert.equal(xPendingPublicActivities(f.state()).length,1);
+ }finally{f.close();}
+});
