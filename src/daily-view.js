@@ -33,7 +33,7 @@ export function createDailyPanel({adapter,getView,redraw,notice,editPart}) {
         const publication=edition?.publication||articles[0]?.outlet||'今日选编';
         const dateValue=edition?String(edition.printDate||dayDate(edition.day)||''):'';
         const date=dateValue?dateValue.replaceAll('-',' / '):'日期待明确';
-        const parsedDate=/^\\d{4}-\\d{2}-\\d{2}$/.test(dateValue)?new Date(dateValue+'T00:00:00Z'):null;
+        const parsedDate=/^\d{4}-\d{2}-\d{2}$/.test(dateValue)?new Date(dateValue+'T00:00:00Z'):null;
         const validDate=parsedDate&&!Number.isNaN(parsedDate.getTime())&&parsedDate.toISOString().slice(0,10)===dateValue;
         const weekday=validDate?'星期'+['日','一','二','三','四','五','六'][parsedDate.getUTCDay()]:'';
         const location=edition?.location||'地区待明确';
