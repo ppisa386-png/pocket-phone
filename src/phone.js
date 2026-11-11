@@ -110,14 +110,22 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         if (social && !options.establishedImport) prompt += SOCIAL_LANGUAGE_RULE;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         const attempts = [];
-        for (let attempt = 0; attempt <= retries; attempt++) {
+        let normalRetriesLeft = retries, formatRetried = false;
+        // An X response with no usable JSON or the wrong root type is not a
+        // transport failure. Give it ONE fresh format-only attempt, using the
+        // same task context, never any previous untrusted model text.
+        for (let attempt = 0; ; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
             let stage = '请求模型', responseLength = null;
             try {
                 checkEnabled();
                 const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; job.progress = value; emit(); } };
                 report(independent ? '正在准备独立 API 请求' : '正在等待酒馆生成回复');
-                const text = independent ? await modelClient.generate(prompt, contact, isCurrent, report, { finalOutputContract: options.finalOutputContract, maxTokens: options.maxTokens, retryEmptyOnce: app==='x' && options.retryEmptyOnce===true }) : await context.generateQuietPrompt(phoneQuietOptions(context, prompt, contact));
+                const correction = formatRetried ?
+                    '\nX 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。' : '';
+                const taskPrompt = prompt + correction;
+                const contract = typeof options.finalOutputContract === 'string' ? options.finalOutputContract + correction : correction.trim();
+                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { finalOutputContract: contract, maxTokens: options.maxTokens, retryEmptyOnce: app==='x' && options.retryEmptyOnce===true && !formatRetried }) : await context.generateQuietPrompt(phoneQuietOptions(context, taskPrompt, contact));
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 checkEnabled();
                 responseLength = typeof text === 'string' ? text.length : null;
@@ -136,14 +144,25 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 return result;
             } catch (failure) {
                 const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');
-                if (!isCurrent() || failure.retryable === false || attempt === retries) {
+                const formatFailure = app === 'x' && options.formatRetryOnce === true &&
+                    !formatRetried && ['MODEL_JSON_MISSING','MODEL_JSON_TYPE'].includes(failure.code);
+                if (formatFailure && isCurrent() && failure.retryable !== false) {
+                    formatRetried = true;
+                    attempts.push(summary);
+                    job.progress = 'X 返回格式不正确，纠正格式重试一次';
+                    emit();
+                    continue;
+                }
+                if (!isCurrent() || failure.retryable === false || normalRetriesLeft <= 0) {
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
-                        + '；本次请求次数：' + (attempt + 1) + (responseLength === null ? '' : '；返回字符数：' + responseLength);
+                        + '；本次请求次数：' + (attempt + 1) + (responseLength === null ? '' : '；返回字符数：' + responseLength)
+                        + (formatRetried ? '；X 格式纠正：已尝试一次' : '');
                     throw Object.assign(new Error(failure.message || '请求失败，请重试。'), {
                         code: failure.code, retryable: failure.retryable,
                         diagnostic: detail + (failure.diagnostic ? '\n' + failure.diagnostic : '') + (attempts.length ? '\n此前尝试：' + attempts.join('；') : ''),
                     });
                 }
+                normalRetriesLeft--;
                 attempts.push(summary);
             }
         }
