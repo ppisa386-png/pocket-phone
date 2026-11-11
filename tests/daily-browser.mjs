@@ -69,7 +69,8 @@ try{
  await brief.getByRole('button',{name:'阅读全文'}).tap();
  await brief.getByText('手动修改的正文',{exact:true}).waitFor();
  assert.equal(await p.evaluate(()=>window.calls),1);
- const blocks=await p.locator('.pp-daily-article').evaluateAll(es=>es.map(e=>({width:e.getBoundingClientRect().width,top:e.getBoundingClientRect().top})));assert.ok(blocks[0].width>blocks[1].width*1.5);assert.ok(Math.abs(blocks[1].top-blocks[2].top)<2);
+ const responsive=await p.locator('.pp-daily').evaluate(el=>{const grid=el.querySelector('.pp-daily-feature-grid'),briefs=el.querySelector('.pp-daily-brief-section');return{paperWidth:el.getBoundingClientRect().width,featureColumns:getComputedStyle(grid).columnCount,featureWidths:[...grid.children].map(a=>a.getBoundingClientRect().width),briefColumns:getComputedStyle(briefs).gridTemplateColumns.trim().split(' ').length,briefListWidth:briefs.querySelector('.pp-daily-brief-list').getBoundingClientRect().width};});assert.equal(responsive.featureColumns,'1');assert.ok(responsive.featureWidths.every(width=>width>responsive.paperWidth*.82));assert.equal(responsive.briefColumns,1);assert.ok(responsive.briefListWidth>responsive.paperWidth*.82);
+ await p.locator('.pp-daily').evaluate(el=>{el.style.width='520px';});assert.equal(await p.locator('.pp-daily-feature-grid').evaluate(el=>getComputedStyle(el).columnCount),'2');await p.locator('.pp-daily').evaluate(el=>el.style.removeProperty('width'));
  await mkdir(resolve(root,'../qa-results'),{recursive:true});await p.screenshot({path:resolve(root,'../qa-results/daily-newspaper-390.png')});
  assert.equal(await p.evaluate(()=>window.prepare()),'');
  const lead=p.locator('.pp-daily-lead');await lead.getByRole('button',{name:'阅读全文',exact:true}).tap();await p.getByText('主办方公布了本周末的完整节目安排。',{exact:false}).waitFor();assert.equal(await p.evaluate(()=>window.calls),1);
