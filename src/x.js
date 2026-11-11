@@ -45,8 +45,29 @@ const xRequired = (s,label,max=6000) => {const value=xText(s,max);if(!value)thro
 const xRecord = (type,data) => ({id:crypto.randomUUID(),type,createdAt:Date.now(),...data});
 const xAccount = (state,id,unblocked=true) => {const a=state.x?.[id];if(a?.type!=='account')throw Error('账号不存在。');if(unblocked&&a.blocked)throw Error('此账号已被拉黑。');return a;};
 const xThread = (state,id) => xItems(state,'message').filter(m=>m.accountId===id).sort((a,b)=>a.createdAt-b.createdAt);
-export function parseXObject(text) {
-    try { return parseModelObject(text,{allowTrailingCommas:true}); }
+// A few X models return a complete array despite being asked for the list's
+// root object. Convert only an unambiguous task-specific array; never guess a
+// private message, engagement update, account identity or financial record.
+export function parseXObject(text, {arrayKey = null} = {}) {
+    try {
+        const data=parseModelObject(text,{allowTrailingCommas:true,allowRootArray:!!arrayKey});
+        if (!Array.isArray(data)) return data;
+        const record=row=>!!row&&typeof row==='object'&&!Array.isArray(row);
+        const populated=value=>typeof value==='string'&&!!value.trim();
+        const valid={
+            posts:row=>populated(row.text)&&(populated(row.accountId)||(populated(row.name)&&populated(row.handle))),
+            replies:row=>populated(row.text)&&populated(row.postId)&&(populated(row.accountId)||(populated(row.name)&&populated(row.handle))),
+            accounts:row=>populated(row.name)&&populated(row.handle),
+            comments:row=>populated(row.text)&&(populated(row.accountId)||(populated(row.name)&&populated(row.handle))),
+            topics:row=>populated(row.title)&&populated(row.summary),
+        };
+        if (!Object.hasOwn(valid,arrayKey)||!data.every(row=>record(row)&&valid[arrayKey](row))) {
+            throw Object.assign(new Error('X 数据返回格式不正确：顶层数组无法对应本次任务。本次未保存。'),{
+                code:'MODEL_JSON_TYPE',diagnostic:'任务：X；错误代码：MODEL_JSON_TYPE；原因：顶层数组与任务字段不符；返回条数：'+data.length,
+            });
+        }
+        return {[arrayKey]:data};
+    }
     catch (error) {
         throw Object.assign(new Error(error.message.replaceAll('账本','X 数据')), {
             code:error.code, diagnostic:error.diagnostic?.replaceAll('资产评估','X').replaceAll('账本','X 数据'),
@@ -91,7 +112,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15).map(({id,text,imageDescription})=>({id,text,imageDescription})))+'\nuser 最近公开转发（不代表赞同）：'+JSON.stringify(xItems(state,'post').filter(p=>p.reposted&&p.author!=='user').slice(-10).map(p=>({author:state.x[p.author]?.name,text:p.text})))+'\n'+task;
     }
     const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task,options?.combined),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
-        retries:0,parseResponse:parseXObject,memoryQuery:{actors:a?[a]:[],names:a?[a.name,...(a.aliases||[])]:[],topic:options?.memoryTopic||''},finalOutputContract:X_JSON_OUTPUT,
+        retries:0,parseResponse:text=>parseXObject(text,{arrayKey:options?.arrayKey}),formatRetryOnce:true,memoryQuery:{actors:a?[a]:[],names:a?[a.name,...(a.aliases||[])]:[],topic:options?.memoryTopic||''},finalOutputContract:X_JSON_OUTPUT,
         outputContract:X_JSON_OUTPUT+'\n当前是 X 应用任务，不续写正文、不输出状态栏或 HTML。保留人设、背景和语言约定，最终只返回本任务要求的单个完整 JSON 对象，数组无内容用[]；不要复述示例或输出多个候选。'+X_ACCOUNT_RULES,...options,
     });
     function register(state,item,changes,kind=null) {
@@ -173,7 +194,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         // return up to 15 rows even when fewer are missing. A cap at `missing` here
         // discarded every fill for posts with large totals and left the detail page
         // stuck on its one sample comment.
-        const rows=await ask(state,null,request,current,task,d=>list(d,'comments',X_COMMENT_LIMIT),{postQueries:[post],finalOutputContract:contract});
+        const rows=await ask(state,null,request,current,task,d=>list(d,'comments',X_COMMENT_LIMIT),{postQueries:[post],finalOutputContract:contract,arrayKey:'comments'});
         const staged=structuredClone(state),changes=[];
         const count=addSamples(staged,post,rows,changes,target);
         // Partial progress commits: duplicates or skipped rows must never wipe the
@@ -270,7 +291,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         const output=X_JSON_OUTPUT+'\n'+X_TRENDS_OUTPUT;
         const result=await ask(state,null,request,valid,X_TRENDS_RULES+publicationScenePrompt(context,candidates)+
             '\n趋势评估资料（人设用于判断身份和公开知名度，不等于向网友公开）：'+JSON.stringify(data)+'\n'+output,
-            d=>validateTrends(d,candidates),{outputContract:output,finalOutputContract:output,postQueries:candidates,combined});
+            d=>validateTrends(d,candidates),{outputContract:output,finalOutputContract:output,postQueries:candidates,combined,arrayKey:'topics'});
         if(!valid())throw Error('人设或聊天已变化，请重新刷新趋势。');
         await commit([xSet({id:'trend-edition',type:'trends',clock,...result})]);
         return {added:result.topics.length};
@@ -323,7 +344,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT(recommended,square)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须填写。':'');
         const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
         const results=await ask(state,null,request,current,task+reachTask+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
-            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10)),memoryChars:8000,maxTokens:8192,retryEmptyOnce:true});
+            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10)),memoryChars:8000,maxTokens:8192,retryEmptyOnce:true,arrayKey:'posts'});
         if(square&&!combined&&results.posts.length<10)throw Error('本批广场帖子只有 '+results.posts.length+' 条，广场刷新需要 10～15 条，本次未保存。');
         state=structuredClone(state);const changes=[],authors=new Set();let added=0,repeatedSquare=false;
         if(!square&&!following){
@@ -393,7 +414,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             await commit(data);
         });},
         discover(query){return run(async(state,current,request,commit)=>{
-            const results=await ask(state,null,request,current,'当前任务：X 搜索账号。搜索词：'+JSON.stringify(xText(query,100))+'。根据角色和世界设定查找使用 X 的人物，char 默认用真名；不能因为已有电话号码或 Snapchat 好友就假定有 X 账号。'+X_SEARCH_OUTPUT,d=>list(d,'accounts',10),{finalOutputContract:X_SEARCH_OUTPUT,memoryTopic:query});
+            const results=await ask(state,null,request,current,'当前任务：X 搜索账号。搜索词：'+JSON.stringify(xText(query,100))+'。根据角色和世界设定查找使用 X 的人物，char 默认用真名；不能因为已有电话号码或 Snapchat 好友就假定有 X 账号。'+X_SEARCH_OUTPUT,d=>list(d,'accounts',10),{finalOutputContract:X_SEARCH_OUTPUT,memoryTopic:query,arrayKey:'accounts'});
             state=structuredClone(state);state.x||={};const changes=[],ids=[];
             for(const item of results){if(item?.has_account!==true)continue;const a=register(state,item,changes);if(a&&!ids.includes(a.id))ids.push(a.id);}
             await commit(changes);return {ids};
