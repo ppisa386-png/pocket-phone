@@ -1204,3 +1204,51 @@ test('NPC home and square posts independently keep optional image descriptions',
   assert.match(panel.html(),/路边摄影者拍下了刚开的橱窗。/);
  }finally{f.close();}
 });
+
+
+test('X feed consumes a complete posts array without another model request',async()=>{
+ const f=setup();try{
+  const id=await account(f);const before=f.count();
+  f.reply(()=>'<think>drafting feed</think>\\n'+JSON.stringify([{accountId:id,text:'今天的排练刚结束。'}]));
+  const result=await f.x.refresh();
+  ok(result);assert.equal(f.count(),before+1);
+  assert.equal(xItems(f.state(),'post').length,1);
+  assert.equal(xItems(f.state(),'post')[0].text,'今天的排练刚结束。');
+ }finally{f.close();}
+});
+
+for(const independent of [false,true])test('X '+(independent?'independent':'host')+' malformed non-JSON response gets one contract-only retry',async()=>{
+ const f=setup(undefined,independent);try{
+  let replies=0;
+  f.reply(()=>++replies===1?'这是本期动态的说明，缺少JSON。':JSON.stringify(feedResult()));
+  ok(await f.x.refresh());
+  assert.equal(f.count(),2);assert.equal(replies,2);
+  assert.match(f.prompt(),/X 格式恢复/);
+  assert.equal(xItems(f.state(),'post').length,10);
+ }finally{f.close();}
+});
+
+test('X wrong-shape array is retried once, repeated bad results are not saved or retried forever',async()=>{
+ const f=setup();try{
+  let n=0;
+  f.reply(()=>++n===1?'[{"text":"只有内容没有作者"}]':JSON.stringify(feedResult()));
+  ok(await f.x.refresh());assert.equal(n,2);
+  const prior=JSON.stringify(f.state().x);
+  f.reply(()=>'抱歉，本次未能按要求输出数据。');
+  const failed=await f.x.refresh();
+  assert.equal(failed.ok,false);assert.equal(failed.code,'MODEL_JSON_MISSING');
+  assert.equal(n,2);assert.equal(f.count(),4);
+  assert.match(failed.error,/未返回 JSON/);
+  assert.equal(JSON.stringify(f.state().x),prior);
+ }finally{f.close();}
+});
+
+test('X truncated or syntactically invalid JSON is not repaired by guessing or extra requests',async()=>{
+ const f=setup();try{
+  for(const [raw,code] of [['{"posts":','MODEL_JSON_TRUNCATED'],['{posts:[]}','MODEL_JSON_SYNTAX']]){
+   const count=f.count();f.reply(()=>raw);
+   const result=await f.x.refresh();
+   assert.equal(result.ok,false);assert.equal(result.code,code);assert.equal(f.count(),count+1);
+  }
+ }finally{f.close();}
+});

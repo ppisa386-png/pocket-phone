@@ -47,3 +47,20 @@ test('parser errors distinguish empty, syntax, truncation, competing and wrong-t
   assert.throws(()=>parseModelObject(raw),e=>e.code===code&&e.message.includes(reason)&&e.diagnostic.includes(code)&&!e.diagnostic.includes('secret'));
  }
 });
+
+
+test('X converts only a complete recognized task list to its named root object',()=>{
+ const posts=[{accountId:'known',text:'公园里的下午'}];
+ const accounts=[{name:'Alex',handle:'alex',has_account:true}];
+ const comments=[{accountId:'known',text:'非常好！'}];
+ assert.deepEqual(parseXObject('<think>Need data.</think>\\n'+JSON.stringify(posts),{arrayKey:'posts'}),{posts});
+ assert.deepEqual(parseXObject(JSON.stringify(accounts),{arrayKey:'accounts'}),{accounts});
+ assert.deepEqual(parseXObject(JSON.stringify(comments),{arrayKey:'comments'}),{comments});
+ assert.deepEqual(parseXObject('[]',{arrayKey:'posts'}),{posts:[]});
+ assert.throws(()=>parseModelObject(JSON.stringify(posts)),e=>e.code==='MODEL_JSON_TYPE');
+ assert.throws(()=>parseXObject(JSON.stringify(posts)),e=>e.code==='MODEL_JSON_TYPE');
+ assert.throws(()=>parseXObject(JSON.stringify(posts),{arrayKey:'accounts'}),e=>e.code==='MODEL_JSON_TYPE');
+ assert.throws(()=>parseXObject('[{"text":"no author"}]',{arrayKey:'posts'}),e=>e.code==='MODEL_JSON_TYPE');
+ assert.throws(()=>parseXObject('[{"accountId":"known","text":"ok"}][{"accountId":"known","text":"second"}]',{arrayKey:'posts'}),e=>e.code==='MODEL_JSON_AMBIGUOUS');
+ assert.throws(()=>parseXObject('<think>[{"accountId":"known","text":"hidden"}]</think>',{arrayKey:'posts'}),e=>e.code==='MODEL_JSON_MISSING');
+});

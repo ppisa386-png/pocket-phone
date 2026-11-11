@@ -1,6 +1,6 @@
 // Extract one complete object without rewriting financial data. Presentation
 // blocks are ignored only outside JSON; markup inside quoted values is data.
-export function parseModelObject(raw, { allowTrailingCommas = false } = {}) {
+export function parseModelObject(raw, { allowTrailingCommas = false, allowRootArray = false } = {}) {
     const original = String(raw ?? ''), text = original.trim();
     let hiddenBlocks = 0, hiddenLedgers = 0, reasoningBlocks = 0;
     const fail = (code, reason, hint = '', extra = '') => {
@@ -15,6 +15,9 @@ export function parseModelObject(raw, { allowTrailingCommas = false } = {}) {
     if (!text) fail('MODEL_JSON_EMPTY', '模型没有返回文字', '请检查模型回复是否为空或被输出规则过滤。');
     const object = value => {
         if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+        // Only explicitly opted-in X list tasks may accept a complete array.
+        // Finance and every other caller still require a single object.
+        if (allowRootArray && Array.isArray(value)) return value;
         fail('MODEL_JSON_TYPE', '需要单个 JSON 对象', '不能用数组、文字或空值代替账本。');
     };
     const parse = source => {
