@@ -1,7 +1,7 @@
 ## v1.2.44 · 榴莲日报纸张容器自适应排版修正（2026-11-11；基线 a1dd1d3a3aa194280d9dbd700e03ae05abc08556）
 **实测问题**：用户提供的手机截图显示日报纸张容器明显窄于浏览器视口，旧样式却只用 `@media(max-width:340px)` 判断设备宽度，导致默认 360px 手机窗口内仍保留双栏；五篇报道按 CSS Grid 行对齐，短文章下方出现大片空白，第五篇单独占左栏；今日简讯侧栏压缩标题和导语。
 **修正**：日报根容器启用 inline-size container query，按纸张实际宽度判断版式。容器宽度不超过 460px 时，头条与五篇报道使用单栏全宽，今日简讯标题横向置顶、三条简讯改为全宽纵向列表；超过 460px 时恢复平衡双栏，采用 CSS columns 避免行高互相牵制，文章保持完整不跨栏拆分，展开全文跨栏显示。
-**验证**：日报浏览器验收新增手机纸张单栏、宽纸张双栏、简讯全宽的实测断言；继续覆盖编辑、展开、注入、过期、归档、回退和聊天隔离。自动回归与浏览器截图以本次提交后的 Actions 为准。
+**验证**：GitHub Actions 完整项目回归 **746/746 通过**、离线预览构建成功；Chromium 验收通过：390px／320px 手机纸张单栏、520px 纸张双栏、简讯全宽、头条全文展开，无横向溢出或脚本错误。实测截图 artifact：`daily-newspaper-browser-evidence`（390px、320px）。日报专属验收：https://github.com/ppisa386-png/pocket-phone/actions/runs/42963266065；合并后主分支完整回归：https://github.com/ppisa386-png/pocket-phone/actions/runs/42963396880；天气与珐琅视觉 QA 亦通过：https://github.com/ppisa386-png/pocket-phone/actions/runs/42963396945、https://github.com/ppisa386-png/pocket-phone/actions/runs/42963396860。修复 PR #6 已 squash 合并至 main（`ad3530de4fccb5836d89e29b8d7b044b916b7be9`）。
 **保护范围**：仅调整日报版式与相关视觉测试；九篇选题／版位协议、生成请求、文章数据、编辑和注入逻辑、历史档案行为，以及天气、X、微信、主题和其他 App 均不变。
 
 ## v1.2.43 · 榴莲日报随机九篇选题与固定版位（2026-11-11；基线 cfcd0ef4e4b53c5fbd1f2590e777e6de01a4d385）
