@@ -45,6 +45,7 @@ test('榴莲日报品牌报头固定，真实出版物可编辑且相同刊源�
         publication:'洛杉矶时报',location:'洛杉矶',articleIds:['lead','feature']},lead,feature}};
     const html=panelFor(state).html();
     assert.match(html,/<h2>榴莲日报<\/h2>/);
+    assert.match(html,/<div class="pp-daily-end"><span>榴莲日报<\/span>/);
     assert.match(html,/class="pp-daily-publication-name" data-press="daily-meta" data-daily-field="publication"/);
     assert.match(html,/星期三/);
     assert.equal((html.match(/class="pp-daily-outlet"/g)||[]).length,0);
