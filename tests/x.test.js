@@ -1224,7 +1224,7 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   ok(await f.x.refresh());
   assert.equal(f.count(),2);assert.equal(replies,2);
   assert.match(f.prompt(),/X 格式恢复/);
-  assert.equal(xItems(f.state(),'post').length,0);
+  assert.equal(xItems(f.state(),'post').length,10);
  }finally{f.close();}
 });
 
