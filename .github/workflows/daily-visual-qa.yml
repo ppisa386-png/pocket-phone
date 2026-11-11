@@ -1,0 +1,54 @@
+name: Daily newspaper layout QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'style-daily.css'
+      - 'src/daily-view.js'
+      - 'src/daily-core.js'
+      - 'src/ui.js'
+      - 'src/config.js'
+      - 'index.js'
+      - 'manifest.json'
+      - 'package.json'
+      - 'tests/daily*.test.js'
+      - 'tests/daily-browser.mjs'
+      - 'tools/build_preview.mjs'
+      - '.github/workflows/daily-visual-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  daily-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CODEX_PRIMARY_RUNTIME_NODE_MODULES: ${{ github.workspace }}/node_modules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run project regression
+        run: npm test
+      - name: Build offline preview
+        run: npm run build:preview
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Daily newspaper browser acceptance
+        run: node tests/daily-browser.mjs
+      - name: Collect newspaper screenshots
+        if: always()
+        run: |
+          mkdir -p qa-results-upload
+          cp ../qa-results/daily-*.png qa-results-upload/ 2>/dev/null || true
+      - name: Upload newspaper browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-newspaper-browser-evidence
+          path: qa-results-upload/daily-*.png
+          if-no-files-found: warn
+          retention-days: 30

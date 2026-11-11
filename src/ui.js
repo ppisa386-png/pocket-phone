@@ -1,6 +1,6 @@
 import {paperDraft} from './daily-core.js?v=1.2';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
-import { createDailyPanel } from './daily-view.js?v=1.2.43';
+import { createDailyPanel } from './daily-view.js?v=1.2.44';
 import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.41';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2';

@@ -52,14 +52,19 @@ test('日报历史档案仍只展示真实过期刊期，不生成虚构期号�
     assert.doesNotMatch(html,/第 14287 期|A2 版|A3 版/);
 });
 
-test('日报视觉样式独立加载并覆盖窄屏单栏',()=>{
+test('日报排版按纸张容器宽度响应，窄屏单栏、宽屏平衡双栏',()=>{
     const css=readFileSync(new URL('../style-daily.css',import.meta.url),'utf8');
     const index=readFileSync(new URL('../index.js',import.meta.url),'utf8');
     const preview=readFileSync(new URL('../tools/build_preview.mjs',import.meta.url),'utf8');
-    assert.match(css,/--pp-daily-paper:#F2F0E9/);
-    assert.match(css,/--pp-daily-red:#A33832/);
-    assert.match(css,/@media\(max-width:340px\)/);
-    assert.match(css,/grid-template-columns:minmax\(0,1fr\)/);
-    assert.match(index,/style-daily\.css\?v=1\.2\.43/);
+    assert.ok(css.includes('--pp-daily-paper:#F2F0E9'));
+    assert.ok(css.includes('--pp-daily-red:#A33832'));
+    assert.ok(css.includes('container-type:inline-size;container-name:daily-paper;'));
+    assert.ok(css.includes('@container daily-paper (max-width:460px)'));
+    assert.ok(css.includes('column-count:2;column-gap:18px;column-rule'));
+    assert.ok(css.includes('break-inside:avoid'));
+    assert.ok(css.includes('column-span:all'));
+    assert.ok(css.includes('.pp-daily-brief-section{grid-template-columns:minmax(0,1fr)'));
+    assert.ok(css.includes('.pp-daily-brief{display:block'));
+    assert.ok(index.includes('style-daily.css?v=1.2.44'));
     assert.match(preview,/style-daily\.css/);
 });
