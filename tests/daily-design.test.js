@@ -48,6 +48,9 @@ test('榴莲日报品牌报头固定，真实出版物可编辑且相同刊源�
     assert.match(html,/class="pp-daily-publication-name" data-press="daily-meta" data-daily-field="publication"/);
     assert.match(html,/星期三/);
     assert.equal((html.match(/class="pp-daily-outlet"/g)||[]).length,0);
+    assert.equal(panelFor(state).press({dataset:{press:'daily-meta',dailyField:'publication'}})[0].label,'修改出版物');
+    const invalidDate=panelFor({daily:{...state.daily,edition:{...state.daily.edition,printDate:'not-a-date'}}}).html();
+    assert.doesNotMatch(invalidDate,/class="pp-daily-weekday"/);
     const alternate={...feature,outlet:'美联社'};
     const mixed=panelFor({daily:{...state.daily,feature:alternate}}).html();
     assert.match(mixed,/class="pp-daily-outlet">美联社<\/span>/);
@@ -74,6 +77,8 @@ test('日报排版按纸张容器宽度响应，窄屏单栏、宽屏平衡双�
     assert.ok(css.includes('--pp-daily-paper:#F2F0E9'));
     assert.ok(css.includes('--pp-daily-red:#A33832'));
     assert.ok(css.includes('container-type:inline-size;container-name:daily-paper;'));
+    assert.ok(css.includes('font-size:clamp(28px,10cqw,42px)'));
+    assert.ok(css.includes('@container daily-paper (max-width:280px)'));
     assert.ok(css.includes('@container daily-paper (max-width:460px)'));
     assert.ok(css.includes('column-count:2;column-gap:18px;column-rule'));
     assert.ok(css.includes('break-inside:avoid'));
