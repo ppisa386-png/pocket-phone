@@ -183,6 +183,12 @@ test('X post lookup uses event and entity IDs, scopes pronouns and ambiguous ali
   assert.doesNotMatch(prompt,/完全无关|engagementUpdates/);
   if(prompt){const [group]=JSON.parse(prompt.split('\n').at(-1));assert.ok(group.actors.length+group.summaries.length<=20);assert.deepEqual(group.actors.map(a=>a.entityId),ids);}
  }
+ queries.length=0;
+ const explicit=await postMemoryPrompt(c,settings(),[{id:'thread',text:'A public X interaction',explicitActors:[
+  {id:'a',name:'Mason',aliases:[]},{id:'b',name:'朱莉',aliases:['Jules']}
+ ]}],()=>true,bridge);
+ assert.deepEqual(queries.flatMap(q=>q.entityIds),['m','j'],'all explicitly involved NPCs receive individually attributed memory');
+ assert.match(explicit,/"accountId":"a"/);assert.match(explicit,/"accountId":"b"/);
  c.chat[399].mes='梅森和朱莉在营地唱歌。';queries.length=0;
  await postMemoryPrompt(c,settings(),[{id:'q',text:'他在唱歌',sourceIndex:399}],()=>true,bridge);assert.equal(queries.length,0);
  assert.equal(await postMemoryPrompt(c,settings(),[{id:'q',text:'Mason'}],()=>true,{}),'');
