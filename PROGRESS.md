@@ -2,7 +2,7 @@
 **用户问题**：正文 AI 将「尚未在小说正文展示」的 WhatsApp 消息误当成「手机未读」，把已在小手机打开阅读的旧消息反复写成新通知或未读消息。
 **讨论结论**：三个状态必须分开：shown=正文是否展示；read=手机是否已打开阅读；未展示不等于未读。X 私信正文仍遵守此前不注入正文 AI 的边界，本次只同步 X 私信的已读状态，不扩大私信内容的注入范围。
 **实现**：src/comm-context.js 对 WhatsApp／X 收到私信新增 `read` 侧车镜像，始终以原消息 `read` 字段为权威；手机端已有 `markRead` 路径在打开会话时把收到的消息设为已读，sidecar 同步不改变 shown。src/continuity.js 为 WhatsApp 正文通信条目附带 read:true/false，并明确告诉正文 AI：read=true 即使 shown=false 也已读，不能叫未读、刚收到或再次安排打开手机；read=false 才是未读，但也不能推断刚到达。多条未展示历史不能一律当作新消息。X 私信仍只在手机内保留 read 状态，不把私信正文注入正文。
-**测试**：新增 sidecar 双平台读状态同步与 WhatsApp read/unread 正文上下文区分测试；扩展 WhatsApp/X 手机打开会话 markRead 后的 sidecar、shown 独立性和隐私边界断言。CI 验收待运行后补录准确结果。
+**测试**：新增 sidecar 双平台读状态同步与 WhatsApp read/unread 正文上下文区分测试；扩展 WhatsApp/X 手机打开会话 markRead 后的 sidecar、shown 独立性和隐私边界断言。另修正 X 拉黑行为：拉黑仅隐藏未读角标，不伪造 read=true；解除拉黑后未读角标恢复。PR #12 GitHub Actions run 43159900465：**771/771 测试通过**，离线预览构建成功，Chromium 390px／320px 单栏与 520px 双栏日报浏览器验收通过。
 **范围**：src/comm-context.js、src/continuity.js、src/story-phone.js、src/phone.js、src/sms-context.js、src/x.js、src/x-story.js、src/x-view.js、src/memory.js、src/ui.js、index.js、版本与通信测试。保留其他渠道和既有 X 私信正文隔离规则。
 
 ## v1.2.49 · 微信朋友圈的可见性隔离、NPC 评论及正文联动（2026-11-12；基线 5930a77b8470a3611af968452218fa2eab77eee2）
