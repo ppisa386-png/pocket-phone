@@ -1,3 +1,10 @@
+## v1.2.51 · 微信私信已阅读状态与正文上下文联动（2026-11-12；基线 4d96b43d9e5474ae5097697919f382f12c0f95d0）
+**用户问题**：v1.2.50 已为 WhatsApp／X 私信区分手机已阅读与小说正文已展示，但微信尚未接入同一机制；微信消息虽已在手机打开阅读，正文 AI 仍可能将 shown=false 的旧消息描述成未读。
+**讨论结论**：微信与 WhatsApp 使用同一规则：shown 表示小说正文是否展示，read 表示手机是否已打开聊天阅读。两者独立；已读但未展示不再称为未读／刚收到，不要求重复打开；未读消息只允许通知，不泄露内容。X 私信内容仍不进入普通正文通信历史。
+**实现**：src/comm-context.js 将微信接收方 message 纳入 read sidecar 同步，原微信消息 read 字段为权威；src/continuity.js 对微信收到消息附带 read:true/false，并将正文提示规则从仅 WhatsApp 扩展为 WhatsApp／微信，同时明确 read=false 才受通知内容限制。共用 Snapchat 聊天引擎原本已有打开会话 markRead，因此不改手机交互、未读角标、消息存储和剧情回退。
+**测试**：扩展 comm-context 同步测试覆盖 WhatsApp／微信／X 三个平台；增加微信 read=true/read=false 且 shown=false 的正文上下文断言；扩展聊天 App 集成测试，分别验证 WhatsApp 与微信打开会话后 sidecar read=true、shown 仍为 false。CI 验收待运行后补录。
+**范围**：src/comm-context.js、src/continuity.js、src/memory.js、index.js、src/config.js、manifest.json、package.json、REQUIREMENTS.md、PROGRESS.md 及通信测试；不改朋友圈联动、X 私信内容注入边界及其他 App 行为。
+
 ## v1.2.50 · WhatsApp／X 私信已阅读状态与已展示状态分离（2026-11-12；基线 ffc547009f9c1370789acf391f9a373d50867290）
 **用户问题**：正文 AI 将「尚未在小说正文展示」的 WhatsApp 消息误当成「手机未读」，把已在小手机打开阅读的旧消息反复写成新通知或未读消息。
 **讨论结论**：三个状态必须分开：shown=正文是否展示；read=手机是否已打开阅读；未展示不等于未读。X 私信正文仍遵守此前不注入正文 AI 的边界，本次只同步 X 私信的已读状态，不扩大私信内容的注入范围。
