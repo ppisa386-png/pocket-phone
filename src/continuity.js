@@ -85,7 +85,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
             if(item.type==='message'&&item.status!=='queued'){
                 const meta=commMetaOrInfer(state,app,item.id,item);
                 if(!shouldInject(meta,currentStoryTime))continue;
-                entries.push({time,data:{channel:label,platform:app,recordId:item.id,shown:meta.shown===true,...(item.role==='assistant'?{read:commReadStatus(state,app,item.id,item)}:{}),...who,speaker:item.role==='user'?who.otherParty:account.name,storyTime:item.storyTime||null,kind:item.kind,text:item.text}});
+                entries.push({time,data:{channel:label,platform:app,recordId:item.id,shown:meta.shown===true,...(app==='whatsapp'&&item.role==='assistant'?{read:commReadStatus(state,app,item.id,item)}:{}),...who,speaker:item.role==='user'?who.otherParty:account.name,storyTime:item.storyTime||null,kind:item.kind,text:item.text}});
             }
             if(item.type==='call'&&item.turns?.length){
                 const meta=commMetaOrInfer(state,app,item.id,item);
