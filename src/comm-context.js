@@ -1,8 +1,9 @@
 // Unified narrative-injection timing and presentation sidecar for every
 // communication and social channel. One journal collection (`commContext`)
 // stores per-record classification (A/B), the story-time anchor of the floor
-// where the record first appeared, expiry and the shown/unshown state.
-// Records themselves, read states and business status are never touched here.
+// where the record first appeared, expiry, shown/unshown state and the phone
+// read state for incoming WhatsApp/X private messages. Message read state is
+// mirrored from the owning app record; the app record remains authoritative.
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
 import { appendChange, replayJournal } from './journal.js?v=1.2';
 import { xFeedArea } from './x-feed.js?v=1.2';
@@ -35,6 +36,13 @@ export function commExpired(meta, now) {
 
 export const commMeta = (state, platform, id) => state.commContext?.[platform + ':' + id];
 export const commKey = (platform, id) => platform + ':' + id;
+const tracksPhoneRead = entry => ['whatsapp','x'].includes(entry.platform) &&
+    !entry.element && entry.record?.type === 'message' && entry.record?.role === 'assistant';
+// The message record is authoritative when available; sidecar is the fallback.
+export function commReadStatus(state, platform, id, record = null) {
+    if (typeof record?.read === 'boolean') return record.read;
+    return state.commContext?.[commKey(platform,id)]?.read === true;
+}
 // Narrative-provided summaries must never re-present a shown record verbatim.
 export const commExcerpt = (text, max = 80) => {
     const value = String(text ?? '');
@@ -105,7 +113,11 @@ export function inferShown(entry) {
 
 // Fallback for prompt builders that run before the sidecar was synced.
 export function commMetaOrInfer(state, platform, id, record, element = null) {
-    return state.commContext?.[platform + ':' + id] || { expired: false, shown: inferShown({ platform, id, record, element }) };
+    const entry={platform,id,record,element};
+    const previous=state.commContext?.[platform + ':' + id];
+    if(previous)return previous;
+    return { expired: false, shown: inferShown(entry),
+        ...(tracksPhoneRead(entry)?{read:record.read===true}:{}) };
 }
 
 function recordEntry(state, platform, id) {
@@ -202,6 +214,10 @@ export function syncCommContext(journal, revisions, chat) {
         meta.category = smsCategory(previous?.category ?? legacy?.category);
         meta.classification = meta.category ? 'classified' : 'pending';
         if (meta.shown === undefined) meta.shown = inferShown(entry);
+        // Keep phone-read status independent from whether the novel has shown
+        // the message. Opening a thread updates the app record; this mirror is
+        // refreshed in the same journal synchronization pass.
+        if (tracksPhoneRead(entry)) meta.read = entry.record.read === true;
         if (entry.fixedCategory && !meta.category) { meta.category = 'A'; meta.classification = 'classified'; }
         if (everQueued.has(collectionOf(entry.platform) + ':' + entry.id) && !entry.element) meta.sentAfterQueue = true;
         if (!meta.anchor || (dateDay(meta.anchor.date) === null && meta.anchorSource !== 'source-floor')) {
