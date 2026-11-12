@@ -1486,6 +1486,35 @@ test('commenting on an NPC post adds one or two related NPC replies to the same 
  }finally{f.close();}
 });
 
+test('a repeated public action after its earlier event was shown creates a fresh reaction cycle',async()=>{
+ const f=setup();try{
+  const accounts=[
+   {id:'npc-a',type:'account',name:'Alex',handle:'alex',characterId:'card:alex.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-b',type:'account',name:'校园男神B',handle:'campus_b',characterId:'card:b.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-c',type:'account',name:'Bea',handle:'bea',characterId:'card:bea.png',authorKind:'npc',following:false,blocked:false},
+  ];
+  const post={id:'repeat-action-post',type:'post',author:'npc-b',feed:'home',text:'今天在图书馆待了一下午。',metrics:{likes:3,reposts:0,replies:1},liked:false,reposted:false};
+  const comment={id:'repeat-action-comment',type:'comment',postId:post.id,author:'npc-c',text:'效率真高。',replyTo:null};
+  await f.memory.commit(await f.memory.begin(),[...accounts,post,comment].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  const {xPendingPublicActivities}=await import('../src/x.js');
+  const respond=()=>{const events=xPendingPublicActivities(f.state());return events.map(event=>({eventId:event.id,accountId:'npc-a',text:'有人注意到这次互动了。'}));};
+  ok(await f.x.react(post.id,'liked'));
+  const first=xPendingPublicActivities(f.state())[0].id;
+  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:20,stats:[]}):JSON.stringify(feedResult({posts:[],activityReactions:respond()})));
+  ok(await f.x.refreshPublic());assert.equal(f.state().x[first].shown,true);
+  assert.equal(xItems(f.state(),'post').filter(row=>row.publicActivityId===first).length,1);
+  ok(await f.x.react(post.id,'liked'));
+  const second=xPendingPublicActivities(f.state())[0].id;
+  assert.notEqual(second,first,'a new action after consumption must not reuse the old event ID');
+  f.reply(({quietPrompt})=>JSON.stringify(feedResult({posts:[],activityReactions:respond()})));
+  ok(await f.x.refreshPublic());
+  assert.equal(f.state().x[second].shown,true);
+  assert.equal(xItems(f.state(),'post').filter(row=>row.publicActivityId===second).length,1);
+  assert.equal(xItems(f.state(),'post').filter(row=>row.publicActivityId===first||row.publicActivityId===second).length,2);
+ }finally{f.close();}
+});
+
 test('multiple changes to one public X action before the next home refresh only expose latest state',async()=>{
  const {xPendingPublicActivities}=await import('../src/x.js');
  const f=setup();try{
