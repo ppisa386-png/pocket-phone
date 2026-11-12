@@ -176,7 +176,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             (a?'\n当前对方：'+JSON.stringify({name:a.name,handle:a.handle})+'。'+(a.identityKnown?'此前已确认 user 账号对应的真实身份，改网名不会遗忘。':'对方不知道此网名是谁。不能凭后台 user 对应关系、角色卡、人设、正文中的私人称呼或私下经历认出 user；只知道网名及本账号公开过或本私信提供的信息。'):'\n逐个人物区分知情范围，不把后台账号对应关系当作人物已知。')+
             '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15).map(({id,text,imageDescription})=>({id,text,imageDescription})))+'\n'+task;
     }
-    const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task,options?.combined),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
+    const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task,options?.combined),validate,current,a?{id:a.characterId&&getContext().characters?.some(character=>'card:'+character.avatar===a.characterId)?a.characterId:a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
         retries:0,parseResponse:text=>parseXObject(text,{arrayKey:options?.arrayKey}),formatRetryOnce:true,memoryQuery:{actors:a?[a]:[],names:a?[a.name,...(a.aliases||[])]:[],topic:options?.memoryTopic||''},finalOutputContract:X_JSON_OUTPUT,
         outputContract:X_JSON_OUTPUT+'\n当前是 X 应用任务，不续写正文、不输出状态栏或 HTML。保留人设、背景和语言约定，最终只返回本任务要求的单个完整 JSON 对象，数组无内容用[]；不要复述示例或输出多个候选。'+X_ACCOUNT_RULES,...options,
     });
