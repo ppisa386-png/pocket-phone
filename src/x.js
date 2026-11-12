@@ -637,7 +637,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 id:X_FLOOR_LEDGER,type:'floor-ledger',version:X_FLOOR_VERSION,
                 ranges:coverThrough(storedRanges,endCovered)}}]);
             collect([xSet({id:'public-refresh',type:'refresh',floor})]);
-            await commit(changes);return {added:home.added};
+            await commit(changes);return {added:home.added,activityReactions:home.activityReactions||0};
         });},
         react(id,kind){return run(async(state,_c,_r,commit)=>{
             const p=state.x[id];
