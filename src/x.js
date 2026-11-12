@@ -672,8 +672,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             // can attract one or two related NPCs. The directly addressed
             // account keeps its own reply channel.
             const thread=xItems(state,'comment').filter(c=>c.postId===id);
-            const hasNpcThread=thread.some(c=>c.author!=='user');
-            const canInviteCommunity=p.author!=='user'||!!target||hasNpcThread;
+            const canInviteCommunity=p.author!=='user'||!!target;
             const community=canInviteCommunity&&xFeedArea(state,p)!=='square'
                 ?relatedNpcAccounts(state,id,[p.author,target?.id,...thread.map(c=>c.author)].filter(Boolean),target?[target.id]:[],8)
                 :[];
