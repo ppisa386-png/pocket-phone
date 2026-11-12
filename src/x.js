@@ -25,9 +25,9 @@ export const xProfile = (state,name='user') => state.x?.profile || {id:'profile'
 export const xPendingPublicActivities = state => xItems(state,'public-activity')
     .filter(row => row.shown !== true)
     .sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)||a.id.localeCompare(b.id));
-// The desktop X badge represents unread incoming DMs only. Public mentions and
-// comments remain in the X app but never raise its launcher badge.
-export const xUnread = state => xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read).length;
+// The desktop X badge represents unread incoming DMs from unblocked accounts.
+// Blocking a sender hides their badge but does not falsely mark the message read.
+export const xUnread = state => xItems(state,'message').filter(m=>m.role==='assistant'&&!m.read&&!state.x?.[m.accountId]?.blocked).length;
 const metric = n => Number.isFinite(Number(n)) ? Math.min(Number.MAX_SAFE_INTEGER,Math.max(0,Math.floor(Number(n)))) : 0;
 export function xCounts(state,post) {
     const comments=xItems(state,'comment').filter(c=>c.postId===post.id);
@@ -462,7 +462,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             await commit([xSet({...known(state,a),following:next}),
                 xSet(socialEvent('follow',id,next?'follow':'unfollow',{accountId:id}))]);
         });},
-        block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true}),...xThread(state,id).filter(m=>!m.read).map(m=>xSet({...m,read:true}))]);});},
+        block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true})]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:storyTime(getContext().chat)}))]);});},
         publish(value,imageDescription=''){return run(async(state,current,request,commit)=>{
             const media=xText(imageDescription,2000);
