@@ -1,4 +1,4 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.39';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.50';
 import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.4';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.39';
@@ -6,8 +6,8 @@ import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.49';
 import {normalizeSettings,MODULE_KEY} from './config.js?v=1.2.39';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
-import { smsReplyClassification } from './sms-context.js?v=1.2';
-import { COMM_PLATFORMS, commKey, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2';
+import { smsReplyClassification } from './sms-context.js?v=1.2.50';
+import { COMM_PLATFORMS, commKey, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.50';
 import { storyTime, exactStoryTime } from './story-clock.js?v=1.2';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.2';
