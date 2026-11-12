@@ -2,7 +2,7 @@ import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from '.
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2';
 import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
-import {readXMemory} from './external-memory.js?v=1.2';
+import {readXMemory} from './external-memory.js?v=1.2.53';
 import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.35';
 import {JOURNAL_KEY} from './journal.js?v=1.2';
 import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
@@ -88,32 +88,67 @@ const X_SEARCH_OUTPUT = '本次任务是搜索/添加 X 角色账号，不续写
 
 export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
-    const socialEvent=(slot,target,action,fields={})=>({
-        id:'public-activity:'+slot+':'+target,
-        type:'public-activity',action,shown:false,createdAt:Date.now(),
-        storyTime:squareClock(getContext().chat||[]),...fields,
-    });
-    function publicActivityPrompt(state,rows) {
+    const socialEvent=(state,slot,target,action,fields={})=>{
+        const base='public-activity:'+slot+':'+target;
+        const previous=xItems(state,'public-activity').filter(row=>
+            (row.slot===slot&&row.targetId===target)||row.id===base
+        ).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)).at(-1);
+        // Coalesce changes while an event is still pending. Once consumed,
+        // the next action gets a fresh ID so older reaction posts cannot mask it.
+        const id=previous?.shown!==true?(previous?.id||base):base+':'+crypto.randomUUID();
+        return {id,type:'public-activity',slot,targetId:target,action,shown:false,createdAt:Date.now(),
+            storyTime:squareClock(getContext().chat||[]),...fields};
+    };
+    function publicActivityPrompt(state,rows,candidateMap=new Map()) {
         if(!rows.length)return '';
         const events=rows.map(item=>{
             const post=item.postId?state.x?.[item.postId]:null;
-            const author=post?.author==='user'?{name:profile(state).alias,handle:null}:state.x?.[item.accountId];
-            if(item.accountId!=='user'&&(!author||author.type!=='account'||author.blocked))return null;
-            return {action:item.action,
-                targetAccount:author?{name:author.name,handle:author.handle||null}:null,
-                ...(post?.type==='post'?{post:{id:post.id,text:xText(post.text,360),imageDescription:xText(post.imageDescription,160)}}:{}),
+            const targetId=item.accountId||post?.author;
+            const author=targetId==='user'?{name:profile(state).alias,handle:null}:state.x?.[targetId];
+            if(targetId!=='user'&&(!author||author.type!=='account'||author.blocked))return null;
+            return {eventId:item.id,action:item.action,
+                targetAccount:author?{id:targetId,name:author.name,handle:author.handle||null}:null,
+                ...(post?.type==='post'?{post:{id:post.id,authorId:post.author,text:xText(post.text,360),imageDescription:xText(post.imageDescription,160)}}:{}),
+                relatedNPCs:(candidateMap.get(item.id)||[]).map(a=>({id:a.id,name:a.name,handle:a.handle||null,characterId:a.characterId||null,relationshipSignals:a.relationshipSignals||[]})),
                 storyTime:item.storyTime||null};
         }).filter(Boolean);
         if(!events.length)return '';
         return '\n本次首页刷新新增的一次性公开社交动态（只有本次可作为新鲜事件，已展示后不再注入）：'+
-            JSON.stringify({userAlias:profile(state).alias,events})+
-            '。这不是发送给某个NPC的私信，而是公开社交行为：人物或其他知情网友可能注意、回应、猜测、讨论、改变印象，也可能无人在意。' +
-            '根据人物性格、关注范围、社交关系、事件意义和公开可见程度自然决定反应；允许吃瓜但不强制吃瓜，不要求每个NPC回应或每条事件都被提及。' +
-            '匿名账号仅可按公开网名识别，除非已知身份，不得凭私人剧情认出真人。' +
+            JSON.stringify({userAlias:profile(state).alias,currentRoleCharacter:getContext().name2||null,events})+
+            '。这不是发送给某个NPC的私信，而是公开社交行为。每个事件都必须检查相关NPC是否能通过公开点赞列表、公开关注关系、转发记录、共同社交圈或已有公开互动注意到。' +
+            '对 relatedNPCs 中有合理知情路径的人物，至少生成1条、通常1～2条公开反应推文；不要把“允许沉默”当成默认答案，也不能在有相关NPC时让所有人毫无反应。每个事件最多2条，使用该事件提供的准确 accountId，反应必须写进 activityReactions，不要混入普通 posts。只有确实没有合适的相关NPC或事件没有合理公开可见路径时才返回空数组。' +
+            '反应应像真实 X 用户发推：可以含蓄调侃、猜测、吃瓜、阴阳怪气、表达醋意或单纯讨论，不必每次直白复述 user 的操作，也不必直接点名 user。' +
+            '匿名账号仅可按公开网名识别，除非已知身份，不得凭私人剧情认出真人；人物私下知道的关系不能自动变成公众已知。' +
             '事件发生过不等于事件当前仍在发生；旧帖子和既有关注状态也不代表刚刚点赞、转发或关注，不可把历史动态反复当新闻。';
     }
     const known=(state,a)=>({...a,identityKnown:a.identityKnown===true||profile(state).alias===getContext().name1});
     const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd});
+    const isNpcAccount=(state,a)=>{
+        if(!a||a.type!=='account'||a.blocked||a.crowd)return false;
+        const kind=xAccountKind(a);
+        return kind==='npc'||kind==null&&xItems(state,'post').some(p=>p.author===a.id&&p.feed!=='square');
+    };
+    function relatedNpcAccounts(state,postId,focusIds=[],excludeIds=[],limit=6){
+        const context=getContext(),post=state.x?.[postId],thread=xItems(state,'comment').filter(c=>c.postId===postId);
+        const focus=new Set([...focusIds,post?.author,...thread.map(c=>c.author)].filter(id=>id&&id!=='user'));
+        const threadAuthors=new Set(thread.map(c=>c.author)),connected=new Set();
+        for(const comment of xItems(state,'comment')){
+            const owner=state.x?.[comment.postId]?.author;
+            if(focus.has(comment.author)&&owner&&owner!=='user')connected.add(owner);
+            if(focus.has(owner)&&comment.author&&comment.author!=='user')connected.add(comment.author);
+        }
+        const excluded=new Set(excludeIds),current=context.name2;
+        return xItems(state,'account').filter(a=>isNpcAccount(state,a)&&!excluded.has(a.id)).map((a,index)=>{
+            const signals=[],currentRole=!!current&&sameNamedPerson(a,{name:current});
+            let score=0;
+            if(currentRole){score+=100;signals.push('当前剧情角色');}
+            if(threadAuthors.has(a.id)){score+=40;signals.push('参与过同一评论串');}
+            if(connected.has(a.id)){score+=20;signals.push('与事件相关账号有公开互动');}
+            if(focus.has(a.id)){score+=15;signals.push('事件目标账号');}
+            if(a.following){score+=5;signals.push('user 已关注');}
+            return {...a,score,index,relationshipSignals:signals};
+        }).filter(a=>a.score>0).sort((a,b)=>b.score-a.score||a.index-b.index).slice(0,limit);
+    }
     function publicConversation(state, maxComments=40, maxChars=24000) {
         const all=xItems(state,'post');
         const posts=new Set([...all.slice(-20),...all.filter(p=>p.author==='user').slice(-15)].map(p=>p.id));
@@ -141,7 +176,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             (a?'\n当前对方：'+JSON.stringify({name:a.name,handle:a.handle})+'。'+(a.identityKnown?'此前已确认 user 账号对应的真实身份，改网名不会遗忘。':'对方不知道此网名是谁。不能凭后台 user 对应关系、角色卡、人设、正文中的私人称呼或私下经历认出 user；只知道网名及本账号公开过或本私信提供的信息。'):'\n逐个人物区分知情范围，不把后台账号对应关系当作人物已知。')+
             '\nuser 最近公开帖子：'+JSON.stringify(xItems(state,'post').filter(p=>p.author==='user').slice(combined?-10:-15).map(({id,text,imageDescription})=>({id,text,imageDescription})))+'\n'+task;
     }
-    const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task,options?.combined),validate,current,a?{id:a.characterId||a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
+    const ask=(state,a,request,current,task,validate,options)=>request(prompt(state,a,task,options?.combined),validate,current,a?{id:a.characterId&&getContext().characters?.some(character=>'card:'+character.avatar===a.characterId)?a.characterId:a.id,name:a.name,channel:'x',alias:profile(state).alias,identityKnown:!!a.identityKnown}:null,{
         retries:0,parseResponse:text=>parseXObject(text,{arrayKey:options?.arrayKey}),formatRetryOnce:true,memoryQuery:{actors:a?[a]:[],names:a?[a.name,...(a.aliases||[])]:[],topic:options?.memoryTopic||''},finalOutputContract:X_JSON_OUTPUT,
         outputContract:X_JSON_OUTPUT+'\n当前是 X 应用任务，不续写正文、不输出状态栏或 HTML。保留人设、背景和语言约定，最终只返回本任务要求的单个完整 JSON 对象，数组无内容用[]；不要复述示例或输出多个候选。'+X_ACCOUNT_RULES,...options,
     });
@@ -336,7 +371,18 @@ export function createX({memory,phone,getContext,getSettings}) {
         // Only the HOME refresh path consumes this global public activity pulse.
         // Square, trends, comments, DMs and standalone followed feeds do not.
         const pendingActivity=combined&&!square&&!following?xPendingPublicActivities(state):[];
-        const activityPrompt=publicActivityPrompt(state,pendingActivity);
+        const activityCandidates=new Map(pendingActivity.map(row=>{
+            const post=row.postId?state.x?.[row.postId]:null,targetId=row.accountId||post?.author,target=targetId&&targetId!=='user'?state.x?.[targetId]:null;
+            return [row.id,targetId!=='user'&&(!target||target.blocked)?[]:relatedNpcAccounts(state,row.postId,[targetId],[],6)];
+        }));
+        const activityPrompt=publicActivityPrompt(state,pendingActivity,activityCandidates);
+        const activityQueries=pendingActivity.map(row=>{
+            const post=row.postId?state.x?.[row.postId]:null,targetId=row.accountId||post?.author,target=targetId&&targetId!=='user'?state.x?.[targetId]:null;
+            const actors=[...(isNpcAccount(state,target)?[target]:[]),...(activityCandidates.get(row.id)||[])];
+            const unique=[...new Map(actors.map(a=>[a.id,a])).values()];
+            return unique.length?{id:row.id,text:JSON.stringify({action:row.action,target:target?.name||profile(state).alias,post:post?{text:post.text,imageDescription:post.imageDescription}:null}),sourceIndex:post?.sourceIndex,explicitActors:unique.map(a=>({id:a.id,name:a.name,aliases:a.aliases||[]}))}:null;
+        }).filter(Boolean);
+        const activityReactionLimit=Math.min(24,pendingActivity.length*2);
         // Give the model the identity roster the program can already verify,
         // so it does not have to guess which account IDs are eligible.
         const identityAid=!square?(()=>{
@@ -377,8 +423,26 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
 `+JSON.stringify({followers:xAudience(state)?.followers??null,posts:reachPosts}) : '';
         const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT(recommended,square)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须填写。':'');
         const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
-        const results=await ask(state,null,request,current,task+reachTask+activityPrompt+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
-            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),d=>({posts:d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15),replies:d.replies===undefined?[]:list(d,'replies',5),accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience}),{outputContract:refreshOutput+reachOutput,finalOutputContract:refreshOutput+reachOutput,combined,postQueries:(square?[]:xItems(state,'post').filter(p=>p.author==='user').slice(-10)),memoryChars:8000,maxTokens:8192,retryEmptyOnce:true,arrayKey:'posts'});
+        const activityOutput=pendingActivity.length?'\n附加字段 activityReactions: [{eventId:"本次公开事件ID",accountId:"relatedNPCs 中的现存 NPC 账号ID",text:"该 NPC 的公开时间线推文",category:"可选A或B"}]。每个有相关NPC的事件至少1条、最多2条，最多 '+activityReactionLimit+' 条；没有相关NPC的事件可不回应。activityReactions 是独立于常规 posts 的事件回应推文。':'';
+        const results=await ask(state,null,request,current,task+reachTask+activityPrompt+activityOutput+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
+            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),
+            d=>{
+                const posts=d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15);
+                const activityReactions=pendingActivity.length?list(d,'activityReactions',activityReactionLimit):[];
+                if(pendingActivity.length){
+                    const perEvent=new Map(),authorsByEvent=new Map();
+                    for(const row of activityReactions){
+                        const candidates=activityCandidates.get(row?.eventId)||[];
+                        if(typeof row?.text!=='string'||!row.text.trim()||!candidates.some(a=>a.id===row.accountId))throw Error('公开动态回应引用了无关事件、未知 NPC 或空内容。');
+                        const count=(perEvent.get(row.eventId)||0)+1,authors=authorsByEvent.get(row.eventId)||new Set();
+                        if(authors.has(row.accountId))throw Error('同一公开事件不能由同一 NPC 重复发出回应。');
+                        perEvent.set(row.eventId,count);authors.add(row.accountId);authorsByEvent.set(row.eventId,authors);
+                        if(count>2)throw Error('每条公开动态最多生成两条 NPC 回应。');
+                    }
+                    for(const [eventId,candidates] of activityCandidates)if(candidates.length&&!perEvent.get(eventId))throw Error('公开动态 '+eventId+' 有相关 NPC，但本次没有生成任何公开回应。请重试首页刷新。');
+                }
+                return {posts,replies:d.replies===undefined?[]:list(d,'replies',5),activityReactions,accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience};
+            },{outputContract:refreshOutput+reachOutput+activityOutput,finalOutputContract:refreshOutput+reachOutput+activityOutput,combined,postQueries:[...(square?[]:userPosts.slice(-10)),...activityQueries],memoryChars:8000,maxTokens:8192,retryEmptyOnce:true,arrayKey:'posts'});
         if(square&&!combined&&results.posts.length<10)throw Error('本批广场帖子只有 '+results.posts.length+' 条，广场刷新需要 10～15 条，本次未保存。');
         state=structuredClone(state);const changes=[],authors=new Set();let added=0,repeatedSquare=false;
         if(!square&&!following){
@@ -387,7 +451,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         }
         // Safe filtering diagnostics: only aggregated reasons are counted;
         // no post text, private story content or full model output is kept.
-        const skipped={identity:0,account:0,duplicate:0,invalid:0};
+        const skipped={identity:0,account:0,duplicate:0,invalid:0};let activityAdded=0;
         for(const item of results.posts){if(!xText(item?.text)){skipped.invalid++;continue;}
             const basis=square?squareBasis(item,prose):null;if(square&&!basis){skipped.invalid++;continue;}
             const resolved=resolvePostAuthor(state,item,changes,following,square,sources),a=resolved.account;
@@ -409,6 +473,20 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             // own publication mechanism. The model may classify each post.
             if(!square&&item.category)changes.push(...commReplyClassification('x',post.id,null,smsCategory(item.category),state));
             added++;
+        }
+        // Public activity reactions are separate, ordinary home-feed posts.
+        // Each event gets at most two distinct, verified NPC authors.
+        const reactionCounts=new Map(),reactionAuthors=new Set();
+        for(const item of results.activityReactions){
+            const event=pendingActivity.find(row=>row.id===item.eventId),author=state.x[item.accountId];
+            if(!event||!isNpcAccount(state,author)||!activityCandidates.get(event.id)?.some(a=>a.id===author.id))continue;
+            const count=reactionCounts.get(event.id)||0,key=event.id+':'+author.id;
+            if(count>=2||reactionAuthors.has(key)||xItems(state,'post').some(post=>post.publicActivityId===event.id&&post.author===author.id))continue;
+            const text=xText(item.text,1600);if(!text)continue;
+            const post=xRecord('post',{author:author.id,postedAtStory:squareClock(chat),text,feed:'home',publicActivityId:event.id,liked:false,reposted:false});
+            state.x[post.id]=post;changes.push(xSet(post));
+            if(item.category)changes.push(...commReplyClassification('x',post.id,null,smsCategory(item.category),state));
+            reactionCounts.set(event.id,count+1);reactionAuthors.add(key);activityAdded++;
         }
         // Empty model batches (no fitting NPC) return added: 0 normally;
         // only batches whose posts were all filtered report a failure with
@@ -435,7 +513,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         // Consume in the same atomic home-refresh commit as the generated feed:
         // a later failed follower/reach stage must leave every pulse pending.
         if(pendingActivity.length)changes.push(...pendingActivity.map(row=>xSet({...row,shown:true})));
-        await commit(changes);return {added};
+        await commit(changes);return {added:added+activityAdded,activityReactions:activityAdded};
         }
     return {
         open:()=>memory.read(),
@@ -460,7 +538,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const a=xAccount(state,id),next=value===true;
             if(!!a.following===next)return;
             await commit([xSet({...known(state,a),following:next}),
-                xSet(socialEvent('follow',id,next?'follow':'unfollow',{accountId:id}))]);
+                xSet(socialEvent(state,'follow',id,next?'follow':'unfollow',{accountId:id}))]);
         });},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true})]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:storyTime(getContext().chat)}))]);});},
@@ -570,7 +648,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 id:X_FLOOR_LEDGER,type:'floor-ledger',version:X_FLOOR_VERSION,
                 ranges:coverThrough(storedRanges,endCovered)}}]);
             collect([xSet({id:'public-refresh',type:'refresh',floor})]);
-            await commit(changes);return {added:home.added};
+            await commit(changes);return {added:home.added,activityReactions:home.activityReactions||0};
         });},
         react(id,kind){return run(async(state,_c,_r,commit)=>{
             const p=state.x[id];
@@ -578,7 +656,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(p.author!=='user')xAccount(state,p.author);
             const next=!p[kind],action=kind==='liked'?(next?'like':'unlike'):(next?'repost':'unrepost');
             await commit([xSet({...p,[kind]:next,[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})}),
-                xSet(socialEvent(kind,id,action,{accountId:p.author,postId:id}))]);
+                xSet(socialEvent(state,kind,id,action,{accountId:p.author,postId:id}))]);
         });},
         comment(id,value,replyTo=null){return run(async(state,current,request,commit)=>{
             const p=state.x[id];if(p?.type!=='post')throw Error('帖子不存在。');
@@ -587,15 +665,63 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(replyTo&&(parent?.type!=='comment'||parent.postId!==id))throw Error('这条回复已不存在。');
             const targetId=parent?.author||p.author;
             const target=targetId==='user'?null:known(state,xAccount(state,targetId));
-            const body=xRequired(value,'回复内容');const comment=xRecord('comment',{postId:id,author:'user',alias:profile(state).alias,text:body,replyTo:parent?.id||null});const changes=[xSet(comment)];
-            // Square generation is refresh-only. Posting a comment is local;
-            // direct conversations and the regular home feed keep their replies.
-            if(target&&xFeedArea(state,p)!=='square'){
-
-                const reply=await ask(state,target,request,current,'当前任务：X 评论。你是被回复的账号：'+JSON.stringify({name:target.name,handle:target.handle})+'；帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；公开帖子：'+JSON.stringify(p.text)+publicationScenePrompt(getContext(),[p])+'；此前评论：'+JSON.stringify(xItems(state,'comment').filter(c=>c.postId===id).slice(-30).map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+'；user 回复的目标评论：'+JSON.stringify(parent?.text||null)+'；user 本次评论：'+JSON.stringify(body)+'。仅决定本账号是否回应 user，可保持沉默，不强制帖子作者出面。输出 {"text":"回复或空字符串"}。不得用私信或未公开剧情作为公众已知。'+engagementRules()+'。粉丝变化在首页综合刷新时评估。',d=>{if(typeof d.text!=='string')throw Error('评论格式不正确。');return {text:xText(d.text),audience:d.audience};},{postQueries:[{...p,text:[p.text,parent?.text,body].filter(Boolean).join('\n'),explicitActor:target}]});
-                changes.push(xSet(target));if(reply.text)changes.push(xSet(xRecord('comment',{postId:id,author:target.id,text:reply.text,replyTo:comment.id})));
-
-
+            const body=xRequired(value,'回复内容');
+            const comment=xRecord('comment',{postId:id,author:'user',alias:profile(state).alias,text:body,replyTo:parent?.id||null});
+            const changes=[xSet(comment)];
+            // NPC-authored home-feed posts and existing NPC-led threads on user posts
+            // can attract one or two related NPCs. The directly addressed
+            // account keeps its own reply channel.
+            const thread=xItems(state,'comment').filter(c=>c.postId===id);
+            const hasNpcThread=thread.some(c=>c.author!=='user'&&isNpcAccount(state,state.x?.[c.author]));
+            const canInviteCommunity=p.author!=='user'||!!target||hasNpcThread;
+            const community=canInviteCommunity&&xFeedArea(state,p)!=='square'
+                ?relatedNpcAccounts(state,id,[p.author,target?.id,...thread.map(c=>c.author)].filter(Boolean),target?[target.id]:[],8)
+                :[];
+            const shouldGenerate=xFeedArea(state,p)!=='square'&&(!!target||community.length>0);
+            if(shouldGenerate){
+                const actorRows=[...(target?[target]:[]),...community];
+                const actors=[...new Map(actorRows.map(a=>[a.id,a])).values()];
+                const contract='输出一个 JSON 对象：{"text":"被直接回复账号的公开回复；若没有回应则为空字符串","reactions":[{"key":"本批评论唯一键","accountId":"relatedNPCs 中现存 NPC 账号ID","text":"公开跟帖内容","replyTo":"user_comment、target_reply、已有评论ID或本批前面评论的key"}]}。reactions 最多2条，可为空；但只要 relatedNPCs 中存在合理相关人物，就必须生成至少1条、通常1～2条跟帖。每个NPC最多一条。不得创建名单外账号。';
+                const task='当前任务：X 公开评论区互动。帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；原帖：'+JSON.stringify({id:p.id,text:p.text,imageDescription:p.imageDescription})+
+                    publicationScenePrompt(getContext(),[p])+'；此前评论串：'+JSON.stringify(thread.map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+
+                    '；user 本次公开评论：'+JSON.stringify({id:comment.id,text:body,replyTo:parent?.id||null})+
+                    '；被直接回复的账号：'+JSON.stringify(target?{id:target.id,name:target.name,handle:target.handle}:null)+
+                    '；可参与的其他相关 NPC 账号（只能从这里选，优先考虑当前剧情角色、同帖参与者及与帖子作者有既有公开互动者）：'+JSON.stringify(community.map(a=>({id:a.id,name:a.name,handle:a.handle,characterId:a.characterId||null,relationshipSignals:a.relationshipSignals})))+
+                    '。先判断被直接回复账号是否回应 user，回复写入 text；再判断其他相关NPC是否加入同一公开讨论串，写入 reactions。至少有一名合理相关NPC时不能默认全体沉默。其他NPC可以回复 user_comment、target_reply、已有评论ID或本批前面评论的key；允许形成一层或多层对话，不要只生成两条互不相关的孤立评论。人物只依据各自知道的公开信息和自身关系反应，不泄露私人剧情；不必所有人都发言。'+contract+engagementRules();
+                const queryPost={...p,text:[p.text,...thread.map(c=>c.text),body].filter(Boolean).join('\n'),
+                    explicitActors:actors.map(a=>({id:a.id,name:a.name,aliases:a.aliases||[]}))};
+                const result=await ask(state,target,request,current,task,d=>{
+                    if(typeof d.text!=='string')throw Error('评论格式不正确。');
+                    const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set(),keys=new Set(['user_comment','target_reply',...thread.map(c=>c.id)]);
+                    const parents=new Set([...thread.map(c=>c.id),'user_comment']);
+                    if(target&&d.text.trim())parents.add('target_reply');
+                    for(const row of reactions){
+                        if(typeof row?.key!=='string'||!row.key.trim()||keys.has(row.key)||typeof row?.text!=='string'||!row.text.trim()||!community.some(a=>a.id===row.accountId)||seen.has(row.accountId))throw Error('评论区 NPC 跟帖引用了未知账号、重复作者、重复键或空内容。');
+                        if(row.replyTo!=null&&row.replyTo!==''&&!parents.has(row.replyTo))throw Error('评论区 NPC 跟帖引用了不存在或尚未生成的父评论。');
+                        seen.add(row.accountId);keys.add(row.key);parents.add(row.key);
+                    }
+                    if(community.length&&!reactions.length)throw Error('评论区存在相关 NPC，但本次没有生成跟帖。请重试。');
+                    return {text:xText(d.text),reactions};
+                },{postQueries:[queryPost],finalOutputContract:contract});
+                if(target)changes.push(xSet(target));
+                const targetReply=target&&result.text?xRecord('comment',{postId:id,author:target.id,text:result.text,replyTo:comment.id}):null;
+                if(targetReply)changes.push(xSet(targetReply));
+                const parents=new Map(thread.map(c=>[c.id,c.id]));
+                parents.set('user_comment',comment.id);
+                if(targetReply)parents.set('target_reply',targetReply.id);
+                const usedAuthors=new Set(),savedKeys=new Set();
+                for(const row of result.reactions){
+                    const author=community.find(a=>a.id===row.accountId);
+                    if(!author||usedAuthors.has(author.id))continue;
+                    const parentKey=typeof row.replyTo==='string'&&row.replyTo?row.replyTo:'user_comment';
+                    const parentId=parents.get(parentKey);
+                    if(!parentId)throw Error('NPC 跟帖引用了不存在的评论父级。');
+                    const text=xText(row.text,1200),signature=xCommentKey(id,author.id,text,parentId);
+                    if(!text||savedKeys.has(signature)||findComment(state,id,author.id,text,parentId))continue;
+                    const reaction=xRecord('comment',{postId:id,author:author.id,text,replyTo:parentId});
+                    changes.push(xSet(reaction));parents.set(row.key,reaction.id);
+                    usedAuthors.add(author.id);savedKeys.add(signature);
+                }
             }
             await commit(changes);
         });},

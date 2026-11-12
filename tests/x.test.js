@@ -365,18 +365,19 @@ test('square refresh needs no following and rejects character authors while crea
  }finally{f.close();}
 });
 
-test('followed characters have un-followed commenters and may remain completely silent',async()=>{
+test('the directly addressed character may stay silent while a related NPC joins the public thread',async()=>{
  const f=setup();try{
   const id=await account(f);ok(await f.x.follow(id,true));
   f.reply({posts:[{accountId:id,text:'A quiet walk.',metrics:{likes:2,reposts:0,replies:1},comments:[{key:'friend',name:'Bea',handle:'bea',text:'Nice weather.'}]}]});
   ok(await f.x.refresh(true));const p=xItems(f.state(),'post')[0],c=xItems(f.state(),'comment')[0];
   assert.equal(f.state().x[c.author].name,'Bea');assert.equal(f.state().x[c.author].following,false);
   assert.equal(xItems(f.state(),'comment').some(c=>c.author===id),false);assert.match(f.prompt(),/可以一条都不回复/);
+  await f.memory.commit(await f.memory.begin(),[{collection:'x',key:c.author,value:{...f.state().x[c.author],authorKind:'npc'}}]);await f.memory.read();
   const before=f.count();ok(await f.x.react(p.id,'liked'));ok(await f.x.react(p.id,'reposted'));
   assert.equal(f.count(),before);assert.deepEqual(xCounts(f.state(),f.state().x[p.id]),{likes:3,reposts:1,replies:1});
   ok(await f.x.react(p.id,'liked'));assert.equal(xCounts(f.state(),f.state().x[p.id]).likes,2);
-  f.reply({text:''});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,2);
-  assert.equal(xCounts(f.state(),f.state().x[p.id]).replies,2);
+  f.reply({text:'',reactions:[{key:'bea',accountId:c.author,text:'Nice to see you here.',replyTo:'user_comment'}]});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,3);
+  assert.equal(xCounts(f.state(),f.state().x[p.id]).replies,3);
  }finally{f.close();}
 });
 
@@ -385,10 +386,10 @@ test('replying to a comment addresses that commenter and rejects a parent from a
   const id=await account(f);ok(await f.x.follow(id,true));
   f.reply({posts:[{accountId:id,text:'Concert tonight',comments:[{key:'one',name:'Bea',handle:'bea',text:'I am going too.'}]}]});
   ok(await f.x.refresh(true));const post=xItems(f.state(),'post')[0],parent=xItems(f.state(),'comment')[0];
-  f.reply({text:'See you there!'});ok(await f.x.comment(post.id,'When will you arrive?',parent.id));
-  const comments=xItems(f.state(),'comment');assert.equal(comments.at(-1).author,parent.author);
-  assert.equal(comments.at(-2).replyTo,parent.id);assert.equal(comments.at(-1).replyTo,comments.at(-2).id);
-  assert.match(f.prompt(),/被回复的账号：.*Bea/);assert.match(f.prompt(),/不强制帖子作者出面/);
+  f.reply({text:'See you there!',reactions:[{key:'alex',accountId:id,text:'我也想知道你们什么时候到。',replyTo:'user_comment'}]});ok(await f.x.comment(post.id,'When will you arrive?',parent.id));
+  const comments=xItems(f.state(),'comment'),userComment=comments.find(c=>c.author==='user'),directReply=comments.find(c=>c.author===parent.author&&c.replyTo===userComment.id),communityReply=comments.find(c=>c.author===id&&c.replyTo===userComment.id);
+  assert.ok(directReply&&communityReply);assert.equal(userComment.replyTo,parent.id);
+  assert.match(f.prompt(),/被直接回复的账号：.*Bea/);assert.match(f.prompt(),/被直接回复账号是否回应 user/);
   ok(await f.x.publish('Other post'));const own=xItems(f.state(),'post').find(p=>p.author==='user');
   const count=f.count();assert.equal((await f.x.comment(own.id,'Wrong parent',parent.id)).ok,false);assert.equal(f.count(),count);
   ok(await f.x.block(parent.author,true));assert.equal((await f.x.comment(post.id,'Blocked',parent.id)).ok,false);
@@ -952,7 +953,7 @@ test('new feed accepts fifteen concrete comments and full posts do not collect a
   f.reply({posts:[{name:'Alex',handle:'alex',has_account:true,text:'Concert',metrics:{likes:123,reposts:7,replies:100},comments:samples}]});
   ok(await f.x.refresh());const npc=xItems(f.state(),'post')[0];assert.equal(xItems(f.state(),'comment').length,15);
   assert.deepEqual(xCounts(f.state(),npc),{likes:123,reposts:7,replies:100});
-  ok(await f.x.publish('User event'));const mine=xItems(f.state(),'post').at(-1);
+  ok(await f.x.publish('User event'));const mine=xItems(f.state(),'post').find(post=>post.author==='user');
   const update={postId:mine.id,metrics:{likes:8,reposts:1,replies:100},comments:samples};
   f.reply({posts:[],engagementUpdates:[update]});ok(await f.x.refresh());
   const before=xItems(f.state(),'comment').filter(c=>c.postId===mine.id);assert.equal(before.length,15);
@@ -1287,7 +1288,8 @@ test('public X follow, unfollow, like and repost form non-directed one-shot home
   f.reply(({quietPrompt})=>{
     seen.push(quietPrompt);
     if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:10,stats:[]});
-    return JSON.stringify(feedResult());
+    const activityReactions=xPendingPublicActivities(f.state()).filter(row=>['follow','unfollow','like','repost','unlike','unrepost'].includes(row.action)).map(row=>({eventId:row.id,accountId:id,text:'注意到这条公开互动的人发了一条相关推文。'}));
+    return JSON.stringify(feedResult({activityReactions}));
   });
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
@@ -1346,10 +1348,147 @@ test('public X social pulse cannot be consumed by square, trends, followed feed 
   f.reply(()=>'{posts:');
   const failed=await f.x.refreshPublic();assert.equal(failed.ok,false);assert.equal(failed.code,'MODEL_JSON_TRUNCATED');
   assert.equal(xPendingPublicActivities(f.state()).length,1);
-  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:5,stats:[]}):JSON.stringify({posts:[]}));
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:5,stats:[]});
+   return JSON.stringify({posts:[],activityReactions:xPendingPublicActivities(f.state()).map(row=>({eventId:row.id,accountId:id,text:'看到你刚刚关注了我。'}))});
+  });
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
   assert.ok(Object.values(f.state().x).some(row=>row.type==='public-activity'&&row.shown===true));
+ }finally{f.close();}
+});
+
+test('public X like and unfollow events create one or two related NPC timeline reactions on the next home refresh',async()=>{
+ const {xPendingPublicActivities}=await import('../src/x.js');
+ const f=setup();try{
+  const accounts=[
+   {id:'npc-a',type:'account',name:'Alex',handle:'alex',characterId:'card:alex.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-b',type:'account',name:'校园男神B',handle:'campus_b',characterId:'card:b.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-c',type:'account',name:'Bea',handle:'bea',characterId:'card:bea.png',authorKind:'npc',following:false,blocked:false},
+  ];
+  const post={id:'post-b',type:'post',author:'npc-b',feed:'home',text:'今天在图书馆待了一下午。',metrics:{likes:3,reposts:0,replies:1},liked:false,reposted:false};
+  const oldComment={id:'comment-c',type:'comment',postId:post.id,author:'npc-c',text:'效率真高。',replyTo:null};
+  await f.memory.commit(await f.memory.begin(),[...accounts,post,oldComment].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  ok(await f.x.react(post.id,'liked'));
+  ok(await f.x.follow('npc-b',true));ok(await f.x.follow('npc-b',false));
+  const events=xPendingPublicActivities(f.state()),likeEvent=events.find(row=>row.action==='like'),unfollowEvent=events.find(row=>row.action==='unfollow');
+  assert.ok(likeEvent&&unfollowEvent);assert.equal(events.length,2,'follow then unfollow before refresh keeps only the latest public state for that account');
+  const prompts=[];
+  f.reply(({quietPrompt})=>{
+   prompts.push(quietPrompt);
+   if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:20,stats:[]});
+   const activityReactions=events.flatMap(event=>[
+    {eventId:event.id,accountId:'npc-b',text:event.action==='like'?'看到你给我点了赞。':'刚关注又取关，挺有意思。'},
+    {eventId:event.id,accountId:'npc-a',text:event.action==='like'?'有人最近挺关注图书馆那位啊。':'怎么突然取关了？'}
+   ]);
+   return JSON.stringify(feedResult({posts:[],activityReactions}));
+  });
+  const result=await f.x.refreshPublic();ok(result);
+  assert.match(prompts[0],/至少生成1条、通常1～2条公开反应推文/);
+  assert.match(prompts[0],/当前剧情角色/);
+  const reactions=xItems(f.state(),'post').filter(row=>row.publicActivityId===likeEvent.id||row.publicActivityId===unfollowEvent.id);
+  assert.equal(reactions.length,4);
+  for(const event of events){
+   const rows=reactions.filter(row=>row.publicActivityId===event.id);
+   assert.equal(rows.length,2);assert.deepEqual(new Set(rows.map(row=>row.author)),new Set(['npc-a','npc-b']));
+   assert.ok(rows.every(row=>row.feed==='home'&&row.type==='post'));
+   assert.equal(f.state().x[event.id].shown,true);
+  }
+  assert.equal(xPendingPublicActivities(f.state()).length,0);
+  assert.equal(result.value.activityReactions,4);
+ }finally{f.close();}
+});
+
+test('replying to an NPC comment under a user post can bring other NPCs into the same thread',async()=>{
+ const f=setup();try{
+  const accounts=[
+   {id:'npc-a',type:'account',name:'Alex',handle:'alex',characterId:'card:alex.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-b',type:'account',name:'校园男神B',handle:'campus_b',characterId:'card:b.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-c',type:'account',name:'Bea',handle:'bea',characterId:'card:bea.png',authorKind:'npc',following:false,blocked:false},
+  ];
+  const post={id:'user-thread-post',type:'post',author:'user',feed:'home',text:'今天的演出结束了。',metrics:{likes:2,reposts:0,replies:1}};
+  const parent={id:'npc-parent',type:'comment',postId:post.id,author:'npc-b',text:'现场气氛很好。',replyTo:null};
+  const sibling={id:'npc-sibling',type:'comment',postId:post.id,author:'npc-c',text:'确实，最后一首尤其好。',replyTo:'npc-parent'};
+  await f.memory.commit(await f.memory.begin(),[...accounts,post,parent,sibling].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  f.reply({text:'我也最喜欢最后一首。',reactions:[
+   {key:'alex',accountId:'npc-a',text:'Alex：你们俩倒是很有共识。',replyTo:'user_comment'},
+   {key:'bea',accountId:'npc-c',text:'Bea：那首副歌确实很抓耳。',replyTo:'alex'}
+  ]});
+  ok(await f.x.comment(post.id,'我也最喜欢最后一首。',parent.id));
+  const comments=xItems(f.state(),'comment').filter(row=>row.postId===post.id);
+  const userComment=comments.find(row=>row.author==='user'&&row.replyTo===parent.id);
+  const direct=comments.find(row=>row.author==='npc-b'&&row.replyTo===userComment?.id);
+  const alex=comments.find(row=>row.author==='npc-a'&&row.replyTo===userComment?.id);
+  const bea=comments.find(row=>row.author==='npc-c'&&row.text.startsWith('Bea：'));
+  assert.ok(userComment&&direct&&alex&&bea);
+  assert.equal(bea.replyTo,alex.id);
+ }finally{f.close();}
+});
+
+test('commenting on an NPC post adds one or two related NPC replies to the same public thread',async()=>{
+ const f=setup();
+ try{
+  const accounts=[
+   {id:'npc-a',type:'account',name:'Alex',handle:'alex',characterId:'card:alex.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-b',type:'account',name:'校园男神B',handle:'campus_b',characterId:'card:b.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-c',type:'account',name:'Bea',handle:'bea',characterId:'card:bea.png',authorKind:'npc',following:false,blocked:false},
+  ];
+  const post={id:'thread-post',type:'post',author:'npc-b',feed:'home',text:'今天在图书馆待了一下午。',metrics:{likes:2,reposts:0,replies:1}};
+  const existing={id:'existing-comment',type:'comment',postId:post.id,author:'npc-c',text:'真有毅力。',replyTo:null};
+  await f.memory.commit(await f.memory.begin(),[...accounts,post,existing].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  f.reply({text:'确实挺意外的。',reactions:[
+   {key:'a',accountId:'npc-a',text:'他平时可坐不住。',replyTo:'user_comment'},
+   {key:'c',accountId:'npc-c',text:'你俩怎么还聊上了？',replyTo:'a'}
+  ]});
+  ok(await f.x.comment(post.id,'你居然真的能坐一下午？'));
+  const comments=xItems(f.state(),'comment').filter(row=>row.postId===post.id);
+  const userComment=comments.find(row=>row.author==='user');
+  const targetReply=comments.find(row=>row.author==='npc-b');
+  const aReply=comments.find(row=>row.author==='npc-a');
+  const cReply=comments.find(row=>row.author==='npc-c'&&row.id!=='existing-comment');
+  assert.ok(userComment&&targetReply&&aReply&&cReply);
+  assert.equal(targetReply.replyTo,userComment.id);
+  assert.equal(aReply.replyTo,userComment.id);
+  assert.equal(cReply.replyTo,aReply.id,'NPCs can join the same thread by replying to another NPC');
+  assert.match(f.prompt(),/其他相关NPC是否加入同一公开讨论串/);
+  assert.match(f.prompt(),/必须生成至少1条/);
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{x:f.x},getView:f.state,redraw(){},notice(){}});
+  await panel.action('comments',post.id);
+  assert.equal((panel.html().match(/data-x-comment="/g)||[]).length,5);
+  assert.match(panel.html(),/你俩怎么还聊上了/);
+ }finally{f.close();}
+});
+
+test('a repeated public action after its earlier event was shown creates a fresh reaction cycle',async()=>{
+ const f=setup();try{
+  const accounts=[
+   {id:'npc-a',type:'account',name:'Alex',handle:'alex',characterId:'card:alex.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-b',type:'account',name:'校园男神B',handle:'campus_b',characterId:'card:b.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-c',type:'account',name:'Bea',handle:'bea',characterId:'card:bea.png',authorKind:'npc',following:false,blocked:false},
+  ];
+  const post={id:'repeat-action-post',type:'post',author:'npc-b',feed:'home',text:'今天在图书馆待了一下午。',metrics:{likes:3,reposts:0,replies:1},liked:false,reposted:false};
+  const comment={id:'repeat-action-comment',type:'comment',postId:post.id,author:'npc-c',text:'效率真高。',replyTo:null};
+  await f.memory.commit(await f.memory.begin(),[...accounts,post,comment].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  const {xPendingPublicActivities}=await import('../src/x.js');
+  const respond=()=>{const events=xPendingPublicActivities(f.state());return events.map(event=>({eventId:event.id,accountId:'npc-a',text:'有人注意到这次互动了。'}));};
+  ok(await f.x.react(post.id,'liked'));
+  const first=xPendingPublicActivities(f.state())[0].id;
+  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:20,stats:[]}):JSON.stringify(feedResult({posts:[],activityReactions:respond()})));
+  ok(await f.x.refreshPublic());assert.equal(f.state().x[first].shown,true);
+  assert.equal(xItems(f.state(),'post').filter(row=>row.publicActivityId===first).length,1);
+  ok(await f.x.react(post.id,'liked'));
+  const second=xPendingPublicActivities(f.state())[0].id;
+  assert.notEqual(second,first,'a new action after consumption must not reuse the old event ID');
+  f.reply(({quietPrompt})=>JSON.stringify(feedResult({posts:[],activityReactions:respond()})));
+  ok(await f.x.refreshPublic());
+  assert.equal(f.state().x[second].shown,true);
+  assert.equal(xItems(f.state(),'post').filter(row=>row.publicActivityId===second).length,1);
+  assert.equal(xItems(f.state(),'post').filter(row=>row.publicActivityId===first||row.publicActivityId===second).length,2);
  }finally{f.close();}
 });
 
