@@ -450,37 +450,46 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
 });
 
 
-test('WhatsApp and X incoming DMs mirror phone-read state independently of shown state',async()=>{
+test('WhatsApp, WeChat and X incoming DMs mirror phone-read state independently of shown state',async()=>{
     const chat=[{mes:'2026-11-12 09:00',name:'Alex',is_user:false}];
     const rev=await revisionsFor(messageSignatures(chat));
     let journal=appendChange(undefined,rev,[
         set('whatsapp','wa-in',{id:'wa-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'WA_CONTENT',read:false,createdAt:1}),
         set('whatsapp','wa-out',{id:'wa-out',type:'message',accountId:'card:alex.png',role:'user',text:'my reply',read:true,createdAt:2}),
-        set('x','x-in',{id:'x-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'X_CONTENT',read:false,createdAt:3}),
+        set('wechat','wc-in',{id:'wc-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'WC_CONTENT',read:false,createdAt:3}),
+        set('wechat','wc-out',{id:'wc-out',type:'message',accountId:'card:alex.png',role:'user',text:'my WeChat reply',read:true,createdAt:4}),
+        set('x','x-in',{id:'x-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'X_CONTENT',read:false,createdAt:5}),
     ]);
     journal=syncCommContext(journal,rev,chat).journal;
     let state=replayJournal(journal);
     assert.equal(commMeta(state,'whatsapp','wa-in').shown,false);
     assert.equal(commMeta(state,'whatsapp','wa-in').read,false);
+    assert.equal(commMeta(state,'wechat','wc-in').shown,false);
+    assert.equal(commMeta(state,'wechat','wc-in').read,false);
     assert.equal(commMeta(state,'x','x-in').shown,false);
     assert.equal(commMeta(state,'x','x-in').read,false);
     assert.equal(commMeta(state,'whatsapp','wa-out').read,undefined,'user-authored messages are not classified as unread');
+    assert.equal(commMeta(state,'wechat','wc-out').read,undefined,'user-authored WeChat messages are not classified as unread');
     // Opening both phone threads updates the source app records. Sidecar sync
     // mirrors read=true without changing whether prose has presented them.
     journal=appendChange(journal,rev,[
         set('whatsapp','wa-in',{...state.whatsapp['wa-in'],read:true}),
+        set('wechat','wc-in',{...state.wechat['wc-in'],read:true}),
         set('x','x-in',{...state.x['x-in'],read:true}),
     ]);
     state=replayJournal(syncCommContext(journal,rev,chat).journal);
     assert.equal(commMeta(state,'whatsapp','wa-in').read,true);
+    assert.equal(commMeta(state,'wechat','wc-in').read,true);
     assert.equal(commMeta(state,'x','x-in').read,true);
     assert.equal(commMeta(state,'whatsapp','wa-in').shown,false);
+    assert.equal(commMeta(state,'wechat','wc-in').shown,false);
     assert.equal(commMeta(state,'x','x-in').shown,false);
     assert.equal(commReadStatus(state,'whatsapp','wa-in',state.whatsapp['wa-in']),true);
+    assert.equal(commReadStatus(state,'wechat','wc-in',state.wechat['wc-in']),true);
     assert.equal(commReadStatus(state,'x','x-in',state.x['x-in']),true);
 });
 
-test('continuity explicitly distinguishes WhatsApp read-but-unshown from unread messages',()=>{
+test('continuity explicitly distinguishes WhatsApp and WeChat read-but-unshown from unread messages',()=>{
     const state=channelState(),who={id:'card:alex.png',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
     state.whatsapp[who.id]={...who};
     state.whatsapp.read={id:'read',type:'message',accountId:who.id,role:'assistant',text:'ALREADY_READ_CONTENT',read:true,createdAt:1};
