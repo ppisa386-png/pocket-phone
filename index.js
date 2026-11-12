@@ -18,7 +18,7 @@ import { captureHostRequest } from './src/api-context.js?v=1.2';
 import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.49';
 import { mountPhone } from './src/ui.js?v=1.2.49';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.49';
-import { createPhoneService } from './src/phone.js?v=1.2.47';
+import { createPhoneService } from './src/phone.js?v=1.2.49';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.39';
 import { normalizeSettings } from './src/config.js?v=1.2.49';
 
