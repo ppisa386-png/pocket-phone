@@ -282,8 +282,28 @@ test('X anonymous private replies stay scoped; failed messages retry once; renam
  const f=setup(),id=await account(f,'open');f.reply(()=>{throw Error('offline');});assert.equal((await f.x.send(id,'Hi')).ok,false);let m=xItems(f.state(),'message')[0];assert.equal(m.status,'failed');
  f.reply({status:'reply',text:'Hello Moon'});ok(await f.x.retryMessage(m.id));assert.equal(xItems(f.state(),'message').length,2);assert.match(f.prompt(),/不知道此网名是谁/);assert.equal(xUnread(f.state()),1);
  const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.equal(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),'','private X DM stays within the phone');
- ok(await f.x.markRead(id));assert.equal(xUnread(f.state()),0);ok(await f.x.reveal(id));ok(await f.x.saveProfile({alias:'New alias',bio:''}));assert.equal(f.state().x[id].identityKnown,true);
+ const incoming=xItems(f.state(),'message').find(message=>message.accountId===id&&message.role==='assistant');ok(await f.x.markRead(id));assert.equal(xUnread(f.state()),0);const readState=(await f.memory.read()).state;assert.equal(readState.commContext['x:'+incoming.id]?.read,true,'opening the X DM thread mirrors phone-read state');assert.equal(readState.commContext['x:'+incoming.id]?.shown,false,'phone reading does not mean the novel has shown the DM');assert.equal(buildContinuityPrompt(readState,speaker,{instruction:'Remember'}),'','X DM contents remain outside the narrative history');ok(await f.x.reveal(id));ok(await f.x.saveProfile({alias:'New alias',bio:''}));assert.equal(f.state().x[id].identityKnown,true);
  assert.equal(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),'');assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
+});
+
+test('blocking an X sender hides the unread badge without falsely marking the DM as read',async()=>{
+ const f=setup(),id=await account(f,'open');
+ f.reply({status:'reply',text:'A message not yet opened'});
+ ok(await f.x.send(id,'Hello'));
+ const incoming=xItems(f.state(),'message').find(m=>m.accountId===id&&m.role==='assistant');
+ assert.equal(incoming.read,false);assert.equal(xUnread(f.state()),1);
+ ok(await f.x.block(id,true));
+ const blocked=(await f.memory.read()).state;
+ assert.equal(blocked.x[incoming.id].read,false,'blocking is not opening the DM');
+ assert.equal(blocked.commContext['x:'+incoming.id].read,false,'read sidecar remains false');
+ assert.equal(xUnread(blocked),0,'blocked account does not keep the launcher badge lit');
+ ok(await f.x.block(id,false));
+ assert.equal(xUnread(f.state()),1,'unblocking restores the still-unread badge');
+ ok(await f.x.markRead(id));
+ const read=(await f.memory.read()).state;
+ assert.equal(read.x[incoming.id].read,true);assert.equal(read.commContext['x:'+incoming.id].read,true);
+ assert.equal(xUnread(read),0);
+ f.close();
 });
 
 test('closed and blocked X accounts cannot receive messages; pending requests do not invent replies',async()=>{

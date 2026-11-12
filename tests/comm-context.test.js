@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { appendChange, replayJournal, reconcileJournal, revisionsFor, messageSignatures, JOURNAL_KEY } from '../src/journal.js';
-import { syncCommContext, commEntries, commExpired, commMeta, commKey, commReplyClassification, commRecordPatch, commClassificationPlan, commClassificationChanges, commRecordExists, commExcerpt, inferShown, COMM_PLATFORMS } from '../src/comm-context.js';
+import { syncCommContext, commEntries, commExpired, commMeta, commKey, commReplyClassification, commRecordPatch, commClassificationPlan, commClassificationChanges, commRecordExists, commExcerpt, inferShown, COMM_PLATFORMS, commReadStatus } from '../src/comm-context.js';
 import { importStoryPhone, buildStoryPhonePrompt } from '../src/story-phone.js';
 import { buildContinuityPrompt } from '../src/continuity.js';
 import { xStoryPrompt, xStoryChanges } from '../src/x-story.js';
@@ -447,4 +447,53 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
     assert.equal(buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000}),'');
     const restored=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
     for(const row of saved)assert.equal(commMeta(restored,row.platform,row.id)?.shown,false,'rolling back reading restores unshown');
+});
+
+
+test('WhatsApp and X incoming DMs mirror phone-read state independently of shown state',async()=>{
+    const chat=[{mes:'2026-11-12 09:00',name:'Alex',is_user:false}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    let journal=appendChange(undefined,rev,[
+        set('whatsapp','wa-in',{id:'wa-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'WA_CONTENT',read:false,createdAt:1}),
+        set('whatsapp','wa-out',{id:'wa-out',type:'message',accountId:'card:alex.png',role:'user',text:'my reply',read:true,createdAt:2}),
+        set('x','x-in',{id:'x-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'X_CONTENT',read:false,createdAt:3}),
+    ]);
+    journal=syncCommContext(journal,rev,chat).journal;
+    let state=replayJournal(journal);
+    assert.equal(commMeta(state,'whatsapp','wa-in').shown,false);
+    assert.equal(commMeta(state,'whatsapp','wa-in').read,false);
+    assert.equal(commMeta(state,'x','x-in').shown,false);
+    assert.equal(commMeta(state,'x','x-in').read,false);
+    assert.equal(commMeta(state,'whatsapp','wa-out').read,undefined,'user-authored messages are not classified as unread');
+    // Opening both phone threads updates the source app records. Sidecar sync
+    // mirrors read=true without changing whether prose has presented them.
+    journal=appendChange(journal,rev,[
+        set('whatsapp','wa-in',{...state.whatsapp['wa-in'],read:true}),
+        set('x','x-in',{...state.x['x-in'],read:true}),
+    ]);
+    state=replayJournal(syncCommContext(journal,rev,chat).journal);
+    assert.equal(commMeta(state,'whatsapp','wa-in').read,true);
+    assert.equal(commMeta(state,'x','x-in').read,true);
+    assert.equal(commMeta(state,'whatsapp','wa-in').shown,false);
+    assert.equal(commMeta(state,'x','x-in').shown,false);
+    assert.equal(commReadStatus(state,'whatsapp','wa-in',state.whatsapp['wa-in']),true);
+    assert.equal(commReadStatus(state,'x','x-in',state.x['x-in']),true);
+});
+
+test('continuity explicitly distinguishes WhatsApp read-but-unshown from unread messages',()=>{
+    const state=channelState(),who={id:'card:alex.png',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
+    state.whatsapp[who.id]={...who};
+    state.whatsapp.read={id:'read',type:'message',accountId:who.id,role:'assistant',text:'ALREADY_READ_CONTENT',read:true,createdAt:1};
+    state.whatsapp.unread={id:'unread',type:'message',accountId:who.id,role:'assistant',text:'NOT_READ_CONTENT',read:false,createdAt:2};
+    state.commContext['whatsapp:read']={shown:false,read:true,expired:false};
+    state.commContext['whatsapp:unread']={shown:false,read:false,expired:false};
+    const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
+    const records=JSON.parse(prompt.split('\n').at(-2)).records;
+    const read=records.find(row=>row.recordId==='read'),unread=records.find(row=>row.recordId==='unread');
+    assert.equal(read.shown,false);assert.equal(read.read,true);
+    assert.equal(unread.shown,false);assert.equal(unread.read,false);
+    assert.match(prompt,/shown 与 read 是两个独立状态/);
+    assert.match(prompt,/不得再称其未读、刚收到/);
+    assert.match(prompt,/不能把多条未展示记录一律写成一串未读消息/);
+    assert.doesNotMatch(prompt,/read:true.*read:false/,'states are structured, not flattened into a single unread label');
 });
