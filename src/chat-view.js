@@ -2,7 +2,7 @@ import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
 import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2';
 import { displayStoryTime } from './story-clock.js?v=1.2';
 import { icon } from './icons.js?v=1.2';
-import { wxMoments,wxFriends,canViewWxMoment } from './wechat-moments.js?v=1.2.34';
+import { wxMoments,wxFriends,canViewWxMoment } from './wechat-moments.js?v=1.2.49';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const chatKinds={text:'文字',voice:'语音',image:'照片',video:'视频',music:'音乐'};
@@ -11,7 +11,7 @@ const chatCallLabels={connected:'通话中',ended:'已结束',no_answer:'未接�
 export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='assets/wechat/'}) {
     const label=CHAT_APPS[app],wc=app==='wechat';
     let tab='chats',accountId=null,page='',editingId=null,status='',epoch=0,posting=false,reading=false;
-    let momentDraft={text:'',imageDescription:'',visibility:'all',audienceIds:[]},momentMenuId=null,momentCommentText='',plusMenu=false;
+    let momentDraft={text:'',imageDescription:'',visibility:'all',audienceIds:[]},momentMenuId=null,momentCommentText='',momentReplyTo=null,plusMenu=false;
     let drafts=Object.create(null);
     const records=type=>chatItems(getView(),app,type);
     const account=()=>getView()[app]?.[accountId];
@@ -89,9 +89,14 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
                     (momentMenuId===m.id?'<div class="pp-wx-moment-menu">'+button('moment-like',liked?'取消赞':'赞',m.id,'heart')+button('moment-comment-open','评论',m.id,'messages')+'</div>':'')+
                     (likes.length||(m.comments||[]).length?'<div class="pp-wx-moment-comments">'+
                     (likes.length?'<p class="pp-wx-like">'+icon('heart')+' '+chatEsc(likes.join('、'))+'</p>':'')+
-                    (m.comments||[]).map(c=>'<p><b>'+chatEsc(c.name||'user')+'：</b>'+chatEsc(c.text)+'</p>').join('')+'</div>':'')+
+                    (m.comments||[]).map(c=>{
+                        const parent=c.replyTo?(m.comments||[]).find(x=>x.id===c.replyTo):null;
+                        const label=parent?' 回复 '+(parent.name||'user'):'';
+                        return '<p><b>'+chatEsc(c.name||'user')+chatEsc(label)+'：</b>'+chatEsc(c.text)+
+                            '<button type="button" class="pp-wx-comment-reply" data-chat-action="moment-comment-reply" data-chat-id="'+chatEsc(c.id)+'" aria-label="回复 '+chatEsc(c.name||'user')+'">回复</button></p>';
+                    }).join('')+'</div>':'')+
                     (momentMenuId==='comment:'+m.id?'<form data-chat-form="moment-comment" class="pp-wx-comment-form">'+
-                    '<input name="comment" data-chat-field="momentComment" aria-label="评论" placeholder="评论" maxlength="500" value="'+chatEsc(momentCommentText)+'">'+
+                    '<input name="comment" data-chat-field="momentComment" aria-label="评论" placeholder="'+chatEsc(momentReplyTo?'回复 '+((m.comments||[]).find(c=>c.id===momentReplyTo)?.name||'评论'):'评论')+'" maxlength="500" value="'+chatEsc(momentCommentText)+'">'+
                     '<input type="hidden" name="momentId" value="'+chatEsc(m.id)+'"><button type="submit">发送</button></form>':'')+
                     '</div></article>';
             }).join(''):'<div class="pp-wx-moment-empty">还没有朋友圈动态</div>')+
@@ -258,7 +263,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
     }
     async function bulk(){const token=epoch,result=await perform('addEstablished');if(token===epoch&&result?.ok){status='已添加 '+result.value.added+' 位好友'+(result.value.updated?'，更新 '+result.value.updated+' 位':'')+'。';redraw();}}
     const api={html,back,queueCurrent,
-        reset(){epoch++;posting=false;reading=false;tab='chats';accountId=null;page='';editingId=null;status='';drafts=Object.create(null);momentDraft={text:'',imageDescription:'',visibility:'all',audienceIds:[]};momentMenuId=null;momentCommentText='';plusMenu=false;},
+        reset(){epoch++;posting=false;reading=false;tab='chats';accountId=null;page='';editingId=null;status='';drafts=Object.create(null);momentDraft={text:'',imageDescription:'',visibility:'all',audienceIds:[]};momentMenuId=null;momentCommentText='';momentReplyTo=null;plusMenu=false;},
         input(target){const name=target.dataset.chatField;if(name){
             if(wc&&name==='momentImage'){momentDraft.imageDescription=target.value;return;}
             if(wc&&name==='momentText'){momentDraft.text=target.value;return;}
@@ -287,7 +292,12 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
             }
             if(wc&&action==='moment-refresh'){await perform('refreshMoments',[],'已刷新朋友圈');return;}
             if(wc&&action==='moment-actions'){momentMenuId=momentMenuId===id?null:id;redraw();return;}
-            if(wc&&action==='moment-comment-open'){momentMenuId='comment:'+id;momentCommentText='';redraw();return;}
+            if(wc&&action==='moment-comment-open'){momentMenuId='comment:'+id;momentCommentText='';momentReplyTo=null;redraw();return;}
+            if(wc&&action==='moment-comment-reply'){
+                const moment=wxMoments(getView()).find(m=>(m.comments||[]).some(c=>c.id===id));
+                if(!moment)return;
+                momentMenuId='comment:'+moment.id;momentCommentText='';momentReplyTo=id;redraw();return;
+            }
             if(wc&&action==='moment-like'){momentMenuId=null;await perform('likeMoment',[id]);redraw();return;}
             if(['add','info','cash'].includes(action)){page=action;editingId=null;redraw();return;}
             if(action==='edit'){editingId=id;drafts[key('editText')]=getView()[app]?.[id]?.text||'';redraw();return;}
@@ -310,8 +320,8 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
                 return;
             }
             if(wc&&name==='moment-comment'){
-                const result=await perform('commentMoment',[data.momentId,data.comment],'已评论');
-                if(token===epoch&&result?.ok){momentMenuId=null;momentCommentText='';redraw();}
+                const result=await perform('commentMoment',[data.momentId,data.comment,momentReplyTo],'已评论');
+                if(token===epoch&&result?.ok){momentMenuId=null;momentCommentText='';momentReplyTo=null;redraw();}
                 return;
             }
             if(wc&&name==='music'){

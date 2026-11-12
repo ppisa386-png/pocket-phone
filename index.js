@@ -11,18 +11,18 @@ import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
 import { createX } from './src/x.js?v=1.2.48';
-import { createChatApp } from './src/chat-apps.js?v=1.2.34';
+import { createChatApp } from './src/chat-apps.js?v=1.2.49';
 import { latestMemory } from './src/external-memory.js?v=1.2';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.38';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.48';
-import { mountPhone } from './src/ui.js?v=1.2.48';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.46';
-import { createPhoneService } from './src/phone.js?v=1.2.47';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.49';
+import { mountPhone } from './src/ui.js?v=1.2.49';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.49';
+import { createPhoneService } from './src/phone.js?v=1.2.49';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.39';
-import { normalizeSettings } from './src/config.js?v=1.2.48';
+import { normalizeSettings } from './src/config.js?v=1.2.49';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.46';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.49';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
