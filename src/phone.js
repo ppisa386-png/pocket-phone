@@ -5,6 +5,7 @@ import { exactStoryTime } from './story-clock.js?v=1.2';
 import { isMemoryHidden } from './journal.js?v=1.2';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
 import { phoneQuietOptions } from './api-context.js?v=1.2';
+import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.49';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
 import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2.39';
@@ -82,6 +83,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             if (characterId < 0) throw new Error('通信角色已不可用。');
             contact = { ...contact, characterId };
         }
+        if(app==='wechat'&&contact?.id&&!options.establishedImport)
+            prompt+=wechatMomentsAccountPrompt(state,contact.id,context.chat);
         const social = ['x','snapchat','whatsapp','wechat'].includes(app);
         const conversation=social||['phone','messages','incoming'].includes(app);
         if(!options.establishedImport&&!options.skipExternalMemory&&app!=='daily'){
