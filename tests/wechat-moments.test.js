@@ -309,3 +309,22 @@ test('narrative markers never import unpublished text or NPC comments on an unau
         assert.equal(f.state().wechat[secret.value.id].comments.length,0);
     }finally{f.close();}
 });
+
+
+test('WeChat direct chats see only that friend’s authorized recent Moments without private-post leaks',async()=>{
+    const f=fixture();try{
+        await f.api.open();const alex=await friend(f,'Alex');const bea=await friend(f,'Bea');
+        ok(await f.api.publish('VISIBLE_TO_ALL','','all',[]));
+        ok(await f.api.publish('ONLY_ALEX','','include',[alex]));
+        ok(await f.api.publish('NOT_ALEX','','exclude',[alex]));
+        ok(await f.api.publish('PRIVATE_DIARY','','private',[]));
+        f.reply({status:'no_reply',messages:[]});
+        ok(await f.api.send(alex,'text','今天好吗'));
+        assert.match(f.prompt(),/VISIBLE_TO_ALL/);assert.match(f.prompt(),/ONLY_ALEX/);
+        assert.doesNotMatch(f.prompt(),/NOT_ALEX|PRIVATE_DIARY/);
+        f.reply({status:'no_reply',messages:[]});
+        ok(await f.api.send(bea,'text','你今天如何'));
+        assert.match(f.prompt(),/VISIBLE_TO_ALL/);assert.match(f.prompt(),/NOT_ALEX/);
+        assert.doesNotMatch(f.prompt(),/ONLY_ALEX|PRIVATE_DIARY/);
+    }finally{f.close();}
+});
