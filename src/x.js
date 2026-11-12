@@ -679,10 +679,10 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     explicitActors:actors.map(a=>({id:a.id,name:a.name,aliases:a.aliases||[]}))};
                 const result=await ask(state,target,request,current,task,d=>{
                     if(typeof d.text!=='string')throw Error('评论格式不正确。');
-                    const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set();
+                    const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set(),keys=new Set(['user_comment','target_reply']);
                     for(const row of reactions){
-                        if(typeof row?.text!=='string'||!row.text.trim()||!community.some(a=>a.id===row.accountId)||seen.has(row.accountId))throw Error('评论区 NPC 跟帖引用了未知账号、重复作者或空内容。');
-                        seen.add(row.accountId);
+                        if(typeof row?.key!=='string'||!row.key.trim()||keys.has(row.key)||typeof row?.text!=='string'||!row.text.trim()||!community.some(a=>a.id===row.accountId)||seen.has(row.accountId))throw Error('评论区 NPC 跟帖引用了未知账号、重复作者、重复键或空内容。');
+                        seen.add(row.accountId);keys.add(row.key);
                     }
                     if(community.length&&!reactions.length)throw Error('评论区存在相关 NPC，但本次没有生成跟帖。请重试。');
                     return {text:xText(d.text),reactions};
@@ -699,7 +699,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     if(!author||usedAuthors.has(author.id))continue;
                     const parentKey=typeof row.replyTo==='string'&&row.replyTo?row.replyTo:'user_comment';
                     const parentId=parents.get(parentKey);
-                    if(!parentId)continue;
+                    if(!parentId)throw Error('NPC 跟帖引用了不存在的评论父级。');
                     const text=xText(row.text,1200),signature=xCommentKey(id,author.id,text,parentId);
                     if(!text||savedKeys.has(signature)||findComment(state,id,author.id,text,parentId))continue;
                     const reaction=xRecord('comment',{postId:id,author:author.id,text,replyTo:parentId});
