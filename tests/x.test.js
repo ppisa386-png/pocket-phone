@@ -1288,7 +1288,7 @@ test('public X follow, unfollow, like and repost form non-directed one-shot home
   f.reply(({quietPrompt})=>{
     seen.push(quietPrompt);
     if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:10,stats:[]});
-    const activityReactions=xPendingPublicActivities(f.state()).filter(row=>['like','repost','unlike','unrepost'].includes(row.action)).map(row=>({eventId:row.id,accountId:id,text:'注意到这条公开互动的人发了一条相关推文。'}));
+    const activityReactions=xPendingPublicActivities(f.state()).filter(row=>['follow','unfollow','like','repost','unlike','unrepost'].includes(row.action)).map(row=>({eventId:row.id,accountId:id,text:'注意到这条公开互动的人发了一条相关推文。'}));
     return JSON.stringify(feedResult({activityReactions}));
   });
   ok(await f.x.refreshPublic());
@@ -1348,7 +1348,10 @@ test('public X social pulse cannot be consumed by square, trends, followed feed 
   f.reply(()=>'{posts:');
   const failed=await f.x.refreshPublic();assert.equal(failed.ok,false);assert.equal(failed.code,'MODEL_JSON_TRUNCATED');
   assert.equal(xPendingPublicActivities(f.state()).length,1);
-  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:5,stats:[]}):JSON.stringify({posts:[],activityReactions:[]}));
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:5,stats:[]});
+   return JSON.stringify({posts:[],activityReactions:xPendingPublicActivities(f.state()).map(row=>({eventId:row.id,accountId:id,text:'看到你刚刚关注了我。'}))});
+  });
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
   assert.ok(Object.values(f.state().x).some(row=>row.type==='public-activity'&&row.shown===true));
