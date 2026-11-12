@@ -25,6 +25,28 @@ const validMoment = moment => moment?.type==='moment' && (moment.text||moment.im
 const recentMoments = state => wxMoments(state).filter(validMoment).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 const shownComments = (moment,actorId) => (moment.comments||[]).filter(c=>c.authorId==='user'||c.authorId===actorId);
 
+// A direct WeChat conversation is also scoped to the one real friend who can
+// see the post. Never attach another friend's exclusive Moments to this chat.
+export function wechatMomentsAccountPrompt(state,accountId,chat) {
+    const friend=wxFriends(state).find(a=>a.id===accountId);
+    if(!friend)return '';
+    const now=readStoryClock(chat);
+    const rows=recentMoments(state).filter(m=>m.authorId==='user'&&canViewWxMoment(m,friend.id))
+        .filter(m=>!(Number.isInteger(now.day)&&Number.isInteger(m.storyTime?.day)&&now.day-m.storyTime.day>3))
+        .slice(0,8).map(m=>({
+            id:m.id,text:plain(m.text,600),imageDescription:plain(m.imageDescription,200),
+            storyTime:m.storyTime||null,
+            comments:shownComments(m,friend.id).slice(-6).map(c=>({
+                author:c.authorId==='user'?'user':friend.name,text:plain(c.text,250),replyTo:c.replyTo||null,
+            })),
+        }));
+    if(!rows.length)return '';
+    return '\n本次微信聊天对象有权限看到的用户朋友圈（仅此账号知情，不作为私信）：'+
+        JSON.stringify({friend:friend.name,userAlias:state.wechat?.profile?.alias||'user',moments:rows})+
+        '。可以自然回应或完全不提，不强制生成朋友圈评论或重复旧帖子。' +
+        (friend.identityKnown===true?'':'当前账号不一定知道网名背后的真人身份，不得凭后台信息识破匿名。');
+}
+
 export function wechatMomentsStoryPrompt(state,context,chat) {
     // The narrative speaker is one actual chat character. Do not expose a
     // restricted Moment to any other speaker merely because the author is user.
