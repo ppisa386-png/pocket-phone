@@ -1353,7 +1353,7 @@ test('public X social pulse cannot be consumed by square, trends, followed feed 
  }finally{f.close();}
 });
 
-test('public X like/follow events create one or two related NPC timeline reactions on the next home refresh',async()=>{
+test('public X like and unfollow events create one or two related NPC timeline reactions on the next home refresh',async()=>{
  const {xPendingPublicActivities}=await import('../src/x.js');
  const f=setup();try{
   const accounts=[
@@ -1366,26 +1366,32 @@ test('public X like/follow events create one or two related NPC timeline reactio
   await f.memory.commit(await f.memory.begin(),[...accounts,post,oldComment].map(value=>({collection:'x',key:value.id,value})));
   await f.memory.read();
   ok(await f.x.react(post.id,'liked'));
-  const event=xPendingPublicActivities(f.state())[0];assert.equal(event.action,'like');
+  ok(await f.x.follow('npc-b',true));ok(await f.x.follow('npc-b',false));
+  const events=xPendingPublicActivities(f.state()),likeEvent=events.find(row=>row.action==='like'),unfollowEvent=events.find(row=>row.action==='unfollow');
+  assert.ok(likeEvent&&unfollowEvent);assert.equal(events.length,2,'follow then unfollow before refresh keeps only the latest public state for that account');
   const prompts=[];
   f.reply(({quietPrompt})=>{
    prompts.push(quietPrompt);
    if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:20,stats:[]});
-   return JSON.stringify(feedResult({posts:[],activityReactions:[
-    {eventId:event.id,accountId:'npc-a',text:'有人最近挺关注图书馆那位啊。'},
-    {eventId:event.id,accountId:'npc-c',text:'我也看到这条点赞了，什么情况？'}
-   ]}));
+   const activityReactions=events.flatMap(event=>[
+    {eventId:event.id,accountId:'npc-a',text:event.action==='like'?'有人最近挺关注图书馆那位啊。':'怎么突然取关了？'},
+    {eventId:event.id,accountId:'npc-c',text:event.action==='like'?'我也看到这条点赞了，什么情况？':'前两天不是还互相关注吗？'}
+   ]);
+   return JSON.stringify(feedResult({posts:[],activityReactions}));
   });
   const result=await f.x.refreshPublic();ok(result);
   assert.match(prompts[0],/至少生成1条、通常1～2条公开反应推文/);
   assert.match(prompts[0],/当前剧情角色/);
-  const reactions=xItems(f.state(),'post').filter(row=>row.publicActivityId===event.id);
-  assert.equal(reactions.length,2);
-  assert.deepEqual(new Set(reactions.map(row=>row.author)),new Set(['npc-a','npc-c']));
-  assert.ok(reactions.every(row=>row.feed==='home'&&row.type==='post'));
+  const reactions=xItems(f.state(),'post').filter(row=>row.publicActivityId===likeEvent.id||row.publicActivityId===unfollowEvent.id);
+  assert.equal(reactions.length,4);
+  for(const event of events){
+   const rows=reactions.filter(row=>row.publicActivityId===event.id);
+   assert.equal(rows.length,2);assert.deepEqual(new Set(rows.map(row=>row.author)),new Set(['npc-a','npc-c']));
+   assert.ok(rows.every(row=>row.feed==='home'&&row.type==='post'));
+   assert.equal(f.state().x[event.id].shown,true);
+  }
   assert.equal(xPendingPublicActivities(f.state()).length,0);
-  assert.equal(f.state().x[event.id].shown,true);
-  assert.equal(result.value.activityReactions,2);
+  assert.equal(result.value.activityReactions,4);
  }finally{f.close();}
 });
 
