@@ -91,7 +91,7 @@ export function createX({memory,phone,getContext,getSettings}) {
     const socialEvent=(state,slot,target,action,fields={})=>{
         const base='public-activity:'+slot+':'+target;
         const previous=xItems(state,'public-activity').filter(row=>
-            row.slot===slot&&row.targetId===target||row.id===base
+            (row.slot===slot&&row.targetId===target)||row.id===base
         ).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)).at(-1);
         // Coalesce changes while an event is still pending. Once consumed,
         // the next action gets a fresh ID so older reaction posts cannot mask it.
@@ -672,7 +672,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             // can attract one or two related NPCs. The directly addressed
             // account keeps its own reply channel.
             const thread=xItems(state,'comment').filter(c=>c.postId===id);
-            const hasNpcThread=thread.some(c=>c.author!=='user');
+            const hasNpcThread=thread.some(c=>c.author!=='user'&&isNpcAccount(state,state.x?.[c.author]));
             const canInviteCommunity=p.author!=='user'||!!target||hasNpcThread;
             const community=canInviteCommunity&&xFeedArea(state,p)!=='square'
                 ?relatedNpcAccounts(state,id,[p.author,target?.id,...thread.map(c=>c.author)].filter(Boolean),target?[target.id]:[],8)
