@@ -166,7 +166,8 @@ function postQuery(context,post,people,accounts){
             alias(name,p.entityId);for(const part of name.split(/[\s·・•]+/))if(part.length>=2)alias(part,p.entityId);
         }
     }
-    for(const person of [...(context.characters||[]),...accounts,...(post.explicitActor?[post.explicitActor]:[])]){
+    const explicitActors=[...(post.explicitActor?[post.explicitActor]:[]),...(Array.isArray(post.explicitActors)?post.explicitActors:[])].filter(Boolean);
+    for(const person of [...(context.characters||[]),...accounts,...explicitActors]){
         const names=[person.name,...(Array.isArray(person.aliases)?person.aliases:[])];
         const ids=new Set(names.flatMap(n=>[...(labels.get(norm(n))||[])]));
         if(ids.size===1)for(const n of names)alias(n,[...ids][0]);
@@ -181,8 +182,7 @@ function postQuery(context,post,people,accounts){
         return {found,ambiguous};
     };
     const direct=find(postText),resolved=direct.found;
-    const explicit=post.explicitActor;
-    if(explicit){const ids=new Set([explicit.name,...(explicit.aliases||[])].flatMap(n=>[...(labels.get(norm(n))||[])]));if(ids.size===1)resolved.add([...ids][0]);}
+    for(const explicit of explicitActors){const ids=new Set([explicit.name,...(explicit.aliases||[])].flatMap(n=>[...(labels.get(norm(n))||[])]));if(ids.size===1)resolved.add([...ids][0]);}
     if(!resolved.size&&!direct.ambiguous&&/(他|她|他们|她们|\b(?:he|she|they|him|her|them)\b)/i.test(postText)){
         const indirect=find(scene);
         if(indirect.found.size===1&&!indirect.ambiguous)resolved.add([...indirect.found][0]);
@@ -196,7 +196,7 @@ function postQuery(context,post,people,accounts){
         }
     }
     const actors=[...resolved].map(id=>({id,matchedEntityId:id,name:entities.get(id).displayName,aliases:[]}));
-    const names=[...actors.map(a=>a.name),...(explicit?[explicit.name,...(explicit.aliases||[])]:[])].filter(Boolean);
+    const names=[...actors.map(a=>a.name),...explicitActors.flatMap(person=>[person.name,...(person.aliases||[])])].filter(Boolean);
     if(direct.ambiguous&&!actors.length)return {actors:[],names:[],topic:''};
     const related=scene.split(/[。！？!?\n]/).find(sentence=>sentence.trim()&&[...labels].some(([n,ids])=>ids.size===1&&resolved.has([...ids][0])&&norm(sentence).includes(n)));
     return {actors,names,topic:[...names,postText.slice(0,1000),related?.trim().slice(0,220)].filter(Boolean).join('\n')};
