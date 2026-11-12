@@ -414,9 +414,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
 `+JSON.stringify({followers:xAudience(state)?.followers??null,posts:reachPosts}) : '';
         const refreshOutput=X_JSON_OUTPUT+'\n'+X_FEED_OUTPUT(recommended,square)+(square?'广场只填posts，replies为空，不填accounts/engagementUpdates/audience；publicBasis仍须填写。':'');
         const reachOutput=reachPosts.length?' 对每条所给 user 推文在 engagementUpdates 返回一组累计 metrics，即使本次估算与已有值相同。':'';
-        const activityOutput=pendingActivity.length?'\\n附加字段 activityReactions: [{eventId:"本次公开事件ID",accountId:"relatedNPCs 中的现存 NPC 账号ID",text:"该 NPC 的公开时间线推文",category:"可选A或B"}]。每个有相关NPC的事件至少1条、最多2条，最多 '+activityReactionLimit+' 条；没有相关NPC的事件可不回应。activityReactions 是独立于常规 posts 的事件回应推文。':'';
-        const results=await ask(state,null,request,current,task+reachTask+activityPrompt+activityOutput+(square?'':'\\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
-            '\\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),
+        const activityOutput=pendingActivity.length?'\n附加字段 activityReactions: [{eventId:"本次公开事件ID",accountId:"relatedNPCs 中的现存 NPC 账号ID",text:"该 NPC 的公开时间线推文",category:"可选A或B"}]。每个有相关NPC的事件至少1条、最多2条，最多 '+activityReactionLimit+' 条；没有相关NPC的事件可不回应。activityReactions 是独立于常规 posts 的事件回应推文。':'';
+        const results=await ask(state,null,request,current,task+reachTask+activityPrompt+activityOutput+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复）：'+JSON.stringify(xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20).map(p=>({id:p.id,author:p.author,text:xText(p.text,600)})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000))+
+            '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),
             d=>{
                 const posts=d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15);
                 const activityReactions=pendingActivity.length?list(d,'activityReactions',activityReactionLimit):[];
@@ -440,7 +440,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         }
         // Safe filtering diagnostics: only aggregated reasons are counted;
         // no post text, private story content or full model output is kept.
-        const skipped={identity:0,account:0,duplicate:0,invalid:0};
+        const skipped={identity:0,account:0,duplicate:0,invalid:0};let activityAdded=0;
         for(const item of results.posts){if(!xText(item?.text)){skipped.invalid++;continue;}
             const basis=square?squareBasis(item,prose):null;if(square&&!basis){skipped.invalid++;continue;}
             const resolved=resolvePostAuthor(state,item,changes,following,square,sources),a=resolved.account;
@@ -462,6 +462,20 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             // own publication mechanism. The model may classify each post.
             if(!square&&item.category)changes.push(...commReplyClassification('x',post.id,null,smsCategory(item.category),state));
             added++;
+        }
+        // Public activity reactions are separate, ordinary home-feed posts.
+        // Each event gets at most two distinct, verified NPC authors.
+        const reactionCounts=new Map(),reactionAuthors=new Set();
+        for(const item of results.activityReactions){
+            const event=pendingActivity.find(row=>row.id===item.eventId),author=state.x[item.accountId];
+            if(!event||!isNpcAccount(state,author)||!activityCandidates.get(event.id)?.some(a=>a.id===author.id))continue;
+            const count=reactionCounts.get(event.id)||0,key=event.id+':'+author.id;
+            if(count>=2||reactionAuthors.has(key)||xItems(state,'post').some(post=>post.publicActivityId===event.id&&post.author===author.id))continue;
+            const text=xText(item.text,1600);if(!text)continue;
+            const post=xRecord('post',{author:author.id,postedAtStory:squareClock(chat),text,feed:'home',publicActivityId:event.id,liked:false,reposted:false});
+            state.x[post.id]=post;changes.push(xSet(post));
+            if(item.category)changes.push(...commReplyClassification('x',post.id,null,smsCategory(item.category),state));
+            reactionCounts.set(event.id,count+1);reactionAuthors.add(key);activityAdded++;
         }
         // Empty model batches (no fitting NPC) return added: 0 normally;
         // only batches whose posts were all filtered report a failure with
@@ -488,7 +502,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         // Consume in the same atomic home-refresh commit as the generated feed:
         // a later failed follower/reach stage must leave every pulse pending.
         if(pendingActivity.length)changes.push(...pendingActivity.map(row=>xSet({...row,shown:true})));
-        await commit(changes);return {added};
+        await commit(changes);return {added:added+activityAdded,activityReactions:activityAdded};
         }
     return {
         open:()=>memory.read(),
