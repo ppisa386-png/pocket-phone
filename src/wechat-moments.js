@@ -43,8 +43,9 @@ export function wechatMomentsStoryPrompt(state,context,chat) {
             storyTime:m.storyTime||null,
             comments:shownComments(m,friend.id).slice(-6).map(c=>({id:c.id,author:c.authorId==='user'?m.authorName:friend.name,text:plain(c.text,300),replyTo:c.replyTo||null})),
         }));
-    if(!moments.length)return '';
-    return '\n微信朋友圈·当前人物可见记录：'+JSON.stringify({account:friend.name,userAlias:state.wechat?.profile?.alias||context.name1,moments})+
+    const rules='\n微信朋友圈与正文同步：仅当本楼小说正文明确描写当前人物已实际发表一条新朋友圈，且写出真实发表内容时，末尾附 <!--durian-wechat-moment:{"action":"published","authorId":"'+friend.id+'","text":"实际发出的朋友圈文字","imageDescription":"如明确发布图片则填写文字描述"}-->；仅当本楼明确描写该人物已在以下可见朋友圈发表评论时，末尾附 <!--durian-wechat-moment:{"action":"comment","authorId":"'+friend.id+'","momentId":"以下已有朋友圈准确ID","text":"实际已发表的评论文字","replyTo":"回复已有评论ID或不填写"}-->。只记录真实已经发生、正文实际写出的评论和发帖；打算、草稿、回忆、手机中已有内容均不重记，不为了生成标记而安排额外动作。没有本楼新发文或评论就不输出标记。';
+    if(!moments.length)return rules;
+    return rules+'\n微信朋友圈·当前人物可见记录：'+JSON.stringify({account:friend.name,userAlias:state.wechat?.profile?.alias||context.name1,moments})+
         '。这些朋友圈已经发表且对当前人物可见，不是尚待发送的消息；只供自然延续人物认知，' +
         '可以在剧情相关时提起，也可以完全不理会；不得让未授权的人物知晓仅部分好友可见的内容。' +
         (friend.identityKnown===true?'':'本账号不一定知道网名对应的现实 user，不得仅凭后台关系认出真人。')+
