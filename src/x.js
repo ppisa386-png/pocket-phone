@@ -662,12 +662,14 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             // NPC-authored home-feed threads can attract one or two additional
             // related NPCs. The directly addressed account keeps its own reply
             // channel; community replies are separate comments in this thread.
-            const community=p.author!=='user'&&xFeedArea(state,p)!=='square'
-                ?relatedNpcAccounts(state,id,[p.author,target?.id,...xItems(state,'comment').filter(c=>c.postId===id).map(c=>c.author)].filter(Boolean),target?[target.id]:[],8)
+            const thread=xItems(state,'comment').filter(c=>c.postId===id);
+            const hasNpcThread=thread.some(c=>c.author!=='user');
+            const canInviteCommunity=p.author!=='user'||!!target||hasNpcThread;
+            const community=canInviteCommunity&&xFeedArea(state,p)!=='square'
+                ?relatedNpcAccounts(state,id,[p.author,target?.id,...thread.map(c=>c.author)].filter(Boolean),target?[target.id]:[],8)
                 :[];
             const shouldGenerate=xFeedArea(state,p)!=='square'&&(!!target||community.length>0);
             if(shouldGenerate){
-                const thread=xItems(state,'comment').filter(c=>c.postId===id);
                 const actorRows=[...(target?[target]:[]),...community];
                 const actors=[...new Map(actorRows.map(a=>[a.id,a])).values()];
                 const contract='输出一个 JSON 对象：{"text":"被直接回复账号的公开回复；若没有回应则为空字符串","reactions":[{"key":"本批评论唯一键","accountId":"relatedNPCs 中现存 NPC 账号ID","text":"公开跟帖内容","replyTo":"user_comment、target_reply、已有评论ID或本批前面评论的key"}]}。reactions 最多2条，可为空；但只要 relatedNPCs 中存在合理相关人物，就必须生成至少1条、通常1～2条跟帖。每个NPC最多一条。不得创建名单外账号。';
