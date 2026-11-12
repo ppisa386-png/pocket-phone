@@ -654,15 +654,58 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(replyTo&&(parent?.type!=='comment'||parent.postId!==id))throw Error('这条回复已不存在。');
             const targetId=parent?.author||p.author;
             const target=targetId==='user'?null:known(state,xAccount(state,targetId));
-            const body=xRequired(value,'回复内容');const comment=xRecord('comment',{postId:id,author:'user',alias:profile(state).alias,text:body,replyTo:parent?.id||null});const changes=[xSet(comment)];
-            // Square generation is refresh-only. Posting a comment is local;
-            // direct conversations and the regular home feed keep their replies.
-            if(target&&xFeedArea(state,p)!=='square'){
-
-                const reply=await ask(state,target,request,current,'当前任务：X 评论。你是被回复的账号：'+JSON.stringify({name:target.name,handle:target.handle})+'；帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；公开帖子：'+JSON.stringify(p.text)+publicationScenePrompt(getContext(),[p])+'；此前评论：'+JSON.stringify(xItems(state,'comment').filter(c=>c.postId===id).slice(-30).map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+'；user 回复的目标评论：'+JSON.stringify(parent?.text||null)+'；user 本次评论：'+JSON.stringify(body)+'。仅决定本账号是否回应 user，可保持沉默，不强制帖子作者出面。输出 {"text":"回复或空字符串"}。不得用私信或未公开剧情作为公众已知。'+engagementRules()+'。粉丝变化在首页综合刷新时评估。',d=>{if(typeof d.text!=='string')throw Error('评论格式不正确。');return {text:xText(d.text),audience:d.audience};},{postQueries:[{...p,text:[p.text,parent?.text,body].filter(Boolean).join('\n'),explicitActor:target}]});
-                changes.push(xSet(target));if(reply.text)changes.push(xSet(xRecord('comment',{postId:id,author:target.id,text:reply.text,replyTo:comment.id})));
-
-
+            const body=xRequired(value,'回复内容');
+            const comment=xRecord('comment',{postId:id,author:'user',alias:profile(state).alias,text:body,replyTo:parent?.id||null});
+            const changes=[xSet(comment)];
+            // NPC-authored home-feed threads can attract one or two additional
+            // related NPCs. The directly addressed account keeps its own reply
+            // channel; community replies are separate comments in this thread.
+            const community=p.author!=='user'&&xFeedArea(state,p)!=='square'
+                ?relatedNpcAccounts(state,id,[p.author,target?.id,...xItems(state,'comment').filter(c=>c.postId===id).map(c=>c.author)].filter(Boolean),target?[target.id]:[],8)
+                :[];
+            const shouldGenerate=xFeedArea(state,p)!=='square'&&(!!target||community.length>0);
+            if(shouldGenerate){
+                const thread=xItems(state,'comment').filter(c=>c.postId===id);
+                const actorRows=[...(target?[target]:[]),...community];
+                const actors=[...new Map(actorRows.map(a=>[a.id,a])).values()];
+                const contract='输出一个 JSON 对象：{"text":"被直接回复账号的公开回复；若没有回应则为空字符串","reactions":[{"key":"本批评论唯一键","accountId":"relatedNPCs 中现存 NPC 账号ID","text":"公开跟帖内容","replyTo":"user_comment、target_reply、已有评论ID或本批前面评论的key"}]}。reactions 最多2条，可为空；但只要 relatedNPCs 中存在合理相关人物，就必须生成至少1条、通常1～2条跟帖。每个NPC最多一条。不得创建名单外账号。';
+                const task='当前任务：X 公开评论区互动。帖子作者：'+JSON.stringify(p.author==='user'?profile(state).alias:state.x[p.author]?.name)+'；原帖：'+JSON.stringify({id:p.id,text:p.text,imageDescription:p.imageDescription})+
+                    publicationScenePrompt(getContext(),[p])+'；此前评论串：'+JSON.stringify(thread.map(c=>({id:c.id,name:c.author==='user'?profile(state).alias:state.x[c.author]?.name,text:c.text,replyTo:c.replyTo})))+
+                    '；user 本次公开评论：'+JSON.stringify({id:comment.id,text:body,replyTo:parent?.id||null})+
+                    '；被直接回复的账号：'+JSON.stringify(target?{id:target.id,name:target.name,handle:target.handle}:null)+
+                    '；可参与的其他相关 NPC 账号（只能从这里选，优先考虑当前剧情角色、同帖参与者及与帖子作者有既有公开互动者）：'+JSON.stringify(community.map(a=>({id:a.id,name:a.name,handle:a.handle,characterId:a.characterId||null,relationshipSignals:a.relationshipSignals})))+
+                    '。先判断被直接回复账号是否回应 user，回复写入 text；再判断其他相关NPC是否加入同一公开讨论串，写入 reactions。至少有一名合理相关NPC时不能默认全体沉默。其他NPC可以回复 user_comment、target_reply、已有评论ID或本批前面评论的key；允许形成一层或多层对话，不要只生成两条互不相关的孤立评论。人物只依据各自知道的公开信息和自身关系反应，不泄露私人剧情；不必所有人都发言。'+contract+engagementRules();
+                const queryPost={...p,text:[p.text,...thread.map(c=>c.text),body].filter(Boolean).join('\n'),
+                    explicitActors:actors.map(a=>({id:a.id,name:a.name,aliases:a.aliases||[]}))};
+                const result=await ask(state,target,request,current,task,d=>{
+                    if(typeof d.text!=='string')throw Error('评论格式不正确。');
+                    const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set();
+                    for(const row of reactions){
+                        if(typeof row?.text!=='string'||!row.text.trim()||!community.some(a=>a.id===row.accountId)||seen.has(row.accountId))throw Error('评论区 NPC 跟帖引用了未知账号、重复作者或空内容。');
+                        seen.add(row.accountId);
+                    }
+                    if(community.length&&!reactions.length)throw Error('评论区存在相关 NPC，但本次没有生成跟帖。请重试。');
+                    return {text:xText(d.text),reactions};
+                },{postQueries:[queryPost],finalOutputContract:contract});
+                if(target)changes.push(xSet(target));
+                const targetReply=target&&result.text?xRecord('comment',{postId:id,author:target.id,text:result.text,replyTo:comment.id}):null;
+                if(targetReply)changes.push(xSet(targetReply));
+                const parents=new Map(thread.map(c=>[c.id,c.id]));
+                parents.set('user_comment',comment.id);
+                if(targetReply)parents.set('target_reply',targetReply.id);
+                const usedAuthors=new Set(),savedKeys=new Set();
+                for(const row of result.reactions){
+                    const author=community.find(a=>a.id===row.accountId);
+                    if(!author||usedAuthors.has(author.id))continue;
+                    const parentKey=typeof row.replyTo==='string'&&row.replyTo?row.replyTo:'user_comment';
+                    const parentId=parents.get(parentKey);
+                    if(!parentId)continue;
+                    const text=xText(row.text,1200),signature=xCommentKey(id,author.id,text,parentId);
+                    if(!text||savedKeys.has(signature)||findComment(state,id,author.id,text,parentId))continue;
+                    const reaction=xRecord('comment',{postId:id,author:author.id,text,replyTo:parentId});
+                    changes.push(xSet(reaction));parents.set(row.key,reaction.id);
+                    usedAuthors.add(author.id);savedKeys.add(signature);
+                }
             }
             await commit(changes);
         });},
