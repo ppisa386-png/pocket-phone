@@ -365,7 +365,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         // Only the HOME refresh path consumes this global public activity pulse.
         // Square, trends, comments, DMs and standalone followed feeds do not.
         const pendingActivity=combined&&!square&&!following?xPendingPublicActivities(state):[];
-        const activityCandidates=new Map(pendingActivity.map(row=>[row.id,relatedNpcAccounts(state,row.postId,[row.accountId],[],6)]));
+        const activityCandidates=new Map(pendingActivity.map(row=>[row.id,relatedNpcAccounts(state,row.postId,[row.accountId],[row.accountId],6)]));
         const activityPrompt=publicActivityPrompt(state,pendingActivity,activityCandidates);
         const activityQueries=pendingActivity.map(row=>{
             const post=row.postId?state.x?.[row.postId]:null,targetId=row.accountId||post?.author,target=targetId&&targetId!=='user'?state.x?.[targetId]:null;
