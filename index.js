@@ -10,17 +10,17 @@ import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
-import { createX } from './src/x.js?v=1.2.52';
+import { createX } from './src/x.js?v=1.2.53';
 import { createChatApp } from './src/chat-apps.js?v=1.2.49';
-import { latestMemory } from './src/external-memory.js?v=1.2';
+import { latestMemory } from './src/external-memory.js?v=1.2.53';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.38';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.52';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.53';
 import { mountPhone } from './src/ui.js?v=1.2.52';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.51';
-import { createPhoneService } from './src/phone.js?v=1.2.52';
+import { createPhoneService } from './src/phone.js?v=1.2.53';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.51';
-import { normalizeSettings } from './src/config.js?v=1.2.52';
+import { normalizeSettings } from './src/config.js?v=1.2.53';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.50';
 
