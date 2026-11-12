@@ -692,7 +692,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     explicitActors:actors.map(a=>({id:a.id,name:a.name,aliases:a.aliases||[]}))};
                 const result=await ask(state,target,request,current,task,d=>{
                     if(typeof d.text!=='string')throw Error('评论格式不正确。');
-                    const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set(),keys=new Set(['user_comment','target_reply']);
+                    const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set(),keys=new Set(['user_comment','target_reply',...thread.map(c=>c.id)]);
                     const parents=new Set([...thread.map(c=>c.id),'user_comment']);
                     if(target&&d.text.trim())parents.add('target_reply');
                     for(const row of reactions){
