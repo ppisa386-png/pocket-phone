@@ -4,7 +4,7 @@ import { smsForAI } from './sms-context.js?v=1.2.50';
 import { syncCommContext, commExpired, commMetaOrInfer, commReadStatus } from './comm-context.js?v=1.2.51';
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
 import { nameAliases } from './names.js?v=1.2';
-import { PROMPTS } from './config.js?v=1.2.54';
+import { PROMPTS } from './config.js?v=1.2.55';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.2';
 
 export const CONTINUITY_KEY = 'durian_phone_continuity';

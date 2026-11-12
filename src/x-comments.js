@@ -22,6 +22,22 @@ export function xComments(state) {
 }
 
 export const X_COMMENT_LIMIT=15;
+// Public context for a post includes user's own comments and the ancestor
+// comments they replied to. Never pull in unrelated threads or private DMs.
+export function xUserReplyContext(state, postId) {
+    const rows=xComments(state).filter(c=>c.postId===postId);
+    const byId=new Map(rows.map(c=>[c.id,c])),selected=new Set();
+    for(const row of rows.filter(c=>c.author==='user')){
+        const visited=new Set();
+        for(let c=row;c&&!visited.has(c.id);c=byId.get(c.replyTo)){
+            visited.add(c.id);selected.add(c.id);
+        }
+    }
+    return rows.filter(c=>selected.has(c.id)).map(c=>({id:c.id,author:c.author,
+        name:c.author==='user'?state.x?.profile?.alias||'user':state.x?.[c.author]?.name||c.name||c.author,
+        text:c.text,replyTo:c.replyTo||null,...(c.storyTime?{storyTime:c.storyTime}:{})}));
+}
+
 export function visibleXComments(comments) {
     if(comments.length<=X_COMMENT_LIMIT)return comments;
     const byId=new Map(comments.map(c=>[c.id,c])),selected=new Set();

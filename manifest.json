@@ -3,8 +3,8 @@
   "loading_order": 100,
   "requires": [],
   "optional": [],
-  "js": "index.js?v=1.2.54",
+  "js": "index.js?v=1.2.55",
   "author": "Personal project",
-  "version": "1.2.54",
+  "version": "1.2.55",
   "auto_update": false
 }

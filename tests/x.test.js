@@ -1504,3 +1504,36 @@ test('multiple changes to one public X action before the next home refresh only 
   assert.equal(f.count(),current);assert.equal(xPendingPublicActivities(f.state()).length,1);
  }finally{f.close();}
 });
+
+for(const independent of [false,true])test('X DM sends only latest ten records and retains full stored history '+independent,async()=>{
+ const f=setup(undefined,independent);try{
+  const id=await account(f,'open');
+  const rows=Array.from({length:16},(_,i)=>({id:'window:'+i,type:'message',accountId:id,role:i%2?'assistant':'user',text:'DM_WINDOW_'+String(i).padStart(2,'0')+'_END',createdAt:i+1,status:'answered',read:true}));
+  await f.memory.commit(await f.memory.begin(),rows.map(value=>({collection:'x',key:value.id,value})));
+  f.reply({status:'reply',text:'Received'});ok(await f.x.send(id,'CURRENT_WINDOW_MESSAGE'));
+  const p=f.prompt(),thread=JSON.parse(p.match(/；记录：(\[[^\n]*\])\n/)[1]);
+  assert.equal(thread.length,10);assert.equal(thread[0].text,rows[7].text);assert.equal(thread.at(-1).text,'CURRENT_WINDOW_MESSAGE');
+  assert.doesNotMatch(p,/DM_WINDOW_0[0-6]_END/);assert.equal(xItems(f.state(),'message').length,18);
+ }finally{f.close();}
+});
+
+test('public post contexts carry user replies with ancestors, excluding unrelated comments and DMs',async()=>{
+ const {xUserReplyContext}=await import('../src/x-comments.js');
+ const f=setup();try{
+  const id=await account(f,'open');ok(await f.x.publish('THREAD_POST'));
+  const post=xItems(f.state(),'post').find(p=>p.author==='user');
+  const rows=[{id:'root',type:'comment',postId:post.id,author:id,text:'PARENT_PUBLIC_COMMENT'},
+   {id:'mine',type:'comment',postId:post.id,author:'user',text:'USER_PUBLIC_REPLY',replyTo:'root'},
+   {id:'unrelated',type:'comment',postId:post.id,author:id,text:'UNRELATED_COMMENT'},
+   {id:'foreign',type:'comment',postId:'other-post',author:'user',text:'FOREIGN_POST_COMMENT'},
+   {id:'private',type:'message',accountId:id,role:'assistant',text:'PRIVATE_MESSAGE',createdAt:1}];
+  await f.memory.commit(await f.memory.begin(),rows.map(value=>({collection:'x',key:value.id,value})));
+  const before=JSON.stringify(f.state().x), selected=xUserReplyContext(f.state(),post.id);
+  assert.deepEqual(selected.map(c=>c.id),['root','mine']);assert.equal(selected[1].replyTo,'root');assert.equal(JSON.stringify(f.state().x),before);
+  const narrative=xStoryPrompt(f.state());assert.match(narrative,/PARENT_PUBLIC_COMMENT/);assert.match(narrative,/USER_PUBLIC_REPLY/);
+  assert.doesNotMatch(narrative,/UNRELATED_COMMENT|FOREIGN_POST_COMMENT|PRIVATE_MESSAGE/);
+  f.reply({status:'reply',text:'Understood'});ok(await f.x.send(id,'What did you think of my post?'));
+  assert.match(f.prompt(),/USER_PUBLIC_REPLY/);assert.match(f.prompt(),/PARENT_PUBLIC_COMMENT/);
+  f.reply(feedResult({posts:[]}));ok(await f.x.refresh());assert.match(f.prompt(),/"userReplies":/);assert.match(f.prompt(),/USER_PUBLIC_REPLY/);
+ }finally{f.close();}
+});

@@ -1,3 +1,4 @@
+import {xUserReplyContext} from './x-comments.js?v=1.2.55';
 import {recentPerConversation} from './proactive-pacing.js?v=1.2';
 import { sameNamedPerson } from './names.js?v=1.2';
 import { dateDay } from './story-clock.js?v=1.2';
@@ -37,8 +38,8 @@ const postAfterMessage = (post,message) => {
     }
     return a.at>b.at;
 };
-const describePost = post => post.author==='user'
-    ? {id:post.id,kind:'新原创推文',text:String(post.text||post.imageDescription||'').slice(0,120),storyTime:post.storyTime||null}
+const describePost = (post,state) => post.author==='user'
+    ? {id:post.id,kind:'新原创推文',text:String(post.text||post.imageDescription||'').slice(0,120),storyTime:post.storyTime||null,userReplies:xUserReplyContext(state,post.id)}
     : {id:post.id,kind:'转发',text:String(post.text||'').slice(0,120),storyDay:post.repostedDay??post.postedAtStory?.day??null};
 function lastUnanswered(thread){
     let lastNpc=null,replied=false;
@@ -59,7 +60,7 @@ export function xTriggerCandidates(state,user,now=null){
     // Expired public posts are no longer fresh narrative material, so they stop
     // serving as a re-outreach trigger or a quoted catalyst.
     const hitsAfter=message=>posts.filter(p=>postAfterMessage(p,message)&&!(now&&commExpired(commMeta(state,'x',p.id),now)))
-        .sort((a,b)=>(publicPostAnchor(b).at||0)-(publicPostAnchor(a).at||0)).slice(0,2).map(describePost);
+        .sort((a,b)=>(publicPostAnchor(b).at||0)-(publicPostAnchor(a).at||0)).slice(0,2).map(p=>describePost(p,state));
     const candidates=[];
     // SMS threads follow journal replay order, i.e. narrative occurrence order.
     const smsThreads=new Map();

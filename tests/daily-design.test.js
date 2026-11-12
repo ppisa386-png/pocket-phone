@@ -87,5 +87,5 @@ test('日报排版按纸张容器宽度响应，窄屏单栏、宽屏平衡双�
     assert.ok(css.includes('.pp-daily-brief{display:block'));
     assert.ok(index.includes('style-daily.css?v=1.2.45'));
     assert.match(preview,/style-daily\.css/);
-    assert.ok(ui.includes('daily-view.js?v=1.2.54'));
+    assert.ok(ui.includes('daily-view.js?v=1.2.55'));
 });

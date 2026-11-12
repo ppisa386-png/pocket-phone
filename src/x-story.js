@@ -1,6 +1,6 @@
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';
 import { readStoryClock, storyTime, dateDay, dayDate } from './story-clock.js?v=1.2';
-import { xComments, xCommentKey } from './x-comments.js?v=1.2';
+import { xComments, xCommentKey, xUserReplyContext } from './x-comments.js?v=1.2.55';
 import {xFeedArea} from './x-feed.js?v=1.2';
 import { xAudience } from './x-audience.js?v=1.2';
 import { commRecordPatch, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2.50';
@@ -39,7 +39,7 @@ export function xStoryPrompt(state, now = null) {
                     metrics:p.metrics,shown:true};
             }
             return {...reference,name:p.author==='user'?state.x.profile?.alias:state.x[p.author]?.name,
-                text:p.text?.slice(0,160),imageDescription:p.imageDescription?.slice(0,160),metrics:p.metrics};
+                text:p.text?.slice(0,160),imageDescription:p.imageDescription?.slice(0,160),metrics:p.metrics,userReplies:xUserReplyContext(state,p.id)};
         });
     return '\nX 正文同步：仅当本楼明确写出 user 已在 X/Twitter 发布新推文，在正文末尾按顺序每帖附一条隐藏 HTML 注释，不用代码块：' +
         '<!--durian-x:{"action":"published","author":"user","text":"推文逐字原文","imageDescription":"正文写明的配图描述原文","replies":[{"name":"实际回复者的姓名或网名","text":"公开回复逐字原文"}],"category":"可选A或B：日常闲聊为A，约定/仍在发展的具体事件为B","shown":true}-->。' +
@@ -51,7 +51,7 @@ export function xStoryPrompt(state, now = null) {
         '正文第一次明确展示或提及手机中已有、尚未在正文展示的 X 帖子时，末尾附 <!--durian-message-shown:{"platform":"x","id":"该帖准确的已有ID"}-->；已经展示过的不重复标记。' +
         '目录中 shown 为 true 的帖子仅保留定位与互动元数据，不再注入正文或配图，也不得再次作为新发布内容出现；没有 text 且未标记 shown 的旧帖仅作定位引用，不再同步其互动数。' +
         '根据原帖内容、作者、发布时间和本楼指代确认目标，postId 和 postText 必须对应同一帖，不能只凭作者选最新一条；指代有歧义就不记。数字不能来自预期、假设、草稿、他帖或旧数的回忆，不因同步数字编写可见评论或粉丝变化。' +
-        '回忆、转述旧帖、草稿、打算发布、转发他人帖子、私信均不记。没有发生就不输出，不为标记安排发帖或回复。已保存的 user 本人帖子（不提供评论、NPC 帖子、广场、趋势及私信）：' +
+        '回忆、转述旧帖、草稿、打算发布、转发他人帖子、私信均不记。没有发生就不输出，不为标记安排发帖或回复。已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：' +
         JSON.stringify(targets).replace(/\{\{/g,'\\u007b\\u007b') + '\n';
 }
 

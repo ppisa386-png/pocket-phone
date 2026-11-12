@@ -1,7 +1,8 @@
-import {brandImpact} from './x-influence.js?v=1.2';
+import {xUserReplyContext} from './x-comments.js?v=1.2.55';
+import {brandImpact} from './x-influence.js?v=1.2.55';
 // Projects and counters live in the rollback journal. Only the private draw
 // survives removal of its source floor, so a replay of the same plan cannot reroll it.
-import {socialContact} from './outreach.js?v=1.2';
+import {socialContact} from './outreach.js?v=1.2.55';
 import {effectiveReply} from './contact-policy.js?v=1.2';
 import {appendChange,replayJournal} from './journal.js?v=1.2';
 import {dateDay,dayDate,readStoryClock,exactStoryTime,storyTime} from './story-clock.js?v=1.2';
@@ -91,7 +92,7 @@ export function businessPrompt(state,settings,chat,user,privateDraws={}){
     const currentTime=exactStoryTime(chat),currentClock=currentTime.date?(currentTime.date+(currentTime.time?' '+currentTime.time:'')):'剧情日期时间未明确';
     if(followers>=1000&&(counter.eligible+1)%15===0){
         const records=Object.values(state.x);
-        const posts=records.filter(p=>p.type==='post'&&p.author==='user').slice(-20).map(({text,metrics})=>({text,metrics}));
+        const posts=records.filter(p=>p.type==='post'&&p.author==='user').slice(-20).map(p=>({id:p.id,text:p.text,metrics:p.metrics,userReplies:xUserReplyContext(state,p.id)}));
         const accounts=records.filter(a=>a.type==='account').map(({name,id,blocked,dmAccepted,inboundRequest})=>({name,id,blocked,dmAccepted,inboundRequest}));
         parts.push('本轮为X专项商业邀约机会。结合近期正文与世界年代地区、账号定位、粉丝受众和公开推文及互动，选择一家匹配的真实或虚构商家，无合理对象可留空。品牌只能知道公开账号资料，使用网名，不借私事识人。可邀体验、活动、推广或代言等。报价通常随影响力提高，按传播、工作量、预算及地区币值估算。私信以品牌口吻称呼并写明项目和报酬；可结合真实档期在私信中明确设置回复截止时间，但不必每次都设置。若正文明确写出“请于某日某时前回复”或“报价有效至某日某时”等回复期限，必须在正文写清完整日期和时刻，并在标记中附 replyBy:"YYYY-MM-DD HH:mm"。replyBy只表示回复截止时间，不得把活动举办、样品寄送、交付或见面时间误当成回复期限；相对表达须依据当前剧情时刻换算为完整日期，正文与字段一致；没有明确回复期限或无法确定日期时分则省略。截止时间不得早于邀约发出时刻。遵守拉黑、待处理和拒绝状态；陌生私信关闭只联系已接受账号。不重复已发或拒绝企划。实际收到时附<!--durian-business:{"kind":"offer","brand":"品牌名","project":"可复用的企划名称","terms":"条件、报价与币种","text":"私信全文"}-->；只有正文明确给出回复期限时，才在该JSON对象额外添加 replyBy:"YYYY-MM-DD HH:mm"。只用商业标签。当前剧情时刻：'+currentClock+'。资料：'+JSON.stringify({alias:profile.alias,bio:profile.bio,followers,posts,accounts,requestsOpen:profile.requestsOpen!==false,history:plans.map(publicPlan)}));
     }

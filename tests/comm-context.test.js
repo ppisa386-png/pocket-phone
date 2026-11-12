@@ -263,7 +263,7 @@ test('the narrative catalog keeps every reference but degrades expired or shown 
         'x:old':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','09:00'),anchorSource:'source-floor',expired:true,shown:false},
         'x:shown':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:false,shown:true},
     };
-    const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-11-02','12:00')).split('已保存的 user 本人帖子（不提供评论、NPC 帖子、广场、趋势及私信）：')[1].trim());
+    const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-11-02','12:00')).split('已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：')[1].trim());
     const rows=Object.fromEntries(catalog.map(p=>[p.id,p]));
     assert.equal(rows.fresh.text.includes('未过期的帖子完整内容'),true,'fresh content stays available');
     assert.equal(rows.old.text,undefined,'expired post degrades to a bare reference');
@@ -373,7 +373,7 @@ test('anonymous X retains narrative DM markers even with no other outgoing chann
 test('X catalog uses source story dates and does not repeatedly send old pending post text',()=>{
  const state=channelState(),day=Date.UTC(2026,9,4)/86400000;
  state.x.p={id:'p',type:'post',author:'user',feed:'home',text:'十月四号发的公开推文',postedAtStory:{day,hour:10},createdAt:Date.now()};
- const row=now=>JSON.parse(xStoryPrompt(state,now).split('已保存的 user 本人帖子（不提供评论、NPC 帖子、广场、趋势及私信）：')[1].trim())[0];
+ const row=now=>JSON.parse(xStoryPrompt(state,now).split('已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：')[1].trim())[0];
  assert.equal(row(stamp('2026-10-05','12:00')).postedDate,'2026-10-04');
  assert.equal(row(stamp('2026-10-05','12:00')).storyDaysAgo,1);
  assert.equal(row(stamp('2026-10-07','10:00')).text,state.x.p.text,'72h boundary remains visible');
@@ -400,7 +400,7 @@ test('existing X post is marked shown on first prose mention and reverts on floo
  journal=importStoryPhone(journal,rev,ctx.chat,ctx).journal;
  const state=replayJournal(syncCommContext(journal,rev,ctx.chat).journal);
  assert.equal(commMeta(state,'x','old').shown,true);
- const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-10-05','10:00')).split('已保存的 user 本人帖子（不提供评论、NPC 帖子、广场、趋势及私信）：')[1].trim());
+ const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-10-05','10:00')).split('已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：')[1].trim());
  assert.equal(catalog[0].text,undefined);assert.equal(catalog[0].postedDate,'2026-10-04');
  assert.equal(commMeta(replayJournal(reconcileJournal(journal,rev.slice(0,1)).journal),'x','old').shown,false);
 });
