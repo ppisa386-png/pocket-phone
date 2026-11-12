@@ -1287,7 +1287,8 @@ test('public X follow, unfollow, like and repost form non-directed one-shot home
   f.reply(({quietPrompt})=>{
     seen.push(quietPrompt);
     if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:10,stats:[]});
-    return JSON.stringify(feedResult({activityReactions:[]}));
+    const activityReactions=xPendingPublicActivities(f.state()).filter(row=>['like','repost','unlike','unrepost'].includes(row.action)).map(row=>({eventId:row.id,accountId:id,text:'注意到这条公开互动的人发了一条相关推文。'}));
+    return JSON.stringify(feedResult({activityReactions}));
   });
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
