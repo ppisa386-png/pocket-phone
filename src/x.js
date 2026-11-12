@@ -373,7 +373,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         const pendingActivity=combined&&!square&&!following?xPendingPublicActivities(state):[];
         const activityCandidates=new Map(pendingActivity.map(row=>{
             const post=row.postId?state.x?.[row.postId]:null,targetId=row.accountId||post?.author,target=targetId&&targetId!=='user'?state.x?.[targetId]:null;
-            return [row.id,targetId!=='user'&&(!target||target.blocked)?[]:relatedNpcAccounts(state,row.postId,[targetId],[targetId],6)];
+            return [row.id,targetId!=='user'&&(!target||target.blocked)?[]:relatedNpcAccounts(state,row.postId,[targetId],[],6)];
         }));
         const activityPrompt=publicActivityPrompt(state,pendingActivity,activityCandidates);
         const activityQueries=pendingActivity.map(row=>{
