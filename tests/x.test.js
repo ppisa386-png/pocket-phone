@@ -365,18 +365,19 @@ test('square refresh needs no following and rejects character authors while crea
  }finally{f.close();}
 });
 
-test('followed characters have un-followed commenters and may remain completely silent',async()=>{
+test('the directly addressed character may stay silent while a related NPC joins the public thread',async()=>{
  const f=setup();try{
   const id=await account(f);ok(await f.x.follow(id,true));
   f.reply({posts:[{accountId:id,text:'A quiet walk.',metrics:{likes:2,reposts:0,replies:1},comments:[{key:'friend',name:'Bea',handle:'bea',text:'Nice weather.'}]}]});
   ok(await f.x.refresh(true));const p=xItems(f.state(),'post')[0],c=xItems(f.state(),'comment')[0];
   assert.equal(f.state().x[c.author].name,'Bea');assert.equal(f.state().x[c.author].following,false);
   assert.equal(xItems(f.state(),'comment').some(c=>c.author===id),false);assert.match(f.prompt(),/可以一条都不回复/);
+  await f.memory.commit(await f.memory.begin(),[{collection:'x',key:c.author,value:{...f.state().x[c.author],authorKind:'npc'}}]);await f.memory.read();
   const before=f.count();ok(await f.x.react(p.id,'liked'));ok(await f.x.react(p.id,'reposted'));
   assert.equal(f.count(),before);assert.deepEqual(xCounts(f.state(),f.state().x[p.id]),{likes:3,reposts:1,replies:1});
   ok(await f.x.react(p.id,'liked'));assert.equal(xCounts(f.state(),f.state().x[p.id]).likes,2);
-  f.reply({text:'',reactions:[{key:'bea',accountId:c.author,text:'Nice to see you here.',replyTo:'user_comment'}]});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,2);
-  assert.equal(xCounts(f.state(),f.state().x[p.id]).replies,2);
+  f.reply({text:'',reactions:[{key:'bea',accountId:c.author,text:'Nice to see you here.',replyTo:'user_comment'}]});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,3);
+  assert.equal(xCounts(f.state(),f.state().x[p.id]).replies,3);
  }finally{f.close();}
 });
 
