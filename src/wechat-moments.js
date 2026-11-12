@@ -164,6 +164,7 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
             changes.push({collection:'wechat',key:value.id,value});
         }
         const mutated=new Map();
+        let savedInteractions=0;
         for(const row of newInteractions){
             const old=mutated.get(row.momentId)||staged.wechat?.[row.momentId];
             if(old?.type!=='moment')continue;
@@ -179,11 +180,11 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                     storyTime:clock};
                 next={...old,comments:[...(old.comments||[]),comment]};
             }
-            mutated.set(row.momentId,next);
+            mutated.set(row.momentId,next);savedInteractions++;
         }
         for(const [id,value]of mutated)changes.push({collection:'wechat',key:id,value});
         await commit(changes);
-        return {added:newPosts.length,interactions:[...mutated.values()].reduce((sum,m)=>sum+(m.comments?.length||0)+(m.likes?.length||0),0)};
+        return {added:newPosts.length,interactions:savedInteractions};
     });
 
     const likeMoment=id=>run(async(state,current,request,commit)=>{
