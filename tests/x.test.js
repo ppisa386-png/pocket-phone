@@ -385,9 +385,9 @@ test('replying to a comment addresses that commenter and rejects a parent from a
   const id=await account(f);ok(await f.x.follow(id,true));
   f.reply({posts:[{accountId:id,text:'Concert tonight',comments:[{key:'one',name:'Bea',handle:'bea',text:'I am going too.'}]}]});
   ok(await f.x.refresh(true));const post=xItems(f.state(),'post')[0],parent=xItems(f.state(),'comment')[0];
-  f.reply({text:'See you there!'});ok(await f.x.comment(post.id,'When will you arrive?',parent.id));
-  const comments=xItems(f.state(),'comment');assert.equal(comments.at(-1).author,parent.author);
-  assert.equal(comments.at(-2).replyTo,parent.id);assert.equal(comments.at(-1).replyTo,comments.at(-2).id);
+  f.reply({text:'See you there!',reactions:[{key:'alex',accountId:id,text:'我也想知道你们什么时候到。',replyTo:'user_comment'}]});ok(await f.x.comment(post.id,'When will you arrive?',parent.id));
+  const comments=xItems(f.state(),'comment'),userComment=comments.find(c=>c.author==='user'),directReply=comments.find(c=>c.author===parent.author&&c.replyTo===userComment.id),communityReply=comments.find(c=>c.author===id&&c.replyTo===userComment.id);
+  assert.ok(directReply&&communityReply);assert.equal(userComment.replyTo,parent.id);
   assert.match(f.prompt(),/被回复的账号：.*Bea/);assert.match(f.prompt(),/不强制帖子作者出面/);
   ok(await f.x.publish('Other post'));const own=xItems(f.state(),'post').find(p=>p.author==='user');
   const count=f.count();assert.equal((await f.x.comment(own.id,'Wrong parent',parent.id)).ok,false);assert.equal(f.count(),count);
