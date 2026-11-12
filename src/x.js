@@ -2,7 +2,7 @@ import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from '.
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2';
 import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
-import {readXMemory} from './external-memory.js?v=1.2';
+import {readXMemory} from './external-memory.js?v=1.2.53';
 import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.35';
 import {JOURNAL_KEY} from './journal.js?v=1.2';
 import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
