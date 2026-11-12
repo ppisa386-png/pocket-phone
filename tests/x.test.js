@@ -286,6 +286,26 @@ test('X anonymous private replies stay scoped; failed messages retry once; renam
  assert.equal(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),'');assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
 });
 
+test('blocking an X sender hides the unread badge without falsely marking the DM as read',async()=>{
+ const f=setup(),id=await account(f,'open');
+ f.reply({status:'reply',text:'A message not yet opened'});
+ ok(await f.x.send(id,'Hello'));
+ const incoming=xItems(f.state(),'message').find(m=>m.accountId===id&&m.role==='assistant');
+ assert.equal(incoming.read,false);assert.equal(xUnread(f.state()),1);
+ ok(await f.x.block(id,true));
+ const blocked=(await f.memory.read()).state;
+ assert.equal(blocked.x[incoming.id].read,false,'blocking is not opening the DM');
+ assert.equal(blocked.commContext['x:'+incoming.id].read,false,'read sidecar remains false');
+ assert.equal(xUnread(blocked),0,'blocked account does not keep the launcher badge lit');
+ ok(await f.x.block(id,false));
+ assert.equal(xUnread(f.state()),1,'unblocking restores the still-unread badge');
+ ok(await f.x.markRead(id));
+ const read=(await f.memory.read()).state;
+ assert.equal(read.x[incoming.id].read,true);assert.equal(read.commContext['x:'+incoming.id].read,true);
+ assert.equal(xUnread(read),0);
+ f.close();
+});
+
 test('closed and blocked X accounts cannot receive messages; pending requests do not invent replies',async()=>{
  const f=setup(),id=await account(f,'closed');let before=f.count();assert.equal((await f.x.send(id,'Hi')).ok,false);assert.equal((await f.x.reveal(id)).ok,false);assert.equal(f.count(),before);f.close();
  const g=setup(),other=await account(g);g.reply({status:'request',text:''});ok(await g.x.send(other,'Hello'));assert.equal(xItems(g.state(),'message').length,1);assert.equal(xItems(g.state(),'message')[0].status,'request');ok(await g.x.block(other,true));before=g.count();assert.equal((await g.x.send(other,'Again')).ok,false);assert.equal(g.count(),before);g.close();
