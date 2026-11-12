@@ -241,11 +241,71 @@ test('narrative WeChat Moments respect the current speaker and story-day expiry 
         const narrative=buildStoryPhonePrompt(state,f.ctx,f.settings,f.ctx.chat);
         assert.match(narrative,/ALEX_STORY/);
         f.ctx.chat.push({mes:'2026-11-05 11:00'});
-        assert.equal(wechatMomentsStoryPrompt(state,f.ctx,f.ctx.chat),'','old Moments do not repeat indefinitely as new story context');
+        assert.doesNotMatch(wechatMomentsStoryPrompt(state,f.ctx,f.ctx.chat),/PUBLIC_STORY|ALEX_STORY/,'old Moments are not repeated indefinitely');
         f.ctx.chat.pop();
         f.ctx.characters.push({name:'Other',avatar:'other.png'});f.ctx.characterId=1;
         assert.equal(wechatMomentsStoryPrompt(state,f.ctx,f.ctx.chat),'','unrelated character cannot read restricted user Moments');
         f.ctx.characterId=0;f.settings.apps.wechat=false;
         assert.doesNotMatch(buildStoryPhonePrompt(state,f.ctx,f.settings,f.ctx.chat),/ALEX_STORY/);
+    }finally{f.close();}
+});
+
+
+test('WeChat multi-cohort refresh is atomic: later invalid cohort cannot preserve earlier generated post',async()=>{
+    const f=fixture();try{
+        await f.api.open();const alex=await friend(f,'Alex');await friend(f,'Bea');
+        ok(await f.api.publish('Alex 的特别消息','','include',[alex]));
+        const before=JSON.stringify(f.state().wechat);let calls=0;
+        f.reply(prompt=>{
+            calls++;
+            const id=prompt.includes('Alex 的特别消息')?alex:wxFriends(f.state()).find(a=>a.id!==alex).id;
+            return calls===1?
+                {moments:[{authorId:id,text:'最新动态'}],interactions:[]}:
+                {moments:[],interactions:[{momentId:'nonexistent',authorId:id,kind:'comment',text:'错误目标'}]};
+        });
+        const bad=await f.api.refreshMoments();assert.equal(bad.ok,false);
+        assert.equal(calls,2);
+        assert.equal(JSON.stringify(f.state().wechat),before,'no first-cohort post can leak into storage after second-cohort failure');
+    }finally{f.close();}
+});
+
+test('narrated NPC WeChat posts and comments import to real Moments once and roll back with their story floor',async()=>{
+    const f=fixture();try{
+        await f.api.open();const alex=await friend(f);
+        const post=await f.api.publish('周末一起排练吧','','all',[]);ok(post);
+        const first=await f.api.commentMoment(post.value.id,'没问题');ok(first);
+        const floor='Alex 发表朋友圈：「新唱片即将发布」，随后在你的旧朋友圈评论：「明天见！」';
+        const tags=[
+            {action:'published',authorId:alex,text:'新唱片即将发布'},
+            {action:'comment',momentId:post.value.id,authorId:alex,text:'明天见！',replyTo:first.value.id}
+        ];
+        f.ctx.chat.push({mes:floor+tags.map(row=>'<!--durian-wechat-moment:'+JSON.stringify(row)+'-->').join(''),is_user:false,name:'Alex'});
+        await f.memory.read();
+        const state=f.state();
+        assert.equal(wxMoments(state).filter(m=>m.authorId===alex&&m.text==='新唱片即将发布').length,1);
+        assert.equal(state.wechat[post.value.id].comments.length,2);
+        assert.equal(state.wechat[post.value.id].comments[1].text,'明天见！');
+        assert.equal(state.wechat[post.value.id].comments[1].replyTo,first.value.id);
+        await f.memory.read();
+        assert.equal(f.state().wechat[post.value.id].comments.length,2,'repeated imports are idempotent');
+        f.ctx.chat.pop();await f.memory.read();
+        assert.equal(wxMoments(f.state()).filter(m=>m.authorId===alex).length,0);
+        assert.equal(f.state().wechat[post.value.id].comments.length,1);
+    }finally{f.close();}
+});
+
+test('narrative markers never import unpublished text or NPC comments on an unauthorized user Moment',async()=>{
+    const f=fixture();try{
+        await f.api.open();const alex=await friend(f);
+        const secret=await f.api.publish('只给我自己看的信','','private',[]);ok(secret);
+        const tags=[
+            {action:'published',authorId:alex,text:'准备发朋友圈但还没有发'},
+            {action:'comment',authorId:alex,momentId:secret.value.id,text:'这是隐私评论'}
+        ];
+        f.ctx.chat.push({mes:'Alex 在思考准备发朋友圈，但没有真的发送。'+
+            tags.map(row=>'<!--durian-wechat-moment:'+JSON.stringify(row)+'-->').join(''),is_user:false,name:'Alex'});
+        await f.memory.read();
+        assert.equal(wxMoments(f.state()).filter(m=>m.authorId===alex).length,0);
+        assert.equal(f.state().wechat[secret.value.id].comments.length,0);
     }finally{f.close();}
 });
