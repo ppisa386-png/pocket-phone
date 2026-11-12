@@ -388,7 +388,7 @@ test('replying to a comment addresses that commenter and rejects a parent from a
   f.reply({text:'See you there!',reactions:[{key:'alex',accountId:id,text:'我也想知道你们什么时候到。',replyTo:'user_comment'}]});ok(await f.x.comment(post.id,'When will you arrive?',parent.id));
   const comments=xItems(f.state(),'comment'),userComment=comments.find(c=>c.author==='user'),directReply=comments.find(c=>c.author===parent.author&&c.replyTo===userComment.id),communityReply=comments.find(c=>c.author===id&&c.replyTo===userComment.id);
   assert.ok(directReply&&communityReply);assert.equal(userComment.replyTo,parent.id);
-  assert.match(f.prompt(),/被回复的账号：.*Bea/);assert.match(f.prompt(),/不强制帖子作者出面/);
+  assert.match(f.prompt(),/被直接回复的账号：.*Bea/);assert.match(f.prompt(),/被直接回复账号是否回应 user/);
   ok(await f.x.publish('Other post'));const own=xItems(f.state(),'post').find(p=>p.author==='user');
   const count=f.count();assert.equal((await f.x.comment(own.id,'Wrong parent',parent.id)).ok,false);assert.equal(f.count(),count);
   ok(await f.x.block(parent.author,true));assert.equal((await f.x.comment(post.id,'Blocked',parent.id)).ok,false);
