@@ -88,11 +88,17 @@ const X_SEARCH_OUTPUT = '本次任务是搜索/添加 X 角色账号，不续写
 
 export function createX({memory,phone,getContext,getSettings}) {
     const profile=state=>xProfile(state,getContext().name1);
-    const socialEvent=(slot,target,action,fields={})=>({
-        id:'public-activity:'+slot+':'+target,
-        type:'public-activity',action,shown:false,createdAt:Date.now(),
-        storyTime:squareClock(getContext().chat||[]),...fields,
-    });
+    const socialEvent=(state,slot,target,action,fields={})=>{
+        const base='public-activity:'+slot+':'+target;
+        const previous=xItems(state,'public-activity').filter(row=>
+            row.slot===slot&&row.targetId===target||row.id===base
+        ).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)).at(-1);
+        // Coalesce changes while an event is still pending. Once consumed,
+        // the next action gets a fresh ID so older reaction posts cannot mask it.
+        const id=previous?.shown!==true?(previous?.id||base):base+':'+crypto.randomUUID();
+        return {id,type:'public-activity',slot,targetId:target,action,shown:false,createdAt:Date.now(),
+            storyTime:squareClock(getContext().chat||[]),...fields};
+    };
     function publicActivityPrompt(state,rows,candidateMap=new Map()) {
         if(!rows.length)return '';
         const events=rows.map(item=>{
@@ -365,7 +371,10 @@ export function createX({memory,phone,getContext,getSettings}) {
         // Only the HOME refresh path consumes this global public activity pulse.
         // Square, trends, comments, DMs and standalone followed feeds do not.
         const pendingActivity=combined&&!square&&!following?xPendingPublicActivities(state):[];
-        const activityCandidates=new Map(pendingActivity.map(row=>[row.id,relatedNpcAccounts(state,row.postId,[row.accountId],[row.accountId],6)]));
+        const activityCandidates=new Map(pendingActivity.map(row=>{
+            const post=row.postId?state.x?.[row.postId]:null,targetId=row.accountId||post?.author,target=targetId&&targetId!=='user'?state.x?.[targetId]:null;
+            return [row.id,targetId!=='user'&&(!target||target.blocked)?[]:relatedNpcAccounts(state,row.postId,[targetId],[targetId],6)];
+        }));
         const activityPrompt=publicActivityPrompt(state,pendingActivity,activityCandidates);
         const activityQueries=pendingActivity.map(row=>{
             const post=row.postId?state.x?.[row.postId]:null,targetId=row.accountId||post?.author,target=targetId&&targetId!=='user'?state.x?.[targetId]:null;
@@ -529,7 +538,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const a=xAccount(state,id),next=value===true;
             if(!!a.following===next)return;
             await commit([xSet({...known(state,a),following:next}),
-                xSet(socialEvent('follow',id,next?'follow':'unfollow',{accountId:id}))]);
+                xSet(socialEvent(state,'follow',id,next?'follow':'unfollow',{accountId:id}))]);
         });},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true})]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:storyTime(getContext().chat)}))]);});},
@@ -647,7 +656,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(p.author!=='user')xAccount(state,p.author);
             const next=!p[kind],action=kind==='liked'?(next?'like':'unlike'):(next?'repost':'unrepost');
             await commit([xSet({...p,[kind]:next,[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})}),
-                xSet(socialEvent(kind,id,action,{accountId:p.author,postId:id}))]);
+                xSet(socialEvent(state,kind,id,action,{accountId:p.author,postId:id}))]);
         });},
         comment(id,value,replyTo=null){return run(async(state,current,request,commit)=>{
             const p=state.x[id];if(p?.type!=='post')throw Error('帖子不存在。');
@@ -659,9 +668,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const body=xRequired(value,'回复内容');
             const comment=xRecord('comment',{postId:id,author:'user',alias:profile(state).alias,text:body,replyTo:parent?.id||null});
             const changes=[xSet(comment)];
-            // NPC-authored home-feed threads can attract one or two additional
-            // related NPCs. The directly addressed account keeps its own reply
-            // channel; community replies are separate comments in this thread.
+            // NPC-authored home-feed posts and existing NPC-led threads on user posts
+            // can attract one or two related NPCs. The directly addressed
+            // account keeps its own reply channel.
             const thread=xItems(state,'comment').filter(c=>c.postId===id);
             const hasNpcThread=thread.some(c=>c.author!=='user');
             const canInviteCommunity=p.author!=='user'||!!target||hasNpcThread;
