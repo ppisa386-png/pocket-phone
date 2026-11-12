@@ -458,7 +458,8 @@ test('WhatsApp and X incoming DMs mirror phone-read state independently of shown
         set('whatsapp','wa-out',{id:'wa-out',type:'message',accountId:'card:alex.png',role:'user',text:'my reply',read:true,createdAt:2}),
         set('x','x-in',{id:'x-in',type:'message',accountId:'card:alex.png',role:'assistant',text:'X_CONTENT',read:false,createdAt:3}),
     ]);
-    let state=replayJournal(syncCommContext(journal,rev,chat).journal);
+    journal=syncCommContext(journal,rev,chat).journal;
+    let state=replayJournal(journal);
     assert.equal(commMeta(state,'whatsapp','wa-in').shown,false);
     assert.equal(commMeta(state,'whatsapp','wa-in').read,false);
     assert.equal(commMeta(state,'x','x-in').shown,false);
