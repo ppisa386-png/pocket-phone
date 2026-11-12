@@ -2,7 +2,7 @@
 // communication and social channel. One journal collection (`commContext`)
 // stores per-record classification (A/B), the story-time anchor of the floor
 // where the record first appeared, expiry, shown/unshown state and the phone
-// read state for incoming WhatsApp/X private messages. Message read state is
+// read state for incoming WhatsApp/WeChat/X private messages. Message read state is
 // mirrored from the owning app record; the app record remains authoritative.
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
 import { appendChange, replayJournal } from './journal.js?v=1.2';
@@ -36,7 +36,7 @@ export function commExpired(meta, now) {
 
 export const commMeta = (state, platform, id) => state.commContext?.[platform + ':' + id];
 export const commKey = (platform, id) => platform + ':' + id;
-const tracksPhoneRead = entry => ['whatsapp','x'].includes(entry.platform) &&
+const tracksPhoneRead = entry => ['whatsapp','wechat','x'].includes(entry.platform) &&
     !entry.element && entry.record?.type === 'message' && entry.record?.role === 'assistant';
 // The message record is authoritative when available; sidecar is the fallback.
 export function commReadStatus(state, platform, id, record = null) {
