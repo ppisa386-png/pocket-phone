@@ -4,9 +4,9 @@ import {pageFields,objectFields} from './x-edit.js?v=1.2';
 import {refreshFloor} from './x-influence.js?v=1.2';
 import {X_FLOOR_LEDGER,hasUnsettledFloors} from './x-floor.js?v=1.2';
 import { icon } from './icons.js?v=1.2';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.2';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.2.54';
 import { displayStoryTime } from './story-clock.js?v=1.2';
-import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.53';
+import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.54';
 import { xAudience } from './x-audience.js?v=1.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {

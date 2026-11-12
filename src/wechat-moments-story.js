@@ -1,6 +1,6 @@
 import {appendChange,replayJournal} from './journal.js?v=1.2';
 import {readStoryClock} from './story-clock.js?v=1.2';
-import {storyAnnotations} from './story-phone.js?v=1.2.49';
+import {storyAnnotations} from './story-phone.js?v=1.2.54';
 import {wxFriends,canViewWxMoment,wxMoments} from './wechat-moments.js?v=1.2.49';
 
 const short=(value,max)=>typeof value==='string'&&value.trim()&&value.length<=max?value.trim():null;

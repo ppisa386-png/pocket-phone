@@ -288,3 +288,13 @@ test('old built-in continuity text migrates while custom and blank instructions 
  assert.match(normalizeSettings({prompts:{continuity:old}}).prompts.continuity,/只在当前情节/);
  for(const text of ['我的衔接规则',''])assert.equal(normalizeSettings({prompts:{continuity:text}}).prompts.continuity,text);
 });
+
+test('default continuity preface is deduplicated without removing custom text or record metadata',()=>{
+ const settings=normalizeSettings({}),state={contacts:{a:{id:'a',name:'Alex'}},messages:{m:{id:'m',contactId:'a',role:'assistant',text:'UNIQUE_MESSAGE',createdAt:1}},calls:{}};
+ const build=instruction=>buildContinuityPrompt(state,{name:'Alex'},{instruction,allParticipants:true});
+ const prompt=build(settings.prompts.continuity);
+ assert.match(prompt,/叙事语言遵循酒馆预设/);assert.match(prompt,/匿名账号只知道网名/);assert.match(prompt,/shown 与 read 是两个独立状态/);
+ assert.equal(prompt.split('UNIQUE_MESSAGE').length-1,1);
+ const custom='自定义衔接：特别保留未完成的约定。';assert.ok(build(custom).startsWith(custom+'\n'));
+ assert.deepEqual(JSON.parse(prompt.split('\n').at(-2)),JSON.parse(build(custom).split('\n').at(-2)),'only redundant instruction text changes, not the records');
+});

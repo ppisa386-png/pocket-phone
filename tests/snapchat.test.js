@@ -228,3 +228,19 @@ test('story reactions recover the publishing scene after later unrelated narrati
   assert.ok(f.prompt().includes(story.id));assert.doesNotMatch(f.prompt(),/闭馆多年的图书馆|第二周的日常/);
  }finally{f.close();}
 });
+
+test('chat prompt deduplicates only current tail records, preserving same-text older messages and old retries',async()=>{
+ const f=setup();try{
+  const id=await friend(f);f.reply({status:'reply',text:'First reply'});
+  ok(await f.snap.send(id,'text','Repeated question'));
+  f.reply({status:'reply',text:'Second reply'});ok(await f.snap.send(id,'text','Repeated question'));
+  assert.equal(f.prompt().split('Repeated question').length-1,2,'different messages with identical text remain separate');
+  assert.equal(f.prompt().split('First reply').length-1,1);
+  f.reply(()=>{throw Error('offline');});assert.equal((await f.snap.send(id,'text','Older failed question')).ok,false);
+  const failed=snapItems(f.state(),'message').find(m=>m.text==='Older failed question');
+  f.reply({status:'reply',text:'Later reply'});ok(await f.snap.send(id,'text','Later question'));
+  f.reply({status:'reply',text:'Retried reply'});ok(await f.snap.retryMessage(failed.id));
+  const p=f.prompt();assert.ok(p.indexOf('Older failed question')<p.indexOf('Later question'),'retry leaves the old message in its chronological history position');
+  assert.equal(snapItems(f.state(),'message').filter(m=>m.id===failed.id).length,1);
+ }finally{f.close();}
+});

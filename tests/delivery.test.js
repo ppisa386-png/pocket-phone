@@ -127,3 +127,17 @@ test('food and parcel orders share one prompt; toggles and receipts gate each in
   assert.match(f.prompts[DELIVERY_KEY].value,/Carbonara/);assert.doesNotMatch(f.prompts[DELIVERY_KEY].value,/Coat/);
  }finally{f.bridge.destroy();}
 });
+
+test('delivery defaults are not sent twice and custom instructions remain intact',async()=>{
+ for(const [make,key] of [[fixture,'amazonDelivery'],[foodFixture,'foodDelivery']]){
+  const f=await make();try{
+   await f.generate();const text=f.prompts[DELIVERY_KEY].value;
+   assert.equal(text.split('不必每轮重复提及订单').length-1,1);
+   assert.match(text,/durian-delivery/);assert.match(text,/不提前/);
+   const custom='自定义配送约定：送达时轻声敲门，不触碰其他订单。';
+   f.settings.prompts[key]=custom;await f.generate();
+   assert.ok(f.prompts[DELIVERY_KEY].value.startsWith(custom+'\n'));
+   assert.match(f.prompts[DELIVERY_KEY].value,/durian-delivery/);
+  }finally{f.bridge.destroy();}
+ }
+});

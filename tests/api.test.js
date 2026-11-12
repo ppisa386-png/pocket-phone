@@ -36,6 +36,8 @@ test('X feed refresh limits inherited 70k output ceiling and retries a blank pro
    const payload=JSON.parse(options.body);
    limits.push(payload.max_completion_tokens??payload.max_tokens);
    assert.equal(payload.messages.at(-1).role,'system');
+   const contract=payload.messages.at(-1).content;
+   assert.equal(payload.messages.filter(m=>typeof m.content==='string'&&m.content.includes(contract)).length,1,'the identical refresh contract only appears at the final system position');
    if(limits.length===1)return {ok:true,status:200,json:async()=>({choices:[{message:{content:''},finish_reason:'stop'}],usage:{prompt_tokens:30155,completion_tokens:0}})};
    return JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',has_account:true,text:'A quiet afternoon.'}]}));
   });

@@ -339,7 +339,7 @@ test('X narrative replies are shown, while app-only X replies remain unshown',as
     assert.doesNotMatch(continuity,/周二见。/,'shown reply is absent');
     assert.doesNotMatch(continuity,/Later followup/,'app-only private messages stay inside X');
     const entryPrompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),context.chat);
-    assert.match(entryPrompt,/X 私信与其他通信使用同一已展示\/未展示记录机制/);
+    assert.match(entryPrompt,/WhatsApp 和 X 私信的 read 是手机阅读状态，shown 是小说正文展示状态，两者独立/);
     assert.match(entryPrompt,/"platform":"x"/);
 });
 

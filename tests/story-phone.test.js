@@ -413,3 +413,30 @@ test('previously ignored evidence-free X floor is recovered once with original r
   assert.equal(f.requests(),0);
  }finally{f.close();}
 });
+
+test('outreach preface keeps custom instructions and the full common notification boundary',async()=>{
+ const f=setup();try{
+  await f.bridge.prepare();const prompt=f.prompts[STORY_PHONE_KEY].value;
+  assert.match(prompt,/不能仅凭消息抵达就写出完整消息/);assert.match(prompt,/不替 user 回复/);
+  f.settings.prompts.outreach='自定义联系：延续人物当前语气与动机。';
+  await f.bridge.prepare();assert.ok(f.prompts[STORY_PHONE_KEY].value.includes(f.settings.prompts.outreach));
+ }finally{f.close();}
+});
+
+test('X-only narrative keeps notification and read boundaries when shared phone channels are unavailable',async()=>{
+ const {buildStoryPhonePrompt}=await import('../src/story-phone.js');
+ const f=setup();try{
+  const state={contacts:{},calls:{},messages:{},profiles:{},x:{profile:{alias:'Anonymous'}}};
+  Object.assign(f.settings.apps,{phone:false,messages:false,whatsapp:false,wechat:false});
+  const isolated=buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat);
+  assert.match(isolated,/shown:false 直接称作未读/);
+  assert.match(isolated,/只出现通知时正文不透露内容，标记仍保存全文/);
+  assert.match(isolated,/durian-message:/);
+  f.settings.apps.whatsapp=true;
+  const shared=buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat);
+  assert.match(shared,/shown 是小说正文展示状态，两者独立/);
+  assert.match(shared,/不能仅凭消息抵达就写出完整消息、摘要/);
+  assert.match(shared,/新消息的全文及必要译文完整写入/);
+  assert.doesNotMatch(shared,/只出现通知时正文不透露内容，标记仍保存全文/,'duplicate X wording is replaced by the shared rule');
+ }finally{f.close();}
+});

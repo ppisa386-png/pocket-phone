@@ -108,7 +108,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             ? commClassificationPlan(state, planPlatform, contact.id, exactStoryTime(context.chat)) : null;
         const commTicket = commPlan ? await memory.begin() : null;
         if (commPlan) prompt += commPlan.prompt;
-        if (options.outputContract) prompt += '\n' + options.outputContract;
+        // Independent requests append the identical contract after all host
+        // hooks. Keep that final instruction, without a second copy in the task.
+        if (options.outputContract && !(independent && options.outputContract === options.finalOutputContract))
+            prompt += '\n' + options.outputContract;
         if (['phone','messages','incoming'].includes(app)) prompt += COMMUNICATION_LANGUAGE_RULE;
         if (social && !options.establishedImport) prompt += SOCIAL_LANGUAGE_RULE;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));

@@ -33,12 +33,12 @@ test('narrative prompt defines the four ledger lanes and no longer audits every 
         const prompt = buildAssetPrompt(f.state(), f.settings);
         // The four lanes are stated positively, with the ledger framed as
         // finance rather than an inventory.
-        assert.match(prompt, /仅记录四类财务变化/);
+        assert.match(prompt, /只管理余额、固定资产、奢侈品、投资四个栏目/);
         assert.match(prompt, /现金收入与支出/);
         assert.match(prompt, /固定资产/);
-        assert.match(prompt, /奢侈品及贵重收藏品/);
-        assert.match(prompt, /投资及持续经济权益，包括股权、经营权益、电影票房分成、音乐版权与授权收益/);
-        assert.match(prompt, /不需要盘点本轮获得、携带或拥有的全部物品/);
+        assert.match(prompt, /高定礼服及贵重收藏品/);
+        assert.match(prompt, /investment 是金融投资、公司企业经营权益、商铺经营权益及电影分成、音乐版权、授权费等持续经济权益/);
+        assert.match(prompt, /不盘点 user 获得、携带或拥有的全部物品/);
         assert.match(prompt, /正文完成后只核对上述四类变化/);
         assert.match(prompt, /普通零食、一般纪念品、普通耐用品等）不产生任何durian-money标记/);
         // Gifts obey the same three asset lanes instead of widening the scope.

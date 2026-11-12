@@ -67,6 +67,7 @@ test('user post reach includes published evidence and story time, supports wider
   f.reply(feedResult({posts:[],engagementUpdates:[update]}));ok(await f.x.refresh());
   assert.match(f.prompt(),/粉丝数不是热度上限/);assert.match(f.prompt(),/不额外根据经过多少剧情时间调整数据/);assert.doesNotMatch(f.prompt(),/以及经过了多少剧情时间/);assert.match(f.prompt(),/私人经过/);assert.match(f.prompt(),/"postedAtStory"/);assert.match(f.prompt(),/"publicText":"今晚。"/);
   assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),update.metrics);assert.equal(xItems(f.state(),'comment').length,1);
+  assert.equal(f.prompt().split(publicText).length-1,1,'the same post text is not repeated in the catalog, reach data and loaded posts');
   f.reply(feedResult({posts:[],engagementUpdates:[{postId:post.id,metrics:{likes:10,reposts:1,replies:0}}]}));ok(await f.x.refresh());assert.deepEqual(xCounts(f.state(),f.state().x[post.id]),update.metrics);
  }finally{f.close();}
 });
@@ -1294,6 +1295,7 @@ test('public X follow, unfollow, like and repost form non-directed one-shot home
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
   assert.ok(seen[0].includes('本次首页刷新新增的一次性公开社交动态'));
+  assert.equal(seen[0].split('附加字段 activityReactions:').length-1,1,'host mode receives the complete activity schema once');
   assert.ok(seen[0].includes('"action":"follow"'));
   assert.match(seen[0],/不是发送给某个NPC的私信/);
   assert.ok(!seen[0].includes('user 最近公开转发'), 'old public reposts must not be repeated in every generic X task');

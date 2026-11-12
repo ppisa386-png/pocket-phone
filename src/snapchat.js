@@ -83,7 +83,14 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
     }
     async function answerMessage(state,account,message,request,current,commit) {
         const batch=message.batchId?threadFor(state,account.id).filter(m=>m.role==='user'&&m.batchId===message.batchId):[message];
-        const result=await ask(state,account,request,current,'当前任务：'+appName+' 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料：'+JSON.stringify(threadFor(state,account.id).slice(-60).map(m=>({role:m.role,kind:m.kind,text:m.text})))+
+        const batchIds=new Set(batch.map(m=>m.id));
+        const thread=threadFor(state,account.id);
+        const batchAtEnd=thread.slice(-batch.length).every((m,i)=>m.id===batch[i].id);
+        // The current batch is sent in full immediately below. Preserve the
+        // existing 60-record window and chronological order. Retrying an older
+        // batch with later messages must retain its original place as well.
+        const history=thread.slice(-60).filter(m=>!batchAtEnd||!batchIds.has(m.id));
+        const result=await ask(state,account,request,current,'当前任务：'+appName+' 聊天。回应 user 本次连续发送的一组内容，不仅是末尾一句。聊天像现实即时通信：通常一句话一条消息，简短自然，按需要回复 1—3 条；不写长篇大论或小说旁白，不为凑条数重复。双方聊天资料（本次 user 消息另列在后）：'+JSON.stringify(history.map(m=>({role:m.role,kind:m.kind,text:m.text})))+
             '\n本次 user 消息：'+JSON.stringify(batch.map(m=>({kind:m.kind,text:m.text})))+
             '\n只输出 {"status":"reply 或 no_reply","messages":[{"kind":"text/voice/image/video","text":"一条简短消息、语音转写或媒体描述"}],"transfer":null,"category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B"}。语言和翻译要求遵守预设。转账币种：'+(walletCurrency(state)||'按 user 常住地区确定；依据不足不发送转账')+'。如角色自愿转账，可将 transfer 设为 {"amount":"金额字符串","currency":"当地三位货币代码","memo":"附言"}；仅为待收款邀请，不自动收款。',data=>replyData(data,walletCurrency(state)));
         const changes=batch.map(m=>setSnap({...m,status:result.status==='reply'?'answered':'no_reply'}));
