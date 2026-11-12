@@ -1287,7 +1287,7 @@ test('public X follow, unfollow, like and repost form non-directed one-shot home
   f.reply(({quietPrompt})=>{
     seen.push(quietPrompt);
     if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:10,stats:[]});
-    return JSON.stringify(feedResult());
+    return JSON.stringify(feedResult({activityReactions:[]}));
   });
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
@@ -1346,7 +1346,7 @@ test('public X social pulse cannot be consumed by square, trends, followed feed 
   f.reply(()=>'{posts:');
   const failed=await f.x.refreshPublic();assert.equal(failed.ok,false);assert.equal(failed.code,'MODEL_JSON_TRUNCATED');
   assert.equal(xPendingPublicActivities(f.state()).length,1);
-  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:5,stats:[]}):JSON.stringify({posts:[]}));
+  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')?JSON.stringify({initialFollowers:5,stats:[]}):JSON.stringify({posts:[],activityReactions:[]}));
   ok(await f.x.refreshPublic());
   assert.equal(xPendingPublicActivities(f.state()).length,0);
   assert.ok(Object.values(f.state().x).some(row=>row.type==='public-activity'&&row.shown===true));
