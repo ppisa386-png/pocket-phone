@@ -421,11 +421,13 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 const posts=d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15);
                 const activityReactions=pendingActivity.length?list(d,'activityReactions',activityReactionLimit):[];
                 if(pendingActivity.length){
-                    const perEvent=new Map();
+                    const perEvent=new Map(),authorsByEvent=new Map();
                     for(const row of activityReactions){
                         const candidates=activityCandidates.get(row?.eventId)||[];
                         if(typeof row?.text!=='string'||!row.text.trim()||!candidates.some(a=>a.id===row.accountId))throw Error('公开动态回应引用了无关事件、未知 NPC 或空内容。');
-                        const count=(perEvent.get(row.eventId)||0)+1;perEvent.set(row.eventId,count);
+                        const count=(perEvent.get(row.eventId)||0)+1,authors=authorsByEvent.get(row.eventId)||new Set();
+                        if(authors.has(row.accountId))throw Error('同一公开事件不能由同一 NPC 重复发出回应。');
+                        perEvent.set(row.eventId,count);authors.add(row.accountId);authorsByEvent.set(row.eventId,authors);
                         if(count>2)throw Error('每条公开动态最多生成两条 NPC 回应。');
                     }
                     for(const [eventId,candidates] of activityCandidates)if(candidates.length&&!perEvent.get(eventId))throw Error('公开动态 '+eventId+' 有相关 NPC，但本次没有生成任何公开回应。请重试首页刷新。');
