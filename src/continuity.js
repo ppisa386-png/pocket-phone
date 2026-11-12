@@ -1,6 +1,6 @@
 import {recentPerConversation} from './proactive-pacing.js?v=1.2';
 import { majorAmount } from './currency.js?v=1.2';
-import { smsForAI } from './sms-context.js?v=1.2';
+import { smsForAI } from './sms-context.js?v=1.2.50';
 import { syncCommContext, commExpired, commMetaOrInfer, commReadStatus } from './comm-context.js?v=1.2.50';
 import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
 import { nameAliases } from './names.js?v=1.2';
