@@ -693,9 +693,12 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 const result=await ask(state,target,request,current,task,d=>{
                     if(typeof d.text!=='string')throw Error('评论格式不正确。');
                     const reactions=d.reactions===undefined?[]:list(d,'reactions',2),seen=new Set(),keys=new Set(['user_comment','target_reply']);
+                    const parents=new Set([...thread.map(c=>c.id),'user_comment']);
+                    if(target&&d.text.trim())parents.add('target_reply');
                     for(const row of reactions){
                         if(typeof row?.key!=='string'||!row.key.trim()||keys.has(row.key)||typeof row?.text!=='string'||!row.text.trim()||!community.some(a=>a.id===row.accountId)||seen.has(row.accountId))throw Error('评论区 NPC 跟帖引用了未知账号、重复作者、重复键或空内容。');
-                        seen.add(row.accountId);keys.add(row.key);
+                        if(row.replyTo!=null&&row.replyTo!==''&&!parents.has(row.replyTo))throw Error('评论区 NPC 跟帖引用了不存在或尚未生成的父评论。');
+                        seen.add(row.accountId);keys.add(row.key);parents.add(row.key);
                     }
                     if(community.length&&!reactions.length)throw Error('评论区存在相关 NPC，但本次没有生成跟帖。请重试。');
                     return {text:xText(d.text),reactions};
