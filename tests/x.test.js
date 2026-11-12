@@ -1423,6 +1423,33 @@ test('replying to an NPC comment under a user post can bring other NPCs into the
  }finally{f.close();}
 });
 
+test('replying to an NPC comment under a user post can bring other NPCs into the same thread',async()=>{
+ const f=setup();try{
+  const accounts=[
+   {id:'npc-a',type:'account',name:'Alex',handle:'alex',characterId:'card:alex.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-b',type:'account',name:'校园男神B',handle:'campus_b',characterId:'card:b.png',authorKind:'npc',following:false,blocked:false},
+   {id:'npc-c',type:'account',name:'Bea',handle:'bea',characterId:'card:bea.png',authorKind:'npc',following:false,blocked:false},
+  ];
+  const post={id:'user-thread-post',type:'post',author:'user',feed:'home',text:'今天的演出结束了。',metrics:{likes:2,reposts:0,replies:1}};
+  const parent={id:'npc-parent',type:'comment',postId:post.id,author:'npc-b',text:'现场气氛很好。',replyTo:null};
+  const sibling={id:'npc-sibling',type:'comment',postId:post.id,author:'npc-c',text:'确实，最后一首尤其好。',replyTo:'npc-parent'};
+  await f.memory.commit(await f.memory.begin(),[...accounts,post,parent,sibling].map(value=>({collection:'x',key:value.id,value})));
+  await f.memory.read();
+  f.reply({text:'我也最喜欢最后一首。',reactions:[
+   {key:'alex',accountId:'npc-a',text:'Alex：你们俩倒是很有共识。',replyTo:'user_comment'},
+   {key:'bea',accountId:'npc-c',text:'Bea：那首副歌确实很抓耳。',replyTo:'alex'}
+  ]});
+  ok(await f.x.comment(post.id,'我也最喜欢最后一首。',parent.id));
+  const comments=xItems(f.state(),'comment').filter(row=>row.postId===post.id);
+  const userComment=comments.find(row=>row.author==='user'&&row.replyTo===parent.id);
+  const direct=comments.find(row=>row.author==='npc-b'&&row.replyTo===userComment?.id);
+  const alex=comments.find(row=>row.author==='npc-a'&&row.replyTo===userComment?.id);
+  const bea=comments.find(row=>row.author==='npc-c'&&row.text.startsWith('Bea：'));
+  assert.ok(userComment&&direct&&alex&&bea);
+  assert.equal(bea.replyTo,alex.id);
+ }finally{f.close();}
+});
+
 test('commenting on an NPC post adds one or two related NPC replies to the same public thread',async()=>{
  const f=setup();
  try{
