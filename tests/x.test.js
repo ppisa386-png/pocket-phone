@@ -375,7 +375,7 @@ test('followed characters have un-followed commenters and may remain completely 
   const before=f.count();ok(await f.x.react(p.id,'liked'));ok(await f.x.react(p.id,'reposted'));
   assert.equal(f.count(),before);assert.deepEqual(xCounts(f.state(),f.state().x[p.id]),{likes:3,reposts:1,replies:1});
   ok(await f.x.react(p.id,'liked'));assert.equal(xCounts(f.state(),f.state().x[p.id]).likes,2);
-  f.reply({text:''});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,2);
+  f.reply({text:'',reactions:[{key:'bea',accountId:c.author,text:'Nice to see you here.',replyTo:'user_comment'}]});ok(await f.x.comment(p.id,'Enjoy your day.'));assert.equal(xItems(f.state(),'comment').length,2);
   assert.equal(xCounts(f.state(),f.state().x[p.id]).replies,2);
  }finally{f.close();}
 });
