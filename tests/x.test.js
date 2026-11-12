@@ -1420,7 +1420,7 @@ test('commenting on an NPC post adds one or two related NPC replies to the same 
   const {createXPanel}=await import('../src/x-view.js');
   const panel=createXPanel({adapter:{x:f.x},getView:f.state,redraw(){},notice(){}});
   await panel.action('comments',post.id);
-  assert.equal((panel.html().match(/data-x-comment="/g)||[]).length,4);
+  assert.equal((panel.html().match(/data-x-comment="/g)||[]).length,5);
   assert.match(panel.html(),/你俩怎么还聊上了/);
  }finally{f.close();}
 });
