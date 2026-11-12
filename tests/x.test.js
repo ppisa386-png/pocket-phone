@@ -952,7 +952,7 @@ test('new feed accepts fifteen concrete comments and full posts do not collect a
   f.reply({posts:[{name:'Alex',handle:'alex',has_account:true,text:'Concert',metrics:{likes:123,reposts:7,replies:100},comments:samples}]});
   ok(await f.x.refresh());const npc=xItems(f.state(),'post')[0];assert.equal(xItems(f.state(),'comment').length,15);
   assert.deepEqual(xCounts(f.state(),npc),{likes:123,reposts:7,replies:100});
-  ok(await f.x.publish('User event'));const mine=xItems(f.state(),'post').at(-1);
+  ok(await f.x.publish('User event'));const mine=xItems(f.state(),'post').find(post=>post.author==='user');
   const update={postId:mine.id,metrics:{likes:8,reposts:1,replies:100},comments:samples};
   f.reply({posts:[],engagementUpdates:[update]});ok(await f.x.refresh());
   const before=xItems(f.state(),'comment').filter(c=>c.postId===mine.id);assert.equal(before.length,15);
