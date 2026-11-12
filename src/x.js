@@ -93,27 +93,56 @@ export function createX({memory,phone,getContext,getSettings}) {
         type:'public-activity',action,shown:false,createdAt:Date.now(),
         storyTime:squareClock(getContext().chat||[]),...fields,
     });
-    function publicActivityPrompt(state,rows) {
+    function publicActivityPrompt(state,rows,candidateMap=new Map()) {
         if(!rows.length)return '';
         const events=rows.map(item=>{
             const post=item.postId?state.x?.[item.postId]:null;
-            const author=post?.author==='user'?{name:profile(state).alias,handle:null}:state.x?.[item.accountId];
-            if(item.accountId!=='user'&&(!author||author.type!=='account'||author.blocked))return null;
-            return {action:item.action,
-                targetAccount:author?{name:author.name,handle:author.handle||null}:null,
-                ...(post?.type==='post'?{post:{id:post.id,text:xText(post.text,360),imageDescription:xText(post.imageDescription,160)}}:{}),
+            const targetId=item.accountId||post?.author;
+            const author=targetId==='user'?{name:profile(state).alias,handle:null}:state.x?.[targetId];
+            if(targetId!=='user'&&(!author||author.type!=='account'||author.blocked))return null;
+            return {eventId:item.id,action:item.action,
+                targetAccount:author?{id:targetId,name:author.name,handle:author.handle||null}:null,
+                ...(post?.type==='post'?{post:{id:post.id,authorId:post.author,text:xText(post.text,360),imageDescription:xText(post.imageDescription,160)}}:{}),
+                relatedNPCs:(candidateMap.get(item.id)||[]).map(a=>({id:a.id,name:a.name,handle:a.handle||null,characterId:a.characterId||null,relationshipSignals:a.relationshipSignals||[]})),
                 storyTime:item.storyTime||null};
         }).filter(Boolean);
         if(!events.length)return '';
         return '\n本次首页刷新新增的一次性公开社交动态（只有本次可作为新鲜事件，已展示后不再注入）：'+
-            JSON.stringify({userAlias:profile(state).alias,events})+
-            '。这不是发送给某个NPC的私信，而是公开社交行为：人物或其他知情网友可能注意、回应、猜测、讨论、改变印象，也可能无人在意。' +
-            '根据人物性格、关注范围、社交关系、事件意义和公开可见程度自然决定反应；允许吃瓜但不强制吃瓜，不要求每个NPC回应或每条事件都被提及。' +
-            '匿名账号仅可按公开网名识别，除非已知身份，不得凭私人剧情认出真人。' +
+            JSON.stringify({userAlias:profile(state).alias,currentRoleCharacter:getContext().name2||null,events})+
+            '。这不是发送给某个NPC的私信，而是公开社交行为。每个事件都必须检查相关NPC是否能通过公开点赞列表、公开关注关系、转发记录、共同社交圈或已有公开互动注意到。' +
+            '对 relatedNPCs 中有合理知情路径的人物，至少生成1条、通常1～2条公开反应推文；不要把“允许沉默”当成默认答案，也不能在有相关NPC时让所有人毫无反应。每个事件最多2条，使用该事件提供的准确 accountId，反应必须写进 activityReactions，不要混入普通 posts。只有确实没有合适的相关NPC或事件没有合理公开可见路径时才返回空数组。' +
+            '反应应像真实 X 用户发推：可以含蓄调侃、猜测、吃瓜、阴阳怪气、表达醋意或单纯讨论，不必每次直白复述 user 的操作，也不必直接点名 user。' +
+            '匿名账号仅可按公开网名识别，除非已知身份，不得凭私人剧情认出真人；人物私下知道的关系不能自动变成公众已知。' +
             '事件发生过不等于事件当前仍在发生；旧帖子和既有关注状态也不代表刚刚点赞、转发或关注，不可把历史动态反复当新闻。';
     }
     const known=(state,a)=>({...a,identityKnown:a.identityKnown===true||profile(state).alias===getContext().name1});
     const accountContext=(state,a)=>({id:a.id,name:a.name,aliases:a.aliases,handle:a.handle,identityKnown:known(state,a).identityKnown,following:a.following,crowd:a.crowd});
+    const isNpcAccount=(state,a)=>{
+        if(!a||a.type!=='account'||a.blocked||a.crowd)return false;
+        const kind=xAccountKind(a);
+        return kind==='npc'||kind==null&&xItems(state,'post').some(p=>p.author===a.id&&p.feed!=='square');
+    };
+    function relatedNpcAccounts(state,postId,focusIds=[],excludeIds=[],limit=6){
+        const context=getContext(),post=state.x?.[postId],thread=xItems(state,'comment').filter(c=>c.postId===postId);
+        const focus=new Set([...focusIds,post?.author,...thread.map(c=>c.author)].filter(id=>id&&id!=='user'));
+        const threadAuthors=new Set(thread.map(c=>c.author)),connected=new Set();
+        for(const comment of xItems(state,'comment')){
+            const owner=state.x?.[comment.postId]?.author;
+            if(focus.has(comment.author)&&owner&&owner!=='user')connected.add(owner);
+            if(focus.has(owner)&&comment.author&&comment.author!=='user')connected.add(comment.author);
+        }
+        const excluded=new Set(excludeIds),current=context.name2;
+        return xItems(state,'account').filter(a=>isNpcAccount(state,a)&&!excluded.has(a.id)).map((a,index)=>{
+            const signals=[],currentRole=!!current&&sameNamedPerson(a,{name:current});
+            let score=0;
+            if(currentRole){score+=100;signals.push('当前剧情角色');}
+            if(threadAuthors.has(a.id)){score+=40;signals.push('参与过同一评论串');}
+            if(connected.has(a.id)){score+=20;signals.push('与事件相关账号有公开互动');}
+            if(focus.has(a.id)){score+=15;signals.push('事件目标账号');}
+            if(a.following){score+=5;signals.push('user 已关注');}
+            return {...a,score,index,relationshipSignals:signals};
+        }).filter(a=>a.score>0).sort((a,b)=>b.score-a.score||a.index-b.index).slice(0,limit);
+    }
     function publicConversation(state, maxComments=40, maxChars=24000) {
         const all=xItems(state,'post');
         const posts=new Set([...all.slice(-20),...all.filter(p=>p.author==='user').slice(-15)].map(p=>p.id));
