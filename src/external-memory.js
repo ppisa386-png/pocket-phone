@@ -195,7 +195,11 @@ function postQuery(context,post,people,accounts){
             if(!match.ambiguous&&match.found.size===1)resolved.add([...match.found][0]);
         }
     }
-    const actors=[...resolved].map(id=>({id,matchedEntityId:id,name:entities.get(id).displayName,aliases:[]}));
+    const actorRefs=[...explicitActors,...accounts];
+    const actors=[...resolved].map(entityId=>{
+        const account=actorRefs.find(person=>[person.name,...(person.aliases||[])].some(name=>{const ids=labels.get(norm(name));return ids?.size===1&&ids.has(entityId);}));
+        return {id:account?.id||entityId,matchedEntityId:entityId,name:entities.get(entityId).displayName,aliases:[]};
+    });
     const names=[...actors.map(a=>a.name),...explicitActors.flatMap(person=>[person.name,...(person.aliases||[])])].filter(Boolean);
     if(direct.ambiguous&&!actors.length)return {actors:[],names:[],topic:''};
     const related=scene.split(/[。！？!?\n]/).find(sentence=>sentence.trim()&&[...labels].some(([n,ids])=>ids.size===1&&resolved.has([...ids][0])&&norm(sentence).includes(n)));
