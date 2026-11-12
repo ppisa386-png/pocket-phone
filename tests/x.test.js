@@ -1376,8 +1376,8 @@ test('public X like and unfollow events create one or two related NPC timeline r
    prompts.push(quietPrompt);
    if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:20,stats:[]});
    const activityReactions=events.flatMap(event=>[
-    {eventId:event.id,accountId:'npc-a',text:event.action==='like'?'有人最近挺关注图书馆那位啊。':'怎么突然取关了？'},
-    {eventId:event.id,accountId:'npc-c',text:event.action==='like'?'我也看到这条点赞了，什么情况？':'前两天不是还互相关注吗？'}
+    {eventId:event.id,accountId:'npc-b',text:event.action==='like'?'看到你给我点了赞。':'刚关注又取关，挺有意思。'},
+    {eventId:event.id,accountId:'npc-a',text:event.action==='like'?'有人最近挺关注图书馆那位啊。':'怎么突然取关了？'}
    ]);
    return JSON.stringify(feedResult({posts:[],activityReactions}));
   });
@@ -1388,7 +1388,7 @@ test('public X like and unfollow events create one or two related NPC timeline r
   assert.equal(reactions.length,4);
   for(const event of events){
    const rows=reactions.filter(row=>row.publicActivityId===event.id);
-   assert.equal(rows.length,2);assert.deepEqual(new Set(rows.map(row=>row.author)),new Set(['npc-a','npc-c']));
+   assert.equal(rows.length,2);assert.deepEqual(new Set(rows.map(row=>row.author)),new Set(['npc-a','npc-b']));
    assert.ok(rows.every(row=>row.feed==='home'&&row.type==='post'));
    assert.equal(f.state().x[event.id].shown,true);
   }
