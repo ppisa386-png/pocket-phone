@@ -22,6 +22,13 @@ export function importStoryWechatMoments(raw,revisions,chat,context) {
             const text=short(row.text,row.action==='published'?6000:500);
             const prose=String(row.prose||'');
             if(!text||!prose.includes(text))continue;
+            const at=prose.indexOf(text),prior=prose.slice(Math.max(0,at-100),at);
+            const nearby=prose.slice(Math.max(0,at-100),at+text.length+45);
+            // A pasted annotation cannot turn a plan or draft into a sent post.
+            if(row.action==='published'&&
+                (!/(?:发表|发布|发出|发到|更新|上传).{0,16}朋友圈|朋友圈.{0,16}(?:发表|发布|发出|更新|上传)|(?:posted|published).{0,16}moments?/i.test(nearby)||
+                /(?:打算|准备|计划|想要|还没|尚未|并未|没有|未曾|取消|草稿).{0,18}(?:发|发表|发布|朋友圈|post|publish)/i.test(prior)))continue;
+            if(row.action==='comment'&&!/(?:评论|留言|回复|朋友圈.{0,12}发送|comment|repl(?:y|ied))/i.test(nearby))continue;
             const prefix=chat.slice(0,index+1),clock=readStoryClock(prefix);
             const now=(Date.parse(chat[index]?.send_date)||Date.now())+n;
             let changes=[];
