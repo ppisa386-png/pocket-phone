@@ -1,3 +1,11 @@
+## v1.2.52 · X 公开行为讨论推文与评论区 NPC 跟帖（2026-11-12；基线 main 5328e8ebcfa5aa6e1371c91f277211a8efca3c6f）
+**用户问题**：user 点赞校园男神 B 的推文后，X 上相关同学毫无反应；user 在 B 的公开评论区留言时，也不应只有 B 本人可能回复，相关 NPC 应能加入同一评论串。
+**讨论结论**：点赞／取消点赞、转发／取消转发、关注／取关仍只在下一次手动刷新 X 首页时释放给 X 应用模型；有相关且有公开知情路径的 NPC 时，至少生成1条、通常1～2条公开时间线推文。user 在 NPC 的普通首页推文下公开评论时，同一模型请求除被直接回复账号外，还生成1～2条相关 NPC 跟帖，按真实评论父子 ID 加入同一讨论串。NPC 不必全体回应，但不能在存在合适相关人物时默认全体沉默。
+**实现**：src/x.js 新增基于当前剧情角色、同帖评论者、与事件目标账号既有公开互动及 user 关注关系的相关 NPC 候选筛选。首页刷新增加结构化 `activityReactions` 输出，校验事件ID、候选账号、每事件1～2条及至少一条要求，保存为带 `publicActivityId` 的普通 home-feed post；与首页刷新及事件 `shown:true` 原子提交。公开评论请求增加 `reactions` 数组，保留直接回复账号原有行为，最多新增2名相关 NPC，支持 `user_comment`、`target_reply`、已有评论ID和前一条反应 key 的父子引用。
+**记忆与隐私**：src/external-memory.js 的 X post-memory 查询支持多个显式参与者，逐人读取并按 accountId 标注记忆；phone.js 仅更新该模块缓存版本。仍只使用现存 NPC 账号，不把私密记忆变成公众知识；广场帖子不触发评论区群体反应；X 私信内容仍不进入正文 AI。
+**测试**：新增公开点赞事件生成1～2条相关 NPC 首页推文、事件一次性消费；新增 NPC 帖子下 user 评论后多 NPC 跟帖及多层 replyTo 关系；扩展 external-memory 多参与者显式记忆查询；更新原评论串和公开行为测试。CI 待运行后补录。
+**范围**：src/x.js、src/external-memory.js、src/phone.js（模块缓存引用）、src/x-view.js（X 模块缓存引用）、index.js、src/config.js、manifest.json、package.json、REQUIREMENTS.md、PROGRESS.md、tests/x.test.js、tests/external-memory.test.js。保持 X UI、广场／趋势／关注流、私信隐私、其他 App 和剧情回退不变。
+
 ## v1.2.51 · 微信私信已阅读状态与正文上下文联动（2026-11-12；基线 4d96b43d9e5474ae5097697919f382f12c0f95d0）
 **用户问题**：v1.2.50 已为 WhatsApp／X 私信区分手机已阅读与小说正文已展示，但微信尚未接入同一机制；微信消息虽已在手机打开阅读，正文 AI 仍可能将 shown=false 的旧消息描述成未读。
 **讨论结论**：微信与 WhatsApp 使用同一规则：shown 表示小说正文是否展示，read 表示手机是否已打开聊天阅读。两者独立；已读但未展示不再称为未读／刚收到，不要求重复打开；未读消息只允许通知，不泄露内容。X 私信内容仍不进入普通正文通信历史。
