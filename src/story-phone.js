@@ -86,7 +86,8 @@ function notifiedRecords(message, state, journal, floor) {
     const prose=notificationProse(message);
     if(!prose||!describesNotification(prose))return [];
     const found=new Map();
-    for(const row of storyAnnotations(message,'durian-message-noticed')){
+    const annotations=storyAnnotations(message,'durian-message-noticed');
+    for(const row of annotations){
         if(!COMM_PLATFORMS.includes(row.platform))continue;
         const ids=Array.isArray(row.ids)?row.ids:[row.id];
         for(const id of ids.slice(0,30)){
@@ -95,7 +96,7 @@ function notifiedRecords(message, state, journal, floor) {
             found.set(commKey(row.platform,id),{platform:row.platform,id});
         }
     }
-    if(found.size)return [...found.values()];
+    if(annotations.length)return [...found.values()];
     // Scope legacy prose fallback to records created by this floor, never
     // records from later story floors that happen to be in the journal.
     const source=new Set(),collections={messages:'sms',whatsapp:'whatsapp',wechat:'wechat',snapchat:'snapchat',x:'x'};
