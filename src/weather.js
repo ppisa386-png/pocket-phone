@@ -1,8 +1,8 @@
 // Shared story location and the local random weather engine. The narrative AI
 // only tags city changes; every weather value here is sampled locally.
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
-import { effectiveReply } from './contact-policy.js?v=1.2';
-import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2';
+import { effectiveReply } from './contact-policy.js?v=1.2.57';
+import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
@@ -647,7 +647,7 @@ export function weatherBackground(state, chat) {
 // Scene block appended to the story-phone prompt: the short location rule for
 // the narrative AI plus, when a valid weather exists, the background line.
 export function sceneBackground(state, chat, settings) {
-    const consumers = ['weather', 'daily', 'assets'].some(id => settings?.apps?.[id] !== false);
+    const consumers = ['weather', 'daily', 'assets'].some(id => settings?.apps?.[id] !== false) || settings?.apps?.calendar === true;
     if (!consumers) return '';
     const weather = settings?.apps?.weather === false ? '' : weatherBackground(state, chat);
     return [WEATHER_LOCATION_RULE, weather].filter(Boolean).join('\n');

@@ -14,7 +14,7 @@ const cutBefore = (code, name, marker) => {
 };
 
 const chunks = [];
-for (const name of ['currency.js', 'story-clock.js', 'names.js', 'daily-prompts.js', 'config.js', 'composer.js', 'input-viewport.js', 'diagnostics.js', 'api.js', 'api-view.js', 'icons.js', 'frost-bloom.js', 'enamel-icons.js', 'journal.js', 'square-core.js', 'contact-events.js', 'block-controls.js', 'press-menu.js', 'phone-view.js', 'messages.js', 'messages-view.js', 'snapchat.js', 'snapchat-view.js', 'wechat-moments.js', 'chat-apps.js', 'chat-view.js', 'x-feed.js', 'x-comments.js', 'x-audience.js', 'contact-policy.js', 'x-influence.js', 'x-edit.js', 'x.js', 'x-view.js', 'payment-request.js', 'amazon.js', 'delivery.js', 'amazon-view.js', 'food.js', 'food-view.js', 'assets-core.js', 'assets-policy.js', 'assets-recovery.js', 'assets-view.js', 'daily-core.js', 'daily-view.js', 'weather.js', 'weather-art.js', 'weather-view.js', 'ui.js']) {
+for (const name of ['currency.js', 'story-clock.js', 'names.js', 'daily-prompts.js', 'config.js', 'composer.js', 'input-viewport.js', 'diagnostics.js', 'api.js', 'api-view.js', 'icons.js', 'frost-bloom.js', 'enamel-icons.js', 'journal.js', 'square-core.js', 'contact-events.js', 'block-controls.js', 'press-menu.js', 'phone-view.js', 'messages.js', 'messages-view.js', 'snapchat.js', 'snapchat-view.js', 'wechat-moments.js', 'chat-apps.js', 'chat-view.js', 'x-feed.js', 'x-comments.js', 'x-audience.js', 'contact-policy.js', 'x-influence.js', 'x-edit.js', 'x.js', 'x-view.js', 'payment-request.js', 'amazon.js', 'delivery.js', 'amazon-view.js', 'food.js', 'food-view.js', 'assets-core.js', 'assets-policy.js', 'assets-recovery.js', 'assets-view.js', 'calendar-core.js', 'calendar-view.js', 'daily-core.js', 'daily-view.js', 'weather.js', 'weather-art.js', 'weather-view.js', 'ui.js']) {
     let code = readSource(name);
     if (name === 'x-influence.js') code = cutBefore(code, name, 'const set=');
     if (name === 'snapchat.js') code = cutBefore(code, name, 'const setSnap');
@@ -23,8 +23,11 @@ for (const name of ['currency.js', 'story-clock.js', 'names.js', 'daily-prompts.
     if (name === 'delivery.js') code = cutBefore(code, name, 'export function createDeliveryBridge');
     if (name === 'x.js') code = cutBefore(code, name, 'const xSet');
     code = code.replace(/^import .+;\n/gm, '');
+    const exported = [...code.matchAll(/^export\s+(?:(?:async\s+)?function|const|let|class)\s+(\w+)/gm)].map(match => match[1]);
     code = code.replace(/^export /gm, '');
-    chunks.push(code);
+    // Preserve module-local helpers: x-comments and weather both have `norm`.
+    // Flattening every declaration made the offline script fail to parse.
+    chunks.push(`const {${exported.join(',')}} = (() => {\n${code}\nreturn {${exported.join(',')}};\n})();`);
 }
 
 const bootstrap = `
@@ -58,6 +61,7 @@ const bundledStyles = [
     fs.readFileSync(path.join(root, 'style-weather.css'), 'utf8'),
     weatherFonts,
     fs.readFileSync(path.join(root, 'style-daily.css'), 'utf8'),
+    fs.readFileSync(path.join(root, 'style-calendar.css'), 'utf8').replaceAll('__CALENDAR_ASSET_BASE__/', 'assets/calendar/'),
 ].join('\n').replace(/\r\n/g, '\n');
 let script = chunks.join('\n') + '\nconst PREVIEW_STYLES = ' + JSON.stringify(bundledStyles) + ';\n' + bootstrap;
 script = script.replaceAll('</script', '<\\/script');
@@ -73,3 +77,5 @@ for (const assetFolder of ['windows', 'fonts']) {
     fs.cpSync(source, target, { recursive: true, force: true });
 }
 console.log(output);
+
+fs.cpSync(path.join(root,'assets/calendar'),path.join(path.dirname(output),'assets/calendar'),{recursive:true,force:true});

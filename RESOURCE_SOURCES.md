@@ -52,3 +52,9 @@ https://github.com/lucide-icons/lucide
 ## 窗边天气日记 · 天气窗插画与字体（2026-11-10）
 - 五张天气窗插画（Sunny、Cloudy、Rainy Day、Snowy、Good Night）由用户在本项目对话中提供，为用户原创素材；不来自第三方图库或仓库，文件及说明位于 `assets/weather/windows/`。
 - Manrope Variable 与 Noto Sans SC Variable 字体来自 Fontsource 的 `font-files` 仓库（commit `5a72889057f592bb0659629e38337359f94d53b2`），字体文件、CSS 与 SIL Open Font License 1.1 许可均随插件本地打包，见 `assets/weather/fonts/README.md`。
+
+
+## 榴莲日历 · 四季手绘年历（2026-11-13）
+https://github.com/ConardLi/garden-skills
+https://github.com/fontsource/font-files
+- 按用户效果图与明确设计体系实现；四季植物透明图集为本轮生成的新素材；DM Sans 与既有 Noto Sans SC 均本地打包，详细来源、许可与设计记录见 assets/calendar/SOURCES.md。

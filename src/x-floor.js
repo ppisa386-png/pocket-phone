@@ -1,4 +1,4 @@
-import {effectiveReply} from './contact-policy.js?v=1.2';
+import {effectiveReply} from './contact-policy.js?v=1.2.57';
 import {xAudience} from './x-audience.js?v=1.2';
 
 // Message indices are zero-based in storage; displayed floor numbers are index + 1.

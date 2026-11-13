@@ -1,0 +1,43 @@
+name: Calendar acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/calendar*.js'
+      - 'style-calendar.css'
+      - 'assets/calendar/**'
+      - 'tests/calendar*'
+      - 'index.js'
+      - 'src/ui.js'
+      - 'src/narrative-prompt.js'
+      - '.github/workflows/calendar-qa.yml'
+  pull_request:
+    paths:
+      - 'src/calendar*.js'
+      - 'style-calendar.css'
+      - 'tests/calendar*'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  calendar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CODEX_PRIMARY_RUNTIME_NODE_MODULES: ${{ github.workspace }}/node_modules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
+      - run: npm run build:preview
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium-headless-shell
+      - run: node tests/calendar-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: calendar-browser-evidence
+          path: ../qa-results/calendar-*.png
+          retention-days: 14

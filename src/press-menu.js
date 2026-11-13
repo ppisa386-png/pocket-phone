@@ -1,4 +1,4 @@
-import { icon } from './icons.js?v=1.2';
+import { icon } from './icons.js?v=1.2.57';
 
 const LONG_PRESS_MS = 500;
 const MOVE_CANCEL_PX = 10;

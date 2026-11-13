@@ -280,7 +280,7 @@ test('moving to another city re-points the app to the new place while the old re
     } finally { f.close(); }
 });
 
-test('every narrative generation receives the scene rule and current weather, gated by the three consumer apps', () => {
+test('every narrative generation receives the scene rule and current weather, gated by the four consumer apps', () => {
     const day = dateDay('2026-01-01');
     const chat = [{ mes: '2026-01-01 10:00\n在上海的一天。', is_user: false }];
     const state = { location: { current: { city: '上海' } }, weather: { 上海: { city: '上海', climate: climateFor('上海'), seed: 's', hour: day * 24 + 10, date: '2026-01-01', state: { type: 'rain', temp: 8, wind: 3, humidity: 80 } } } };
@@ -312,7 +312,7 @@ test('story-phone prompt carries the scene block before the language rule and ho
     const noWeather = buildStoryPhonePrompt(state, context, normalizeSettings({ apps: { weather: false } }), chat);
     assert.match(noWeather, /durian-location/);
     assert.doesNotMatch(noWeather, /当前位置：上海/);
-    const allOff = buildStoryPhonePrompt(state, context, normalizeSettings({ apps: { weather: false, daily: false, assets: false } }), chat);
+    const allOff = buildStoryPhonePrompt(state, context, normalizeSettings({ apps: { weather: false, daily: false, assets: false, calendar: false } }), chat);
     assert.doesNotMatch(allOff, /durian-location/);
 });
 

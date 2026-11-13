@@ -1,27 +1,28 @@
-import {paperDraft} from './daily-core.js?v=1.2.55';
+import { createCalendarPanel } from './calendar-view.js?v=1.2.57';
+import {paperDraft} from './daily-core.js?v=1.2.57';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
-import { createDailyPanel } from './daily-view.js?v=1.2.55';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.41';
+import { createDailyPanel } from './daily-view.js?v=1.2.57';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.57';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
-import { createAssetPanel } from './assets-view.js?v=1.2';
-import { createAmazonPanel } from './amazon-view.js?v=1.2.55';
-import { createFoodPanel } from './food-view.js?v=1.2.55';
+import { createAssetPanel } from './assets-view.js?v=1.2.57';
+import { createAmazonPanel } from './amazon-view.js?v=1.2.57';
+import { createFoodPanel } from './food-view.js?v=1.2.57';
 import { bindComposerKeys } from './composer.js?v=1.2';
-import { createXPanel } from './x-view.js?v=1.2.56';
-import { xUnread } from './x.js?v=1.2.56';
-import { createChatPanel } from './chat-view.js?v=1.2.54';
-import { chatUnread } from './chat-apps.js?v=1.2.54';
-import { createSnapPanel } from './snapchat-view.js?v=1.2.54';
-import { snapUnread } from './snapchat.js?v=1.2.54';
+import { createXPanel } from './x-view.js?v=1.2.57';
+import { xUnread } from './x.js?v=1.2.57';
+import { createChatPanel } from './chat-view.js?v=1.2.57';
+import { chatUnread } from './chat-apps.js?v=1.2.57';
+import { createSnapPanel } from './snapchat-view.js?v=1.2.57';
+import { snapUnread } from './snapchat.js?v=1.2.57';
 import { createApiPanel } from './api-view.js?v=1.2';
 import { isBlocked } from './contact-events.js?v=1.2';
-import { createPressMenu } from './press-menu.js?v=1.2.5';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.56';
-import { icon } from './icons.js?v=1.2';
-import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.31';
-import { renderMessagesScreen } from './messages-view.js?v=1.2';
+import { createPressMenu } from './press-menu.js?v=1.2.57';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.57';
+import { icon } from './icons.js?v=1.2.57';
+import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.57';
+import { renderMessagesScreen } from './messages-view.js?v=1.2.57';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
-import { renderPhoneScreen } from './phone-view.js?v=1.2';
+import { renderPhoneScreen } from './phone-view.js?v=1.2.57';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、悬浮球、壁纸、字号与大小' },
@@ -157,6 +158,10 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         queueMicrotask(()=>{if(opened&&route==='app:x')void xPanel.readVisible();});
     }
 
+    const calendarPanel=createCalendarPanel({adapter,getView:()=>viewFor('calendar'),redraw:()=>{if(!destroyed&&opened&&route==='app:calendar')renderCalendar();},notice});
+    function renderCalendar(){const scroll=content.scrollTop;const active=shadow.activeElement;const action=active?.dataset?.calendarAction;const id=active?.dataset?.calendarId;const field=active?.name;const selection=typeof active?.selectionStart==='number'?[active.selectionStart,active.selectionEnd]:null;content.innerHTML=calendarPanel.html();content.scrollTop=scroll;if(action){const next=[...content.querySelectorAll('[data-calendar-action]')].find(el=>el.dataset.calendarAction===action&&el.dataset.calendarId===id);next?.focus({preventScroll:true});}else if(field){const next=[...content.querySelectorAll('[data-calendar-form] [name]')].find(el=>el.name===field);next?.focus({preventScroll:true});if(selection&&next?.setSelectionRange)try{next.setSelectionRange(...selection);}catch{}}}
+    shadow.addEventListener('input',event=>{if(event.target.closest('[data-calendar-form]'))calendarPanel.change(event.target.name,event.target.value);},{signal:lifetime.signal});
+    shadow.addEventListener('submit',event=>{if(event.target.matches('[data-calendar-form]')){event.preventDefault();void calendarPanel.submit();}},{signal:lifetime.signal});
     const dailyPanel=createDailyPanel({adapter,getView:()=>viewFor('daily'),redraw:()=>{if(!destroyed&&opened&&route==='app:daily')renderDaily();},notice,editPart:editDailyPart});
     const weatherPanel=createWeatherPanel({adapter,getView:()=>viewFor('weather'),redraw:()=>{if(!destroyed&&opened&&route==='app:weather')renderWeather();},editLocation:editWeatherLocation,assetBase:adapter.weatherAssetBase||'assets/weather/'});
     function editWeatherLocation(previousCity) {
@@ -525,6 +530,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         else if (chatPanels[app?.id]) renderChat(app.id);
         else if (app?.id === 'snapchat') renderSnapchat();
         else if (app?.id === 'x') renderX();
+        else if (app?.id === 'calendar') renderCalendar();
         else if (app?.id === 'daily') renderDaily();
         else if (app?.id === 'weather') renderWeather();
         else if (app?.id === 'assets') renderAssets();
@@ -545,6 +551,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         shadow.querySelector('[data-action="back"]').focus({ preventScroll: true });
         if (next === 'app:phone') phoneAction(() => adapter.phone.open());
         if (next === 'app:messages') phoneAction(() => adapter.phone.openMessages());
+        if (next === 'app:calendar' && adapter.calendar) phoneAction(() => adapter.calendar.open());
         if (next === 'app:daily' && adapter.daily) phoneAction(() => adapter.daily.open());
         if (next === 'app:weather' && adapter.weather) phoneAction(() => adapter.weather.open());
         if (next === 'app:assets' && adapter.assets) phoneAction(() => adapter.assets.open());
@@ -600,6 +607,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('click', event => {
         const target = event.target.closest('button');
         if (!target) return;
+        if(target.dataset.calendarAction){void calendarPanel.action(target.dataset.calendarAction,target.dataset.calendarId).then(()=>{if(['add','edit'].includes(target.dataset.calendarAction))content.querySelector('[data-calendar-form] [name="name"]')?.focus();});return;}
         if(target.dataset.dailyAction){void dailyPanel.action(target.dataset.dailyAction,target.dataset.dailyId);return;}
         if(target.dataset.weatherAction){void weatherPanel.action(target.dataset.weatherAction);return;}
         if(target.dataset.assetAction){
@@ -626,6 +634,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             }else if(currentChat()?.back()){return;}
             else if(route==='app:snapchat'&&snapPanel.back()){return;}
             else if(route==='app:x'&&xPanel.back()){return;}
+            else if(route==='app:calendar'&&calendarPanel.back()){return;}
             else if(route==='app:daily'&&dailyPanel.back()){return;}
             else if(route==='app:amazon'&&shopPanel.back()){return;}
             else if(route==='app:food'&&foodPanel.back()){return;}
@@ -920,7 +929,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             lastScope = scope;contactSearchOpen=false;contactQuery='';smsEditing=null;
             route = keepSettings ? 'settings' : 'home'; history = []; phoneTab = 'history'; selectedCallId = null; callDraft = '';
             Object.values(chatPanels).forEach(panel=>panel.reset());
-            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();foodScroll.clear();foodPanel.reset();assetPanel.reset();dailyPanel.reset();weatherPanel.reset();
+            snapPanel.reset();xPanel.reset();shopScroll.clear();shopPanel.reset();foodScroll.clear();foodPanel.reset();assetPanel.reset();dailyPanel.reset();weatherPanel.reset();calendarPanel.reset();
             selectedSMSContactId = null; pickingSMSContact = false; smsDrafts = Object.create(null); smsRenderKey = '';
             if (opened) render();
         }
@@ -940,6 +949,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (opened && currentChat()) renderChat(route.slice(4));
         if (opened && route === 'app:snapchat') renderSnapchat();
         if (opened && route === 'app:x') renderX();
+        if (opened && route === 'app:calendar') renderCalendar();
         if (opened && route === 'app:daily') renderDaily();
         if (opened && route === 'app:weather') renderWeather();
         if (opened && route === 'app:assets') renderAssets();

@@ -1,7 +1,7 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.54';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.57';
 import { displayStoryTime } from './story-clock.js?v=1.2';
-import { icon } from './icons.js?v=1.2';
+import { icon } from './icons.js?v=1.2.57';
 import { wxMoments,wxFriends,canViewWxMoment } from './wechat-moments.js?v=1.2.49';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);

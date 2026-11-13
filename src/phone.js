@@ -1,8 +1,8 @@
 import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.2';
-import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.50';
-import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.56';
+import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.57';
+import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.57';
 import { exactStoryTime } from './story-clock.js?v=1.2';
-import { isMemoryHidden } from './journal.js?v=1.2';
+import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
 import { phoneQuietOptions } from './api-context.js?v=1.2';
 import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.49';
@@ -10,7 +10,7 @@ import { contactSources, contactPrompt, validateContacts, establishedSources, es
 export { validateContacts } from './contacts.js?v=1.2';
 import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2.53';
 import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.2';
-import { narrativeTurn } from './contact-policy.js?v=1.2';
+import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 
 

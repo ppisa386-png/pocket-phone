@@ -1,20 +1,20 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
-import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.55';
-import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2';
+import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
+import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2.57';
 import {readXMemory} from './external-memory.js?v=1.2.53';
-import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.55';
-import {JOURNAL_KEY} from './journal.js?v=1.2';
+import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.57';
+import {JOURNAL_KEY} from './journal.js?v=1.2.57';
 import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.55';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.55';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.57';
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
 import { parseModelObject } from './model-json.js?v=1.2.47';
-import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.56';
+import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.57';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.2';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);

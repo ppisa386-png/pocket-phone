@@ -1,5 +1,5 @@
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
-import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.54';
+import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.57';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 import { createWechatMoments } from './wechat-moments.js?v=1.2.49';
 

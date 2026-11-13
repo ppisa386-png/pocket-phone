@@ -1,4 +1,4 @@
-import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.16';
+import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.57';
 import { sceneIcon, metricIcon, weatherWindow } from './weather-art.js?v=1.2.41';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

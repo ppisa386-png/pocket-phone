@@ -5,10 +5,11 @@ export function createNarrativePrompt({ getContext, key, depth = 0 }) {
     const hooks = []; let prepared = null;
     function inject(messages, data) {
         if (data?.dryRun || ['quiet', 'impersonate'].includes(data?.type) || !Array.isArray(messages) || !prepared?.current()) return;
-        const { text } = prepared;
-        if (messages.some(m => typeof m?.content === 'string' && m.content.includes(text))) return;
+        const { text, onApplied } = prepared;
+        if (messages.some(m => typeof m?.content === 'string' && m.content.includes(text))) { onApplied?.(); return; }
         const lastUser = messages.findLastIndex(m => m?.role === 'user');
         messages.splice(lastUser < 0 ? messages.length : lastUser, 0, {role:'system',content:text});
+        onApplied?.();
     }
     function listen(name, fn, first = false) {
         if (!types[name] || !bus?.on) return;
@@ -20,10 +21,14 @@ export function createNarrativePrompt({ getContext, key, depth = 0 }) {
     function clear() { prepared = null; getContext()?.setExtensionPrompt?.(key, '', 1, depth, false, 0); }
     return {
         clear,
-        set(text, current) {
+        set(text, current, onApplied) {
             if (!text || !current()) return;
-            prepared = {text, current};
-            getContext()?.setExtensionPrompt?.(key, text, 1, depth, false, 0, current);
+            prepared = {text, current, onApplied};
+            getContext()?.setExtensionPrompt?.(key, text, 1, depth, false, 0, () => {
+                if (!current()) return false;
+                onApplied?.();
+                return true;
+            });
         },
         destroy() { clear(); for (const [name, fn] of hooks) { if (bus.removeListener) bus.removeListener(name, fn); else bus.off?.(name, fn); } },
     };

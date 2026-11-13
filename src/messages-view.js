@@ -1,7 +1,7 @@
 import { displayStoryTime } from './story-clock.js?v=1.2';
-import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.2';
+import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.2.57';
 import { isBlocked } from './contact-events.js?v=1.2';
-import { icon } from './icons.js?v=1.2';
+import { icon } from './icons.js?v=1.2.57';
 import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=1.2';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const smsTime = displayStoryTime;

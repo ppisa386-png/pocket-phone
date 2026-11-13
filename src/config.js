@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from './daily-prompts.js?v=1.2.43';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.2.56';
+export const VERSION = '1.2.57';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -11,6 +11,7 @@ export const APPS = [
     { id: 'x', name: 'X', color: '#252733' },
     { id: 'daily', name: '榴莲日报', color: '#b66b3e' },
     { id: 'assets', name: '小榴莲', color: '#739c45' },
+    { id: 'calendar', name: '榴莲日历', color: '#3558A8' },
     { id: 'weather', name: '天气', color: '#4a90c2' },
     { id: 'amazon', name: 'Amazon', color: '#e89947' },
     { id: 'food', name: '榴莲外卖', color: '#e2574b' },

@@ -1,8 +1,8 @@
 import { walletCurrency, formatMoney, majorAmount } from './currency.js?v=1.2';
-import { needsOwnershipRecovery } from './assets-recovery.js?v=1.2';
+import { needsOwnershipRecovery } from './assets-recovery.js?v=1.2.57';
 import { assetRows, cashBalance, reservedCash, recentCash } from './assets-core.js?v=1.2';
 import { dayDate } from './story-clock.js?v=1.2';
-import { icon } from './icons.js?v=1.2';
+import { icon } from './icons.js?v=1.2.57';
 const assetEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 // 底部导航图标：与 icons.js 相同的线性风格（1.65 描边、圆角端点），本地定义避免动共享文件。
 const TAB_ICONS = {
