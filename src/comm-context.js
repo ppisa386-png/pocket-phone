@@ -36,6 +36,30 @@ export function commExpired(meta, now) {
 
 export const commMeta = (state, platform, id) => state.commContext?.[platform + ':' + id];
 export const commKey = (platform, id) => platform + ':' + id;
+// A notification's first appearance in prose is NOT reading the message and
+// does not mean its contents have been presented. Keep this independent of
+// both the phone's read flag and the narrative's shown flag.
+const INCOMING_MESSAGE_PLATFORMS = new Set(['sms','whatsapp','wechat','snapchat','x']);
+export function commCanNotify(state, platform, id) {
+    if (!INCOMING_MESSAGE_PLATFORMS.has(platform)) return false;
+    const record = platform==='sms' ? state.messages?.[id] : state[platform]?.[id];
+    if (!record || (platform!=='sms'&&record.type!=='message') || record.role!=='assistant' ||
+        record.status==='queued' || record.replyStatus==='queued') return false;
+    return true;
+}
+export function commNotificationChange(state, platform, id) {
+    if (!commCanNotify(state,platform,id)) return null;
+    const key=commKey(platform,id),previous=state.commContext?.[key];
+    if (previous?.noticeMentioned === true) return null;
+    return {collection:'commContext',key,value:{
+        ...(previous||{version:1,classification:'pending',category:null,expired:false,shown:false}),
+        noticeMentioned:true
+    }};
+}
+export function commHasPhoneRead(state,platform,id) {
+    const record=platform==='sms'?state.messages?.[id]:state[platform]?.[id];
+    return record?.read===true;
+}
 const tracksPhoneRead = entry => ['whatsapp','wechat','x'].includes(entry.platform) &&
     !entry.element && entry.record?.type === 'message' && entry.record?.role === 'assistant';
 // The message record is authoritative when available; sidecar is the fallback.
@@ -214,6 +238,7 @@ export function syncCommContext(journal, revisions, chat) {
         meta.category = smsCategory(previous?.category ?? legacy?.category);
         meta.classification = meta.category ? 'classified' : 'pending';
         if (meta.shown === undefined) meta.shown = inferShown(entry);
+        if (meta.noticeMentioned !== true) meta.noticeMentioned = false;
         // Keep phone-read status independent from whether the novel has shown
         // the message. Opening a thread updates the app record; this mirror is
         // refreshed in the same journal synchronization pass.
