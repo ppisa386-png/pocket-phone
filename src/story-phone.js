@@ -1,7 +1,7 @@
 import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.55';
 import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.55';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.55';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.56';
 import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.49';
 import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.56';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.56';
