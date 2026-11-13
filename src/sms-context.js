@@ -1,4 +1,4 @@
-import { commExpired, commKey, syncCommContext, commClassificationPlan, commClassificationChanges, commReplyClassification } from './comm-context.js?v=1.2.50';
+import { commExpired, commKey, syncCommContext, commClassificationPlan, commClassificationChanges, commReplyClassification } from './comm-context.js?v=1.2.56';
 
 // The SMS A/B timing mechanism is now a thin compatibility layer over the
 // unified per-channel sidecar in comm-context.js. Old `smsContext` rows are
