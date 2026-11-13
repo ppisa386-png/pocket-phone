@@ -1,30 +1,30 @@
-import { createCalendar } from './src/calendar.js?v=1.2.58';
-import { createCalendarBridge } from './src/calendar-story.js?v=1.2.58';
-import { createDaily } from './src/daily.js?v=1.2.58';
-import { createWeather } from './src/weather.js?v=1.2.58';
-import { createDailyBridge } from './src/daily-story.js?v=1.2.58';
-import { createAssets } from './src/assets.js?v=1.2.58';
-import { createAssetBridge } from './src/assets-story.js?v=1.2.58';
-import { createOpinionBridge } from './src/x-opinion.js?v=1.2.58';
+import { createCalendar } from './src/calendar.js?v=1.2.59';
+import { createCalendarBridge } from './src/calendar-story.js?v=1.2.59';
+import { createDaily } from './src/daily.js?v=1.2.59';
+import { createWeather } from './src/weather.js?v=1.2.59';
+import { createDailyBridge } from './src/daily-story.js?v=1.2.59';
+import { createAssets } from './src/assets.js?v=1.2.59';
+import { createAssetBridge } from './src/assets-story.js?v=1.2.59';
+import { createOpinionBridge } from './src/x-opinion.js?v=1.2.59';
 import { createAmazon } from './src/amazon.js?v=1.2.14';
 import { createFood } from './src/food.js?v=1.2.17';
 import { createPaymentRequest } from './src/payment-request.js?v=1.2';
-import { createDeliveryBridge } from './src/delivery.js?v=1.2.58';
+import { createDeliveryBridge } from './src/delivery.js?v=1.2.59';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2';
-import { createX } from './src/x.js?v=1.2.58';
-import { createChatApp } from './src/chat-apps.js?v=1.2.58';
+import { createX } from './src/x.js?v=1.2.59';
+import { createChatApp } from './src/chat-apps.js?v=1.2.59';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.38';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.58';
-import { mountPhone } from './src/ui.js?v=1.2.58';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.58';
-import { createPhoneService } from './src/phone.js?v=1.2.58';
-import { createContinuityBridge } from './src/continuity.js?v=1.2.58';
-import { normalizeSettings } from './src/config.js?v=1.2.58';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.59';
+import { mountPhone } from './src/ui.js?v=1.2.59';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.59';
+import { createPhoneService } from './src/phone.js?v=1.2.59';
+import { createContinuityBridge } from './src/continuity.js?v=1.2.59';
+import { normalizeSettings } from './src/config.js?v=1.2.59';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.58';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.59';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -73,7 +73,7 @@ async function start() {
             fetch(new URL('./style-weather.css?v=1.2.41', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./assets/weather/fonts/weather-fonts.css', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-daily.css?v=1.2.45', import.meta.url), { cache: 'no-cache' }),
-            fetch(new URL('./style-calendar.css?v=1.2.58', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-calendar.css?v=1.2.59', import.meta.url), { cache: 'no-cache' }),
         ]);
         if (!response.ok || !enamelResponse.ok || !foodResponse.ok || !wechatResponse.ok ||
             !weatherStyleResponse.ok || !weatherFontsResponse.ok || !dailyStyleResponse.ok || !calendarStyleResponse.ok)
