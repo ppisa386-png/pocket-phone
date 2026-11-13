@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createContinuityBridge, buildContinuityPrompt, resolveSpeaker, CONTINUITY_KEY } from '../src/continuity.js';
+import { createContinuityBridge, buildContinuityPrompt, resolveSpeaker, communicationSceneScope, CONTINUITY_KEY } from '../src/continuity.js';
 import { JOURNAL_KEY, revisionsFor, messageSignatures, appendChange } from '../src/journal.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { normalizeSettings } from '../src/config.js';
@@ -21,7 +21,7 @@ async function fixture({ group = false, legacy = false, withMemory = false, befo
         name1: 'Sam', name2: 'Alex', chatId: 'story', characterId: 0,
         characters: [{ name: 'Alex', avatar: 'alex.png' }, { name: 'Bea', avatar: 'bea.png' }],
         groupId: group ? 'group1' : null, groups: [{ id: 'group1', members: ['alex.png', 'bea.png'] }],
-        chat: [{ mes: 'You and Alex exchanged numbers.', name: 'Alex', is_user: false }],
+        chat: [{ mes: 'You and Alex exchanged numbers. 两人谈起 Alex 和 Bea 之前短信里说的事，以及电话里的承诺。', name: 'Alex', is_user: false }],
         chatMetadata: {}, eventSource: bus, event_types: Object.fromEntries(names.map(n => [n, n])),
         saveMetadata: async () => {},
         setExtensionPrompt(key, value, position, depth, scan, role, filter) { prompts[key] = { value, position, depth, scan, role, filter }; },
@@ -219,7 +219,7 @@ test('actual narrative payload expires SMS by story time before persistence and 
    set('smsContext','a',{category:'A',anchor:{date:'2026-10-01',time:'12:00'},expired:false}),
    set('smsContext','b',{category:'B',anchor:{date:'2026-10-01',time:'12:00'},expired:false})
   ]);
-  f.context.chat.push({mes:'2026-10-03 12:00',name:'Alex',is_user:false});
+  f.context.chat.push({mes:'2026-10-03 12:00\n他们谈起电话里的事。',name:'Alex',is_user:false});
   await f.generate();
   const payload={chat:[{role:'user',content:'Continue'}]};
   await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',payload);
@@ -227,7 +227,7 @@ test('actual narrative payload expires SMS by story time before persistence and 
   assert.match(JSON.stringify(payload),/B_PRIVATE_PLAN/);
   await f.bus.emit('GENERATION_ENDED');await f.memory.read();
   assert.equal((await f.memory.read()).state.commContext['sms:a'].expired,true);
-  f.context.chat.push({mes:'2026-10-04 12:01',name:'Alex',is_user:false});
+  f.context.chat.push({mes:'2026-10-04 12:01\n他们继续讨论电话里的约定。',name:'Alex',is_user:false});
   await f.generate();
   const next={type:'normal',messages:[{role:'user',content:'Continue'}]};
   await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',next);
@@ -240,22 +240,71 @@ test('actual narrative payload expires SMS by story time before persistence and 
  }finally{f.close();}
 });
 
-test('one SMS stays optional before and after a narrative reaction, and its age advances with the story calendar',async()=>{
+test('unrelated scenes stay free of old messages, but an actual topic restores exact memory with the right story age',async()=>{
  const f=await fixture();try{
   const c=f.context;c.chat=[{mes:'2026-10-30 21:15\n短信送达。'}];
   const rev=await revisionsFor(messageSignatures(c.chat));
   const record={id:'s',contactId:'card:alex.png',role:'assistant',text:'昨晚那件事，我知道了。',createdAt:1};
   c.chatMetadata[JOURNAL_KEY]=appendChange(undefined,rev,[set('contacts',record.contactId,{id:record.contactId,name:'Alex'}),set('messages','s',record)]);
   const saved=JSON.stringify(c.chatMetadata);
-  for(const [mes,days] of [['2026-10-31 09:00\n两人照常去上课。',1],['他们讨论了作业。',1],['Sam 这才说起短信，Alex 已经听明白了。',1],['2026-11-01 08:00\n他们又谈起这件事。',2]]){
+  for(const mes of ['2026-10-31 09:00\n两人照常去上课。','他们讨论了作业。']){
    c.chat.push({mes});await f.generate();
-   const prompt=f.prompts[CONTINUITY_KEY].value;
-   assert.match(prompt,/连续多楼完全不提/);assert.match(prompt,/不能让人物再次首次得知/);assert.match(prompt,/后来可以回忆、讨论/);
-   const [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
-   assert.equal(sms.recordId,'s');assert.equal(sms.text,record.text);
-   assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyTime.time,'21:15');assert.equal(sms.storyDaysAgo,days);
-   assert.equal(JSON.stringify(c.chatMetadata),saved);
+   assert.equal(f.prompts[CONTINUITY_KEY].value,'','unshown messages cannot force an unrelated scene to display them');
   }
+  c.chat.push({mes:'Sam 这才谈起短信里说过的话，Alex 已经听明白了。'});await f.generate();
+  let prompt=f.prompts[CONTINUITY_KEY].value;
+  assert.match(prompt,/不能让人物再次首次得知/);
+  assert.match(prompt,/后来可以回忆、讨论/);
+  let [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
+  assert.equal(sms.text,record.text);assert.equal(sms.storyDaysAgo,1);
+  assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyTime.time,'21:15');
+  c.chat.push({mes:'2026-11-01 08:00\n他们又继续上课。'});await f.generate();
+  assert.equal(f.prompts[CONTINUITY_KEY].value,'','history disappears from the next unrelated prose turn');
+  c.chat.push({mes:'他们再次谈起短信里的约定。'});await f.generate();
+  prompt=f.prompts[CONTINUITY_KEY].value;
+  [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
+  assert.equal(sms.text,record.text);assert.equal(sms.storyDaysAgo,2,'same original fact, never a new message');
+  assert.equal(JSON.stringify(c.chatMetadata),saved,'selective context does not consume, delete or mark phone history');
+ }finally{f.close();}
+});
+
+test('communication scene cues require genuine plot relevance and never treat picking up a phone as reading',()=>{
+ const state={contacts:{a:{id:'card:a',name:'Alex'},b:{id:'card:b',name:'Bea'}},whatsapp:{a:{type:'account',name:'Alex'},b:{type:'account',name:'Bea'}}};
+ const speaker={name:'Alex'};
+ assert.equal(communicationSceneScope(state,speaker,[{mes:'她把手机放在口袋里。'}]),null);
+ assert.equal(communicationSceneScope(state,speaker,[{is_user:true,mes:'拿起手机看了看时间，继续走路。'}]),null);
+ assert.equal(communicationSceneScope(state,speaker,[{mes:'手机又亮起未读红点。'}]),null);
+ const topical=communicationSceneScope(state,speaker,[{is_user:true,mes:'Bea 问起昨天 WhatsApp 里的那段聊天。'}]);
+ assert.equal(topical.readingPhone,false);assert.deepEqual(topical.relevantPeople,['Bea']);assert.deepEqual(topical.relevantPlatforms,['whatsapp']);
+ const viewing=communicationSceneScope(state,speaker,[{is_user:true,mes:'Sam 打开 WhatsApp 查看和 Bea 的聊天记录。'}]);
+ assert.equal(viewing.readingPhone,true);assert.deepEqual(viewing.relevantPeople,['Bea']);
+ const all=communicationSceneScope(state,speaker,[{is_user:true,mes:'查看微信里的未读消息。'}]);
+ assert.equal(all.readingPhone,true);assert.equal(all.relevantPeople,null);assert.deepEqual(all.relevantPlatforms,['wechat']);
+ assert.equal(communicationSceneScope(state,speaker,[{is_user:true,mes:'继续正常上课。'}]),null);
+});
+
+test('a story only injects the named conversation and platform, not an unrelated NPC inbox',async()=>{
+ const f=await fixture();try{
+  const c=f.context;
+  c.chat=[{mes:'Sam 和 Alex 走在街上。'}];
+  const revisions=await revisionsFor(messageSignatures(c.chat));
+  c.chatMetadata[JOURNAL_KEY]=appendChange(undefined,revisions,[
+   set('contacts','card:alex.png',{id:'card:alex.png',name:'Alex'}),
+   set('contacts','card:bea.png',{id:'card:bea.png',name:'Bea'}),
+   set('messages','a',{id:'a',contactId:'card:alex.png',role:'user',text:'A_SMS_PRIVATE',createdAt:1}),
+   set('messages','b',{id:'b',contactId:'card:bea.png',role:'assistant',text:'B_SMS_PRIVATE',createdAt:2}),
+   set('whatsapp','alex',{id:'alex',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true}),
+   set('whatsapp','wa',{id:'wa',type:'message',accountId:'alex',role:'assistant',text:'A_WHATSAPP_PRIVATE',read:true,createdAt:3}),
+  ]);
+  await f.generate();assert.equal(f.prompts[CONTINUITY_KEY].value,'');
+  c.chat.push({mes:'Bea 问起之前的短信里说了什么。',is_user:true});
+  await f.generate();let text=f.prompts[CONTINUITY_KEY].value;
+  assert.match(text,/B_SMS_PRIVATE/);assert.doesNotMatch(text,/A_SMS_PRIVATE|A_WHATSAPP_PRIVATE/);
+  c.chat.push({mes:'他们转而谈起当天的演出安排。',is_user:false});
+  await f.generate();assert.equal(f.prompts[CONTINUITY_KEY].value,'');
+  c.chat.push({mes:'Sam 打开 WhatsApp 查看和 Alex 的聊天记录。',is_user:true});
+  await f.generate();text=f.prompts[CONTINUITY_KEY].value;
+  assert.match(text,/A_WHATSAPP_PRIVATE/);assert.doesNotMatch(text,/B_SMS_PRIVATE|A_SMS_PRIVATE/);
  }finally{f.close();}
 });
 
@@ -272,7 +321,7 @@ test('missing dates never use wall time; valid stored SMS dates and sidecar date
 
 test('queued draft anchors to the floor it was actually sent, not the draft or later edits',async()=>{
  const f=await fixture();try{
-  const c=f.context;c.chat=['2026-10-29 10:00','2026-10-30 21:00','2026-10-31 08:00'].map(mes=>({mes}));
+  const c=f.context;c.chat=['2026-10-29 10:00','2026-10-30 21:00','2026-10-31 08:00\n他们谈起短信里说过的事。'].map(mes=>({mes}));
   const rev=await revisionsFor(messageSignatures(c.chat));
   const m={id:'s',contactId:'card:alex.png',role:'user',text:'你好。',storyTime:{date:'2026-10-29',time:'10:00'}};
   let j=appendChange(undefined,rev.slice(0,1),[set('contacts',m.contactId,{id:m.contactId,name:'Alex'}),set('messages','s',{...m,replyStatus:'queued'})]);
