@@ -220,9 +220,13 @@ export function syncCommContext(journal, revisions, chat) {
         if (tracksPhoneRead(entry)) meta.read = entry.record.read === true;
         if (entry.fixedCategory && !meta.category) { meta.category = 'A'; meta.classification = 'classified'; }
         if (everQueued.has(collectionOf(entry.platform) + ':' + entry.id) && !entry.element) meta.sentAfterQueue = true;
+        // The first non-queued source floor also anchors the single narrative
+        // notification opportunity. It is independent of read, shown and A/B
+        // expiry: no phone message is marked read or presented by this anchor.
+        const sourceFloor = entry.element ? elementFloor.get(key) : first.get(collectionOf(entry.platform) + ':' + entry.id);
+        if (Number.isInteger(sourceFloor) && !Number.isInteger(meta.sourceFloor)) meta.sourceFloor = sourceFloor;
         if (!meta.anchor || (dateDay(meta.anchor.date) === null && meta.anchorSource !== 'source-floor')) {
-            const index = entry.element ? elementFloor.get(key) : first.get(collectionOf(entry.platform) + ':' + entry.id);
-            meta.anchor = (Number.isInteger(index) ? clockAt(index) : null) || meta.anchor || { date: '', time: '', precision: 'exact' };
+            meta.anchor = (Number.isInteger(sourceFloor) ? clockAt(sourceFloor) : null) || meta.anchor || { date: '', time: '', precision: 'exact' };
             meta.anchorSource = 'source-floor';
         }
         // The sidecar row can exist before its legacy SMS row lands in the same
