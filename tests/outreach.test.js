@@ -70,7 +70,7 @@ test('proactive notifications store complete private messages without marking th
         instruction:'衔接实际通信',allParticipants:true,budget:50000,
     });
     assert.match(continuity,/user 未在剧情里打开手机查看之前/);
-    assert.match(continuity,/HIDDEN_SMS_CONTENT/,'unshown text remains available to the author, not the character');
+    assert.doesNotMatch(continuity,/HIDDEN_SMS_CONTENT|HIDDEN_WHATSAPP_CONTENT|HIDDEN_WECHAT_CONTENT/,'the arrival was already narrated as a notification; the same unread messages must not prompt a second alert');
     assert.deepEqual(await capture(chat,journal),journal,'re-reading does not regenerate the incoming notifications');
     const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
     assert.equal(Object.keys(rolled.messages).length,0);
