@@ -240,22 +240,31 @@ test('actual narrative payload expires SMS by story time before persistence and 
  }finally{f.close();}
 });
 
-test('one SMS stays optional before and after a narrative reaction, and its age advances with the story calendar',async()=>{
+test('unread SMS has one optional narrative notification window and remains on the phone afterward',async()=>{
  const f=await fixture();try{
-  const c=f.context;c.chat=[{mes:'2026-10-30 21:15\n短信送达。'}];
+  const c=f.context;c.chat=[{mes:'2026-10-30 21:15\n短信送达。',name:'Alex',is_user:false}];
   const rev=await revisionsFor(messageSignatures(c.chat));
-  const record={id:'s',contactId:'card:alex.png',role:'assistant',text:'昨晚那件事，我知道了。',createdAt:1};
+  const record={id:'s',contactId:'card:alex.png',role:'assistant',text:'昨晚那件事，我知道了。',createdAt:1,read:false};
   c.chatMetadata[JOURNAL_KEY]=appendChange(undefined,rev,[set('contacts',record.contactId,{id:record.contactId,name:'Alex'}),set('messages','s',record)]);
-  const saved=JSON.stringify(c.chatMetadata);
-  for(const [mes,days] of [['2026-10-31 09:00\n两人照常去上课。',1],['他们讨论了作业。',1],['Sam 这才说起短信，Alex 已经听明白了。',1],['2026-11-01 08:00\n他们又谈起这件事。',2]]){
-   c.chat.push({mes});await f.generate();
-   const prompt=f.prompts[CONTINUITY_KEY].value;
-   assert.match(prompt,/连续多楼完全不提/);assert.match(prompt,/不能让人物再次首次得知/);assert.match(prompt,/后来可以回忆、讨论/);
-   const [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
-   assert.equal(sms.recordId,'s');assert.equal(sms.text,record.text);
-   assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyTime.time,'21:15');assert.equal(sms.storyDaysAgo,days);
-   assert.equal(JSON.stringify(c.chatMetadata),saved);
+  const original=JSON.stringify(c.chatMetadata);
+  await f.generate();
+  let prompt=f.prompts[CONTINUITY_KEY].value;
+  assert.match(prompt,/昨晚那件事，我知道了/);
+  assert.match(prompt,/未读新消息最多只有首次后续正文生成的一次可选通知机会/);
+  assert.equal(JSON.parse(prompt.split('\n').at(-2)).records[0].storyDaysAgo,0);
+  for(const mes of ['2026-10-31 09:00\n两人照常去上课。','Alex 继续讨论作业。','2026-11-01 08:00\n他们又谈起这件事。']){
+   c.chat.push({mes,name:'Alex',is_user:false});await f.generate();
+   prompt=f.prompts[CONTINUITY_KEY].value;
+   assert.doesNotMatch(prompt,/昨晚那件事，我知道了|还剩一条未读/);
   }
+  assert.equal(JSON.stringify(c.chatMetadata),original,'a notification opportunity never marks a phone message read or shown');
+  const revisions=await revisionsFor(messageSignatures(c.chat));
+  c.chatMetadata[JOURNAL_KEY]=appendChange(c.chatMetadata[JOURNAL_KEY],revisions,[set('messages','s',{...record,read:true})]);
+  await f.generate();prompt=f.prompts[CONTINUITY_KEY].value;
+  const [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
+  assert.equal(sms.recordId,'s');assert.equal(sms.read,true);
+  assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyTime.time,'21:15');assert.equal(sms.storyDaysAgo,2);
+  assert.equal(sms.shown,false,'opening the phone does not mark the message shown in the novel');
  }finally{f.close();}
 });
 
