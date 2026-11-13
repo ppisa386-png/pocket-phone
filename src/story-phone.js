@@ -7,7 +7,7 @@ import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.55';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
 import { smsReplyClassification } from './sms-context.js?v=1.2.50';
-import { COMM_PLATFORMS, commKey, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.50';
+import { COMM_PLATFORMS, commKey, commEntries, commCanNotify, commHasPhoneRead, commNotificationChange, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.56';
 import { storyTime, exactStoryTime } from './story-clock.js?v=1.2';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.2';
@@ -68,6 +68,61 @@ function shownAnnotations(message){
     }
     return rows;
 }
+// Mentioning a notification is not reading or displaying message contents.
+// Exact markers take precedence; old prose without markers has a conservative
+// fallback for explicit messages-notification descriptions.
+function notificationProse(message) {
+    if(message?.is_user||(message?.is_system&&!isMemoryHidden(message)))return '';
+    return String(message?.mes||'')
+        .replace(/```[\s\S]*?```/g,'')
+        .replace(/<(think|thinking|analysis|script|style)[^>]*>[\s\S]*?<\/\1>/gi,'')
+        .replace(/<!--[\s\S]*?-->/g,'');
+}
+function describesNotification(text){
+    return /(?:未读(?:消息|私信|短信|通知)|新(?:消息|私信|短信)|消息(?:通知|提醒)|(?:收到|来了|弹出|显示).{0,18}(?:消息|私信|短信)|(?:手机|锁屏|屏幕|通知栏|WhatsApp|微信|短信|私信).{0,50}(?:消息|未读|通知|提示音|震动|振动)|(?:message|notification|unread|text alert).{0,22}(?:phone|screen|buzz|badge)|(?:phone|screen).{0,22}(?:message|notification|unread|buzz))/i.test(text) &&
+        !/(?:没有|并无|不存在|无任何|毫无|no|without).{0,12}(?:未读|新消息|消息通知|notifications?)/i.test(text);
+}
+function notifiedRecords(message, state, journal, floor) {
+    const prose=notificationProse(message);
+    if(!prose||!describesNotification(prose))return [];
+    const found=new Map();
+    for(const row of storyAnnotations(message,'durian-message-noticed')){
+        if(!COMM_PLATFORMS.includes(row.platform))continue;
+        const ids=Array.isArray(row.ids)?row.ids:[row.id];
+        for(const id of ids.slice(0,30)){
+            if(typeof id!=='string'||!id.trim()||id.length>200||!commCanNotify(state,row.platform,id))continue;
+            if(row.evidence&&(!prose.includes(row.evidence)||!describesNotification(row.evidence)))continue;
+            found.set(commKey(row.platform,id),{platform:row.platform,id});
+        }
+    }
+    if(found.size)return [...found.values()];
+    // Scope legacy prose fallback to records created by this floor, never
+    // records from later story floors that happen to be in the journal.
+    const source=new Set(),collections={messages:'sms',whatsapp:'whatsapp',wechat:'wechat',snapchat:'snapchat',x:'x'};
+    for(const event of journal.events||[]){
+        if(event.source.index>floor)continue;
+        for(const change of event.changes||[]){
+            const platform=collections[change.collection];
+            if(platform&&change.value&&(change.collection==='messages'||change.value.type==='message'))
+                source.add(commKey(platform,change.key));
+        }
+    }
+    const scope=[];
+    if(/WhatsApp/i.test(prose))scope.push('whatsapp');
+    if(/微信|WeChat/i.test(prose))scope.push('wechat');
+    if(/Snapchat/i.test(prose))scope.push('snapchat');
+    if(/(?:X|Twitter)\s*私信|X\s*DM/i.test(prose))scope.push('x');
+    if(/短信|SMS/i.test(prose))scope.push('sms');
+    for(const entry of commEntries(state)){
+        if(!source.has(commKey(entry.platform,entry.id))||!commCanNotify(state,entry.platform,entry.id)||
+            state.commContext?.[commKey(entry.platform,entry.id)]?.noticeMentioned===true||
+            commHasPhoneRead(state,entry.platform,entry.id)||
+            (scope.length&&!scope.includes(entry.platform)))continue;
+        found.set(commKey(entry.platform,entry.id),{platform:entry.platform,id:entry.id});
+    }
+    return [...found.values()];
+}
+
 // Called only after a complete, stable narrative revision. Source-floor events
 // are replayed alongside normal phone changes; no model call or prose rewrite.
 export function importStoryPhone(raw,revisions,chat,context){
@@ -274,6 +329,15 @@ export function importStoryPhone(raw,revisions,chat,context){
             const change=commShownChange(state,shown.platform,shown.id);
             if(!change)continue; // Already shown; a repeated marker stays silent.
             journal=appendChange(journal,revisions.slice(0,index+1),[change],eventId);state=replayJournal(journal);changed=true;
+        }
+        const noticeId='story-notice:'+revisions[index];
+        if(!journal.events.some(e=>e.id===noticeId)){
+            const changes=notifiedRecords(chat[index],state,journal,index)
+                .map(row=>commNotificationChange(state,row.platform,row.id)).filter(Boolean);
+            if(changes.length){
+                journal=appendChange(journal,revisions.slice(0,index+1),changes,noticeId);
+                state=replayJournal(journal);changed=true;
+            }
         }
     }
     const business=importBusiness(journal,revisions,chat,settings,storyAnnotations);
