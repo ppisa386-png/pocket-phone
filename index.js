@@ -15,14 +15,14 @@ import { createChatApp } from './src/chat-apps.js?v=1.2.54';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.38';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.55';
-import { mountPhone } from './src/ui.js?v=1.2.55';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.55';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.56';
+import { mountPhone } from './src/ui.js?v=1.2.56';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.56';
 import { createPhoneService } from './src/phone.js?v=1.2.54';
-import { createContinuityBridge } from './src/continuity.js?v=1.2.55';
-import { normalizeSettings } from './src/config.js?v=1.2.55';
+import { createContinuityBridge } from './src/continuity.js?v=1.2.56';
+import { normalizeSettings } from './src/config.js?v=1.2.56';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.55';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.56';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
