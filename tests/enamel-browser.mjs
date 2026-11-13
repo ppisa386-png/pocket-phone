@@ -151,6 +151,27 @@ try {
   // Test-only framing: move the launcher away from the viewport edge so the
   // entire 36px orb and sixfold bloom are visible in un-clipped real captures.
   await launcher.evaluate(el=>{el.style.left='160px';el.style.top='232px';});
+  // Sample the live animation inside the browser. Screenshot/transport time on
+  // a busy CI runner must not shift peak assertions past the 680ms animation.
+  await launcher.evaluate(el=>{
+    window.ppFrostPeak = new Promise(resolve=>{
+      const observer=new MutationObserver(()=>{
+        if(!el.classList.contains('pp-haze-burst'))return;
+        observer.disconnect();
+        const start=performance.now();
+        function sample(){
+          if(performance.now()-start<360){requestAnimationFrame(sample);return;}
+          const snow=el.querySelector('.pp-frost-snow');
+          resolve({snowOpacity:Number(getComputedStyle(snow).opacity),
+            scale:new DOMMatrixReadOnly(getComputedStyle(snow).transform).a,
+            heartOpacity:Number(getComputedStyle(el.querySelector('.pp-frost-heart')).opacity),
+            arms:[...el.querySelectorAll('.pp-frost-branch')].map(arm=>({delay:parseFloat(getComputedStyle(arm).animationDelay),opacity:Number(getComputedStyle(arm).opacity)}))});
+        }
+        requestAnimationFrame(sample);
+      });
+      observer.observe(el,{attributes:true,attributeFilter:['class']});
+    });
+  });
   await launcher.click();
   await page.waitForTimeout(180);
   assert.equal(await page.locator('.pp-haze-spark').count(),12);
@@ -165,17 +186,14 @@ try {
   const bounding = await launcher.boundingBox();
   const clip={x:Math.max(0,bounding.x-44),y:Math.max(0,bounding.y-44),width:Math.min(126,390-Math.max(0,bounding.x-44)),height:Math.min(126,844-Math.max(0,bounding.y-44))};
   await page.screenshot({path:resolve(output,'enamel-floating-burst.png'),clip});
-  await page.waitForTimeout(180);
-  assert.ok(Number(await page.locator('.pp-frost-snow').evaluate(el=>getComputedStyle(el).opacity))>.9,'snowflake reaches its visible mid-bloom peak');
+  const peak=await page.evaluate(()=>window.ppFrostPeak);
+  assert.ok(peak.snowOpacity>.9,'snowflake reaches its visible mid-bloom peak');
   await page.screenshot({path:resolve(output,'enamel-floating-burst-peak.png'),clip});
-  const armValues=await arms.evaluateAll(elements=>elements.map(el=>({
-    delay:parseFloat(getComputedStyle(el).animationDelay),
-    opacity:Number(getComputedStyle(el).opacity)
-  })));
+  const armValues=peak.arms;
   assert.deepEqual(armValues.map(x=>x.delay),[0,.016,.032,.048,.064,.08],'short optical cascade across six branches');
   assert.ok(armValues.every(x=>x.opacity>.65),'all arms remain legible at 36px bloom peak');
-  assert.ok(Number(await page.locator('.pp-frost-heart').evaluate(el=>getComputedStyle(el).opacity))>.8,'center inlay catches light at peak');
-  const bloomScale=await page.locator('.pp-frost-snow').evaluate(el=>new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
+  assert.ok(peak.heartOpacity>.8,'center inlay catches light at peak');
+  const bloomScale=peak.scale;
   assert.ok(bloomScale>1.1&&bloomScale<1.23,'36px snowflake peak is visibly expanded without oversized bounce');
   await page.waitForTimeout(360);
   assert.equal(await launcher.evaluate(el=>el.classList.contains('pp-haze-burst')),false,'burst returns to normal stacking and visual state after 680ms');
