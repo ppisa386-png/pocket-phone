@@ -219,7 +219,7 @@ test('actual narrative payload expires SMS by story time before persistence and 
    set('smsContext','a',{category:'A',anchor:{date:'2026-10-01',time:'12:00'},expired:false}),
    set('smsContext','b',{category:'B',anchor:{date:'2026-10-01',time:'12:00'},expired:false})
   ]);
-  f.context.chat.push({mes:'2026-10-03 12:00\n他们谈起短信和电话里的事。',name:'Alex',is_user:false});
+  f.context.chat.push({mes:'2026-10-03 12:00\n他们谈起 Alex 与 Bea 的短信和电话里的事。',name:'Alex',is_user:false});
   await f.generate();
   const payload={chat:[{role:'user',content:'Continue'}]};
   await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',payload);
