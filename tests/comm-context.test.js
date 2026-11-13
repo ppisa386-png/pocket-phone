@@ -515,3 +515,88 @@ test('continuity explicitly distinguishes WhatsApp and WeChat read-but-unshown f
     assert.match(prompt,/不能把多条未展示记录一律写成一串未读消息/);
     assert.doesNotMatch(prompt,/read:true.*read:false/,'states are structured, not flattened into a single unread label');
 });
+
+
+test('a prose reminder consumes the unread-notice opportunity but does not read or display messages',async()=>{
+    const chat=[
+        {mes:'2026-11-13 09:00',name:'Alex',is_user:false},
+        {mes:'Sam 的手机屏幕亮起，显示几条未读消息。',name:'Alex',is_user:false},
+        {mes:'他们继续讨论明天的活动。',name:'Alex',is_user:false},
+    ];
+    const rev=await revisionsFor(messageSignatures(chat)),accountId='card:alex.png';
+    const base=appendChange(undefined,rev.slice(0,1),[
+        set('contacts',accountId,{id:accountId,name:'Alex'}),
+        set('messages','sms-old',{id:'sms-old',contactId:accountId,role:'assistant',text:'SMS_SECRET',read:false,createdAt:1}),
+        set('whatsapp',accountId,{id:accountId,type:'account',name:'Alex',identityKnown:true,characterId:accountId}),
+        set('whatsapp','wa-old',{id:'wa-old',type:'message',accountId,role:'assistant',text:'WA_SECRET',read:false,createdAt:2}),
+    ]);
+    const context={name1:'Sam',name2:'Alex',characters:[{name:'Alex',avatar:'alex.png'}],characterId:0};
+    let result=importStoryPhone(base,rev,chat,context);
+    let journal=syncCommContext(result.journal,rev,chat).journal,state=replayJournal(journal);
+    assert.equal(state.commContext['sms:sms-old'].noticeMentioned,true);
+    assert.equal(state.commContext['whatsapp:wa-old'].noticeMentioned,true);
+    assert.equal(state.messages['sms-old'].read,false);
+    assert.equal(state.whatsapp['wa-old'].read,false);
+    assert.equal(state.commContext['sms:sms-old'].shown,false);
+    assert.equal(state.commContext['whatsapp:wa-old'].shown,false);
+    const opts={instruction:'剧情衔接',allParticipants:true,budget:20000};
+    const silent=buildContinuityPrompt(state,speaker,opts);
+    assert.doesNotMatch(silent,/SMS_SECRET|WA_SECRET/,'old unread messages are no longer offered to generate another reminder');
+    const reading=buildContinuityPrompt(state,speaker,{...opts,readingPhone:true});
+    assert.match(reading,/SMS_SECRET/);
+    assert.match(reading,/WA_SECRET/);
+    assert.match(reading,/noticeMentioned":true/);
+    assert.equal(importStoryPhone(journal,rev,chat,context).changed,false,'repeated import does not write duplicates');
+    const newMessage={id:'sms-new',contactId:accountId,role:'assistant',text:'A_FRESH_MESSAGE',read:false,createdAt:3};
+    journal=appendChange(journal,rev,[set('messages','sms-new',newMessage)]);
+    state=replayJournal(syncCommContext(journal,rev,chat).journal);
+    assert.match(buildContinuityPrompt(state,speaker,opts),/A_FRESH_MESSAGE/,'later genuine messages can still notify');
+    assert.doesNotMatch(buildContinuityPrompt(state,speaker,opts),/SMS_SECRET|WA_SECRET/);
+    const reverted=replayJournal(reconcileJournal(journal,rev.slice(0,1)).journal);
+    assert.notEqual(reverted.commContext['sms:sms-old']?.noticeMentioned,true,'removing the notifying floor restores the notice opportunity');
+});
+
+test('exact notice markers apply to specified records only and never change another message or shown/read',async()=>{
+    const id='card:alex.png',evidence='Sam 手机屏幕亮起，显示一条微信未读消息。';
+    const marker='<!--durian-message-noticed:'+JSON.stringify({platform:'wechat',ids:['wc-old'],evidence})+'-->';
+    const chat=[{mes:'2026-11-13 09:00',name:'Alex',is_user:false},{mes:evidence+marker,name:'Alex',is_user:false}];
+    const rev=await revisionsFor(messageSignatures(chat));
+    const base=appendChange(undefined,rev.slice(0,1),[
+        set('wechat',id,{id,type:'account',name:'Alex',identityKnown:true,characterId:id}),
+        set('wechat','wc-old',{id:'wc-old',type:'message',accountId:id,role:'assistant',text:'WC_SECRET',read:false}),
+        set('whatsapp',id,{id,type:'account',name:'Alex',identityKnown:true,characterId:id}),
+        set('whatsapp','wa-old',{id:'wa-old',type:'message',accountId:id,role:'assistant',text:'WA_SECRET',read:false}),
+    ]);
+    const context={name1:'Sam',name2:'Alex',characters:[{name:'Alex',avatar:'alex.png'}],characterId:0};
+    const journal=importStoryPhone(base,rev,chat,context).journal,state=replayJournal(syncCommContext(journal,rev,chat).journal);
+    assert.equal(state.commContext['wechat:wc-old'].noticeMentioned,true);
+    assert.equal(state.commContext['whatsapp:wa-old'].noticeMentioned,false);
+    assert.equal(state.commContext['wechat:wc-old'].shown,false);
+    assert.equal(state.wechat['wc-old'].read,false);
+    const prompt=buildContinuityPrompt(state,speaker,{instruction:'延续',allParticipants:true,budget:20000});
+    assert.doesNotMatch(prompt,/WC_SECRET/);
+    assert.match(prompt,/WA_SECRET/);
+    const invalidChat=[chat[0],{mes:evidence+'<!--durian-message-noticed:'+JSON.stringify({platform:'wechat',ids:['not-real'],evidence})+'-->',name:'Alex',is_user:false}];
+    const rev2=await revisionsFor(messageSignatures(invalidChat));
+    const invalid=importStoryPhone(appendChange(undefined,rev2.slice(0,1),base.events[0].changes),rev2,invalidChat,context);
+    const badState=replayJournal(invalid.journal);
+    assert.notEqual(badState.commContext['wechat:wc-old']?.noticeMentioned,true,'a made-up marker must not consume real notification records');
+});
+
+test('notification fallback cannot mark a message that did not exist until a later floor',async()=>{
+    const chat=[{mes:'First floor.',name:'Alex',is_user:false},
+        {mes:'Sam 的手机上显示未读消息。',name:'Alex',is_user:false},
+        {mes:'The later phone message is created here.',name:'Alex',is_user:false}];
+    const rev=await revisionsFor(messageSignatures(chat)),id='card:alex.png';
+    const base=appendChange(undefined,rev.slice(0,1),[
+        set('contacts',id,{id,name:'Alex'}),
+        set('messages','earlier',{id:'earlier',contactId:id,role:'assistant',text:'OLD',read:false})
+    ]);
+    const withFuture=appendChange(base,rev,[
+        set('messages','later',{id:'later',contactId:id,role:'assistant',text:'FUTURE',read:false})
+    ]);
+    const context={name1:'Sam',name2:'Alex',characters:[{name:'Alex',avatar:'alex.png'}],characterId:0};
+    const state=replayJournal(importStoryPhone(withFuture,rev,chat,context).journal);
+    assert.equal(state.commContext['sms:earlier'].noticeMentioned,true);
+    assert.notEqual(state.commContext['sms:later']?.noticeMentioned,true);
+});
