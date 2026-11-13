@@ -37,7 +37,9 @@ test('every comm channel gets a sidecar row with a story-time anchor from its so
         const meta=commMeta(state,platform,id);
         assert.deepEqual(meta.anchor,stamp('2026-11-01','09:00'),platform+' anchors to its source floor');
         assert.equal(meta.classification,'pending');assert.equal(meta.expired,false);
-        assert.equal(meta.sourceFloor,0,'notification opportunity anchors to first real source floor');
+        if (['sms:s1','whatsapp:w1'].includes(platform+':'+id))
+            assert.equal(meta.sourceFloor,0,'incoming private notifications anchor to their first source floor');
+        else assert.equal(meta.sourceFloor,undefined,'non-notification history is not rewritten with an extra anchor');
     }
 });
 
