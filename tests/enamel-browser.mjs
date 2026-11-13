@@ -6,9 +6,11 @@ import { resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
+import { APPS } from '../src/config.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const { chromium } = createRequire(import.meta.url)('playwright');
+const { chromium } = createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES ? process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + '/' : import.meta.url)('playwright');
+const desktopAppCount = APPS.filter(app => app.id !== 'snapchat').length + 1; // Settings is also a desktop icon.
 const output = resolve(root, '..', 'qa-results');
 await mkdir(output, { recursive: true });
 const fixtureHTML = "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>榴莲手机·真实模块视觉验收</title><style>body{margin:0;background:#e9e5e4;font-family:system-ui}main{padding:20px;color:#726c70;font-size:12px}</style></head><body><main>实际 HTML / CSS / SVG 浏览器测试（离线数据）</main><script type=\"module\">\nimport { mountPhone } from '/src/ui.js';\nimport { normalizeSettings } from '/src/config.js';\nconst KEY='pocket_phone_preview_v010';\nlet settings=normalizeSettings(JSON.parse(localStorage.getItem(KEY)||'{}'));\nconst adapter={\n  load:()=>settings,\n  save(next){settings=next;localStorage.setItem(KEY,JSON.stringify(next));},\n  onChange(){},\n  storyChat:()=>[{is_user:false,mes:'当前时间：2026-11-09 13:13'}],\n  userName:()=> '用户',\n  diagnostics:{add(error){console.error(error);},text:()=>'',persistent:()=>true},\n  connectionName:()=> '离线视觉验收'\n};\nconst styles=await (await fetch('/style.css')).text()+'\\n'+await (await fetch('/style-enamel.css')).text();\nwindow.controller=mountPhone({adapter,styles});\nwindow.controller.open();\nwindow.ready=true;\n</script></body></html>";
@@ -41,7 +43,7 @@ try {
   }
   assert.equal(await page.locator('.pp-layer').getAttribute('data-skin'),'classic');
   assert.equal(await page.locator('.pp-layer').getAttribute('data-launcher'),'classic');
-  assert.equal(await page.locator('.pp-app').count(),11);
+  assert.equal(await page.locator('.pp-app').count(),desktopAppCount);
   assert.equal(await page.locator('.pp-haze-art').count(),0);
   assert.equal(await page.locator('.pp-status-time').isHidden(),true,'desktop top-left time is hidden');
   assert.equal(await page.locator('.pp-big-time').isVisible(),true,'desktop central clock remains');
@@ -85,9 +87,9 @@ try {
   await phone.screenshot({path:resolve(output,'enamel-settings.png')});
 
   await page.getByRole('button',{name:'回到桌面',exact:true}).click();
-  assert.equal(await page.locator('.pp-haze-art').count(),11);
+  assert.equal(await page.locator('.pp-haze-art').count(),desktopAppCount);
   const shapes = await page.locator('.pp-haze-art path[stroke="#c6a67d"]').count();
-  assert.equal(shapes,11,'all badges have enamel-metal edging');
+  assert.equal(shapes,desktopAppCount,'all badges have enamel-metal edging');
   const noOverflow = await page.locator('.pp-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1);
   assert.ok(noOverflow,'enamel desktop has no horizontal overflow');
   const rhythm=await page.locator('.pp-home').evaluate(home=>{

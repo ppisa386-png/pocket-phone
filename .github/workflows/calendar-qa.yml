@@ -35,9 +35,14 @@ jobs:
       - run: npm install --no-save playwright@1.56.1
       - run: npx playwright install --with-deps chromium-headless-shell
       - run: node tests/calendar-browser.mjs
+      - name: Collect calendar screenshots in workspace
+        if: always()
+        run: |
+          mkdir -p qa-results
+          cp ../qa-results/calendar-*.png qa-results/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: calendar-browser-evidence
-          path: ../qa-results/calendar-*.png
+          path: qa-results/calendar-*.png
           retention-days: 14
