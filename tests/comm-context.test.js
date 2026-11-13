@@ -491,8 +491,8 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
     }
     const before=buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000});
     assert.doesNotMatch(before,/HIDDEN_X_PRIVATE/,'X private messages stay local');
-    assert.match(before,/HIDDEN_WA_PRIVATE/);
-    assert.match(before,/user 未在剧情里打开手机查看之前/);
+    assert.doesNotMatch(before,/HIDDEN_WA_PRIVATE/,'the original narrative floor already described this incoming notification; no second reminder');
+    assert.equal(before,'','notification-only arrival does not make its private content readable in the next story turn');
     context.chat.push({mes:'Sam实际打开手机阅读了这两条信息。'+saved.map(row=>
         '<!--durian-message-shown:'+JSON.stringify(row)+'-->').join('')});
     rev=await revisionsFor(messageSignatures(context.chat));
