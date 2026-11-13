@@ -37,6 +37,7 @@ test('every comm channel gets a sidecar row with a story-time anchor from its so
         const meta=commMeta(state,platform,id);
         assert.deepEqual(meta.anchor,stamp('2026-11-01','09:00'),platform+' anchors to its source floor');
         assert.equal(meta.classification,'pending');assert.equal(meta.expired,false);
+        assert.equal(meta.sourceFloor,0,'notification opportunity anchors to first real source floor');
     }
 });
 
@@ -159,6 +160,60 @@ test('continuity omits all X records and shown records from other channels',()=>
     state.commContext['sms:unshown'].expired=true;
     const expired=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true});
     assert.doesNotMatch(expired,/UNSHOWN_SMS/,'expiry still filters unshown records');
+});
+
+test('each incoming unread message gets only one optional story notification; the next new message gets a fresh one',async()=>{
+ const chat=[{mes:'2026-11-01 09:00 早晨的课结束了。',name:'Alex',is_user:false}];
+ const revisions=await revisionsFor(messageSignatures(chat));
+ const account={id:'card:alex.png',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
+ const sms={id:'old-sms',contactId:account.id,role:'assistant',text:'OLD_UNREAD_SMS',createdAt:1,read:false};
+ const wa={id:'old-wa',type:'message',accountId:account.id,role:'assistant',text:'OLD_UNREAD_WA',createdAt:2,read:false};
+ const wx={id:'old-wx',type:'message',accountId:account.id,role:'assistant',text:'OLD_UNREAD_WECHAT',createdAt:3,read:false};
+ const read={id:'known-wa',type:'message',accountId:account.id,role:'assistant',text:'KNOWN_ALREADY_READ',createdAt:4,read:true};
+ const sent={id:'sent-sms',contactId:account.id,role:'user',text:'USER_SENT_MESSAGE',createdAt:5,read:true};
+ let journal=appendChange(undefined,revisions,[
+  set('contacts',account.id,{id:account.id,name:account.name}),
+  set('whatsapp',account.id,account),set('wechat',account.id,account),
+  set('messages',sms.id,sms),set('messages',sent.id,sent),
+  set('whatsapp',wa.id,wa),set('wechat',wx.id,wx),set('whatsapp',read.id,read),
+  set('calls','missed',{id:'missed',contactId:account.id,status:'missed',turns:[],createdAt:6}),
+ ]);
+ const promptFor=(j,story)=>{
+  // Prompt construction does not mark the source message read or shown.
+  const state=replayJournal(syncCommContext(j, Array.from({length:story.length},()=>''), story).journal);
+  return {state,prompt:buildContinuityPrompt(state,speaker,{instruction:'参考',allParticipants:true,chat:story,budget:50000})};
+ };
+ const initial=promptFor(journal,chat);
+ for(const text of ['OLD_UNREAD_SMS','OLD_UNREAD_WA','OLD_UNREAD_WECHAT','KNOWN_ALREADY_READ','USER_SENT_MESSAGE','未接来电'])assert.match(initial.prompt,new RegExp(text));
+ const initRows=JSON.parse(initial.prompt.split('\n').at(-2)).records;
+ assert.ok(initRows.some(r=>r.recordId==='old-sms'&&r.read===false));
+ assert.equal(initial.state.commContext['whatsapp:old-wa'].sourceFloor,0);
+ chat.push({mes:'Alex 继续讲着学校里的趣事。',name:'Alex',is_user:false});
+ const second=promptFor(journal,chat);
+ for(const text of ['OLD_UNREAD_SMS','OLD_UNREAD_WA','OLD_UNREAD_WECHAT','未接来电'])assert.doesNotMatch(second.prompt,new RegExp(text));
+ for(const text of ['KNOWN_ALREADY_READ','USER_SENT_MESSAGE'])assert.match(second.prompt,new RegExp(text));
+ assert.equal(second.state.commContext['whatsapp:old-wa'].shown,false);
+ assert.equal(second.state.whatsapp['old-wa'].read,false);
+ const newer={id:'new-wa',type:'message',accountId:account.id,role:'assistant',text:'ACTUALLY_NEW_UNREAD',createdAt:8,read:false};
+ journal=appendChange(journal,await revisionsFor(messageSignatures(chat)),[set('whatsapp',newer.id,newer)]);
+ const third=promptFor(journal,chat);
+ assert.match(third.prompt,/ACTUALLY_NEW_UNREAD/);
+ assert.doesNotMatch(third.prompt,/OLD_UNREAD_WA/);
+ assert.equal(third.state.commContext['whatsapp:new-wa'].sourceFloor,1);
+ chat.push({mes:'随后他们一起去图书馆。',name:'Alex',is_user:false});
+ assert.doesNotMatch(promptFor(journal,chat).prompt,/ACTUALLY_NEW_UNREAD/,'the latest notification opportunity does not repeat');
+ // A genuinely opened old message can still be used as background, without
+ // changing its narrative-shown flag or pretending that it is unread.
+ journal=appendChange(journal,await revisionsFor(messageSignatures(chat)),[set('whatsapp',wa.id,{...wa,read:true})]);
+ const reopened=promptFor(journal,chat);
+ assert.match(reopened.prompt,/OLD_UNREAD_WA/);
+ assert.equal(JSON.parse(reopened.prompt.split('\n').at(-2)).records.find(r=>r.recordId==='old-wa').read,true);
+ assert.equal(reopened.state.commContext['whatsapp:old-wa'].shown,false);
+ // Deleting the intervening story floor reopens the single offer naturally.
+ const reverted=promptFor(appendChange(undefined,revisions,[
+   set('contacts',account.id,{id:account.id,name:account.name}),set('messages',sms.id,sms),
+ ]),chat.slice(0,1));
+ assert.match(reverted.prompt,/OLD_UNREAD_SMS/);
 });
 
 test('element entries anchor to the floor their reaction appeared on and default to A',async()=>{
