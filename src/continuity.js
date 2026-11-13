@@ -23,6 +23,7 @@ const lastNarrativeFloor = chat => Array.isArray(chat) ? chat.findLastIndex(effe
 const hadNarrativeReplySince = (meta, latestFloor) => Number.isInteger(meta?.sourceFloor) && latestFloor>meta.sourceFloor;
 const notificationAlreadyOffered = (meta, record, latestFloor) =>
     record?.origin==='narrative' || record?.proactive===true || !!record?.acquisition ||
+    /^(?:outreach:|narrative-message:|narrative-x:)/.test(String(record?.id||'')) ||
     hadNarrativeReplySince(meta,latestFloor);
 const shouldInjectIncoming = (meta, record, latestFloor, read = record?.read===true) =>
     read || !notificationAlreadyOffered(meta,record,latestFloor);
