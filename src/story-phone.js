@@ -79,7 +79,7 @@ function notificationProse(message) {
         .replace(/<!--[\s\S]*?-->/g,'');
 }
 function describesNotification(text){
-    return /(?:未读(?:消息|私信|短信|通知)|新(?:消息|私信|短信)|消息(?:通知|提醒)|(?:收到|来了|弹出|显示).{0,18}(?:消息|私信|短信)|(?:手机|锁屏|屏幕|通知栏|WhatsApp|微信|短信|私信).{0,50}(?:消息|未读|通知|提示音|震动|振动)|(?:message|notification|unread|text alert).{0,22}(?:phone|screen|buzz|badge)|(?:phone|screen).{0,22}(?:message|notification|unread|buzz))/i.test(text) &&
+    return /(?:未读(?:消息|私信|短信|通知)|新(?:消息|私信|短信)|消息(?:通知|提醒)|(?:收到|来了|弹出|显示).{0,18}(?:消息|私信|短信)|(?:手机|锁屏|屏幕|通知栏|WhatsApp|微信|短信|私信).{0,50}(?:消息|未读|通知|提示音|震动|振动)|(?:unread|notification|text alert).{0,22}(?:phone|screen|buzz|badge)|(?:phone|screen).{0,22}(?:notification|unread|buzz|ping|message alert|message notification))/i.test(text) &&
         !/(?:没有|并无|不存在|无任何|毫无|no|without).{0,12}(?:未读|新消息|消息通知|notifications?)/i.test(text);
 }
 function notifiedRecords(message, state, journal, floor) {
@@ -332,7 +332,7 @@ export function importStoryPhone(raw,revisions,chat,context){
             journal=appendChange(journal,revisions.slice(0,index+1),[change],eventId);state=replayJournal(journal);changed=true;
         }
         const noticeId='story-notice:'+revisions[index];
-        if(!journal.events.some(e=>e.id===noticeId)){
+        if(!journal?.events?.some(e=>e.id===noticeId)){
             const changes=notifiedRecords(chat[index],state,journal,index)
                 .map(row=>commNotificationChange(state,row.platform,row.id)).filter(Boolean);
             if(changes.length){
