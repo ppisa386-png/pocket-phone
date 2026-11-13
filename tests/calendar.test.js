@@ -6,13 +6,13 @@ import { normalizeSettings } from '../src/config.js';
 import { createCalendar } from '../src/calendar.js';
 import { createCalendarBridge, CALENDAR_KEY } from '../src/calendar-story.js';
 import { createCalendarPanel } from '../src/calendar-view.js';
-import { calendarOccurrences, calendarMonth, calendarDue, calendarSet, validateCalendarDatabase, validateCalendarEvent } from '../src/calendar-core.js';
+import { calendarOccurrences, calendarMonth, calendarDue, calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from '../src/calendar-core.js';
 import { dateDay } from '../src/story-clock.js';
 const data = () => ({ region: '日本 · 东京', timezone: 'Asia/Tokyo', years: [2026, 2027], holidays: [
     { name: '节日甲', date: '2026-11-16', note: '公开节日背景' }, { name: '节日乙', date: '2026-11-16' },
     { name: '元旦', date: '2027-01-01' }, { name: '文化之日', date: '2026-11-03' },
 ] });
-async function setup() {
+async function setup(independentClient = null) {
     const handlers = new Map(), bus = { on(n, f) { handlers.set(n, [...(handlers.get(n) || []), f]); }, removeListener(n, f) { handlers.set(n, (handlers.get(n) || []).filter(x => x !== f)); }, async emit(n, ...args) { for (const fn of [...(handlers.get(n) || [])]) await fn(...args); } };
     let response = data(), calls = 0, prompt = '';
     const c = { chatId: 'calendar', characterId: 0, characters: [{ name: 'Alex', avatar: 'a' }], name1: 'Sam', onlineStatus: 'connected', chatMetadata: {},
@@ -20,8 +20,8 @@ async function setup() {
         event_types: Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','GENERATION_STOPPED','CHAT_COMPLETION_PROMPT_READY','CHAT_COMPLETION_SETTINGS_READY'].map(n => [n, n])),
         extensionPrompts: {}, setExtensionPrompt(k, value, _a, _b, _c, _d, filter) { this.extensionPrompts[k] = { value, filter }; },
         generateQuietPrompt: async o => { calls++; prompt = o.quietPrompt; return typeof response === 'function' ? response() : JSON.stringify(response); } };
-    const settings = normalizeSettings({ retries: 0 });
-    const memory = createPhoneMemory({ getContext: () => c }), phone = createPhoneService({ memory, getContext: () => c, getSettings: () => settings });
+    const settings = normalizeSettings({ retries: 0, ...(independentClient ? { api: { mode: 'independent' } } : {}) });
+    const memory = createPhoneMemory({ getContext: () => c }), phone = createPhoneService({ memory, getContext: () => c, getSettings: () => settings, modelClient: independentClient });
     const calendar = createCalendar({ memory, phone, getContext: () => c }), errors = [];
     const bridge = createCalendarBridge({ memory, getContext: () => c, getSettings: () => settings, onError: e => errors.push(e.message) });
     await memory.commit(await memory.begin(), [{ collection: 'location', key: 'current', value: { city: '东京', manual: true } }]);
@@ -106,4 +106,52 @@ test('unknown story date or weather place blocks refresh without a request; stal
     const f=await setup();try{ok(await f.calendar.refresh());const state=f.state();state.location.current.city='巴黎';assert.deepEqual(calendarDue(state,dateDay('2026-11-13')),[]);
         f.c.chat=[{mes:'没有明确日期',is_user:false}];await f.memory.read();assert.equal((await f.calendar.refresh()).ok,false);assert.equal(f.calls(),1);
     }finally{f.close();}
+});
+
+test('calendar reads complete wrapped JSON, compact tuples, legacy rows and benign trailing commas', () => {
+    const compact = { ...data(), holidays: [['2026-11-16', '节日甲'], ['2027-01-01', '元旦', '简短介绍']] };
+    const result = parseCalendarResponse('说明：\n' + ['```json', JSON.stringify(compact), '```'].join('\n'));
+    assert.deepEqual(result.holidays, [
+        { date: '2026-11-16', name: '节日甲', note: '' },
+        { date: '2027-01-01', name: '元旦', note: '简短介绍' },
+    ]);
+    assert.equal(validateCalendarDatabase(result, '东京', 2026).holidays.length, 2);
+    assert.equal(validateCalendarDatabase(parseCalendarResponse(JSON.stringify(data())), '东京', 2026).holidays.length, 4);
+    assert.equal(parseCalendarResponse('{"region":"东京","years":[2026,2027],"holidays":[["2026-11-16","节日甲",],],}').holidays.length, 1);
+    for (const raw of ['模型暂时无法生成节日', '{"region":"东京"', '{}{}']) {
+        assert.throws(() => parseCalendarResponse(raw), error =>
+            error.code?.startsWith('MODEL_JSON_') && error.message.includes('节日 JSON') && !error.diagnostic.includes(raw));
+    }
+});
+test('calendar malformed reply triggers one format recovery, failed recovery preserves saved data', async () => {
+    const f = await setup(); let returned = 0;
+    try {
+        f.reply(() => ++returned === 1 ? '这是节日介绍而不是 JSON' :
+            ['```json', JSON.stringify({ ...data(), holidays: [['2026-11-16', '节日甲'], ['2027-01-01', '元旦']] }), '```'].join('\n'));
+        ok(await f.calendar.refresh());
+        assert.equal(f.calls(), 2);
+        assert.equal(f.state().calendar.database.holidays.length, 2);
+        assert.match(f.prompt(), /榴莲日历格式恢复/);
+        const before = f.state().calendar.database;
+        f.reply(() => '无效的模型回答');
+        const failed = await f.calendar.refresh();
+        assert.equal(failed.ok, false);
+        assert.equal(failed.code, 'MODEL_JSON_MISSING');
+        assert.equal(f.calls(), 4);
+        assert.deepEqual(f.state().calendar.database, before);
+    } finally { f.close(); }
+});
+test('independent calendar requests carry a final JSON contract and isolated output ceiling', async () => {
+    const calls = [];
+    const f = await setup({ generate: async (prompt, contact, current, progress, options) => {
+        calls.push({ prompt, options });
+        return JSON.stringify({ ...data(), holidays: [['2026-11-16', '节日甲']] });
+    } });
+    try {
+        ok(await f.calendar.refresh());
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].options.maxTokens, 4096);
+        assert.match(calls[0].options.finalOutputContract, /holidays/);
+        assert.equal(f.state().calendar.database.holidays[0].name, '节日甲');
+    } finally { f.close(); }
 });
