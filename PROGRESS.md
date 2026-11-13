@@ -2,7 +2,7 @@
 **用户问题**：只要小手机里存在未读／未展示消息，小说正文基本每隔一两楼就重复提到未读消息。原有 read 与 shown 只追踪手机阅读与消息正文内容呈现，没有独立追踪“正文已经提过消息通知”。
 **讨论结论**：同一批旧消息的通知只允许在正文首次实际提到时出现一次；之后即使仍未读、未在正文展示，也不能重复铃声、震动、通知栏、红点或“还有未读消息”。新消息可产生新的通知，user 主动打开手机仍可实际读取消息正文。通知标记不得改变 read/shown。
 **实现**：src/comm-context.js 增加 noticeMentioned 侧车、真实收到消息校验。src/story-phone.js 解析有证据的 durian-message-noticed 标记，旧楼若明确写过通知而无标记，则按原楼实际已有的渠道消息谨慎补识别；事件绑定正文修订并可回退。src/continuity.js 将已经提过通知但未读的旧消息从常规提醒上下文中排除，user 在本轮明确打开手机查看时重新提供消息详情；不误判未展示为新消息。src/proactive-pacing.js 的短信时间元数据也携带 noticeMentioned，正文共享提示禁止重复通知。
-**验证**：PR #15 GitHub Actions run 43386734592：**786/786 Node 回归测试通过**，`npm run build:preview` 成功；新增首次提示、反复同步不重复、已读与已展示独立、用户主动读回原文、后到新消息仍可提醒、平台限定、伪标记拒绝、未来楼层不误消费及删楼回退测试。日报浏览器验收见关联 PR 工作流，主分支其他视觉与 X 专项工作流合并后复核。
+**验证**：PR #15 GitHub Actions run 43386734592：**786/786 Node 回归测试通过**，`npm run build:preview` 成功；新增首次提示、反复同步不重复、已读与已展示独立、用户主动读回原文、后到新消息仍可提醒、平台限定、伪标记拒绝、未来楼层不误消费及删楼回退测试。日报浏览器 QA run 43386917302 通过；X 专项、天气和柔雾珐琅视觉工作流合并到主分支后复核。
 **保持不变**：X 私信不注入小说正文、手机 UI 未读角标、消息原文和手机已读、shown、分类和时效、主动联系低频原则、既有通信和剧情回退。
 **范围**：src/comm-context.js、src/continuity.js、src/story-phone.js、src/proactive-pacing.js、必要依赖缓存版本、tests/comm-context.test.js、REQUIREMENTS.md、PROGRESS.md。
 
