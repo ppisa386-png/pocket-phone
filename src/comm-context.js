@@ -224,7 +224,17 @@ export function syncCommContext(journal, revisions, chat) {
         // notification opportunity. It is independent of read, shown and A/B
         // expiry: no phone message is marked read or presented by this anchor.
         const sourceFloor = entry.element ? elementFloor.get(key) : first.get(collectionOf(entry.platform) + ':' + entry.id);
-        if (Number.isInteger(sourceFloor) && !Number.isInteger(meta.sourceFloor)) meta.sourceFloor = sourceFloor;
+        // Only notification-capable records need this extra datum. Do not
+        // rewrite every X post, public reaction or completed call on upgrade.
+        const notificationCapable = !entry.element && (
+            (entry.platform==='sms' && entry.record.role==='assistant') ||
+            (['whatsapp','wechat','snapchat'].includes(entry.platform) &&
+                entry.record.type==='message' && entry.record.role==='assistant') ||
+            (entry.platform==='call' && !entry.record.turns?.length &&
+                ['missed','declined','no_answer'].includes(entry.record.status))
+        );
+        if (notificationCapable && Number.isInteger(sourceFloor) && !Number.isInteger(meta.sourceFloor))
+            meta.sourceFloor = sourceFloor;
         if (!meta.anchor || (dateDay(meta.anchor.date) === null && meta.anchorSource !== 'source-floor')) {
             meta.anchor = (Number.isInteger(sourceFloor) ? clockAt(sourceFloor) : null) || meta.anchor || { date: '', time: '', precision: 'exact' };
             meta.anchorSource = 'source-floor';
