@@ -160,7 +160,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
 // alone is not a reason to recall the entire inbox in the novel.
 export function communicationSceneScope(state, speaker, chat) {
     const tail = (chat || []).slice(-2);
-    const user = [...tail].reverse().find(row => row?.is_user);
+    const user = tail.at(-1)?.is_user ? tail.at(-1) : null;
     const userText = String(user?.mes || '').replace(/<!--[^]*?-->/g, '').slice(-2400);
     const last = tail.at(-1);
     const proseText = last?.is_user ? '' : String(last?.mes || '').replace(/<!--[^]*?-->/g, '').slice(-1600);
