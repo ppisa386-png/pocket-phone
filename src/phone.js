@@ -127,8 +127,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 checkEnabled();
                 const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; job.progress = value; emit(); } };
                 report(independent ? '正在准备独立 API 请求' : '正在等待酒馆生成回复');
-                const correction = formatRetried ?
-                    '\nX 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。' : '';
+                const correction = formatRetried ? (app === 'calendar'
+                    ? '\n榴莲日历格式恢复：上一份回复未提供完整且合法的节日 JSON。只重新完成原地点、原年份的同一任务，按任务给出的 region、timezone、years、holidays 结构返回唯一完整 JSON 对象；节日使用紧凑数组，不输出 Markdown、推理、剧情或其他说明。不得捏造无依据的日期。'
+                    : '\nX 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + correction;
                 const contract = typeof options.finalOutputContract === 'string' ? options.finalOutputContract + correction : correction.trim();
                 const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { finalOutputContract: contract, maxTokens: options.maxTokens, retryEmptyOnce: app==='x' && options.retryEmptyOnce===true && !formatRetried }) : await context.generateQuietPrompt(phoneQuietOptions(context, taskPrompt, contact));
@@ -150,19 +151,21 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 return result;
             } catch (failure) {
                 const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');
-                const formatFailure = app === 'x' && options.formatRetryOnce === true &&
-                    !formatRetried && ['MODEL_JSON_MISSING','MODEL_JSON_TYPE'].includes(failure.code);
+                const formatFailure = options.formatRetryOnce === true && !formatRetried &&
+                    (app === 'x' && ['MODEL_JSON_MISSING','MODEL_JSON_TYPE'].includes(failure.code) ||
+                     app === 'calendar' && ['MODEL_JSON_EMPTY','MODEL_JSON_MISSING','MODEL_JSON_TRUNCATED','MODEL_JSON_SYNTAX',
+                        'MODEL_JSON_TYPE','MODEL_JSON_AMBIGUOUS','MODEL_JSON_REASONING','CALENDAR_JSON_INVALID','CALENDAR_DATA_INVALID'].includes(failure.code));
                 if (formatFailure && isCurrent() && failure.retryable !== false) {
                     formatRetried = true;
                     attempts.push(summary);
-                    job.progress = 'X 返回格式不正确，纠正格式重试一次';
+                    job.progress = app === 'calendar' ? '日历格式异常，正在重新整理一次' : 'X 返回格式不正确，纠正格式重试一次';
                     emit();
                     continue;
                 }
                 if (!isCurrent() || failure.retryable === false || normalRetriesLeft <= 0) {
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + (attempt + 1) + (responseLength === null ? '' : '；返回字符数：' + responseLength)
-                        + (formatRetried ? '；X 格式纠正：已尝试一次' : '');
+                        + (formatRetried ? '；' + (app === 'calendar' ? '日历' : 'X') + '格式纠正：已尝试一次' : '');
                     throw Object.assign(new Error(failure.message || '请求失败，请重试。'), {
                         code: failure.code, retryable: failure.retryable,
                         diagnostic: detail + (failure.diagnostic ? '\n' + failure.diagnostic : '') + (attempts.length ? '\n此前尝试：' + attempts.join('；') : ''),
