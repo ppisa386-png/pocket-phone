@@ -53,6 +53,7 @@ test('proactive notifications store complete private messages without marking th
         const message=Object.values(state[collection]).find(row=>row.text===content);
         assert.ok(message,platform+' was saved with its full hidden text');
         assert.equal(commMeta(state,platform,message.id)?.shown,false,platform+' arrival is not narrative reading');
+        assert.equal(commMeta(state,platform,message.id)?.noticeMentioned,true,platform+' arrival was already announced in prose');
         assert.ok(!prose.includes(content),platform+' content stays out of prose');
     }
     const mention=Object.values(state.x).find(row=>row.type==='post'&&row.outreachMention);
@@ -69,8 +70,12 @@ test('proactive notifications store complete private messages without marking th
     const continuity=buildContinuityPrompt(state,{name:'Sam Lee'},{
         instruction:'衔接实际通信',allParticipants:true,budget:50000,
     });
-    assert.match(continuity,/user 未在剧情里打开手机查看之前/);
-    assert.match(continuity,/HIDDEN_SMS_CONTENT/,'unshown text remains available to the author, not the character');
+    assert.doesNotMatch(continuity,/HIDDEN_SMS_CONTENT|HIDDEN_WHATSAPP_CONTENT|HIDDEN_WECHAT_CONTENT/,
+        'old messages whose first notification was narrated must not generate reminders again');
+    const reading=buildContinuityPrompt(state,{name:'Sam Lee'},{instruction:'衔接实际通信',allParticipants:true,budget:50000,readingPhone:true});
+    assert.match(reading,/HIDDEN_SMS_CONTENT/,'the text is still available when user explicitly reads the phone');
+    assert.match(reading,/HIDDEN_WHATSAPP_CONTENT/);
+    assert.match(reading,/HIDDEN_WECHAT_CONTENT/);
     assert.deepEqual(await capture(chat,journal),journal,'re-reading does not regenerate the incoming notifications');
     const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
     assert.equal(Object.keys(rolled.messages).length,0);

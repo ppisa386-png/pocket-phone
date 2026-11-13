@@ -3,7 +3,7 @@ import { readStoryClock, storyTime, dateDay, dayDate } from './story-clock.js?v=
 import { xComments, xCommentKey, xUserReplyContext } from './x-comments.js?v=1.2.55';
 import {xFeedArea} from './x-feed.js?v=1.2';
 import { xAudience } from './x-audience.js?v=1.2';
-import { commRecordPatch, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2.50';
+import { commRecordPatch, commExpired, commMetaOrInfer } from './comm-context.js?v=1.2.56';
 
 // Publication dates are anchored to story time, never device time.
 export function xPostTiming(post, now = null, meta = null) {
