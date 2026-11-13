@@ -214,8 +214,11 @@ test('erased SMS clears prepared slot and is absent from next actual narrative p
 
 test('actual narrative payload expires SMS by story time before persistence and keeps phone UI history',async()=>{
  const f=await fixture({withMemory:true});try{
-  await f.memory.read();
+  const initial=(await f.memory.read()).state;
+  // Already-read incoming SMS is background context, not a pending alert;
+  // this expiry regression must therefore isolate the 24/72-hour rule.
   await f.memory.commit(await f.memory.begin(),[
+   set('messages','b',{...initial.messages.b,read:true}),
    set('smsContext','a',{category:'A',anchor:{date:'2026-10-01',time:'12:00'},expired:false}),
    set('smsContext','b',{category:'B',anchor:{date:'2026-10-01',time:'12:00'},expired:false})
   ]);
