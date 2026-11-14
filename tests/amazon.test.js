@@ -12,8 +12,8 @@ const product={name:'Alhambra necklace',brand:'Van Cleef & Arpels',luxury:true,p
 function setup({independentClient=null,retries=0}={}){
  const bus=new EventEmitter();let response={products:[product]},count=0,prompt='';
  const context={chatId:'shopping',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'日期：2026-10-11 14:00\nAlex gives you a number.',is_user:false}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;prompt=o.quietPrompt;return typeof response==='function'?response():JSON.stringify(response);}};
- const settings=normalizeSettings({retries,...(independentClient?{api:{mode:'independent'}}:{})}),memory=createPhoneMemory({getContext:()=>context}),phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:independentClient}),amazon=createAmazon({memory,phone,getContext:()=>context,getSettings:()=>settings});
- return {context,bus,settings,memory,phone,amazon,state:()=>phone.snapshot(),reply:r=>response=r,count:()=>count,prompt:()=>prompt,close(){phone.destroy();memory.destroy();}};
+ const errors=[],settings=normalizeSettings({retries,...(independentClient?{api:{mode:'independent'}}:{})}),memory=createPhoneMemory({getContext:()=>context}),phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:independentClient,onError:e=>errors.push(e)}),amazon=createAmazon({memory,phone,getContext:()=>context,getSettings:()=>settings});
+ return {context,bus,settings,memory,phone,amazon,errors,state:()=>phone.snapshot(),reply:r=>response=r,count:()=>count,prompt:()=>prompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
 async function fill(f,qty=2){const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:1000000,included:[],startDay:0}}]);ok(await f.amazon.search('项链'));const p=shopItems(f.state(),'product')[0];ok(await f.amazon.add(p.id,'Gold',qty));return p;}
@@ -44,8 +44,8 @@ test('Amazon repairs malformed hosted output once and keeps the same genuine cat
   const failure=await f.amazon.search('耳机');
   assert.equal(failure.ok,false);
   assert.equal(failure.code,'MODEL_JSON_MISSING');
-  assert.match(failure.diagnostic,/Amazon格式纠正：已尝试一次/);
-  assert.match(failure.diagnostic,/本次请求次数：2/);
+  assert.match(f.errors.at(-1).diagnostic,/Amazon格式纠正：已尝试一次/);
+  assert.match(f.errors.at(-1).diagnostic,/本次请求次数：2/);
   assert.equal(requests,2);assert.equal(JSON.stringify(shopItems(f.state(),'product')),old,'invalid searches preserve previously displayed products');
  }finally{f.close();}
 });
