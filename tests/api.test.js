@@ -17,12 +17,12 @@ import { cashBalance, assetRows } from '../src/assets-core.js';
 
 test('published version cache-busts the actual changed independent API and JSON data modules',()=>{
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
- for(const module of ['api','amazon','assets','calendar','phone']){
+ for(const module of ['api','amazon','assets','calendar','phone','continuity']){
   const line=source.split(/\r?\n/).find(s=>s.includes("'./src/"+module+".js?v="));
   assert.ok(line,'entry must import '+module);
   assert.ok(line.includes("./src/"+module+".js?v="+VERSION+"'"),module+' must not keep an obsolete import cache key');
  }
- const targets=new Set(['diagnostics','model-json','api','phone','amazon','assets','calendar-core','daily','snapchat','wechat-moments','x']);
+ const targets=new Set(['continuity','diagnostics','model-json','api','phone','amazon','assets','calendar-core','daily','snapchat','wechat-moments','x']);
  const pending=[new URL('../index.js',import.meta.url)],visited=new Set(),found=new Set();
  while(pending.length){
   const url=pending.pop();if(visited.has(url.href))continue;visited.add(url.href);

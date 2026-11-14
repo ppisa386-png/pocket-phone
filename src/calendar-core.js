@@ -1,5 +1,5 @@
 import { dateDay, dayDate } from './story-clock.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.63';
+import { parseAppObject } from './model-json.js?v=1.2.64';
 
 // A calendar response must contain exactly one complete JSON object. Allow
 // wrapper prose, fenced JSON and redundant trailing commas; never infer dates

@@ -1,6 +1,6 @@
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
-import { phoneJsonSchema } from './model-json.js?v=1.2.63';
+import { phoneJsonSchema } from './model-json.js?v=1.2.64';
 export function normalizeApiUrl(value) {
     let url;
     try { url = new URL(String(value ?? '').trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://example.com/v1'); }

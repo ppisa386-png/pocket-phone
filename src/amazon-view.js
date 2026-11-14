@@ -1,6 +1,6 @@
-import { shopItems, shopMoney } from './amazon.js?v=1.2.63';
+import { shopItems, shopMoney } from './amazon.js?v=1.2.64';
 import { dayDate, readStoryClock } from './story-clock.js?v=1.2';
-import { deliveryStatus } from './delivery.js?v=1.2.63';
+import { deliveryStatus } from './delivery.js?v=1.2.64';
 import { icon } from './icons.js?v=1.2.57';
 import { shopImageKey, shopImageSrc } from './amazon-art.js?v=1.2.14';
 const shopEscape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);

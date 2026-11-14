@@ -1,8 +1,8 @@
 import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.43';
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
-import { storyEvidenceRows } from './square-core.js?v=1.2.63';
-import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.63';
-import { parseAppObject } from './model-json.js?v=1.2.63';
+import { storyEvidenceRows } from './square-core.js?v=1.2.64';
+import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.64';
+import { parseAppObject } from './model-json.js?v=1.2.64';
 import { locationKind } from './weather.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
 

@@ -4,6 +4,7 @@ import { createContinuityBridge, buildContinuityPrompt, resolveSpeaker, communic
 import { JOURNAL_KEY, revisionsFor, messageSignatures, appendChange } from '../src/journal.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { normalizeSettings } from '../src/config.js';
+import { importStoryPhone } from '../src/story-phone.js';
 class Events {
     listeners = new Map();
     on(type, fn) { this.listeners.set(type, [...(this.listeners.get(type) || []), fn]); }
@@ -283,7 +284,82 @@ test('communication scene cues require genuine plot relevance and never treat pi
  assert.equal(communicationSceneScope(state,speaker,[{is_user:true,mes:'继续正常上课。'}]),null);
 });
 
-test('a story only injects the named conversation and platform, not an unrelated NPC inbox',async()=>{
+async function chatMemoryFixture(options = {}) {
+ const f=await fixture(options),c=f.context;
+ c.chat=[{mes:'2026-11-14 09:00\nAlex 和 Sam 走进教室。',is_user:false}];
+ const changes=[];
+ for(const app of ['wechat','whatsapp']){
+  changes.push(set(app,'alex',{id:'alex',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}),set(app,'profile',{alias:'小雨'}));
+  changes.push(set(app,'bea',{id:'bea',type:'account',name:'Bea',characterId:'card:bea.png',identityKnown:true}));
+  for(let i=0;i<6;i++)changes.push(set(app,'m'+i,{id:'m'+i,type:'message',accountId:'alex',role:i%2?'assistant':'user',text:app+'_FACT_'+i,status:'sent',read:i!==5,createdAt:i+1}));
+  changes.push(set(app,'draft',{id:'draft',type:'message',accountId:'alex',role:'user',text:'UNSENT_DRAFT',status:'queued',createdAt:20}));
+  changes.push(set(app,'private',{id:'private',type:'message',accountId:'bea',role:'assistant',text:'BEA_PRIVATE',status:'sent',createdAt:21}));
+ }
+ c.chatMetadata[JOURNAL_KEY]=appendChange(undefined,await revisionsFor(messageSignatures(c.chat)),changes);
+ return f;
+}
+const historyRecords = prompt => JSON.parse(prompt.split('\n').at(-2)).records;
+
+test('ordinary final requests carry the latest three messages per current-speaker chat without phone keywords',async()=>{
+ const f=await chatMemoryFixture();try{
+  const before=JSON.stringify(f.context.chatMetadata);
+  await f.generate();
+  const payload={chat:[{role:'user',content:'走进教室，接着聊。'}]};
+  await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',payload);
+  const outgoing={messages:structuredClone(payload.chat),type:'normal'};
+  await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',outgoing);
+  const blocks=outgoing.messages.filter(m=>m.content.includes('<durian-phone-history>'));
+  assert.equal(blocks.length,1);
+  const records=historyRecords(blocks[0].content);
+  for(const app of ['wechat','whatsapp'])assert.deepEqual(records.filter(r=>r.platform===app).map(r=>r.recordId),['m3','m4','m5']);
+  assert.equal(records.length,6);assert.doesNotMatch(blocks[0].content,/UNSENT_DRAFT|BEA_PRIVATE/);
+  assert.ok(records.every(r=>r.otherParty==='小雨'&&r.identityKnown===false));
+  assert.equal(records.find(r=>r.recordId==='m5').read,false);
+  assert.equal(JSON.stringify(f.context.chatMetadata),before,'reading context must not mutate message state');
+  f.context.chat.push({is_user:true,mes:'我直接问他约定的地点。'});await f.generate();
+  assert.equal(historyRecords(f.prompts[CONTINUITY_KEY].value).length,6);
+ }finally{f.close();}
+});
+
+test('shown and already-notified messages remain speaker memory without becoming new notifications',async()=>{
+ const f=await chatMemoryFixture();try{
+  f.context.chat.push({is_user:false,mes:'手机亮起微信未读消息通知。<!--durian-message-shown:{"platform":"wechat","id":"m3"}--><!--durian-message-noticed:{"platform":"wechat","ids":["m5"],"evidence":"手机亮起微信未读消息通知。"}-->'});
+  const c=f.context;
+  c.chatMetadata[JOURNAL_KEY]=importStoryPhone(c.chatMetadata[JOURNAL_KEY],await revisionsFor(messageSignatures(c.chat)),c.chat,c).journal;
+  await f.generate();
+  const text=f.prompts[CONTINUITY_KEY].value,rows=historyRecords(text).filter(r=>r.platform==='wechat');
+  assert.deepEqual(rows.map(r=>r.recordId),['m3','m4','m5']);
+  assert.equal(rows[0].shown,true);assert.equal(rows[2].noticeMentioned,true);assert.equal(rows[2].read,false);
+  assert.match(text,/不得.*重复.*通知|绝不可再描写同一旧消息/);
+ }finally{f.close();}
+});
+
+test('chat memory respects app switches, member identity, silent requests and source rollback',async()=>{
+ const f=await chatMemoryFixture({group:true});try{
+  f.settings.apps.whatsapp=false;await f.generate();
+  assert.deepEqual(new Set(historyRecords(f.prompts[CONTINUITY_KEY].value).map(r=>r.platform)),new Set(['wechat']));
+  const old=f.prompts[CONTINUITY_KEY];f.context.characterId=1;f.context.name2='Bea';assert.equal(old.filter(),false);
+  await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/BEA_PRIVATE/);assert.doesNotMatch(f.prompts[CONTINUITY_KEY].value,/wechat_FACT/);
+  for(const type of ['quiet','impersonate']){await f.generate(type);const payload={messages:[],type};await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',payload);assert.deepEqual(payload.messages,[]);}
+  f.context.chat[0].mes='新分支，没有那些交流。';await f.generate();assert.equal(f.prompts[CONTINUITY_KEY].value,'');
+ }finally{f.close();}
+});
+
+test('automatic chat memory preserves expiry and rejects ambiguous or mismatched account identities',()=>{
+ const state={contacts:{},messages:{},calls:{},wechat:{
+  a:{id:'a',type:'account',name:'阿历克斯',aliases:['Alex']},
+  m:{id:'m',type:'message',accountId:'a',role:'assistant',text:'ALIAS_FACT',read:true,createdAt:1},
+ },commContext:{}};
+ const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true},options={instruction:'参考',allParticipants:true,sceneScope:null,currentStoryTime:{date:'2026-11-14',time:'09:00'}};
+ assert.match(buildContinuityPrompt(state,speaker,options),/ALIAS_FACT/);
+ assert.equal(buildContinuityPrompt(state,{...speaker,nameIsUnique:false},options),'');
+ state.wechat.a.characterId='card:other.png';assert.equal(buildContinuityPrompt(state,speaker,options),'');
+ state.wechat.a.characterId='card:alex.png';
+ state.commContext['wechat:m']={shown:true,category:'A',anchor:{date:'2026-11-12',time:'09:00'}};
+ assert.equal(buildContinuityPrompt(state,speaker,options),'','existing story-time expiry still applies');
+});
+
+test('scene recall adds named conversations while the current speaker retains their own chat memory',async()=>{
  const f=await fixture();try{
   const c=f.context;
   c.chat=[{mes:'Sam 和 Alex 走在街上。'}];
@@ -296,12 +372,12 @@ test('a story only injects the named conversation and platform, not an unrelated
    set('whatsapp','alex',{id:'alex',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true}),
    set('whatsapp','wa',{id:'wa',type:'message',accountId:'alex',role:'assistant',text:'A_WHATSAPP_PRIVATE',read:true,createdAt:3}),
   ]);
-  await f.generate();assert.equal(f.prompts[CONTINUITY_KEY].value,'');
+  await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/A_WHATSAPP_PRIVATE/);
   c.chat.push({mes:'Bea 问起之前的短信里说了什么。',is_user:true});
   await f.generate();let text=f.prompts[CONTINUITY_KEY].value;
-  assert.match(text,/B_SMS_PRIVATE/);assert.doesNotMatch(text,/A_SMS_PRIVATE|A_WHATSAPP_PRIVATE/);
+  assert.match(text,/B_SMS_PRIVATE/);assert.match(text,/A_WHATSAPP_PRIVATE/);assert.doesNotMatch(text,/A_SMS_PRIVATE/);
   c.chat.push({mes:'他们转而谈起当天的演出安排。',is_user:false});
-  await f.generate();assert.equal(f.prompts[CONTINUITY_KEY].value,'');
+  await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/A_WHATSAPP_PRIVATE/);
   c.chat.push({mes:'Sam 打开 WhatsApp 查看和 Alex 的聊天记录。',is_user:true});
   await f.generate();text=f.prompts[CONTINUITY_KEY].value;
   assert.match(text,/A_WHATSAPP_PRIVATE/);assert.doesNotMatch(text,/B_SMS_PRIVATE|A_SMS_PRIVATE/);

@@ -6,11 +6,33 @@ import {createPhoneService} from '../src/phone.js';
 import {createChatApp,chatItems,chatUnread} from '../src/chat-apps.js';
 import {createChatPanel} from '../src/chat-view.js';
 import {normalizeSettings} from '../src/config.js';
-import {buildContinuityPrompt} from '../src/continuity.js';
+import {buildContinuityPrompt,createContinuityBridge} from '../src/continuity.js';
 import {cashBalance,reservedCash} from '../src/assets-core.js';
 const ok=r=>assert.equal(r.ok,true,r.error);
 const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};
 const history=state=>buildContinuityPrompt(state,speaker,{instruction:'Remember',userName:'Sam',budget:30000});
+for(const app of ['wechat','whatsapp'])test(app+': actual app exchange reaches the next ordinary narrative request',async()=>{
+ const f=fixture(app);let bridge;
+ try{
+  const id=await add(f);
+  ok(await f.api.queueMessage(id,'text','明天在北门见。'));
+  f.reply({status:'reply',messages:[{kind:'text',text:'好的，我带蓝色雨伞。'}]});ok(await f.api.flushMessages(id));
+  ok(await f.api.markRead(id));
+  f.ctx.chat.push({is_user:true,mes:'我问他明天带什么。'});
+  await f.memory.read();
+  const before=f.count();f.ctx.setExtensionPrompt=()=>{};
+  f.ctx.event_types.CHAT_COMPLETION_SETTINGS_READY='CHAT_COMPLETION_SETTINGS_READY';
+  bridge=createContinuityBridge({getContext:()=>f.ctx,getSettings:()=>f.settings,onError:error=>{throw error;}});
+  await bridge.prepare('normal');
+  const payload={type:'normal',messages:[{role:'user',content:'我问他明天带什么。'}]};
+  f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',payload);
+  const block=payload.messages.find(m=>m.content.includes('<durian-phone-history>'));
+  assert.ok(block,'app history must reach the real outgoing array without phone keywords');
+  const rows=JSON.parse(block.content.split('\n').at(-2)).records;
+  assert.deepEqual(rows.map(r=>r.text),['明天在北门见。','好的，我带蓝色雨伞。']);
+  assert.equal(rows[1].read,true);assert.equal(f.count(),before,'recalling phone memory adds no model call');
+ }finally{bridge?.destroy();f.close();}
+});
 function fixture(app,mode='host') {
     const bus=new EventEmitter();let response={},count=0,prompt='';
     const ctx={chatId:'chat-apps',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'2026-10-30 09:30\nAlex gives Sam his number.'}],powerUserSettings:{persona_description:'Alex is Sam’s friend. Bea is Sam’s rival.'},chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(n=>[n,n]))};

@@ -9,11 +9,11 @@ import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.55';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.63';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.64';
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.63';
+import { parseAppObject } from './model-json.js?v=1.2.64';
 import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.57';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.2';
 // Story-local X simulation. No real social-network API or account is used.

@@ -1,7 +1,7 @@
 import {appendChange,replayJournal} from './journal.js?v=1.2.57';
 import {readStoryClock} from './story-clock.js?v=1.2';
-import {storyAnnotations} from './story-phone.js?v=1.2.63';
-import {wxFriends,canViewWxMoment,wxMoments} from './wechat-moments.js?v=1.2.63';
+import {storyAnnotations} from './story-phone.js?v=1.2.64';
+import {wxFriends,canViewWxMoment,wxMoments} from './wechat-moments.js?v=1.2.64';
 
 const short=(value,max)=>typeof value==='string'&&value.trim()&&value.length<=max?value.trim():null;
 const record=value=>value&&typeof value==='object'&&!Array.isArray(value);

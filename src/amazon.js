@@ -2,7 +2,7 @@ import { walletCurrency, majorAmount, formatMoney, validCurrency } from './curre
 import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.2';
 import { dateDay, readStoryClock } from './story-clock.js?v=1.2';
 import { shopImageKey, AMAZON_IMAGE_KEYS } from './amazon-art.js?v=1.2.14';
-import { parseAppObject } from './model-json.js?v=1.2.63';
+import { parseAppObject } from './model-json.js?v=1.2.64';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>formatMoney(minor,currency)+' '+currency;
