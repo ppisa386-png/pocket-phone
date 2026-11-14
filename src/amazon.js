@@ -106,7 +106,7 @@ export function createAmazon({memory,phone,getContext,getSettings,paymentRequest
                 catch(error){ throw Object.assign(new Error(error.message), {code:'AMAZON_DATA_INVALID'}); }
             },current,null,{
                 retries: 0, parseResponse: parseAmazonResponse, formatRetryOnce: true,
-                maxTokens: 4096, finalOutputContract: outputRule,
+                maxTokens: 4096, requireJsonObject:true, finalOutputContract: outputRule,
             });
             const changes=shopItems(state,'product').map(p=>({collection:'orders',key:p.id,value:null}));
             changes.push(...products.map(shopSet),shopSet({id:'catalog',type:'catalog',query:q}));await commit(changes);
