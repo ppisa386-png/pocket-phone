@@ -121,19 +121,23 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         // not repeated identical requests or reuse of prior untrusted output.
         for (let attempt = 0; ; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
-            let stage = '请求模型', responseLength = null;
+            let stage = '请求模型', responseLength = null, responseMeta = null;
             try {
                 checkEnabled();
                 const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; job.progress = value; emit(); } };
                 report(independent ? '正在准备独立 API 请求' : '正在等待酒馆生成回复');
-                const correction = formatRetried ? (app === 'calendar'
+                const correction = formatRetried ? (app === 'assets'
+                    ? '\n小榴莲格式恢复：上一份账本数据未形成完整且合法的 JSON。严格按照本次任务已有账本状态、日期、币种、待处理事项和财产估值规则重新计算并返回一个完整 JSON 对象。不得修改已有金额、补造无依据事件或丢失待处理事项。只返回 JSON，不输出解释、Markdown、思考、代码块或角色扮演。'
+                    : app === 'calendar'
                     ? '\n榴莲日历格式恢复：上一份回复未提供完整且合法的节日 JSON。只重新完成原地点、原年份的同一任务，按任务给出的 region、timezone、years、holidays 结构返回唯一完整 JSON 对象；节日使用紧凑数组，不输出 Markdown、推理、剧情或其他说明。不得捏造无依据的日期。'
                     : app === 'amazon'
                     ? '\nAmazon 搜索格式恢复：上一份回复未提供可用的完整商品 JSON 或商品必要资料不合法。重新执行相同购物搜索，须生成完整的 4—6 件商品；最终只返回一个 JSON 对象，顶层为 products 数组，每项包含 name、brand、luxury、description、image、price、currency、variants、reviews；币种沿用本次购物要求，价格有效，不新增购买、付款或配送记录。不输出分析、解释、Markdown、代码块或其他对象。'
                     : '\nX 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + correction;
                 const contract = typeof options.finalOutputContract === 'string' ? options.finalOutputContract + correction : correction.trim();
-                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { finalOutputContract: contract, maxTokens: options.maxTokens, retryEmptyOnce: app==='x' && options.retryEmptyOnce===true && !formatRetried }) : await context.generateQuietPrompt(phoneQuietOptions(context, taskPrompt, contact));
+                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { finalOutputContract: contract, maxTokens: options.maxTokens, requireJsonObject: options.requireJsonObject===true,
+                    onResponseMeta: metadata => { responseMeta = metadata; },
+                    retryEmptyOnce: app==='x' && options.retryEmptyOnce===true && !formatRetried }) : await context.generateQuietPrompt(phoneQuietOptions(context, taskPrompt, contact));
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 checkEnabled();
                 responseLength = typeof text === 'string' ? text.length : null;
@@ -157,19 +161,25 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                      app === 'calendar' && ['MODEL_JSON_EMPTY','MODEL_JSON_MISSING','MODEL_JSON_TRUNCATED','MODEL_JSON_SYNTAX',
                         'MODEL_JSON_TYPE','MODEL_JSON_AMBIGUOUS','MODEL_JSON_REASONING','CALENDAR_JSON_INVALID','CALENDAR_DATA_INVALID'].includes(failure.code) ||
                      app === 'amazon' && ['MODEL_JSON_EMPTY','MODEL_JSON_MISSING','MODEL_JSON_TRUNCATED','MODEL_JSON_SYNTAX',
-                        'MODEL_JSON_TYPE','MODEL_JSON_AMBIGUOUS','MODEL_JSON_REASONING','AMAZON_JSON_INVALID','AMAZON_DATA_INVALID'].includes(failure.code));
+                        'MODEL_JSON_TYPE','MODEL_JSON_AMBIGUOUS','MODEL_JSON_REASONING','AMAZON_JSON_INVALID','AMAZON_DATA_INVALID'].includes(failure.code) ||
+                     app === 'assets' && ['MODEL_JSON_EMPTY','MODEL_JSON_MISSING','MODEL_JSON_TRUNCATED','MODEL_JSON_SYNTAX',
+                        'MODEL_JSON_TYPE','MODEL_JSON_AMBIGUOUS','MODEL_JSON_REASONING'].includes(failure.code));
                 if (formatFailure && isCurrent() && failure.retryable !== false) {
                     formatRetried = true;
                     attempts.push(summary);
                     job.progress = app === 'calendar' ? '日历格式异常，正在重新整理一次'
-                        : app === 'amazon' ? 'Amazon 商品格式异常，正在重新搜索一次' : 'X 返回格式不正确，纠正格式重试一次';
+                        : app === 'amazon' ? 'Amazon 商品格式异常，正在重新搜索一次'
+                        : app === 'assets' ? '资产评估 JSON 格式异常，正在纠正一次' : 'X 返回格式不正确，纠正格式重试一次';
                     emit();
                     continue;
                 }
                 if (!isCurrent() || failure.retryable === false || normalRetriesLeft <= 0) {
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + (attempt + 1) + (responseLength === null ? '' : '；返回字符数：' + responseLength)
-                        + (formatRetried ? '；' + (app === 'calendar' ? '日历' : app === 'amazon' ? 'Amazon' : 'X') + '格式纠正：已尝试一次' : '');
+                        + (formatRetried ? '；' + (app === 'calendar' ? '日历' : app === 'amazon' ? 'Amazon' : app === 'assets' ? '资产' : 'X') + '格式纠正：已尝试一次' : '')
+                        + (responseMeta ? '；接口结束原因：' + responseMeta.finishReason
+                            + '；接口输出 token：' + responseMeta.completionTokens
+                            + '；其中推理 token：' + responseMeta.reasoningTokens : '');
                     throw Object.assign(new Error(failure.message || '请求失败，请重试。'), {
                         code: failure.code, retryable: failure.retryable,
                         diagnostic: detail + (failure.diagnostic ? '\n' + failure.diagnostic : '') + (attempts.length ? '\n此前尝试：' + attempts.join('；') : ''),
