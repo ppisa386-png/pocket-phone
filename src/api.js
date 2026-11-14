@@ -41,7 +41,11 @@ export function apiError(status, data) {
     const reported = Number.isInteger(declared) && declared >= 400 && declared <= 599 ? declared : Object.hasOwn(labels, message.trim()) ? labels[message.trim()] : null;
     const effective = reported || status;
     let reason = '未识别', hint = '请核对酒馆服务端同一时刻的错误记录（分享前去除密钥和正文）。';
-    if (data?.quota_error === true || /insufficient_quota|quota_exceeded|resource_exhausted/.test(code)) { reason='额度不足';hint='请检查服务额度。'; }
+    const jsonUnsupported = [400, 422].includes(effective) &&
+        /response[_ ]?format|json[_ ]?object|json mode/i.test(code + ' ' + message) &&
+        /unsupported|not supported|does not support|unknown|unrecognized|invalid|not allowed|not available/i.test(code + ' ' + message);
+    if (jsonUnsupported) { reason='JSON 输出模式不被支持';hint='当前中转不接受结构化 JSON 参数，手机可改用原请求格式重试一次。'; }
+    else if (data?.quota_error === true || /insufficient_quota|quota_exceeded|resource_exhausted/.test(code)) { reason='额度不足';hint='请检查服务额度。'; }
     else if ([401,403].includes(effective) || /authentication|invalid_api_key/.test(code)) { reason='认证失败';hint='请检查这个地址对应的 API 密钥和访问权限。'; }
     else if (effective===429 || /rate_limit/.test(code)) { reason='请求过于频繁';hint='请稍后手动重试。'; }
     else if (effective===404 || /model_not_found/.test(code)) { reason='找不到接口或模型';hint='请检查 API 地址及模型 ID。'; }
@@ -53,13 +57,14 @@ export function apiError(status, data) {
     else if (effective>=500) { reason='服务内部错误';hint='请核对中转服务记录，再手动重试。'; }
     const prefix = status>=200&&status<300 ? '酒馆接口已响应（HTTP '+status+'），但返回了错误结果，未取得模型回复。' : 'API 请求失败'+(status?'（HTTP '+status+'）':'')+'。';
     const error = failure(prefix+(reason==='未识别'?'':reason+'。')+hint, status===429 && data?.quota_error!==true);
+    if (jsonUnsupported) error.code = 'API_JSON_MODE_UNSUPPORTED';
     error.diagnostic = '错误分类：'+reason+'；错误体报告状态：'+(reported??'未提供')
         +'；错误结构：'+(raw===null?'null':Array.isArray(raw)?'array':typeof raw)
         +'；含错误说明：'+(message?'是':'否')+'；额度标记：'+(data?.quota_error===true?'是':'否');
     return error;
 }
 
-export function extractApiText(data) {
+export function extractApiText(data, onMetadata = () => {}) {
     if (data?.error) throw apiError(0, data);
     const choices = Array.isArray(data?.choices) ? data.choices : [];
     const choice = choices[0], message = choice?.message, content = message?.content;
@@ -99,6 +104,12 @@ export function extractApiText(data) {
         }
         fail('API_EMPTY_OUTPUT','接口返回的最终回复文字为空。本次未保存；空回复本身不能说明是 token 上限问题。');
     }
+    onMetadata({
+        finishReason: finish,
+        completionTokens: tokenCount(data?.usage?.completion_tokens),
+        reasoningTokens: tokenCount(data?.usage?.completion_tokens_details?.reasoning_tokens),
+        textCharacters: text.trim().length,
+    });
     return text.trim();
 }
 
@@ -106,7 +117,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
     const active = new Set();
     let cancelEpoch = 0;
     let preparation = null;
-    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}) {
+    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}) {
         if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
@@ -141,7 +152,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             if (path === 'generate') {
                 stage = '正在读取模型回复文字';
                 onProgress(stage);
-                return extractApiText(data);
+                return extractApiText(data, onResponseMeta);
             }
             return data;
         } catch (error) {
@@ -195,14 +206,41 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 if (payload.max_completion_tokens !== undefined) payload.max_completion_tokens = limit;
                 else payload.max_tokens = limit;
             }
+            // JSON-only phone tasks are distinct from prose generation. Roleplay
+            // stop sequences could cut a JSON object mid-value. Keep the full
+            // host context and other portable settings, without rewriting prefs.
+            if (options.requireJsonObject === true) {
+                delete payload.stop;
+                if (!payload.response_format || payload.response_format.type === 'text') {
+                    payload.response_format = { type: 'json_object' };
+                }
+            }
             // Only the caller's task contract is appended, after preset hooks.
-            // Keep all roleplay context and portable settings intact.
+            // Keep all roleplay context and other portable settings intact.
             if (typeof options.finalOutputContract === 'string' && options.finalOutputContract.trim()) {
                 payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
             }
             try {
-                try { return await post('generate', config, key, payload, current, onProgress); }
+                try { return await post('generate', config, key, payload, current, onProgress, options.onResponseMeta); }
                 catch (error) {
+                    // Some OpenAI-compatible providers reject json_object rather
+                    // than ignoring it. Retry the SAME request without that
+                    // optional format flag only on an explicitly identified
+                    // unsupported-parameter error. Never retry other 400s.
+                    if (options.requireJsonObject === true && error.code === 'API_JSON_MODE_UNSUPPORTED' &&
+                        payload.response_format?.type === 'json_object' && current()) {
+                        const original = prepared.response_format;
+                        const fallback = { ...payload };
+                        if (original) fallback.response_format = original;
+                        else delete fallback.response_format;
+                        onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
+                        try { return await post('generate', config, key, fallback, current, onProgress, options.onResponseMeta); }
+                        catch (again) {
+                            again.diagnostic = (again.diagnostic ? again.diagnostic + '\n' : '') +
+                                'JSON 输出参数不受支持：已使用无此参数的同任务兼容请求一次';
+                            throw again;
+                        }
+                    }
                     if (options.retryEmptyOnce!==true || error.code!=='API_EMPTY_OUTPUT' || !current()) throw error;
                     // Only opted-in X tasks use this recovery. A successful response is
                     // never repeated; the retry keeps the full original context
@@ -211,7 +249,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                     const field=retryPayload.max_completion_tokens!==undefined?'max_completion_tokens':'max_tokens';
                     retryPayload[field]=Math.min(4096, Math.max(1024, Math.floor((Number(retryPayload[field])||8192)/2)));
                     onProgress('X 请求收到空回复，降低输出上限重试一次');
-                    try { return await post('generate', config, key, retryPayload, current, onProgress); }
+                    try { return await post('generate', config, key, retryPayload, current, onProgress, options.onResponseMeta); }
                     catch (again) {
                         again.diagnostic=(again.diagnostic?again.diagnostic+'\n':'')+'X 请求空回复恢复：已执行一次较低上限重试';
                         throw again;
