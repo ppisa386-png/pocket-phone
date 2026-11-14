@@ -41,7 +41,7 @@ export function apiError(status, data) {
     const reported = Number.isInteger(declared) && declared >= 400 && declared <= 599 ? declared : Object.hasOwn(labels, message.trim()) ? labels[message.trim()] : null;
     const effective = reported || status;
     let reason = '未识别', hint = '请核对酒馆服务端同一时刻的错误记录（分享前去除密钥和正文）。';
-    const jsonUnsupported = [400, 422].includes(effective) &&
+    const jsonUnsupported = ([400, 422].includes(effective) || (status >= 200 && status < 300 && !!raw)) &&
         /response[_ ]?format|json[_ ]?object|json mode/i.test(code + ' ' + message) &&
         /unsupported|not supported|does not support|unknown|unrecognized|invalid|not allowed|not available/i.test(code + ' ' + message);
     if (jsonUnsupported) { reason='JSON 输出模式不被支持';hint='当前中转不接受结构化 JSON 参数，手机可改用原请求格式重试一次。'; }
@@ -211,7 +211,10 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             // host context and other portable settings, without rewriting prefs.
             if (options.requireJsonObject === true) {
                 delete payload.stop;
+                delete payload.tools;
+                delete payload.tool_choice;
                 if (!payload.response_format || payload.response_format.type === 'text') {
+                    delete payload.json_schema;
                     payload.response_format = { type: 'json_object' };
                 }
             }
