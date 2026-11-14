@@ -151,6 +151,7 @@ test('independent calendar requests carry a final JSON contract and isolated out
         ok(await f.calendar.refresh());
         assert.equal(calls.length, 1);
         assert.equal(calls[0].options.maxTokens, 4096);
+        assert.equal(calls[0].options.requireJsonObject, true);
         assert.match(calls[0].options.finalOutputContract, /holidays/);
         assert.equal(f.state().calendar.database.holidays[0].name, '节日甲');
     } finally { f.close(); }
