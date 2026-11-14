@@ -138,6 +138,79 @@ test('independent final output contract follows all preset hooks without mutatin
  await f.client.generate('ordinary phone task',null,()=>true);assert.deepEqual(f.requests[1].body.messages,original.messages);
 });
 
+test('structured data calls ask for JSON object without inherited roleplay stops, and preserve the host preset',async()=>{
+ const prepared={messages:[{role:'system',content:'World and character information'},{role:'user',content:'Structured task'}],
+     stop:['\\n'],response_format:{type:'text'},temperature:0.83,max_tokens:2048};
+ const original=structuredClone(prepared),seen=[];
+ const f=clientFixture({prepareRequest:async()=>prepared,fetchImpl:async(_url,options)=>{
+  const body=JSON.parse(options.body);seen.push(body);
+  return response('{"holidays":[]}');
+ }});
+ const metadata=[];
+ assert.equal(await f.client.generate('task',null,()=>true,()=>{},{requireJsonObject:true,
+  finalOutputContract:'Only one valid JSON object.',maxTokens:4096,onResponseMeta:x=>metadata.push(x)}),'{"holidays":[]}');
+ assert.equal(seen.length,1);
+ assert.deepEqual(seen[0].response_format,{type:'json_object'});
+ assert.equal(seen[0].stop,undefined,'roleplay stop sequences cannot truncate task JSON');
+ assert.equal(seen[0].max_tokens,4096);
+ assert.deepEqual(seen[0].messages,[...original.messages,{role:'system',content:'Only one valid JSON object.'}]);
+ assert.deepEqual(prepared,original,'JSON transport changes are request-local');
+ assert.equal(f.settings.api.maxTokens,2048);
+ assert.equal(metadata[0].finishReason,'未提供');
+ assert.equal(metadata[0].textCharacters,'{"holidays":[]}'.length);
+ assert.equal(metadata[0].completionTokens,'未提供');
+ await f.client.generate('ordinary chat',null,()=>true);
+ assert.deepEqual(seen[1].response_format,{type:'text'},'non-JSON tasks remain unchanged');
+ assert.deepEqual(seen[1].stop,['\\n']);
+});
+
+test('unsupported JSON output parameter falls back once; unrelated upstream errors never retry or expose text',async()=>{
+ const originalMessages=[{role:'user',content:'Task and personal context'}],seen=[];
+ const f=clientFixture({prepareRequest:async()=>({messages:originalMessages,stop:['STOP']}),fetchImpl:async(_url,options)=>{
+  const body=JSON.parse(options.body);seen.push(body);
+  if(seen.length===1)return {ok:false,status:400,json:async()=>({error:{code:'invalid_request_error',message:'Unsupported response_format json_object'}})};
+  return response('{"region":"Tokyo","holidays":[]}');
+ }});
+ const progress=[];
+ const answer=await f.client.generate('task',null,()=>true,v=>progress.push(v),{requireJsonObject:true});
+ assert.equal(answer,'{"region":"Tokyo","holidays":[]}');
+ assert.equal(seen.length,2);
+ assert.deepEqual(seen[0].response_format,{type:'json_object'});
+ assert.equal(seen[1].response_format,undefined);
+ assert.equal(seen[1].stop,undefined,'do not restore roleplay stop sequences');
+ assert.deepEqual(seen[0].messages,seen[1].messages);
+ assert.ok(progress.some(s=>/兼容格式/.test(s)));
+ const bad=[];const reject=clientFixture({fetchImpl:async(_url,options)=>{
+  bad.push(JSON.parse(options.body));return {ok:false,status:400,json:async()=>({error:{code:'invalid_request_error',message:'Model unavailable'}})};
+ }});
+ await assert.rejects(reject.client.generate('task',null,()=>true,()=>{},{requireJsonObject:true}),e=>
+  e.code!=='API_JSON_MODE_UNSUPPORTED'&&!e.message.includes('Model unavailable'));
+ assert.equal(bad.length,1,'unrelated provider 400 must not launch fallback');
+});
+
+test('asset first assessment can correct a syntax-only JSON failure while keeping data intact',async()=>{
+ const f=phoneFixture(),assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ try{
+  f.context.chat=[{mes:'日期：2026-05-17\\n平常的一天。'}];
+  await f.memory.read();
+  let calls=0;
+  f.reply(options=>{
+   calls++;const body=JSON.parse(options.body);
+   assert.deepEqual(body.response_format,{type:'json_object'});
+   assert.equal(body.max_tokens,8192);
+   if(calls===1)return "{'initial':{'balance':5000}}"; // Not legal JSON, never copied or guessed.
+   assert.match(body.messages.at(-1).content,/小榴莲格式恢复/);
+   return JSON.stringify({residence:{region:'US',currency:'USD',evidence:'Sam 常住美国。'},
+       initial:{balance:5000,holdings:[],jobs:[]}});
+  });
+  const result=await assets.update();
+  assert.equal(result.ok,true,result.error);
+  assert.equal(calls,2);
+  assert.equal(cashBalance(f.phone.snapshot()),500000);
+  assert.equal(f.settings.api.maxTokens,2048,'saved settings are untouched');
+ }finally{f.close();}
+});
+
 test('independent legacy repair sends final schema and reads wrapped JSON once; non-JSON keeps ledger untouched',async()=>{
  const f=phoneFixture();const assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
  try{
