@@ -191,7 +191,7 @@ test('unsupported JSON output parameter falls back once; unrelated upstream erro
 test('asset first assessment can correct a syntax-only JSON failure while keeping data intact',async()=>{
  const f=phoneFixture(),assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
  try{
-  f.context.chat=[{mes:'日期：2026-05-17\\n平常的一天。'}];
+  f.context.chat=[{mes:'日期：2026-05-17\n平常的一天。'}];
   await f.memory.read();
   let calls=0;
   f.reply(options=>{
