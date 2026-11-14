@@ -1,7 +1,7 @@
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2.57';
 import { readStoryClock } from './story-clock.js?v=1.2';
-import { calendarDue, calendarPrompt, calendarSet } from './calendar-core.js?v=1.2.62';
+import { calendarDue, calendarPrompt, calendarSet } from './calendar-core.js?v=1.2.63';
 
 export const CALENDAR_KEY = 'durian_phone_calendar';
 export function createCalendarBridge({ getContext, getSettings, memory, onError = () => {} }) {

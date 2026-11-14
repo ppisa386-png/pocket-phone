@@ -1,6 +1,6 @@
 import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.62';
+import { parseAppObject } from './model-json.js?v=1.2.63';
 import { requireCash, moneyMinor } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';

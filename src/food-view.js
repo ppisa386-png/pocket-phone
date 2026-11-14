@@ -1,7 +1,7 @@
 import { foodItems } from './food.js?v=1.2.17';
 import { formatMoney } from './currency.js?v=1.2';
 import { dayDate } from './story-clock.js?v=1.2';
-import { foodDeliveryStatus } from './delivery.js?v=1.2.62';
+import { foodDeliveryStatus } from './delivery.js?v=1.2.63';
 import { icon } from './icons.js?v=1.2.57';
 
 // Visual-only replacement for food-view.js. The original adapter methods, IDs,

@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 1.2.62</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>const {RESIDENCE_RULE,resolveResidence,walletCurrency,validCurrency,currencyDigits,unitScale,majorAmount,formatMoney,personaStamp} = (() => {
+</style></head><body><main><small>POCKET PHONE · 1.2.63</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>const {RESIDENCE_RULE,resolveResidence,walletCurrency,validCurrency,currencyDigits,unitScale,majorAmount,formatMoney,personaStamp} = (() => {
 // Modern legal tender by territory, from Unicode CLDR supplemental currencyData
 // (2026-11-01). Several territories have more than one local currency.
 const territories = {
@@ -364,7 +364,7 @@ return {DAILY_EDITORIAL_PROMPT,PREVIOUS_DAILY_EDITORIAL_PROMPT,PREVIOUS_DAILY_ED
 const {MODULE_KEY,LAUNCHER_SIZE,VERSION,APPS,PROMPTS,normalizeApiSettings,normalizeSettings,appearanceSettingsPatch,clampPosition} = (() => {
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '1.2.62';
+const VERSION = '1.2.63';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -573,36 +573,83 @@ function bindInputViewport({ shadow, phone, content, signal }) {
 return {bindInputViewport};
 })();
 const {createDiagnostics} = (() => {
-// Local, bounded error history. Never persist request bodies, responses or keys.
+// Local, bounded error history. Failed JSON replies are retained for debugging;
+// request bodies, separate reasoning fields and credentials are never stored.
 function createDiagnostics({storage, version = '', getSecrets = () => []} = {}) {
     if (storage === undefined) { try { storage = globalThis.localStorage; } catch { storage = null; } }
     const key = 'durian_phone_errors_v1';
     let entries = [];
-    const clean = (value, secrets = []) => {
+    const clean = (value, secrets = [], limit = 1500) => {
         let text = String(value ?? '');
-        for (const secret of [...getSecrets(), ...secrets].filter(s=>typeof s==='string'&&s).sort((a,b)=>b.length-a.length)) text=text.split(secret).join('[已隐藏]');
+        const known = [...getSecrets(), ...secrets].filter(s=>typeof s==='string'&&s);
+        for (const secret of [...new Set(known.flatMap(s=>[s,JSON.stringify(s).slice(1,-1)]))].sort((a,b)=>b.length-a.length)) text=text.split(secret).join('[已隐藏]');
         return text.replace(/\bBearer\s+[^\s"',;]+/gi,'Bearer [已隐藏]')
             .replace(/((?:api[_-]?key|proxy_password|authorization|access_token|密钥)["']?\s*[:=]\s*["']?)[^\s"',;}&]+/gi,'$1[已隐藏]')
             .replace(/\bsk-[a-zA-Z0-9_-]+/g,'[已隐藏]')
             .replace(/https?:\/\/[^\s<>"']+/g, url => { try { const u=new URL(url);u.username='';u.password='';u.search='';u.hash='';return u.toString(); } catch { return '[地址已隐藏]'; } })
-            .slice(0,1500);
+            .slice(0,limit);
     };
+    const integer = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+    const stripReasoning = value => String(value).replace(/<(think|thinking|analysis)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi,
+        (_block, tag) => '<'+tag+'>[推理内容已隐藏]</'+tag+'>');
+    const sample = (item, secrets = []) => {
+        if (!item || typeof item.text !== 'string') return null;
+        // Redact before truncation so a credential crossing the cut is not leaked.
+        const redacted = clean(stripReasoning(item.text), secrets, Infinity);
+        const truncated = redacted.length > (item.truncated === true ? 12100 : 12000);
+        const meta = item.metadata || {}, parser = item.parser || {};
+        const safeMetadata = {};
+        for (const name of ['finishReason','completionTokens','reasoningTokens','choices','contentType','textParts','legacyText','rawTextCharacters','textCharacters','jsonMode','model','endpointOrigin']) {
+            if (typeof meta[name] === 'string') safeMetadata[name] = clean(meta[name],secrets,300);
+            else if (typeof meta[name] === 'boolean' || (typeof meta[name] === 'number' && Number.isFinite(meta[name]))) safeMetadata[name] = meta[name];
+        }
+        return {
+            attempt:integer(item.attempt), code:clean(item.code,secrets,80),
+            originalCharacters:integer(item.originalCharacters) ?? item.text.length,
+            redacted:item.redacted === true || redacted !== item.text,
+            truncated:item.truncated === true || truncated,
+            text:truncated ? redacted.slice(0,8000)+'\n[中段省略 '+(redacted.length-12000)+' 字符]\n'+redacted.slice(-4000) : redacted,
+            metadata:safeMetadata,
+            parser:typeof parser.nativeMessage === 'string' ? {
+                nativeMessage:clean(stripReasoning(parser.nativeMessage),secrets,600),
+                inputCharacters:integer(parser.inputCharacters), candidateCharacters:integer(parser.candidateCharacters), candidateStart:integer(parser.candidateStart),
+                position:integer(parser.position), line:integer(parser.line), column:integer(parser.column),
+                positionBasis:clean(parser.positionBasis,secrets,100),
+            } : null,
+        };
+    };
+    const samples = (items, secrets) => Array.isArray(items) ? items.slice(0,2).map(item=>sample(item,secrets)).filter(Boolean) : [];
+    function bound() {
+        entries=entries.slice(-100);
+        while(entries.length>1 && JSON.stringify(entries).length>512000) entries.shift();
+    }
     try {
         const saved=JSON.parse(storage?.getItem(key)||'[]');
-        if(Array.isArray(saved))entries=saved.filter(e=>e&&typeof e.message==='string').slice(-100).map(e=>({time:clean(e.time),version:clean(e.version),source:clean(e.source),message:clean(e.message)}));
+        if(Array.isArray(saved))entries=saved.filter(e=>e&&typeof e.message==='string').slice(-100).map(e=>({time:clean(e.time),version:clean(e.version),source:clean(e.source),message:clean(e.message,[],6500),modelResponses:samples(e.modelResponses)}));
+        bound();
     } catch { /* A malformed log must never block the phone. */ }
     let persisted = true;
     function save() { try { if(!storage)throw Error();storage.setItem(key,JSON.stringify(entries));persisted=true; } catch { persisted=false; } }
     return {
         add(error, source = '运行', secrets = []) {
-            const message=clean(error?.message ?? error ?? '未知错误',secrets)+(typeof error?.diagnostic==='string'?'\n'+clean(error.diagnostic,secrets):'');
-            entries.push({time:new Date().toISOString(),version,source:clean(source,secrets),message});
-            entries=entries.slice(-100);save();
+            const message=clean(error?.message ?? error ?? '未知错误',secrets)+(typeof error?.diagnostic==='string'?'\n'+clean(error.diagnostic,secrets,4500):'');
+            entries.push({time:new Date().toISOString(),version,source:clean(source,secrets),message,modelResponses:samples(error?.modelResponses,secrets)});
+            bound();save();
         },
         list: () => structuredClone(entries).reverse(),
         persistent: () => persisted,
         clear() { entries=[];save(); },
-        text() { return (entries.length ? '当前运行版本：榴莲手机 ' + version + '\n（以下每条版本为报错发生时的版本；更新插件后请刷新酒馆页面。）\n\n' : '') + entries.slice().reverse().map(e=>'['+e.time+'] 榴莲手机 '+e.version+' · '+e.source+'\n'+e.message).join('\n\n'); },
+        text() {
+            const escaped = value => JSON.stringify(value).replace(/[\u007f-\u009f\u00a0\u2000-\u200f\u2028-\u202f\u2060\u3000\ufeff]/g,
+                c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+            const responseText = item => '\n\n模型返回诊断 · 第'+item.attempt+'次 · '+item.code
+                +'\n原始字符数：'+item.originalCharacters+'；样本：'+(item.truncated?'仅保留头尾，非完整回复':'完整回复')+'；脱敏：'+(item.redacted?'是':'否')
+                +'\n接口元数据：'+JSON.stringify(item.metadata)
+                +(item.parser ? '\n解析器原始错误（脱敏）：'+item.parser.nativeMessage+'\n解析定位（候选内position/解析输入内candidateStart 从0起，line/column从1起）：'+JSON.stringify({...item.parser,nativeMessage:undefined}) : '')
+                +'\n返回文本（JSON字符串转义表示；\\n是换行，\\\\n是字面量反斜线+n）：\n'+escaped(item.text);
+            return (entries.length ? '当前运行版本：榴莲手机 ' + version + '\n（以下每条版本为报错发生时的版本；更新插件后请刷新酒馆页面。）\n\n' : '')
+                + entries.slice().reverse().map(e=>'['+e.time+'] 榴莲手机 '+e.version+' · '+e.source+'\n'+e.message+(e.modelResponses||[]).map(responseText).join('')).join('\n\n');
+        },
     };
 }
 
@@ -730,8 +777,25 @@ function parseModelObject(raw, { allowTrailingCommas = false, allowRootArray = f
             : /after property value|after array element/i.test(message) ? '字段或数组项之间分隔错误（也可能是字符串内引号未转义）'
             : /after property name/i.test(message) ? '字段名后缺少冒号'
             : /unterminated string/i.test(message) ? '字符串未闭合' : '无法解析字段或值';
-        fail('MODEL_JSON_SYNTAX', 'JSON 语法无效：'+detail, '返回内容未通过语法检查，本次未保存，可手动重试。',
-            offset === undefined ? '' : '候选内字符位置：' + (Number(offset) + 1));
+        const lineColumn = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+        try {
+            fail('MODEL_JSON_SYNTAX', 'JSON 语法无效：'+detail, '返回内容未通过语法检查，本次未保存，可手动重试。',
+                offset === undefined ? '' : '候选内字符位置：' + (Number(offset) + 1));
+        } catch (failure) {
+            // Separate from the public error: native messages can quote values.
+            // The local diagnostics store redacts/bounds this alongside the reply.
+            failure.jsonParse = {
+                nativeMessage: message,
+                inputCharacters: original.length,
+                candidateCharacters: candidates[0].length,
+                candidateStart: original.indexOf(candidates[0]),
+                position: offset === undefined ? null : Number(offset),
+                line: lineColumn ? Number(lineColumn[1]) : null,
+                column: lineColumn ? Number(lineColumn[2]) : null,
+                positionBasis: '候选文本（已尝试控制字符与尾逗号兼容处理）',
+            };
+            throw failure;
+        }
     }
     return object(value);
 }
@@ -860,10 +924,13 @@ function extractApiText(data, onMetadata = () => {}) {
     }
     onMetadata({
         finishReason: finish,
+        choices: choices.length, contentType: shape(content), textParts: textParts.length,
+        legacyText: typeof content !== 'string' && !textParts.length && typeof choice?.text === 'string',
+        rawTextCharacters: text.length,
         completionTokens: tokenCount(data?.usage?.completion_tokens),
         reasoningTokens: tokenCount(data?.usage?.completion_tokens_details?.reasoning_tokens),
         textCharacters: text.trim().length,
-    });
+    }, text);
     return text.trim();
 }
 
@@ -982,7 +1049,10 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
                 payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
             }
             try {
-                try { return await post('generate', config, key, payload, current, onProgress, options.onResponseMeta); }
+                const metadata = jsonMode => (info, rawText) => options.onResponseMeta?.({ ...info,
+                    jsonMode, model:config.model, endpointOrigin:new URL(config.baseUrl).origin,
+                }, rawText);
+                try { return await post('generate', config, key, payload, current, onProgress, metadata(payload.json_schema ? 'json_schema' : 'none')); }
                 catch (error) {
                     // Some OpenAI-compatible providers reject json_schema rather
                     // than ignoring it. Retry the SAME request without that
@@ -995,7 +1065,7 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
                         delete fallback.json_schema;
                         delete fallback.response_format;
                         onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
-                        try { return await post('generate', config, key, fallback, current, onProgress, options.onResponseMeta); }
+                        try { return await post('generate', config, key, fallback, current, onProgress, metadata('unsupported_fallback')); }
                         catch (again) {
                             again.diagnostic = (again.diagnostic ? again.diagnostic + '\n' : '') +
                                 'JSON 输出参数不受支持：已使用无此参数的同任务兼容请求一次';
@@ -6170,7 +6240,7 @@ function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderErrors() {
         const log=adapter.diagnostics?.text()||'';
-        content.innerHTML='<div class="pp-page"><p class="pp-footnote" data-running-version>当前运行：榴莲手机 '+VERSION+'。历史报错可能来自旧版本；更新插件后请刷新酒馆页面。</p><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近 100 条报错。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
+        content.innerHTML='<div class="pp-page"><p class="pp-footnote" data-running-version>当前运行：榴莲手机 '+VERSION+'。历史报错可能来自旧版本；更新插件后请刷新酒馆页面。</p><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近最多 100 条报错；JSON 解析失败附脱敏后的模型返回文本，仅在当前浏览器保存。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
     }
     async function copyErrors() {
         const text=adapter.diagnostics?.text()||'';

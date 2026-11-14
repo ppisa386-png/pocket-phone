@@ -5,14 +5,14 @@ import { exactStoryTime } from './story-clock.js?v=1.2';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
 import { phoneQuietOptions } from './api-context.js?v=1.2';
-import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.62';
+import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.63';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
 import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2.53';
 import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.2';
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
-import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.62';
+import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.63';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -118,6 +118,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         if (social && !options.establishedImport) prompt += SOCIAL_LANGUAGE_RULE;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         const attempts = [];
+        const modelResponses = [];
         let normalRetriesLeft = retries, formatRetried = false;
         let maxTokens = options.maxTokens ?? (app === 'daily' ? 16384 : 8192);
         const outputContract = options.finalOutputContract || options.outputContract || MODEL_JSON_CONTRACT;
@@ -126,7 +127,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         // to the configurable network retry loop or reuse incomplete results.
         for (let attempt = 0; ; attempt++) {
             if (!isCurrent()) throw new Error('本次操作已取消。');
-            let stage = '请求模型', responseLength = null, responseMeta = null;
+            let stage = '请求模型', responseLength = null, responseMeta = null, responseText = null;
             try {
                 checkEnabled();
                 const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; job.progress = value; emit(); } };
@@ -141,11 +142,12 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
                 const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { finalOutputContract: contract, maxTokens, requireJsonObject:true,
-                    onResponseMeta: metadata => { responseMeta = metadata; },
+                    onResponseMeta: (metadata, rawText) => { responseMeta = metadata; responseText = rawText; },
                 }) : await context.generateQuietPrompt({...phoneQuietOptions(context, taskPrompt, contact),responseLength:maxTokens});
                 if (!isCurrent()) throw new Error('本次操作已取消。');
                 checkEnabled();
                 responseLength = typeof text === 'string' ? text.length : null;
+                if (typeof responseText !== 'string' && typeof text === 'string') responseText = text;
                 stage = '解析返回格式';
                 const data = (options.parseResponse || parseJSON)(text);
                 stage = '校验业务数据';
@@ -164,6 +166,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const outputFailure = ['API_EMPTY_OUTPUT','API_OUTPUT_TRUNCATED'].includes(failure.code);
                 const formatFailure = /^MODEL_JSON_/.test(failure.code || '') || outputFailure ||
                     ['CALENDAR_JSON_INVALID','CALENDAR_DATA_INVALID','AMAZON_JSON_INVALID','AMAZON_DATA_INVALID'].includes(failure.code);
+                if (/^MODEL_JSON_/.test(failure.code || '') && typeof responseText === 'string') {
+                    modelResponses.push({attempt:attempt+1, code:failure.code, text:responseText,
+                        metadata:responseMeta, parser:failure.jsonParse});
+                }
                 if (formatFailure && options.formatRetryOnce !== false && !formatRetried && isCurrent() && (outputFailure || failure.retryable !== false)) {
                     formatRetried = true;
                     if (['MODEL_JSON_TRUNCATED','API_OUTPUT_TRUNCATED'].includes(failure.code)) maxTokens = Math.min(32768, maxTokens * 2);
@@ -184,6 +190,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                             + '；其中推理 token：' + responseMeta.reasoningTokens : '');
                     throw Object.assign(new Error(failure.message || '请求失败，请重试。'), {
                         code: failure.code, retryable: failure.retryable,
+                        modelResponses,
                         diagnostic: detail + (failure.diagnostic ? '\n' + failure.diagnostic : '') + (attempts.length ? '\n此前尝试：' + attempts.join('；') : ''),
                     });
                 }

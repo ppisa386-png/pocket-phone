@@ -11,6 +11,7 @@ import { parseSnapObject } from '../src/snapchat.js';
 import { parseXObject } from '../src/x.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { createApiClient } from '../src/api.js';
+import { createDiagnostics } from '../src/diagnostics.js';
 
 test('all app parsers recover lossless transport formatting without changing content or amounts', () => {
     const text = '第一行\r\n第二行\t原文\u0000 <!--keep--> <think>keep</think> ,} ,]';
@@ -132,5 +133,62 @@ test('invalid business data, transport errors and cancelled replies cannot enter
         f.reply(()=>{f.settings.api.model='changed';return '{"records":[';});
         assert.equal((await f.run('messages')).ok,false);assert.equal(f.requests.length,4);
         assert.deepEqual(f.phone.snapshot().profiles,before);
+    } finally {f.close();}
+});
+
+for (const mode of ['host','independent']) test(mode+': failed JSON attempts reach the persisted diagnostic separately from the public error',async()=>{
+    const f=setup(mode), values=new Map();
+    const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
+    try {
+        const replies=['\ufeff {records:["first"]} ', '{"records":["second",,]}'];
+        let n=0;f.reply(()=>replies[n++]);
+        const result=await f.run('calendar');
+        assert.equal(result.ok,false);assert.equal(n,2);
+        const failure=f.errors.at(-1);
+        assert.doesNotMatch(result.error+failure.diagnostic,/first|second/,'the on-screen failure remains a safe summary');
+        assert.deepEqual(failure.modelResponses.map(s=>s.text),replies,'preserve raw whitespace before API trimming');
+        assert.deepEqual(failure.modelResponses.map(s=>s.attempt),[1,2]);
+        assert.ok(failure.modelResponses.every(s=>s.parser.nativeMessage && s.parser.candidateCharacters>0));
+        if(mode==='independent') {
+            assert.equal(failure.modelResponses[0].metadata.contentType,'string');
+            assert.equal(failure.modelResponses[0].metadata.jsonMode,'json_schema');
+            assert.equal(failure.modelResponses[0].metadata.model,'test');
+        }
+        const log=createDiagnostics({storage,version:'test'});log.add(failure,'calendar');
+        const copied=log.text();
+        assert.match(copied,/第1次[\s\S]*第2次/);assert.match(copied,/解析器原始错误/);
+        assert.match(copied,/\\ufeff/);assert.doesNotMatch(copied,/KEEP_PRESET|原任务数据|fixture-key/);
+        assert.equal(createDiagnostics({storage,version:'test'}).text(),copied,'reload must not truncate or lose the evidence');
+        assert.equal(f.phone.snapshot().profiles.calendar,undefined,'diagnostic samples are not business records');
+    } finally {f.close();}
+});
+
+test('first malformed response survives a transport failure during the correction attempt',async()=>{
+    const f=setup('independent');
+    try {
+        let n=0;f.reply(()=>++n===1?'{records:[]}':{ok:false,status:401,json:async()=>({error:{message:'private upstream detail'}})});
+        assert.equal((await f.run('assets')).ok,false);
+        assert.equal(n,2);assert.equal(f.errors.at(-1).modelResponses.length,1);
+        assert.equal(f.errors.at(-1).modelResponses[0].text,'{records:[]}');
+        assert.doesNotMatch(JSON.stringify(f.errors.at(-1)),/private upstream detail/);
+    } finally {f.close();}
+});
+
+test('successful recovery does not persist the failed or successful reply',async()=>{
+    const f=setup('independent');
+    try {
+        let n=0;f.reply(()=>++n===1?'{records:[]}':'{"records":["success"]}');
+        assert.equal((await f.run('amazon')).ok,true);
+        assert.equal(f.errors.length,0);
+    } finally {f.close();}
+});
+
+test('diagnostic records distinguish schema fallback from subsequent requests without schema',async()=>{
+    const f=setup('independent');
+    try {
+        f.reply(body=>body.json_schema?{ok:false,status:400,json:async()=>({error:{message:'json_schema is not supported'}})}:'{records:[]}');
+        assert.equal((await f.run('calendar')).ok,false);
+        assert.equal(f.requests.length,3);
+        assert.deepEqual(f.errors.at(-1).modelResponses.map(s=>s.metadata.jsonMode),['unsupported_fallback','none']);
     } finally {f.close();}
 });

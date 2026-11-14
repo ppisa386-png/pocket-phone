@@ -1,6 +1,6 @@
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
-import { phoneJsonSchema } from './model-json.js?v=1.2.62';
+import { phoneJsonSchema } from './model-json.js?v=1.2.63';
 export function normalizeApiUrl(value) {
     let url;
     try { url = new URL(String(value ?? '').trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://example.com/v1'); }
@@ -107,10 +107,13 @@ export function extractApiText(data, onMetadata = () => {}) {
     }
     onMetadata({
         finishReason: finish,
+        choices: choices.length, contentType: shape(content), textParts: textParts.length,
+        legacyText: typeof content !== 'string' && !textParts.length && typeof choice?.text === 'string',
+        rawTextCharacters: text.length,
         completionTokens: tokenCount(data?.usage?.completion_tokens),
         reasoningTokens: tokenCount(data?.usage?.completion_tokens_details?.reasoning_tokens),
         textCharacters: text.trim().length,
-    });
+    }, text);
     return text.trim();
 }
 
@@ -229,7 +232,10 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
             }
             try {
-                try { return await post('generate', config, key, payload, current, onProgress, options.onResponseMeta); }
+                const metadata = jsonMode => (info, rawText) => options.onResponseMeta?.({ ...info,
+                    jsonMode, model:config.model, endpointOrigin:new URL(config.baseUrl).origin,
+                }, rawText);
+                try { return await post('generate', config, key, payload, current, onProgress, metadata(payload.json_schema ? 'json_schema' : 'none')); }
                 catch (error) {
                     // Some OpenAI-compatible providers reject json_schema rather
                     // than ignoring it. Retry the SAME request without that
@@ -242,7 +248,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                         delete fallback.json_schema;
                         delete fallback.response_format;
                         onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
-                        try { return await post('generate', config, key, fallback, current, onProgress, options.onResponseMeta); }
+                        try { return await post('generate', config, key, fallback, current, onProgress, metadata('unsupported_fallback')); }
                         catch (again) {
                             again.diagnostic = (again.diagnostic ? again.diagnostic + '\n' : '') +
                                 'JSON 输出参数不受支持：已使用无此参数的同任务兼容请求一次';

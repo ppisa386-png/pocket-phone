@@ -119,8 +119,25 @@ export function parseModelObject(raw, { allowTrailingCommas = false, allowRootAr
             : /after property value|after array element/i.test(message) ? '字段或数组项之间分隔错误（也可能是字符串内引号未转义）'
             : /after property name/i.test(message) ? '字段名后缺少冒号'
             : /unterminated string/i.test(message) ? '字符串未闭合' : '无法解析字段或值';
-        fail('MODEL_JSON_SYNTAX', 'JSON 语法无效：'+detail, '返回内容未通过语法检查，本次未保存，可手动重试。',
-            offset === undefined ? '' : '候选内字符位置：' + (Number(offset) + 1));
+        const lineColumn = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+        try {
+            fail('MODEL_JSON_SYNTAX', 'JSON 语法无效：'+detail, '返回内容未通过语法检查，本次未保存，可手动重试。',
+                offset === undefined ? '' : '候选内字符位置：' + (Number(offset) + 1));
+        } catch (failure) {
+            // Separate from the public error: native messages can quote values.
+            // The local diagnostics store redacts/bounds this alongside the reply.
+            failure.jsonParse = {
+                nativeMessage: message,
+                inputCharacters: original.length,
+                candidateCharacters: candidates[0].length,
+                candidateStart: original.indexOf(candidates[0]),
+                position: offset === undefined ? null : Number(offset),
+                line: lineColumn ? Number(lineColumn[1]) : null,
+                column: lineColumn ? Number(lineColumn[2]) : null,
+                positionBasis: '候选文本（已尝试控制字符与尾逗号兼容处理）',
+            };
+            throw failure;
+        }
     }
     return object(value);
 }

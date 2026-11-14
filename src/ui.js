@@ -1,23 +1,23 @@
-import { createCalendarPanel } from './calendar-view.js?v=1.2.62';
-import {paperDraft} from './daily-core.js?v=1.2.62';
+import { createCalendarPanel } from './calendar-view.js?v=1.2.63';
+import {paperDraft} from './daily-core.js?v=1.2.63';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
-import { createDailyPanel } from './daily-view.js?v=1.2.62';
+import { createDailyPanel } from './daily-view.js?v=1.2.63';
 import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.57';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2.57';
-import { createAmazonPanel } from './amazon-view.js?v=1.2.62';
-import { createFoodPanel } from './food-view.js?v=1.2.62';
+import { createAmazonPanel } from './amazon-view.js?v=1.2.63';
+import { createFoodPanel } from './food-view.js?v=1.2.63';
 import { bindComposerKeys } from './composer.js?v=1.2';
-import { createXPanel } from './x-view.js?v=1.2.62';
-import { xUnread } from './x.js?v=1.2.62';
-import { createChatPanel } from './chat-view.js?v=1.2.62';
-import { chatUnread } from './chat-apps.js?v=1.2.62';
-import { createSnapPanel } from './snapchat-view.js?v=1.2.62';
-import { snapUnread } from './snapchat.js?v=1.2.62';
-import { createApiPanel } from './api-view.js?v=1.2.62';
+import { createXPanel } from './x-view.js?v=1.2.63';
+import { xUnread } from './x.js?v=1.2.63';
+import { createChatPanel } from './chat-view.js?v=1.2.63';
+import { chatUnread } from './chat-apps.js?v=1.2.63';
+import { createSnapPanel } from './snapchat-view.js?v=1.2.63';
+import { snapUnread } from './snapchat.js?v=1.2.63';
+import { createApiPanel } from './api-view.js?v=1.2.63';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.57';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.62';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.63';
 import { icon } from './icons.js?v=1.2.57';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.57';
 import { renderMessagesScreen } from './messages-view.js?v=1.2.57';
@@ -412,7 +412,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     function renderErrors() {
         const log=adapter.diagnostics?.text()||'';
-        content.innerHTML='<div class="pp-page"><p class="pp-footnote" data-running-version>当前运行：榴莲手机 '+VERSION+'。历史报错可能来自旧版本；更新插件后请刷新酒馆页面。</p><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近 100 条报错。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
+        content.innerHTML='<div class="pp-page"><p class="pp-footnote" data-running-version>当前运行：榴莲手机 '+VERSION+'。历史报错可能来自旧版本；更新插件后请刷新酒馆页面。</p><div class="pp-api-actions"><button type="button" class="pp-text-button" data-action="copy-errors">复制报错</button><button type="button" class="pp-text-button" data-action="refresh-errors">刷新</button><button type="button" class="pp-text-button" data-action="clear-errors">清空记录</button></div><textarea class="pp-log-output" data-error-log readonly aria-label="报错记录">'+esc(log)+'</textarea><p class="pp-footnote">'+(log?'保留最近最多 100 条报错；JSON 解析失败附脱敏后的模型返回文本，仅在当前浏览器保存。':'暂无报错。')+(adapter.diagnostics?.persistent()===false?' 当前浏览器无法保存记录，刷新后可能丢失。':'')+'</p></div>';
     }
     async function copyErrors() {
         const text=adapter.diagnostics?.text()||'';

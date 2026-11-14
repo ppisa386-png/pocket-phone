@@ -22,7 +22,7 @@ test('published version cache-busts the actual changed independent API and JSON 
   assert.ok(line,'entry must import '+module);
   assert.ok(line.includes("./src/"+module+".js?v="+VERSION+"'"),module+' must not keep an obsolete import cache key');
  }
- const targets=new Set(['model-json','api','phone','amazon','assets','calendar-core','daily','snapchat','wechat-moments','x']);
+ const targets=new Set(['diagnostics','model-json','api','phone','amazon','assets','calendar-core','daily','snapchat','wechat-moments','x']);
  const pending=[new URL('../index.js',import.meta.url)],visited=new Set(),found=new Set();
  while(pending.length){
   const url=pending.pop();if(visited.has(url.href))continue;visited.add(url.href);
