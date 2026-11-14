@@ -4,12 +4,17 @@ import { changeWalletCurrency } from './assets-currency.js?v=1.2';
 import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2.57';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES } from './assets-policy.js?v=1.2';
 import { validateRights, rightsHistory, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2';
-import { parseModelObject } from './model-json.js?v=1.2';
+import { parseModelObject } from './model-json.js?v=1.2.61';
 import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.2';
 import { latestMemory } from './external-memory.js?v=1.2';
 import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.2';
 import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.2';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
+
+// Assessment values are never guessed or repaired. Only a redundant JSON
+// delimiter can be safely removed; all monetary and ownership validation still
+// happens after parsing, and invalid assessments never reach the journal.
+export const parseAssetResponse = raw => parseModelObject(raw, {allowTrailingCommas:true});
 
 export const ASSET_OUTPUT_CONTRACT = '本次是小榴莲后台数据任务，不是角色扮演正文续写。沿用上述人设、事实和世界观，仅临时改用本次任务要求的JSON输出格式。只返回一个完整JSON对象，以{开头、}结尾；不要写解释、对白、思考、状态栏、HTML注释、durian-money注释或多个结果。正文格式要求不适用于本次账本结果。按任务提供的真实资料填写，不能只复述示例；没有项目才用空数组。事实已发生但金额未知的收支必须按本次评估规则估算，不能因正文没写数字就填null；实物估值确实无法合理判断时才可暂留null，不虚构事项。';
 
@@ -409,7 +414,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 const prompt = getSettings().prompts.general + '\n' + OWNERSHIP_RECOVERY_RULES +
                     '\n这一楼已结算，本次只做一次升级补漏核对。只返回JSON {"recoveredAssets":[]}，不要返回任何结算、估价旧财产或收支字段。资料：' + JSON.stringify(recoveryPayload);
                 const changes = await request(prompt, data => applyOwnershipRepair(view.state, data, chat), current, null,
-                    { summarySnapshot:prepared, retries: 0, parseResponse: parseModelObject, finalOutputContract: ASSET_OUTPUT_CONTRACT + ' '+OWNERSHIP_RECOVERY_RULES, outputContract: '\n当前仅核对旧账遗漏财产，返回一个含recoveredAssets数组的JSON，不续写正文。' });
+                    { summarySnapshot:prepared, retries: 0, parseResponse: parseAssetResponse, requireJsonObject:true, maxTokens:3072, finalOutputContract: ASSET_OUTPUT_CONTRACT + ' '+OWNERSHIP_RECOVERY_RULES, outputContract: '\n当前仅核对旧账遗漏财产，返回一个含recoveredAssets数组的JSON，不续写正文。' });
                 if (!current()) throw Error('剧情或设置已变化，本次补查未保存。');
                 await memory.commit(ticket, changes);
                 return { updated: true, repaired: true };
@@ -450,8 +455,8 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 '\nbookedIds优先填写ledger.offsetReferences中的短ref（C1/P1等），不要凭空拼接长ID。P编号的待处理收支必须先在events补齐金额，events.id也可填写P编号；原事件ID和真实cash流水ID仍兼容。只有该总额实际包含的流水才列入，生活/经营不能重复引用同一笔；固定月薪由程序处理，不得抵扣；一次性劳动报酬只按income入账一次。若本次补漏新增收支，优先只在events登记并从生活/经营估算中排除此项，禁止编造未知流水ID。\n生活 total 是整个区间总生活费，bookedIds 列其中已记费用；business netIncome 是整个区间总净现金收益，bookedIds 列已记经营收支。已售产业只算持有时段。禁止将股票浮盈、工资、资产市值变化作为 business 收益。开销/经营仅计算 from 至 date 的完整实际期间，未经过时间均0。'+
                 '\nledger.holdings 中 valueManual:true 的估值由 user 手动确认并受保护，不要在 valuations 中返回这些资产，也不要在 events/classifications 中改动其价值；valueManual 缺失或 false 且尚无估值的资产按待估正常估值。deletedHoldings 列出 user 已手动删除的资产登记：它们已不在账本中，不得通过 events/ownership/classifications 重新登记、估值或分类，即使正文再次提到也忽略其登记，不为此编造事件或扣款。'+
                 '\n账本与待核对资料：' + JSON.stringify(payload);
-            // One assessment attempt per click; failure commits nothing. A saved
-            // revision remains locked across reloads and changes of API settings.
+            // At most one additional JSON-format correction after a malformed response.
+            // No intermediate assessment is saved or changes the revision lock.
             const changes = await request(prompt, data => {
                 const home=assessmentResidence(wallet,data,persona,[],residenceSummaries);
                 if(wallet && home && currency!==home.currency) return {home};
@@ -460,7 +465,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                     return [assetSet({...wallet,...home,personaStamp:personaStamp(persona)})];
                 }
                 return applyAssessment(view.state,data,{chat,index,revision:view.revision,memoryText,persona,residenceSummaries});
-            }, current, null, { summarySnapshot:prepared, retries: 0, parseResponse: parseModelObject, finalOutputContract: ASSET_OUTPUT_CONTRACT + homeContract + dateContract + pendingContract + (wallet ? '已有账本，返回events/salaries/valuations/living/business，不得重置initial。' : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? '本次已有账本：只使用后续格式，禁止 initial。' : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + (hasResidence(wallet)?'沿用已确认常住地；无明确迁居返回residenceChange:null。':'返回顶层 residence。') + '金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
+            }, current, null, { summarySnapshot:prepared, retries: 0, parseResponse: parseAssetResponse, formatRetryOnce:true, requireJsonObject:true, maxTokens:8192, finalOutputContract: ASSET_OUTPUT_CONTRACT + homeContract + dateContract + pendingContract + (wallet ? '已有账本，返回events/salaries/valuations/living/business，不得重置initial。' : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? '本次已有账本：只使用后续格式，禁止 initial。' : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + (hasResidence(wallet)?'沿用已确认常住地；无明确迁居返回residenceChange:null。':'返回顶层 residence。') + '金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
             if (!current()) throw Error('剧情或设置已变化，本次评估未保存。');
             if (persona!==(getContext().powerUserSettings?.persona_description||'')) throw Error('user 人设已变化，请重新一键更新。');
             if(changes.home) {
