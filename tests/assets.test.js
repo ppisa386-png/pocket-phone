@@ -508,11 +508,11 @@ test('asset update accepts a single JSON in reasoning/markdown wrappers, one req
  }finally{f.close();}
 });
 
-test('truncated or ambiguous asset JSON never changes wallet and never silently retries',async()=>{
+test('truncated or ambiguous asset JSON permits one format recovery but never changes wallet',async()=>{
  const f=setup();try{
   for(const text of [JSON.stringify(initial()).slice(0,-1),JSON.stringify(initial())+'\n'+JSON.stringify(initial()),'这里没有账本 JSON']){
    f.reply(()=>text);const before=f.count();const result=await f.assets.update();
-   assert.equal(result.ok,false);assert.match(result.error,/格式不正确/);assert.equal(f.count(),before+1);assert.equal(cashBalance(f.state()),null);
+   assert.equal(result.ok,false);assert.match(result.error,/格式不正确/);assert.equal(f.count(),before+2,'at most one safe format recovery');assert.equal(cashBalance(f.state()),null);
   }
  }finally{f.close();}
 });
@@ -525,15 +525,15 @@ test('asset errors include transport, stage and amount field but never persist r
   f.reply(()=>'<content>{"date":"2026-01-01","initial":');
   let result=await assets.update();
   assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_TRUNCATED');
-  assert.match(errors.at(-1).diagnostic,/跟随酒馆.*解析返回格式.*本次请求次数：1/);
+  assert.match(errors.at(-1).diagnostic,/跟随酒馆.*解析返回格式.*本次请求次数：2/);
   f.reply({...initial(),initial:{balance:'$1,000 secret-scene',holdings:[],jobs:[]}});
   result=await assets.update();assert.equal(result.code,'ASSET_MONEY_INVALID');
   assert.match(result.error,/initial.balance/);assert.match(errors.at(-1).diagnostic,/校验业务数据/);
   assert.match(errors.at(-1).diagnostic,/收到类型：string/);
   assert.ok(!JSON.stringify(errors.map(e=>({message:e.message,diagnostic:e.diagnostic}))).includes('secret-scene'));
-  assert.equal(phone.snapshot().assets.wallet,undefined);assert.equal(f.count(),2);
+  assert.equal(phone.snapshot().assets.wallet,undefined);assert.equal(f.count(),3);
   f.reply(()=>{throw Error('network failed');});
-  await assets.update();assert.match(errors.at(-1).diagnostic,/失败阶段：请求模型/);assert.equal(f.count(),3);
+  await assets.update();assert.match(errors.at(-1).diagnostic,/失败阶段：请求模型/);assert.equal(f.count(),4);
   f.reply(initial());ok(await assets.update());assert.equal(cashBalance(phone.snapshot()),100000);
  } finally {phone.destroy();f.memory.destroy();}
 });
