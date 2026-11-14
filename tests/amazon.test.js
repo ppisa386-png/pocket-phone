@@ -3,20 +3,87 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from '../src/phone.js';
-import {createAmazon,shopItems,validateProducts} from '../src/amazon.js';
+import {createAmazon,shopItems,validateProducts,parseAmazonResponse} from '../src/amazon.js';
 import {createAmazonPanel} from '../src/amazon-view.js';
 import {assetRows} from '../src/assets-core.js';
 import {normalizeSettings} from '../src/config.js';
 import {dateDay} from '../src/story-clock.js';
 const product={name:'Alhambra necklace',brand:'Van Cleef & Arpels',luxury:true,price:'2800.50',currency:'USD',variants:['Gold','Silver'],reviews:[{name:'Ivy',rating:4,text:'Lovely clasp.'}]};
-function setup(){
+function setup({independentClient=null,retries=0}={}){
  const bus=new EventEmitter();let response={products:[product]},count=0,prompt='';
  const context={chatId:'shopping',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'日期：2026-10-11 14:00\nAlex gives you a number.',is_user:false}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;prompt=o.quietPrompt;return typeof response==='function'?response():JSON.stringify(response);}};
- const settings=normalizeSettings({retries:0}),memory=createPhoneMemory({getContext:()=>context}),phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings}),amazon=createAmazon({memory,phone,getContext:()=>context,getSettings:()=>settings});
+ const settings=normalizeSettings({retries,...(independentClient?{api:{mode:'independent'}}:{})}),memory=createPhoneMemory({getContext:()=>context}),phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:independentClient}),amazon=createAmazon({memory,phone,getContext:()=>context,getSettings:()=>settings});
  return {context,bus,settings,memory,phone,amazon,state:()=>phone.snapshot(),reply:r=>response=r,count:()=>count,prompt:()=>prompt,close(){phone.destroy();memory.destroy();}};
 }
 const ok=r=>assert.equal(r?.ok,true,r?.error);
 async function fill(f,qty=2){const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',openingMinor:1000000,included:[],startDay:0}}]);ok(await f.amazon.search('项链'));const p=shopItems(f.state(),'product')[0];ok(await f.amazon.add(p.id,'Gold',qty));return p;}
+test('Amazon parser accepts one complete wrapped collection or a product root array without changing prices',()=>{
+ const object={products:[{...product,price:'2800.50'}]};
+ assert.deepEqual(parseAmazonResponse(JSON.stringify(object)),object);
+ assert.deepEqual(parseAmazonResponse('商品 JSON：\n\u0060\u0060\u0060json\n'+JSON.stringify(object)+'\n\u0060\u0060\u0060'),object);
+ const array=[{...product,price:'2800.50'}];
+ assert.deepEqual(parseAmazonResponse(JSON.stringify(array)),{products:array});
+ const trailing='{"products":[{"name":"Test","currency":"USD","price":"25",}],}';
+ assert.deepEqual(parseAmazonResponse(trailing),{products:[{name:'Test',currency:'USD',price:'25'}]});
+ for(const raw of ['这里没有 JSON','{"products":[{"price":"25"}','{"products":[]}\n{"products":[]}', '<think>未完成']){
+  assert.throws(()=>parseAmazonResponse(raw),error=>error.code?.startsWith('MODEL_JSON_')&&
+   /Amazon 商品搜索/.test(error.message)&&!error.diagnostic.includes(raw));
+ }
+});
+
+test('Amazon repairs malformed hosted output once and keeps the same genuine catalog until success',async()=>{
+ const f=setup({retries:3});try{
+  let requests=0;
+  f.reply(()=>{requests++;return requests===1?'这是推荐的商品。':JSON.stringify({products:[product]});});
+  const result=await f.amazon.search('项链');
+  ok(result);assert.equal(requests,2,'Amazon format errors do not repeat four identical requests');
+  assert.match(f.prompt(),/Amazon 搜索格式恢复/);
+  assert.equal(shopItems(f.state(),'product').length,1);
+  const old=JSON.stringify(shopItems(f.state(),'product'));
+  requests=0;f.reply(()=>{requests++;return '没有可用的 JSON';});
+  const failure=await f.amazon.search('耳机');
+  assert.equal(failure.ok,false);
+  assert.equal(failure.code,'MODEL_JSON_MISSING');
+  assert.match(failure.diagnostic,/Amazon格式纠正：已尝试一次/);
+  assert.match(failure.diagnostic,/本次请求次数：2/);
+  assert.equal(requests,2);assert.equal(JSON.stringify(shopItems(f.state(),'product')),old,'invalid searches preserve previously displayed products');
+ }finally{f.close();}
+});
+
+test('Amazon independent requests append final schema and a 4096-token ceiling without altering user settings',async()=>{
+ let attempts=0;const seen=[];
+ const client={generate:async(prompt,contact,current,progress,options)=>{
+  attempts++;seen.push({prompt,options});
+  return attempts===1?'抱歉，稍后再试。':JSON.stringify({products:[product]});
+ }};
+ const f=setup({independentClient:client,retries:3});try{
+  const result=await f.amazon.search('项链');ok(result);
+  assert.equal(attempts,2);
+  assert.match(seen[0].options.finalOutputContract,/4—6 件/);
+  assert.match(seen[0].options.finalOutputContract,/products/);
+  assert.equal(seen[0].options.maxTokens,4096);
+  assert.match(seen[1].options.finalOutputContract,/Amazon 搜索格式恢复/);
+  assert.match(seen[1].prompt,/Amazon 搜索格式恢复/);
+  assert.equal(shopItems(f.state(),'product').length,1);
+  assert.equal(f.settings.api.maxTokens,2048,'the user-configured API ceiling remains unchanged');
+ }finally{f.close();}
+});
+
+test('Amazon product validation error repairs once, but transport errors are not retried',async()=>{
+ let calls=0;const client={generate:async()=>{
+  calls++;return calls===1?JSON.stringify({products:[{...product,price:'no-price'}]}):JSON.stringify({products:[product]});
+ }};
+ const f=setup({independentClient:client,retries:5});try{
+  ok(await f.amazon.search('项链'));
+  assert.equal(calls,2);
+  const old=JSON.stringify(shopItems(f.state(),'product'));
+  client.generate=async()=>{calls++;throw Object.assign(new Error('网络失败'),{code:'API_TIMEOUT',retryable:false});};
+  const error=await f.amazon.search('戒指');assert.equal(error.ok,false);
+  assert.equal(calls,3,'API/transport failure is not incorrectly retried as a JSON fix');
+  assert.equal(JSON.stringify(shopItems(f.state(),'product')),old);
+ }finally{f.close();}
+});
+
 test('shopping search uses one shared request, preserves cart snapshots across catalogs, and local checkout needs no API',async()=>{
  const f=setup();try{
  await f.amazon.open();assert.equal(f.count(),0);const p=await fill(f);assert.equal(f.count(),1);assert.match(f.prompt(),/消费水平/);assert.match(f.prompt(),/奢侈品必须/);
