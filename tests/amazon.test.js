@@ -62,6 +62,7 @@ test('Amazon independent requests append final schema and a 4096-token ceiling w
   assert.match(seen[0].options.finalOutputContract,/4—6 件/);
   assert.match(seen[0].options.finalOutputContract,/products/);
   assert.equal(seen[0].options.maxTokens,4096);
+  assert.equal(seen[0].options.requireJsonObject,true);
   assert.match(seen[1].options.finalOutputContract,/Amazon 搜索格式恢复/);
   assert.match(seen[1].prompt,/Amazon 搜索格式恢复/);
   assert.equal(shopItems(f.state(),'product').length,1);
