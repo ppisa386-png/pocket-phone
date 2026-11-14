@@ -5,13 +5,23 @@ import { EventEmitter } from 'node:events';
 import { createApiClient, createKeyStore, normalizeApiUrl, extractApiText } from '../src/api.js';
 import { captureHostRequest } from '../src/api-context.js';
 import { HostEvents, installHostGeneration } from './host-fixture.js';
-import { normalizeSettings } from '../src/config.js';
+import { normalizeSettings, VERSION } from '../src/config.js';
+import { readFileSync } from 'node:fs';
 import { createPhoneMemory } from '../src/memory.js';
 import { createPhoneService } from '../src/phone.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { createAssets } from '../src/assets.js';
 import { createX, xItems } from '../src/x.js';
 import { cashBalance, assetRows } from '../src/assets-core.js';
+
+test('published version cache-busts the actual changed independent API and JSON data modules',()=>{
+ const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
+ for(const module of ['api','amazon','assets','calendar','phone']){
+  const line=source.split('\\n').find(s=>s.includes("'./src/"+module+".js?v="));
+  assert.ok(line,'entry must import '+module);
+  assert.ok(line.includes("./src/"+module+".js?v="+VERSION+"'"),module+' must not keep an obsolete import cache key');
+ }
+});
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
 
