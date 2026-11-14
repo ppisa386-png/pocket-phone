@@ -17,7 +17,7 @@ import { cashBalance, assetRows } from '../src/assets-core.js';
 test('published version cache-busts the actual changed independent API and JSON data modules',()=>{
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
  for(const module of ['api','amazon','assets','calendar','phone']){
-  const line=source.split('\\n').find(s=>s.includes("'./src/"+module+".js?v="));
+  const line=source.split(/\r?\n/).find(s=>s.includes("'./src/"+module+".js?v="));
   assert.ok(line,'entry must import '+module);
   assert.ok(line.includes("./src/"+module+".js?v="+VERSION+"'"),module+' must not keep an obsolete import cache key');
  }
@@ -172,6 +172,19 @@ test('structured data calls ask for JSON object without inherited roleplay stops
  await f.client.generate('ordinary chat',null,()=>true);
  assert.deepEqual(seen[1].response_format,{type:'text'},'non-JSON tasks remain unchanged');
  assert.deepEqual(seen[1].stop,['\\n']);
+});
+
+test('HTTP-200 wrapped provider rejection of JSON mode also retries without this optional parameter',async()=>{
+ let calls=0;const payloads=[];
+ const f=clientFixture({fetchImpl:async(_url,options)=>{
+  const body=JSON.parse(options.body);payloads.push(body);calls++;
+  if(calls===1)return {ok:true,status:200,json:async()=>({error:{code:'invalid_request_error',
+      message:'response_format json_object is not supported on this model'}})};
+  return response('{"ok":true}');
+ }});
+ assert.equal(await f.client.generate('task',null,()=>true,()=>{},{requireJsonObject:true}),'{"ok":true}');
+ assert.equal(calls,2);assert.deepEqual(payloads[0].response_format,{type:'json_object'});
+ assert.equal(payloads[1].response_format,undefined);
 });
 
 test('unsupported JSON output parameter falls back once; unrelated upstream errors never retry or expose text',async()=>{
