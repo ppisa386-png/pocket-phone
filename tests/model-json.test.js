@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseModelObject} from '../src/model-json.js';
 import {parseXObject} from '../src/x.js';
+import {parseAssetResponse} from '../src/assets.js';
 
 test('X tolerates trailing delimiters only, preserving strings and all scalar values',()=>{
  const raw='{"accounts":[{"name":"Alex","handle":"alex","bio":"Literal ,} and ,] and \\"quote\\"","has_account":true,"followers":12,},],}';
@@ -63,4 +64,19 @@ test('X converts only a complete recognized task list to its named root object',
  assert.throws(()=>parseXObject('[{"text":"no author"}]',{arrayKey:'posts'}),e=>e.code==='MODEL_JSON_TYPE');
  assert.throws(()=>parseXObject('[{"accountId":"known","text":"ok"}][{"accountId":"known","text":"second"}]',{arrayKey:'posts'}),e=>e.code==='MODEL_JSON_AMBIGUOUS');
  assert.throws(()=>parseXObject('<think>[{"accountId":"known","text":"hidden"}]</think>',{arrayKey:'posts'}),e=>e.code==='MODEL_JSON_MISSING');
+});
+
+test('asset-specific safe delimiter tolerance keeps amount data exact and never repairs missing fields',()=>{
+ const data={residence:{region:'US',currency:'USD'},initial:{balance:'1580.25',holdings:[],jobs:[]}};
+ assert.deepEqual(parseAssetResponse(JSON.stringify(data)),data);
+ assert.deepEqual(parseAssetResponse('说明：\\n' + JSON.stringify(data)),data);
+ assert.deepEqual(parseAssetResponse('{"initial":{"balance":1580.25,"holdings":[],"jobs":[],},}'),
+     {initial:{balance:1580.25,holdings:[],jobs:[]}});
+ for(const raw of ["{'initial':{'balance':125}}",'{"initial":{"balance":125',
+     '{"initial":{"balance":1000}} {"initial":{"balance":2000}}',
+     '{"initial":{"balance": not-a-number }}']){
+  assert.throws(()=>parseAssetResponse(raw),error=>error.code?.startsWith('MODEL_JSON_'));
+ }
+ assert.throws(()=>parseModelObject('{"initial":{"balance":1000,}}'),error=>error.code==='MODEL_JSON_SYNTAX',
+     'other finance consumers keep strict parsing unless they opted in');
 });
