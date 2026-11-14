@@ -140,7 +140,7 @@ test('Chinese friend display names preserve original character, friendship and a
 });
 
 
-test('batch invitations use one wrapped response and map by ID, with no partial save or automatic retry',async()=>{
+test('batch invitations use one wrapped response and map by ID, with no partial save and one syntax recovery',async()=>{
  const f=setup();try{
  f.settings.retries=4;
  f.reply({accounts:[{name:'Alex',handle:'alex',has_account:true},{name:'Bea',handle:'bea',has_account:true}]});ok(await f.snap.discover());
@@ -148,7 +148,7 @@ test('batch invitations use one wrapped response and map by ID, with no partial 
  f.reply(()=>'<think>consider</think>结果：'+JSON.stringify({results:[{id:ids[1],status:'pending'},{id:ids[0],status:'friends'}]}));
  ok(await f.snap.inviteMany([...ids,ids[0]]));assert.equal(f.count(),before+1);assert.equal(f.state().snapchat[ids[0]].friend,'friends');assert.equal(f.state().snapchat[ids[1]].friend,'pending');
  f.reply({results:[{id:'unknown',status:'friends'}]});assert.equal((await f.snap.inviteMany([ids[1]])).ok,false);assert.equal(f.count(),before+2);assert.equal(f.state().snapchat[ids[1]].friend,'pending');
- f.reply(()=>'{"results":[');assert.equal((await f.snap.inviteMany([ids[1]])).ok,false);assert.equal(f.count(),before+3);assert.match(f.state().error,/不完整/);
+ f.reply(()=>'{"results":[');assert.equal((await f.snap.inviteMany([ids[1]])).ok,false);assert.equal(f.count(),before+4);assert.match(f.state().error,/不完整/);
  const reload=createPhoneMemory({getContext:()=>f.context});try{assert.equal((await reload.read()).state.snapchat[ids[0]].friend,'friends');}finally{reload.destroy();}
  }finally{f.close();}
 });

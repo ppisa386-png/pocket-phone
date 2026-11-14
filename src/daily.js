@@ -1,8 +1,8 @@
 import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.43';
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
-import { storyEvidenceRows } from './square-core.js?v=1.2.57';
-import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.57';
-import { parseModelObject } from './model-json.js?v=1.2';
+import { storyEvidenceRows } from './square-core.js?v=1.2.62';
+import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.62';
+import { parseAppObject } from './model-json.js?v=1.2.62';
 import { locationKind } from './weather.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
 
@@ -30,7 +30,7 @@ export function dailyHistoryRules(kind) {
 }
 export const DAILY_RULES = DAILY_RULES_CORE + dailyHistoryRules('real');
 const parseDailyObject = raw => {
-    try { return parseModelObject(raw); }
+    try { return parseAppObject(raw); }
     catch (e) { e.message=String(e.message).replaceAll('账本','日报'); if(e.diagnostic)e.diagnostic=e.diagnostic.replaceAll('资产评估','日报选编').replaceAll('账本','日报'); throw e; }
 };
 // For fictional worlds the editorial model needs the world's own setting text:

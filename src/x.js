@@ -9,11 +9,11 @@ import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.55';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.57';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.62';
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
-import { parseModelObject } from './model-json.js?v=1.2.47';
+import { parseAppObject } from './model-json.js?v=1.2.62';
 import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.57';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.2';
 // Story-local X simulation. No real social-network API or account is used.
@@ -56,7 +56,7 @@ const xThread = (state,id) => xItems(state,'message').filter(m=>m.accountId===id
 // private message, engagement update, account identity or financial record.
 export function parseXObject(text, {arrayKey = null} = {}) {
     try {
-        const data=parseModelObject(text,{allowTrailingCommas:true,allowRootArray:!!arrayKey});
+        const data=parseAppObject(text,{allowTrailingCommas:true,allowRootArray:!!arrayKey});
         if (!Array.isArray(data)) return data;
         const record=row=>!!row&&typeof row==='object'&&!Array.isArray(row);
         const populated=value=>typeof value==='string'&&!!value.trim();
@@ -332,7 +332,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             await commit(changes);return;
         }
         const result=await ask(state,a,request,current,'当前任务：X 私信。仅回应本会话最后一条 user 消息，不查看其他账号的私信。对方的私信设置：'+a.dmPolicy+'；会话此前已通过：'+!!a.dmAccepted+'；记录：'+JSON.stringify(xThread(state,a.id).slice(-10).map(({role,text})=>({role,text})))+
-            '\n根据角色判断是否接受并回复。输出 {"status":"reply/no_reply/request","text":"回复内容；不回复时为空","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B"}。requests 且未通过时可返回 request（等待对方接受），reply 表示本次同意并回复，no_reply 表示保持沉默。'+dmDealTask(state,a.id),d=>{if(!['reply','no_reply','request'].includes(d.status)||d.status==='reply'&&!xText(d.text))throw Error('私信回复格式不正确。');return {status:d.status,text:xText(d.text),deal:d.deal,category:smsCategory(d.category)};},{memoryTopic:m.text,maxTokens:4096,retryEmptyOnce:true});
+            '\n根据角色判断是否接受并回复。输出 {"status":"reply/no_reply/request","text":"回复内容；不回复时为空","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B"}。requests 且未通过时可返回 request（等待对方接受），reply 表示本次同意并回复，no_reply 表示保持沉默。'+dmDealTask(state,a.id),d=>{if(!['reply','no_reply','request'].includes(d.status)||d.status==='reply'&&!xText(d.text))throw Error('私信回复格式不正确。');return {status:d.status,text:xText(d.text),deal:d.deal,category:smsCategory(d.category)};},{memoryTopic:m.text,maxTokens:4096});
         const changes=[xSet({...a,dmAccepted:a.dmAccepted||result.status==='reply'}),xSet({...m,status:result.status==='reply'?'answered':result.status})];
         if(result.status==='reply'){
             changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false,storyTime:storyTime(getContext().chat)}));
@@ -447,7 +447,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     for(const [eventId,candidates] of activityCandidates)if(candidates.length&&!perEvent.get(eventId))throw Error('公开动态 '+eventId+' 有相关 NPC，但本次没有生成任何公开回应。请重试首页刷新。');
                 }
                 return {posts,replies:d.replies===undefined?[]:list(d,'replies',5),activityReactions,accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience};
-            },{outputContract:refreshOutput+reachOutput+activityOutput,finalOutputContract:refreshOutput+reachOutput+activityOutput,combined,reachPostIds:reachPosts.map(p=>p.postId),postQueries:[...(square?[]:userPosts.slice(-10)),...activityQueries],memoryChars:8000,maxTokens:8192,retryEmptyOnce:true,arrayKey:'posts'});
+            },{outputContract:refreshOutput+reachOutput+activityOutput,finalOutputContract:refreshOutput+reachOutput+activityOutput,combined,reachPostIds:reachPosts.map(p=>p.postId),postQueries:[...(square?[]:userPosts.slice(-10)),...activityQueries],memoryChars:8000,maxTokens:8192,arrayKey:'posts'});
         if(square&&!combined&&results.posts.length<10)throw Error('本批广场帖子只有 '+results.posts.length+' 条，广场刷新需要 10～15 条，本次未保存。');
         state=structuredClone(state);const changes=[],authors=new Set();let added=0,repeatedSquare=false;
         if(!square&&!following){

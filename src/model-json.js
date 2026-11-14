@@ -1,6 +1,6 @@
 // Extract one complete object without rewriting financial data. Presentation
 // blocks are ignored only outside JSON; markup inside quoted values is data.
-export function parseModelObject(raw, { allowTrailingCommas = false, allowRootArray = false } = {}) {
+export function parseModelObject(raw, { allowTrailingCommas = false, allowRootArray = false, allowControlCharacters = false, allowEncodedObject = false } = {}) {
     const original = String(raw ?? ''), text = original.trim();
     let hiddenBlocks = 0, hiddenLedgers = 0, reasoningBlocks = 0;
     const fail = (code, reason, hint = '', extra = '') => {
@@ -22,14 +22,17 @@ export function parseModelObject(raw, { allowTrailingCommas = false, allowRootAr
     };
     const parse = source => {
         try { return JSON.parse(source); } catch (error) {
-            if (!allowTrailingCommas) throw error;
+            if (!allowTrailingCommas && !allowControlCharacters) throw error;
             // Only remove a redundant delimiter after a value, outside strings.
             // Never repair quotes, keys, missing values/brackets or scalar data.
             let fixed='', quoted=false, escaped=false, previous='';
             for (let i=0;i<source.length;i++) {
                 const c=source[i];
-                if (!quoted && c===',' && previous && !'{[:,'.includes(previous) && /^[\s]*[}\]]/.test(source.slice(i+1))) continue;
-                fixed+=c;
+                if (allowTrailingCommas && !quoted && c===',' && previous && !'{[:,'.includes(previous) && /^[\s]*[}\]]/.test(source.slice(i+1))) continue;
+                // Literal line breaks/tabs inside a quoted value have a unique
+                // lossless representation. Never guess quotes, keys or values.
+                fixed += allowControlCharacters && quoted && !escaped && c.charCodeAt(0)<32
+                    ? '\\u'+c.charCodeAt(0).toString(16).padStart(4,'0') : c;
                 if (quoted) {
                     if (escaped) escaped=false;
                     else if (c==='\\') escaped=true;
@@ -42,6 +45,15 @@ export function parseModelObject(raw, { allowTrailingCommas = false, allowRootAr
         }
     };
     const clean = text.replace(/^\x60\x60\x60(?:json)?\s*/i, '').replace(/\s*\x60\x60\x60$/, '').trim();
+    // Some gateways serialize the whole answer a second time. Decode exactly
+    // one layer, only when it contains a complete root container, not prose.
+    if (allowEncodedObject && clean.startsWith('"')) {
+        let decoded;
+        try { decoded = JSON.parse(clean); } catch { /* Normal scanner below. */ }
+        if (typeof decoded === 'string' && /^[\s]*[\[{]/.test(decoded)) {
+            return parseModelObject(decoded, {allowTrailingCommas,allowRootArray,allowControlCharacters});
+        }
+    }
     try { return object(parse(clean)); } catch (e) { if (e.diagnostic) throw e; }
     const candidates = [];
     let start = -1, stack = [], quoted = false, escaped = false;
@@ -112,3 +124,16 @@ export function parseModelObject(raw, { allowTrailingCommas = false, allowRootAr
     }
     return object(value);
 }
+
+// Shared by every model-backed app; stored records still use strict JSON.parse.
+export const parseAppObject = (raw, options = {}) => parseModelObject(raw, {
+    allowTrailingCommas: true, allowControlCharacters: true, allowEncodedObject: true, ...options,
+});
+
+export const MODEL_JSON_CONTRACT = '当前仅完成上文指定的手机 App 数据任务。最终只输出一个完整 JSON 对象，字段名、数组、数量和类型严格遵循本次任务；沿用人物、语言、事实与知情边界，不续写小说、状态栏或额外剧情。不输出解释、代码块、注释或多个候选；字符串中的换行用\\n，双引号用\\"转义。不得省略必需字段，不猜测缺失的金额、日期或记录。';
+
+// SillyTavern's backend reads json_schema, not a raw response_format field.
+// A non-strict open object enforces JSON syntax without replacing app validation.
+export const phoneJsonSchema = () => ({
+    name: 'phone_task', strict: false, value: {type: 'object', additionalProperties: true},
+});

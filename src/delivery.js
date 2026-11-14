@@ -1,7 +1,7 @@
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2.57';
-import { PROMPTS } from './config.js?v=1.2.57';
+import { PROMPTS } from './config.js?v=1.2.62';
 export const DELIVERY_KEY='durian_phone_delivery';
 const deliverySafe=value=>JSON.stringify(value).replace(/\{\{/g,'\\u007b\\u007b');
 const hourText=h=>Number.isFinite(h)?String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round(h%1*60)).padStart(2,'0'):null;

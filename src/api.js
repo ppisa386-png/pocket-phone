@@ -1,5 +1,6 @@
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
+import { phoneJsonSchema } from './model-json.js?v=1.2.62';
 export function normalizeApiUrl(value) {
     let url;
     try { url = new URL(String(value ?? '').trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://example.com/v1'); }
@@ -42,7 +43,7 @@ export function apiError(status, data) {
     const effective = reported || status;
     let reason = '未识别', hint = '请核对酒馆服务端同一时刻的错误记录（分享前去除密钥和正文）。';
     const jsonUnsupported = ([400, 422].includes(effective) || (status >= 200 && status < 300 && !!raw)) &&
-        /response[_ ]?format|json[_ ]?object|json mode/i.test(code + ' ' + message) &&
+        /response[_ ]?format|json[_ ]?(?:object|schema)|structured output|json mode/i.test(code + ' ' + message) &&
         /unsupported|not supported|does not support|unknown|unrecognized|invalid|not allowed|not available/i.test(code + ' ' + message);
     if (jsonUnsupported) { reason='JSON 输出模式不被支持';hint='当前中转不接受结构化 JSON 参数，手机可改用原请求格式重试一次。'; }
     else if (data?.quota_error === true || /insufficient_quota|quota_exceeded|resource_exhausted/.test(code)) { reason='额度不足';hint='请检查服务额度。'; }
@@ -115,6 +116,7 @@ export function extractApiText(data, onMetadata = () => {}) {
 
 export function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
     const active = new Set();
+    const unsupportedSchemas = new Set();
     let cancelEpoch = 0;
     let preparation = null;
     async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}) {
@@ -183,6 +185,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
             const key = getKey(config.baseUrl);
             const fingerprint = JSON.stringify(config), epoch = cancelEpoch;
+            const schemaEndpoint = JSON.stringify([config.baseUrl,config.model]);
             const current = () => epoch === cancelEpoch && isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             // The host uses shared prompt hooks. Release this queue before the network call.
@@ -213,10 +216,12 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 delete payload.stop;
                 delete payload.tools;
                 delete payload.tool_choice;
-                if (!payload.response_format || payload.response_format.type === 'text') {
-                    delete payload.json_schema;
-                    payload.response_format = { type: 'json_object' };
-                }
+                // This endpoint reconstructs the provider body; it does NOT
+                // forward response_format. Use its native schema envelope and
+                // replace any unrelated roleplay schema for this request only.
+                delete payload.response_format;
+                delete payload.json_schema;
+                if (!unsupportedSchemas.has(schemaEndpoint)) payload.json_schema = phoneJsonSchema();
             }
             // Only the caller's task contract is appended, after preset hooks.
             // Keep all roleplay context and other portable settings intact.
@@ -226,16 +231,16 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             try {
                 try { return await post('generate', config, key, payload, current, onProgress, options.onResponseMeta); }
                 catch (error) {
-                    // Some OpenAI-compatible providers reject json_object rather
+                    // Some OpenAI-compatible providers reject json_schema rather
                     // than ignoring it. Retry the SAME request without that
                     // optional format flag only on an explicitly identified
                     // unsupported-parameter error. Never retry other 400s.
                     if (options.requireJsonObject === true && error.code === 'API_JSON_MODE_UNSUPPORTED' &&
-                        payload.response_format?.type === 'json_object' && current()) {
-                        const original = prepared.response_format;
+                        payload.json_schema && current()) {
+                        unsupportedSchemas.add(schemaEndpoint);
                         const fallback = { ...payload };
-                        if (original) fallback.response_format = original;
-                        else delete fallback.response_format;
+                        delete fallback.json_schema;
+                        delete fallback.response_format;
                         onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
                         try { return await post('generate', config, key, fallback, current, onProgress, options.onResponseMeta); }
                         catch (again) {
@@ -244,19 +249,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                             throw again;
                         }
                     }
-                    if (options.retryEmptyOnce!==true || error.code!=='API_EMPTY_OUTPUT' || !current()) throw error;
-                    // Only opted-in X tasks use this recovery. A successful response is
-                    // never repeated; the retry keeps the full original context
-                    // with a smaller per-request budget and unchanged settings.
-                    const retryPayload={...payload};
-                    const field=retryPayload.max_completion_tokens!==undefined?'max_completion_tokens':'max_tokens';
-                    retryPayload[field]=Math.min(4096, Math.max(1024, Math.floor((Number(retryPayload[field])||8192)/2)));
-                    onProgress('X 请求收到空回复，降低输出上限重试一次');
-                    try { return await post('generate', config, key, retryPayload, current, onProgress, options.onResponseMeta); }
-                    catch (again) {
-                        again.diagnostic=(again.diagnostic?again.diagnostic+'\n':'')+'X 请求空回复恢复：已执行一次较低上限重试';
-                        throw again;
-                    }
+                    throw error;
                 }
             } catch (error) {
                 if (error.diagnostic) {

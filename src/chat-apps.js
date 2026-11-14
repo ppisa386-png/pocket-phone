@@ -1,7 +1,7 @@
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
-import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.57';
+import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.62';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
-import { createWechatMoments } from './wechat-moments.js?v=1.2.49';
+import { createWechatMoments } from './wechat-moments.js?v=1.2.62';
 
 export const CHAT_APPS = {whatsapp:'WhatsApp',wechat:'微信'};
 export const chatItems = (state,app,type) => Object.values(state[app]||{}).filter(i=>i.type===type);

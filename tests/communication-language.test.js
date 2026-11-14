@@ -52,7 +52,7 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
             assert.equal(f.requests.length,before+1,'no separate classification or translation request');
             const payload=f.requests.at(-1);
             assert.equal(payload.messages[0].content,preset,'current preset, including narration/dialogue distinction, is unchanged');
-            assert.ok(payload.messages.at(-1).content.endsWith(COMMUNICATION_LANGUAGE_RULE));
+            assert.ok(payload.messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
             const state=f.phone.snapshot(), message=Object.values(state.messages).at(-1);
             assert.equal(message.text,text);
             assert.ok(renderMessagesScreen(state,contactId,false,{}).includes('>'+text+'</p>'));
@@ -63,7 +63,7 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
         assert.equal((await f.phone.rerollMessage(last.id)).ok,true);
         assert.equal(f.requests.length,before+1);
         assert.equal(f.phone.snapshot().messages[last.id].text,text);
-        assert.ok(f.requests.at(-1).messages.at(-1).content.endsWith(COMMUNICATION_LANGUAGE_RULE));
+        assert.ok(f.requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
         f.reply({status:'answered',text});before=f.requests.length;
         assert.equal((await f.phone.dial(contactId)).ok,true);
         assert.equal((await f.phone.say('听得见吗')).ok,true);
@@ -71,7 +71,7 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
         const state=f.phone.snapshot(),call=state.calls[state.activeCallId];
         assert.equal(call.turns[0].text,text);assert.equal(call.turns.at(-1).text,text);
         assert.ok(renderPhoneScreen(state,'calls',call.id,'').includes('>'+text+'</p>'));
-        assert.ok(f.requests.at(-1).messages.at(-1).content.endsWith(COMMUNICATION_LANGUAGE_RULE));
+        assert.ok(f.requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
         const reloaded=createPhoneMemory({getContext:()=>f.context});
         try{const saved=(await reloaded.read()).state;assert.equal(saved.messages[last.id].text,text);assert.equal(saved.calls[call.id].turns.at(-1).text,text);}finally{reloaded.destroy();}
         if(mode==='independent')assert.equal(f.host.requests.length,0,'preparing full preset never sends a second model request');

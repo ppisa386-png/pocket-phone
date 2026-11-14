@@ -6,7 +6,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 version = re.search(r"export const VERSION = '([^']+)'", (root / 'src' / 'config.js').read_text()).group(1)
 chunks = []
-for name in ['currency.js', 'story-clock.js', 'names.js', 'daily-prompts.js', 'config.js', 'composer.js', 'input-viewport.js', 'diagnostics.js', 'api.js', 'api-view.js', 'icons.js', 'journal.js', 'square-core.js', 'contact-events.js', 'block-controls.js', 'press-menu.js', 'phone-view.js', 'messages.js', 'messages-view.js', 'snapchat.js', 'snapchat-view.js', 'chat-apps.js', 'chat-view.js', 'x-feed.js', 'x-comments.js', 'x-audience.js', 'contact-policy.js', 'x-influence.js', 'x-edit.js', 'x.js', 'x-view.js', 'amazon.js', 'delivery.js', 'amazon-view.js', 'assets-core.js', 'assets-policy.js', 'assets-recovery.js', 'assets-view.js', 'daily-core.js', 'daily-view.js', 'weather.js', 'weather-view.js', 'ui.js']:
+for name in ['currency.js', 'story-clock.js', 'names.js', 'daily-prompts.js', 'config.js', 'composer.js', 'input-viewport.js', 'diagnostics.js', 'model-json.js', 'api.js', 'api-view.js', 'icons.js', 'journal.js', 'square-core.js', 'contact-events.js', 'block-controls.js', 'press-menu.js', 'phone-view.js', 'messages.js', 'messages-view.js', 'snapchat.js', 'snapchat-view.js', 'chat-apps.js', 'chat-view.js', 'x-feed.js', 'x-comments.js', 'x-audience.js', 'contact-policy.js', 'x-influence.js', 'x-edit.js', 'x.js', 'x-view.js', 'amazon.js', 'delivery.js', 'amazon-view.js', 'assets-core.js', 'assets-policy.js', 'assets-recovery.js', 'assets-view.js', 'daily-core.js', 'daily-view.js', 'weather.js', 'weather-view.js', 'ui.js']:
     code = (root / 'src' / name).read_text()
     if name == 'x-influence.js':
         code = code[:code.index('const set=')]

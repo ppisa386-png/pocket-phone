@@ -2,7 +2,7 @@ import { walletCurrency, majorAmount, formatMoney, validCurrency } from './curre
 import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.2';
 import { dateDay, readStoryClock } from './story-clock.js?v=1.2';
 import { shopImageKey, AMAZON_IMAGE_KEYS } from './amazon-art.js?v=1.2.14';
-import { parseModelObject } from './model-json.js?v=1.2.59';
+import { parseAppObject } from './model-json.js?v=1.2.62';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>formatMoney(minor,currency)+' '+currency;
@@ -58,7 +58,7 @@ export function resolveGiftRecipient(key,state,context){
 // Never mine incomplete text or synthesize prices, currencies or brands.
 export function parseAmazonResponse(raw) {
     try {
-        const parsed = parseModelObject(raw, { allowTrailingCommas: true, allowRootArray: true });
+        const parsed = parseAppObject(raw, { allowTrailingCommas: true, allowRootArray: true });
         return Array.isArray(parsed) ? { products: parsed } : parsed;
     } catch (error) {
         throw Object.assign(new Error('Amazon 商品搜索没有返回完整可用的 JSON，请重试搜索。'), {

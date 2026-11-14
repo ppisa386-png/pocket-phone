@@ -1,5 +1,5 @@
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
-import { calendarMonth, calendarOccurrences, calendarPersonal, calendarRegionKey } from './calendar-core.js?v=1.2.57';
+import { calendarMonth, calendarOccurrences, calendarPersonal, calendarRegionKey } from './calendar-core.js?v=1.2.62';
 import { icon } from './icons.js?v=1.2.57';
 
 const calendarEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

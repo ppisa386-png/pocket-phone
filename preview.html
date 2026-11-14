@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>榴莲手机 · 界面预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#efedf4;color:#353244;font:15px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:540px;padding:10vh 40px 40px;margin-left:max(0px,calc((100vw - 1100px)/2))}small{color:#76658b;letter-spacing:3px}h1{font-size:36px;letter-spacing:-1px;line-height:1.3;margin:20px 0}p{color:#716b7c}button{font:inherit;border:1px solid #d4ccde;border-radius:10px;padding:9px 15px;cursor:pointer;color:#514361;background:#ffffffb0}button:hover{background:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.card{margin:28px 0;padding:20px;border:1px solid #dad3e2;border-radius:18px;background:#ffffff70}.card label{display:flex;align-items:center;gap:10px;margin:10px 0 18px}.card input{width:18px;height:18px;accent-color:#827096}li{margin:8px 0}footer{font-size:12px;color:#92899e;margin-top:28px}@media(max-width:760px){main{padding:36px 24px;max-width:100%;margin:0}h1{font-size:28px}}
-</style></head><body><main><small>POCKET PHONE · 1.2.57</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>const {RESIDENCE_RULE,resolveResidence,walletCurrency,validCurrency,currencyDigits,unitScale,majorAmount,formatMoney,personaStamp} = (() => {
+</style></head><body><main><small>POCKET PHONE · 1.2.62</small><h1>榴莲手机，先从这里开始。</h1><p>这是离线界面预览，可以查看桌面、设置及 WhatsApp、微信页面。模型互动需安装到酒馆后使用。</p><div class="actions"><button id="preview-open">打开手机</button><button id="preview-settings">打开设置</button></div><div class="card"><strong>悬浮入口</strong><label><input id="preview-visibility" type="checkbox">显示悬浮入口</label><button id="preview-reset">重置悬浮位置</button><p style="font-size:12px;margin-bottom:0">安装到酒馆后，这组控制位于扩展栏的「榴莲手机」条目中。</p></div><ol><li>检查手机窗口是否挡住操作、字号是否合适。</li><li>在「设置 → App 管理」关闭、重新开启应用。</li><li>修改提示词和重试次数，刷新后检查是否保留。</li></ol><p id="storage-note" hidden>当前打开方式不支持保存预览设置；本次修改只在页面关闭前保留。可换用浏览器打开。</p><footer>预览数据独立于酒馆。本文件无需联网，不请求模型。</footer></main><script>const {RESIDENCE_RULE,resolveResidence,walletCurrency,validCurrency,currencyDigits,unitScale,majorAmount,formatMoney,personaStamp} = (() => {
 // Modern legal tender by territory, from Unicode CLDR supplemental currencyData
 // (2026-11-01). Several territories have more than one local currency.
 const territories = {
@@ -364,7 +364,7 @@ return {DAILY_EDITORIAL_PROMPT,PREVIOUS_DAILY_EDITORIAL_PROMPT,PREVIOUS_DAILY_ED
 const {MODULE_KEY,LAUNCHER_SIZE,VERSION,APPS,PROMPTS,normalizeApiSettings,normalizeSettings,appearanceSettingsPatch,clampPosition} = (() => {
 const MODULE_KEY = 'personal_pocket_phone';
 const LAUNCHER_SIZE = 36;
-const VERSION = '1.2.57';
+const VERSION = '1.2.62';
 const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -608,6 +608,149 @@ function createDiagnostics({storage, version = '', getSecrets = () => []} = {}) 
 
 return {createDiagnostics};
 })();
+const {parseModelObject,parseAppObject,MODEL_JSON_CONTRACT,phoneJsonSchema} = (() => {
+// Extract one complete object without rewriting financial data. Presentation
+// blocks are ignored only outside JSON; markup inside quoted values is data.
+function parseModelObject(raw, { allowTrailingCommas = false, allowRootArray = false, allowControlCharacters = false, allowEncodedObject = false } = {}) {
+    const original = String(raw ?? ''), text = original.trim();
+    let hiddenBlocks = 0, hiddenLedgers = 0, reasoningBlocks = 0;
+    const fail = (code, reason, hint = '', extra = '') => {
+        throw Object.assign(new Error('账本返回格式不正确：' + reason + '。本次未保存。' + hint), {
+            code,
+            diagnostic: '任务：资产评估；错误代码：' + code + '；原因：' + reason
+                + '；返回字符数：' + original.length + (extra ? '；' + extra : '')
+                + '；隐藏注释数：' + hiddenBlocks + '；隐藏账本数：' + hiddenLedgers + '；思考块数：' + reasoningBlocks
+                + (hint ? '\n建议：' + hint : ''),
+        });
+    };
+    if (!text) fail('MODEL_JSON_EMPTY', '模型没有返回文字', '请检查模型回复是否为空或被输出规则过滤。');
+    const object = value => {
+        if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+        // Only explicitly opted-in X list tasks may accept a complete array.
+        // Finance and every other caller still require a single object.
+        if (allowRootArray && Array.isArray(value)) return value;
+        fail('MODEL_JSON_TYPE', '需要单个 JSON 对象', '不能用数组、文字或空值代替账本。');
+    };
+    const parse = source => {
+        try { return JSON.parse(source); } catch (error) {
+            if (!allowTrailingCommas && !allowControlCharacters) throw error;
+            // Only remove a redundant delimiter after a value, outside strings.
+            // Never repair quotes, keys, missing values/brackets or scalar data.
+            let fixed='', quoted=false, escaped=false, previous='';
+            for (let i=0;i<source.length;i++) {
+                const c=source[i];
+                if (allowTrailingCommas && !quoted && c===',' && previous && !'{[:,'.includes(previous) && /^[\s]*[}\]]/.test(source.slice(i+1))) continue;
+                // Literal line breaks/tabs inside a quoted value have a unique
+                // lossless representation. Never guess quotes, keys or values.
+                fixed += allowControlCharacters && quoted && !escaped && c.charCodeAt(0)<32
+                    ? '\\u'+c.charCodeAt(0).toString(16).padStart(4,'0') : c;
+                if (quoted) {
+                    if (escaped) escaped=false;
+                    else if (c==='\\') escaped=true;
+                    else if (c==='"') quoted=false;
+                } else if (c==='"') quoted=true;
+                if (!/\s/.test(c)) previous=c;
+            }
+            if (fixed===source) throw error;
+            return JSON.parse(fixed);
+        }
+    };
+    const clean = text.replace(/^\x60\x60\x60(?:json)?\s*/i, '').replace(/\s*\x60\x60\x60$/, '').trim();
+    // Some gateways serialize the whole answer a second time. Decode exactly
+    // one layer, only when it contains a complete root container, not prose.
+    if (allowEncodedObject && clean.startsWith('"')) {
+        let decoded;
+        try { decoded = JSON.parse(clean); } catch { /* Normal scanner below. */ }
+        if (typeof decoded === 'string' && /^[\s]*[\[{]/.test(decoded)) {
+            return parseModelObject(decoded, {allowTrailingCommas,allowRootArray,allowControlCharacters});
+        }
+    }
+    try { return object(parse(clean)); } catch (e) { if (e.diagnostic) throw e; }
+    const candidates = [];
+    let start = -1, stack = [], quoted = false, escaped = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (start < 0) {
+            if (c === '<') {
+                const opening = text.slice(i).match(/^<(think|thinking|analysis|script|style)\b[^>]*>/i);
+                if (opening) {
+                    if (/think|analysis/i.test(opening[1])) reasoningBlocks++;
+                    const end = new RegExp('<\\/' + opening[1] + '\\s*>', 'i').exec(text.slice(i + opening[0].length));
+                    if (!end) fail('MODEL_JSON_REASONING', /think|analysis/i.test(opening[1]) ? '思考标签未闭合' : '展示标签未闭合', '请检查模型是否只返回了思考或未完成回复。');
+                    i += opening[0].length + end.index + end[0].length - 1; continue;
+                }
+                if (text.startsWith('<!--', i)) {
+                    hiddenBlocks++;
+                    const end = text.indexOf('-->', i + 4);
+                    if (end < 0) fail('MODEL_JSON_TRUNCATED', '隐藏注释不完整，可能被截断');
+                    // Accept only an entire, explicitly structured ledger in a
+                    // comment. Never mine reasoning, snippets or durian-money
+                    // narrative events to invent a financial assessment.
+                    const body = text.slice(i + 4, end).trim().replace(/^durian-ledger\s*:\s*/i, '');
+                    try {
+                        const value = JSON.parse(body);
+                        if (value && !Array.isArray(value) && typeof value === 'object' &&
+                            (Array.isArray(value.recoveredAssets) || (value.initial && typeof value.initial === 'object' && !Array.isArray(value.initial)) ||
+                                ['events', 'valuations', 'ownership', 'business'].some(key => Array.isArray(value[key])))) {
+                            candidates.push(body); hiddenLedgers++;
+                        }
+                    } catch { /* No JSON surgery, no guessing missing values. */ }
+                    i = end + 2; continue;
+                }
+            }
+            if (c !== '{' && c !== '[') continue;
+            start = i; stack = [c]; quoted = false; escaped = false; continue;
+        }
+        if (quoted) {
+            if (escaped) escaped = false;
+            else if (c === '\\') escaped = true;
+            else if (c === '"') quoted = false;
+            continue;
+        }
+        if (c === '"') quoted = true;
+        else if (c === '{' || c === '[') stack.push(c);
+        else if (c === '}' || c === ']') {
+            if (stack.pop() !== (c === '}' ? '{' : '[')) fail('MODEL_JSON_SYNTAX', 'JSON 括号不匹配', '', '字符位置：' + (i + 1));
+            if (!stack.length) { candidates.push(text.slice(start, i + 1)); start = -1; }
+        }
+    }
+    if (start >= 0) fail('MODEL_JSON_TRUNCATED', 'JSON 不完整，可能被截断', '请检查酒馆回复长度或停止词；不会自动补齐金额。');
+    if (candidates.length !== 1) fail(candidates.length ? 'MODEL_JSON_AMBIGUOUS' : 'MODEL_JSON_MISSING',
+        candidates.length ? '返回多个 JSON，无法确定唯一账本' : '未返回 JSON 账本',
+        candidates.length ? '需要唯一的账本结果，不会替你选择其中一份。' : '本次未识别出可用账本；未写入任何数据，可手动重试。仅凭此错误不能确定是预设还是模型输出造成。', '完整候选数：' + candidates.length);
+    let value;
+    try { value = parse(candidates[0]); }
+    catch (error) {
+        // Native SyntaxError messages may include private response excerpts.
+        const offset = String(error.message).match(/\bposition\s+(\d+)/i)?.[1];
+        const message = String(error.message);
+        const detail = /control character/i.test(message) ? '字符串含未转义换行或控制字符'
+            : /escape|unicode/i.test(message) ? '字符串转义无效'
+            : /property name|property names/i.test(message) ? '字段名缺少英文双引号或分隔符错误'
+            : /after property value|after array element/i.test(message) ? '字段或数组项之间分隔错误（也可能是字符串内引号未转义）'
+            : /after property name/i.test(message) ? '字段名后缺少冒号'
+            : /unterminated string/i.test(message) ? '字符串未闭合' : '无法解析字段或值';
+        fail('MODEL_JSON_SYNTAX', 'JSON 语法无效：'+detail, '返回内容未通过语法检查，本次未保存，可手动重试。',
+            offset === undefined ? '' : '候选内字符位置：' + (Number(offset) + 1));
+    }
+    return object(value);
+}
+
+// Shared by every model-backed app; stored records still use strict JSON.parse.
+const parseAppObject = (raw, options = {}) => parseModelObject(raw, {
+    allowTrailingCommas: true, allowControlCharacters: true, allowEncodedObject: true, ...options,
+});
+
+const MODEL_JSON_CONTRACT = '当前仅完成上文指定的手机 App 数据任务。最终只输出一个完整 JSON 对象，字段名、数组、数量和类型严格遵循本次任务；沿用人物、语言、事实与知情边界，不续写小说、状态栏或额外剧情。不输出解释、代码块、注释或多个候选；字符串中的换行用\\n，双引号用\\"转义。不得省略必需字段，不猜测缺失的金额、日期或记录。';
+
+// SillyTavern's backend reads json_schema, not a raw response_format field.
+// A non-strict open object enforces JSON syntax without replacing app validation.
+const phoneJsonSchema = () => ({
+    name: 'phone_task', strict: false, value: {type: 'object', additionalProperties: true},
+});
+
+return {parseModelObject,parseAppObject,MODEL_JSON_CONTRACT,phoneJsonSchema};
+})();
 const {normalizeApiUrl,createKeyStore,apiError,extractApiText,createApiClient,independentPayload} = (() => {
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
@@ -652,7 +795,11 @@ function apiError(status, data) {
     const reported = Number.isInteger(declared) && declared >= 400 && declared <= 599 ? declared : Object.hasOwn(labels, message.trim()) ? labels[message.trim()] : null;
     const effective = reported || status;
     let reason = '未识别', hint = '请核对酒馆服务端同一时刻的错误记录（分享前去除密钥和正文）。';
-    if (data?.quota_error === true || /insufficient_quota|quota_exceeded|resource_exhausted/.test(code)) { reason='额度不足';hint='请检查服务额度。'; }
+    const jsonUnsupported = ([400, 422].includes(effective) || (status >= 200 && status < 300 && !!raw)) &&
+        /response[_ ]?format|json[_ ]?(?:object|schema)|structured output|json mode/i.test(code + ' ' + message) &&
+        /unsupported|not supported|does not support|unknown|unrecognized|invalid|not allowed|not available/i.test(code + ' ' + message);
+    if (jsonUnsupported) { reason='JSON 输出模式不被支持';hint='当前中转不接受结构化 JSON 参数，手机可改用原请求格式重试一次。'; }
+    else if (data?.quota_error === true || /insufficient_quota|quota_exceeded|resource_exhausted/.test(code)) { reason='额度不足';hint='请检查服务额度。'; }
     else if ([401,403].includes(effective) || /authentication|invalid_api_key/.test(code)) { reason='认证失败';hint='请检查这个地址对应的 API 密钥和访问权限。'; }
     else if (effective===429 || /rate_limit/.test(code)) { reason='请求过于频繁';hint='请稍后手动重试。'; }
     else if (effective===404 || /model_not_found/.test(code)) { reason='找不到接口或模型';hint='请检查 API 地址及模型 ID。'; }
@@ -664,13 +811,14 @@ function apiError(status, data) {
     else if (effective>=500) { reason='服务内部错误';hint='请核对中转服务记录，再手动重试。'; }
     const prefix = status>=200&&status<300 ? '酒馆接口已响应（HTTP '+status+'），但返回了错误结果，未取得模型回复。' : 'API 请求失败'+(status?'（HTTP '+status+'）':'')+'。';
     const error = failure(prefix+(reason==='未识别'?'':reason+'。')+hint, status===429 && data?.quota_error!==true);
+    if (jsonUnsupported) error.code = 'API_JSON_MODE_UNSUPPORTED';
     error.diagnostic = '错误分类：'+reason+'；错误体报告状态：'+(reported??'未提供')
         +'；错误结构：'+(raw===null?'null':Array.isArray(raw)?'array':typeof raw)
         +'；含错误说明：'+(message?'是':'否')+'；额度标记：'+(data?.quota_error===true?'是':'否');
     return error;
 }
 
-function extractApiText(data) {
+function extractApiText(data, onMetadata = () => {}) {
     if (data?.error) throw apiError(0, data);
     const choices = Array.isArray(data?.choices) ? data.choices : [];
     const choice = choices[0], message = choice?.message, content = message?.content;
@@ -710,14 +858,21 @@ function extractApiText(data) {
         }
         fail('API_EMPTY_OUTPUT','接口返回的最终回复文字为空。本次未保存；空回复本身不能说明是 token 上限问题。');
     }
+    onMetadata({
+        finishReason: finish,
+        completionTokens: tokenCount(data?.usage?.completion_tokens),
+        reasoningTokens: tokenCount(data?.usage?.completion_tokens_details?.reasoning_tokens),
+        textCharacters: text.trim().length,
+    });
     return text.trim();
 }
 
 function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
     const active = new Set();
+    const unsupportedSchemas = new Set();
     let cancelEpoch = 0;
     let preparation = null;
-    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}) {
+    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}) {
         if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
@@ -752,7 +907,7 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
             if (path === 'generate') {
                 stage = '正在读取模型回复文字';
                 onProgress(stage);
-                return extractApiText(data);
+                return extractApiText(data, onResponseMeta);
             }
             return data;
         } catch (error) {
@@ -783,6 +938,7 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
             if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
             const key = getKey(config.baseUrl);
             const fingerprint = JSON.stringify(config), epoch = cancelEpoch;
+            const schemaEndpoint = JSON.stringify([config.baseUrl,config.model]);
             const current = () => epoch === cancelEpoch && isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             // The host uses shared prompt hooks. Release this queue before the network call.
@@ -806,27 +962,47 @@ function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetc
                 if (payload.max_completion_tokens !== undefined) payload.max_completion_tokens = limit;
                 else payload.max_tokens = limit;
             }
+            // JSON-only phone tasks are distinct from prose generation. Roleplay
+            // stop sequences could cut a JSON object mid-value. Keep the full
+            // host context and other portable settings, without rewriting prefs.
+            if (options.requireJsonObject === true) {
+                delete payload.stop;
+                delete payload.tools;
+                delete payload.tool_choice;
+                // This endpoint reconstructs the provider body; it does NOT
+                // forward response_format. Use its native schema envelope and
+                // replace any unrelated roleplay schema for this request only.
+                delete payload.response_format;
+                delete payload.json_schema;
+                if (!unsupportedSchemas.has(schemaEndpoint)) payload.json_schema = phoneJsonSchema();
+            }
             // Only the caller's task contract is appended, after preset hooks.
-            // Keep all roleplay context and portable settings intact.
+            // Keep all roleplay context and other portable settings intact.
             if (typeof options.finalOutputContract === 'string' && options.finalOutputContract.trim()) {
                 payload.messages = [...payload.messages, { role: 'system', content: options.finalOutputContract }];
             }
             try {
-                try { return await post('generate', config, key, payload, current, onProgress); }
+                try { return await post('generate', config, key, payload, current, onProgress, options.onResponseMeta); }
                 catch (error) {
-                    if (options.retryEmptyOnce!==true || error.code!=='API_EMPTY_OUTPUT' || !current()) throw error;
-                    // Only opted-in X tasks use this recovery. A successful response is
-                    // never repeated; the retry keeps the full original context
-                    // with a smaller per-request budget and unchanged settings.
-                    const retryPayload={...payload};
-                    const field=retryPayload.max_completion_tokens!==undefined?'max_completion_tokens':'max_tokens';
-                    retryPayload[field]=Math.min(4096, Math.max(1024, Math.floor((Number(retryPayload[field])||8192)/2)));
-                    onProgress('X 请求收到空回复，降低输出上限重试一次');
-                    try { return await post('generate', config, key, retryPayload, current, onProgress); }
-                    catch (again) {
-                        again.diagnostic=(again.diagnostic?again.diagnostic+'\n':'')+'X 请求空回复恢复：已执行一次较低上限重试';
-                        throw again;
+                    // Some OpenAI-compatible providers reject json_schema rather
+                    // than ignoring it. Retry the SAME request without that
+                    // optional format flag only on an explicitly identified
+                    // unsupported-parameter error. Never retry other 400s.
+                    if (options.requireJsonObject === true && error.code === 'API_JSON_MODE_UNSUPPORTED' &&
+                        payload.json_schema && current()) {
+                        unsupportedSchemas.add(schemaEndpoint);
+                        const fallback = { ...payload };
+                        delete fallback.json_schema;
+                        delete fallback.response_format;
+                        onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
+                        try { return await post('generate', config, key, fallback, current, onProgress, options.onResponseMeta); }
+                        catch (again) {
+                            again.diagnostic = (again.diagnostic ? again.diagnostic + '\n' : '') +
+                                'JSON 输出参数不受支持：已使用无此参数的同任务兼容请求一次';
+                            throw again;
+                        }
                     }
+                    throw error;
                 }
             } catch (error) {
                 if (error.diagnostic) {
@@ -2084,7 +2260,7 @@ function createWechatMoments({memory,phone,getContext,getSettings}) {
                 });
                 return {posts,interactions};
             },current,null,{retries:0,skipExternalMemory:true,skipSMSClassification:true,
-                parseResponse:parseModelObject,finalOutputContract:'仅返回一个合法 JSON 对象，根字段 moments 和 interactions 均为数组。不能输出正文、说明或隐藏标记。'});
+                parseResponse:parseAppObject,finalOutputContract:'仅返回一个合法 JSON 对象，根字段 moments 和 interactions 均为数组。不能输出正文、说明或隐藏标记。'});
             for(const p of data.posts){
                 const dedupe=p.authorId+':'+p.text;
                 if(usedPosts.has(dedupe)||wxMoments(state).some(m=>m.authorId===p.authorId&&m.text===p.text))continue;
@@ -4006,7 +4182,26 @@ function createAssetPanel({ adapter, getView, redraw, notice }) {
 
 return {createAssetPanel};
 })();
-const {calendarRegionKey,calendarSet,calendarPersonal,validateCalendarEvent,validateCalendarDatabase,calendarOccurrences,calendarMonth,calendarDue,calendarPrompt} = (() => {
+const {parseCalendarResponse,calendarRegionKey,calendarSet,calendarPersonal,validateCalendarEvent,validateCalendarDatabase,calendarOccurrences,calendarMonth,calendarDue,calendarPrompt} = (() => {
+
+// A calendar response must contain exactly one complete JSON object. Allow
+// wrapper prose, fenced JSON and redundant trailing commas; never infer dates
+// or holidays from free text. Compact tuple entries reduce response size.
+function parseCalendarResponse(raw) {
+    let data;
+    try { data = parseAppObject(raw, { allowTrailingCommas: true }); }
+    catch (failure) {
+        const code = failure.code || 'CALENDAR_JSON_INVALID';
+        throw Object.assign(new Error('模型没有返回完整可用的节日 JSON，请重试刷新。'), {
+            code, diagnostic: '任务：榴莲日历；错误代码：' + code + '；返回字符数：' + String(raw ?? '').length
+                + (failure.diagnostic ? '\n'+failure.diagnostic.replaceAll('资产评估','榴莲日历').replaceAll('账本','节日资料').replaceAll('金额','日期') : ''),
+        });
+    }
+    if (!Array.isArray(data.holidays)) return data;
+    return { ...data, holidays: data.holidays.map(item => Array.isArray(item)
+        ? { date: item[0], name: item[1], note: item[2] ?? '' } : item) };
+}
+
 
 const calendarRegionKey = city => String(city || '').trim().normalize('NFKC').toLowerCase().replace(/\s+/g, '');
 const calendarSet = (key, value) => ({ collection: 'calendar', key, value });
@@ -4095,7 +4290,7 @@ function calendarPrompt(rows) {
         JSON.stringify(rows.map(({ name, date, note, stage, kind }) => ({ name, date, kind, note, reminder: stage === 'today' ? '今天' : '还有3天' }))).replace(/\{\{/g, '\\u007b\\u007b');
 }
 
-return {calendarRegionKey,calendarSet,calendarPersonal,validateCalendarEvent,validateCalendarDatabase,calendarOccurrences,calendarMonth,calendarDue,calendarPrompt};
+return {parseCalendarResponse,calendarRegionKey,calendarSet,calendarPersonal,validateCalendarEvent,validateCalendarDatabase,calendarOccurrences,calendarMonth,calendarDue,calendarPrompt};
 })();
 const {createCalendarPanel} = (() => {
 

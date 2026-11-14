@@ -1,16 +1,17 @@
 import { dateDay, dayDate } from './story-clock.js?v=1.2';
-import { parseModelObject } from './model-json.js?v=1.2.59';
+import { parseAppObject } from './model-json.js?v=1.2.62';
 
 // A calendar response must contain exactly one complete JSON object. Allow
 // wrapper prose, fenced JSON and redundant trailing commas; never infer dates
 // or holidays from free text. Compact tuple entries reduce response size.
 export function parseCalendarResponse(raw) {
     let data;
-    try { data = parseModelObject(raw, { allowTrailingCommas: true }); }
+    try { data = parseAppObject(raw, { allowTrailingCommas: true }); }
     catch (failure) {
         const code = failure.code || 'CALENDAR_JSON_INVALID';
         throw Object.assign(new Error('模型没有返回完整可用的节日 JSON，请重试刷新。'), {
-            code, diagnostic: '任务：榴莲日历；错误代码：' + code + '；返回字符数：' + String(raw ?? '').length,
+            code, diagnostic: '任务：榴莲日历；错误代码：' + code + '；返回字符数：' + String(raw ?? '').length
+                + (failure.diagnostic ? '\n'+failure.diagnostic.replaceAll('资产评估','榴莲日历').replaceAll('账本','节日资料').replaceAll('金额','日期') : ''),
         });
     }
     if (!Array.isArray(data.holidays)) return data;

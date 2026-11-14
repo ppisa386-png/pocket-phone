@@ -4,10 +4,10 @@ import { reservedCash } from './assets-core.js?v=1.2';
 import { migrateDailyArchives } from './daily-archive.js?v=1.2.57';
 import { syncCommContext, COMM_RECORD_COLLECTIONS } from './comm-context.js?v=1.2.57';
 import { storyTime,readStoryClock } from './story-clock.js?v=1.2';
-import { importStoryAssets } from './assets-story.js?v=1.2.57';
+import { importStoryAssets } from './assets-story.js?v=1.2.62';
 import { importStorySquare } from './x-opinion.js?v=1.2.57';
-import { importStoryPhone } from './story-phone.js?v=1.2.58';
-import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.57';
+import { importStoryPhone } from './story-phone.js?v=1.2.62';
+import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.62';
 import { importStoryLocation } from './weather.js?v=1.2.57';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 

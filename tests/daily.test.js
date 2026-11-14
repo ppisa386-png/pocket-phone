@@ -114,7 +114,7 @@ test('reprinting a story preserves identity and adoption, multiple lead labels a
 
 test('wrapper JSON is accepted, truncated JSON fails atomically with a newspaper error',async()=>{
  const f=setup();try{f.reply(()=>'<think>prepare</think>\n```json\n'+JSON.stringify(complete({articles:[article()]}))+'\n```');ok(await f.daily.update());const old=first(f);
-  f.reply(()=>'SECRET_TEXT {"articles":[');const r=await f.daily.update();assert.equal(r.ok,false);assert.match(r.error,/日报/);assert.doesNotMatch(r.error,/SECRET_TEXT|账本/);assert.equal(first(f).id,old.id);assert.equal(f.calls(),2);
+  f.reply(()=>'SECRET_TEXT {"articles":[');const r=await f.daily.update();assert.equal(r.ok,false);assert.match(r.error,/日报/);assert.doesNotMatch(r.error,/SECRET_TEXT|账本/);assert.equal(first(f).id,old.id);assert.equal(f.calls(),3);
  }finally{f.close();}
 });
 test('save failure, changed chat and late response never leave a partial new edition',async()=>{

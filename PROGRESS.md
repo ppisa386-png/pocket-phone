@@ -1,3 +1,11 @@
+## v1.2.62 · 全 App JSON 解析、酒馆转发参数与统一恢复（2026-11-14；基线 b867eb2440358e44972105b5504e5abd176620c4）
+**用户要求 / 实现状态**：检查所有 App 经常出现的 JSON 错误，修复并直接推送；已实现。截图为日历初始化及 Amazon 搜索失败，没有原始模型回复，未将具体语法错误归因于某个模型。
+**确认的问题**：电话/短信/天气定位/外卖/代付仍走旧严格解析；日报和聊天等解析能力不同，恢复只开放少数任务。更关键的是 SillyTavern release 的后端会自行组装 OpenAI 请求，读取 json_schema 并转换成上游 response_format，而不透传浏览器的 response_format。v1.2.61 的测试只检查浏览器参数，未验证这一转换，原强制JSON约束可能根本没有生效。依据：https://github.com/SillyTavern/SillyTavern/blob/release/src/endpoints/backends/chat-completions.js （json_schema 分支及 requestBody）；quiet 长度接口依据同仓库 public/script.js 的 generateQuietPrompt。
+**修复**：model-json 新增所有 App 共用的 parseAppObject，仅修复可无损表示的控制字符、尾逗号和单层重复编码，保留严格底层解析及所有既有业务校验。phone.request 对所有 App 统一最终格式要求和一次格式恢复，阻止格式错误落入15次全局重试；空回复/明确截断亦一次恢复，截断增预算。独立 API 使用酒馆原生 schema 包装，清理本次旧 schema/stop/tools；不支持 schema 时仅兼容回退一次并按接口与模型记忆本次会话能力。日报默认输出上限16384，其余未指定任务8192；任务已指定预算保留，跟随酒馆使用宿主 responseLength。微信朋友圈等旁路模型解析也已统一，剩余 JSON.parse 均为证据/本地保存/内部序列化读取，维持原校验。
+**缓存与打包**：版本1.2.62，变更模块及所有传递导入者同步缓存标识；预览构建加入共享model-json依赖，更新随附preview.html。其他源文件仅因依赖缓存标识调整而变动。
+**验证证据**：修改前完整Node回归811/811；修复后839/839通过，新增28项覆盖12个App×宿主/独立模式、无损解析、ST schema字段转换与不支持回退缓存、上游截断加预算及原子保存、业务/网络/取消隔离。保留并更新原有格式恢复次数断言，原财务、通信语言/隐私、日历、订单、时间/回退等回归全部通过。npm run build:preview成功；以CRLF兼容的git diff --check检查。没有连接用户真实中转或使用用户密钥。
+**保持与限制**：无UI/玩法修改，无新事实或填充假数据，无已有消息/商品/订单/账本删除；成功前不提交新业务结果。跟随酒馆沿用宿主自己的API及停止词处理，未偷偷改其全局预设；独立结构化支持视具体模型/中转而定，反复违规仍会给出安全诊断。参数不支持回退与一次模型格式恢复可能合计三次HTTP，日志分别说明，不承诺永不报错。发布用非强制推送，远端CI以新提交为准。
+
 ## v1.2.61 · assets/calendar JSON 语法错误、独立 API 结构化模式及版本缓存修复（2026-11-14；基线 58b9dda4403e96c0ee35b7e394812a501039bdf3）
 **问题与证据**：用户 v1.2.60 截图显示 assets 在独立 API 收到175字符却报 MODEL_JSON_SYNTAX，calendar 两次回复约178/195字符仍报同一错误。截图并未提供原始模型文本；不能仅凭长度断言模型或中转原因。审查发现重要缓存缺口：尽管版本号更新至1.2.60，入口 index.js 对 Amazon 仍使用 v=1.2.14、对独立API仍使用 v=1.2.38，更新的模块可能被旧浏览器缓存遮蔽。
 **实现完成**：改 index.js 的 Amazon 和 API 导入 cache key 到1.2.61，同时把 assets/calendar/phone 与正式版本同步并增守护测试。src/api.js 的独立 API 数据任务可在本轮请求要求 json_object；移除仅本轮不适合结构化 JSON 的 stop/tools/tool_choice，保留完整宿主上下文、API永久设置、其他采样参数；只有上游明确不支持 response_format（400/422或200封装错误）才去掉该参数兼容回退一次，不自动重发其他连接错误。以无原文的 finish_reason/输出token/推理token摘要增强解析失败诊断。

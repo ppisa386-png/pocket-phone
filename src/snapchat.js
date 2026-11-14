@@ -1,6 +1,6 @@
 import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
-import { parseModelObject } from './model-json.js?v=1.2';
+import { parseAppObject } from './model-json.js?v=1.2.62';
 import { requireCash, moneyMinor } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';
@@ -19,7 +19,7 @@ export function snapStoryRefreshState(state, revision = state.revision) {
 }
 const setSnap = value => ({collection:'snapchat',key:value.id,value});
 export function parseSnapObject(raw, label = 'Snapchat') {
-    try { return parseModelObject(raw); }
+    try { return parseAppObject(raw); }
     catch (error) {
         const local = value => value?.replaceAll('资产评估',label).replaceAll('账本',label+' 数据').replaceAll('金额','邀请或消息');
         throw Object.assign(new Error(local(error.message)), {code:error.code,diagnostic:local(error.diagnostic)});

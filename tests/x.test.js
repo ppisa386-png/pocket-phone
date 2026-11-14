@@ -88,7 +88,7 @@ test('X account discovery accepts trailing commas once and keeps existing accoun
   ok(await f.x.discover('Alex'));assert.equal(f.count(),1);assert.equal(xItems(f.state(),'account').length,1);
   assert.match(f.prompt(),/字段名及字符串必须用英文双引号/);
   const before=structuredClone(f.state().x);
-  f.reply(()=>'{accounts:[]}');const failure=await f.x.discover('Another');assert.equal(failure.ok,false);assert.equal(failure.code,'MODEL_JSON_SYNTAX');assert.deepEqual(f.state().x,before);assert.equal(f.count(),2);
+  f.reply(()=>'{accounts:[]}');const failure=await f.x.discover('Another');assert.equal(failure.ok,false);assert.equal(failure.code,'MODEL_JSON_SYNTAX');assert.deepEqual(f.state().x,before);assert.equal(f.count(),3);
   f.reply(()=>'{"accounts":[]}');ok(await f.x.discover('Nobody'));assert.deepEqual(f.state().x,before);
  }finally{f.close();}
 });
@@ -146,8 +146,8 @@ test('X home accepts one complete wrapped result and explains invalid fields wit
   assert.match(f.prompt(),/最终只输出本任务要求的一个JSON对象/);
   const before=structuredClone(f.state().x);
   f.reply(()=>'{"posts":');const bad=await f.x.refresh();assert.equal(bad.ok,false);assert.match(bad.error,/X 数据返回格式不正确.*不完整/);
-  assert.deepEqual(f.state().x,before);assert.equal(f.count(),2);
-  f.reply({posts:'not-array'});const wrong=await f.x.refresh();assert.equal(wrong.ok,false);assert.match(wrong.error,/字段 posts/);assert.equal(f.count(),3);
+  assert.deepEqual(f.state().x,before);assert.equal(f.count(),3);
+  f.reply({posts:'not-array'});const wrong=await f.x.refresh();assert.equal(wrong.ok,false);assert.match(wrong.error,/字段 posts/);assert.equal(f.count(),4);
   f.reply(()=>'{"posts":[]}\n{"posts":[]}');assert.equal((await f.x.refresh()).ok,false);assert.deepEqual(f.state().x,before);
  }finally{f.close();}
 });
@@ -1265,12 +1265,12 @@ test('X wrong-shape array is retried once, repeated bad results are not saved or
  }finally{f.close();}
 });
 
-test('X truncated or syntactically invalid JSON is not repaired by guessing or extra requests',async()=>{
+test('X truncated or syntactically invalid JSON gets one fresh recovery without guessing data',async()=>{
  const f=setup();try{
   for(const [raw,code] of [['{"posts":','MODEL_JSON_TRUNCATED'],['{posts:[]}','MODEL_JSON_SYNTAX']]){
    const count=f.count();f.reply(()=>raw);
    const result=await f.x.refresh();
-   assert.equal(result.ok,false);assert.equal(result.code,code);assert.equal(f.count(),count+1);
+   assert.equal(result.ok,false);assert.equal(result.code,code);assert.equal(f.count(),count+2);
   }
  }finally{f.close();}
 });

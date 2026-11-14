@@ -1,5 +1,5 @@
 import { readStoryClock } from './story-clock.js?v=1.2';
-import { parseModelObject } from './model-json.js?v=1.2';
+import { parseAppObject } from './model-json.js?v=1.2.62';
 
 const MAX_POSTS = 5;
 const plain = (value, max) => String(value ?? '').trim().slice(0,max);
@@ -169,7 +169,7 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                 });
                 return {posts,interactions};
             },current,null,{retries:0,skipExternalMemory:true,skipSMSClassification:true,
-                parseResponse:parseModelObject,finalOutputContract:'仅返回一个合法 JSON 对象，根字段 moments 和 interactions 均为数组。不能输出正文、说明或隐藏标记。'});
+                parseResponse:parseAppObject,finalOutputContract:'仅返回一个合法 JSON 对象，根字段 moments 和 interactions 均为数组。不能输出正文、说明或隐藏标记。'});
             for(const p of data.posts){
                 const dedupe=p.authorId+':'+p.text;
                 if(usedPosts.has(dedupe)||wxMoments(state).some(m=>m.authorId===p.authorId&&m.text===p.text))continue;

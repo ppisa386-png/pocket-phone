@@ -8,6 +8,7 @@ import { HostEvents, installHostGeneration } from './host-fixture.js';
 import { normalizeSettings, VERSION } from '../src/config.js';
 import { readFileSync } from 'node:fs';
 import { createPhoneMemory } from '../src/memory.js';
+import { phoneJsonSchema } from '../src/model-json.js';
 import { createPhoneService } from '../src/phone.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { createAssets } from '../src/assets.js';
@@ -21,19 +22,30 @@ test('published version cache-busts the actual changed independent API and JSON 
   assert.ok(line,'entry must import '+module);
   assert.ok(line.includes("./src/"+module+".js?v="+VERSION+"'"),module+' must not keep an obsolete import cache key');
  }
+ const targets=new Set(['model-json','api','phone','amazon','assets','calendar-core','daily','snapchat','wechat-moments','x']);
+ const pending=[new URL('../index.js',import.meta.url)],visited=new Set(),found=new Set();
+ while(pending.length){
+  const url=pending.pop();if(visited.has(url.href))continue;visited.add(url.href);
+  for(const match of readFileSync(url,'utf8').matchAll(/['"](\.\/[^'"]+\.js)\?v=([^'"]+)['"]/g)){
+   const dependency=new URL(match[1],url),name=dependency.pathname.split('/').at(-1).slice(0,-3);
+   if(targets.has(name)){assert.equal(match[2],VERSION,name+' must use the new cache key through every importer');found.add(name);}
+   pending.push(dependency);
+  }
+ }
+ assert.deepEqual(found,targets);
 });
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
 
-test('all X refresh routes append feed schema, preserve old posts on syntax failure and make one request',async()=>{
+test('all X refresh routes preserve old posts after one failed syntax recovery',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
  try{
   f.reply(()=>JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',has_account:true,text:'Old post'}]})));assert.equal((await x.refresh()).ok,true);
   const a=xItems(f.phone.snapshot(),'account')[0];await x.follow(a.id,true);
   const before=structuredClone(f.phone.snapshot().x||{});
-  f.reply(options=>{calls++;const last=JSON.parse(options.body).messages.at(-1);assert.equal(last.role,'system');assert.match(last.content,/本次为X刷新/);assert.match(last.content,/字符串内部/);return '{"posts":[{"text":"PRIVATE\nsecret"}]}';});
-  for(const mode of [false,true,'square']){const result=await x.refresh(mode);assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_SYNTAX');assert.match(result.error,/未转义换行/);assert.doesNotMatch(result.error,/PRIVATE|secret/);assert.deepEqual(f.phone.snapshot().x,before);}
-  assert.equal(calls,3);
+  f.reply(options=>{calls++;const last=JSON.parse(options.body).messages.at(-1);assert.equal(last.role,'system');assert.match(last.content,/本次为X刷新/);assert.match(last.content,/字符串内部/);return '{posts:[{"text":"PRIVATE secret"}]}';});
+  for(const mode of [false,true,'square']){const result=await x.refresh(mode);assert.equal(result.ok,false);assert.equal(result.code,'MODEL_JSON_SYNTAX');assert.match(result.error,/字段名/);assert.doesNotMatch(result.error,/PRIVATE|secret/);assert.deepEqual(f.phone.snapshot().x,before);}
+  assert.equal(calls,6);
   f.reply(()=>JSON.stringify(feedResult()));assert.equal((await x.refresh()).ok,true);
  }finally{f.close();}
 });
@@ -160,7 +172,7 @@ test('structured data calls ask for JSON object without inherited roleplay stops
  assert.equal(await f.client.generate('task',null,()=>true,()=>{},{requireJsonObject:true,
   finalOutputContract:'Only one valid JSON object.',maxTokens:4096,onResponseMeta:x=>metadata.push(x)}),'{"holidays":[]}');
  assert.equal(seen.length,1);
- assert.deepEqual(seen[0].response_format,{type:'json_object'});
+ assert.deepEqual(seen[0].json_schema,phoneJsonSchema());assert.equal(seen[0].response_format,undefined);
  assert.equal(seen[0].stop,undefined,'roleplay stop sequences cannot truncate task JSON');
  assert.equal(seen[0].max_tokens,4096);
  assert.deepEqual(seen[0].messages,[...original.messages,{role:'system',content:'Only one valid JSON object.'}]);
@@ -183,8 +195,8 @@ test('HTTP-200 wrapped provider rejection of JSON mode also retries without this
   return response('{"ok":true}');
  }});
  assert.equal(await f.client.generate('task',null,()=>true,()=>{},{requireJsonObject:true}),'{"ok":true}');
- assert.equal(calls,2);assert.deepEqual(payloads[0].response_format,{type:'json_object'});
- assert.equal(payloads[1].response_format,undefined);
+ assert.equal(calls,2);assert.deepEqual(payloads[0].json_schema,phoneJsonSchema());assert.equal(payloads[0].response_format,undefined);
+ assert.equal(payloads[1].response_format,undefined);assert.equal(payloads[1].json_schema,undefined);
 });
 
 test('unsupported JSON output parameter falls back once; unrelated upstream errors never retry or expose text',async()=>{
@@ -198,8 +210,8 @@ test('unsupported JSON output parameter falls back once; unrelated upstream erro
  const answer=await f.client.generate('task',null,()=>true,v=>progress.push(v),{requireJsonObject:true});
  assert.equal(answer,'{"region":"Tokyo","holidays":[]}');
  assert.equal(seen.length,2);
- assert.deepEqual(seen[0].response_format,{type:'json_object'});
- assert.equal(seen[1].response_format,undefined);
+ assert.deepEqual(seen[0].json_schema,phoneJsonSchema());assert.equal(seen[0].response_format,undefined);
+ assert.equal(seen[1].response_format,undefined);assert.equal(seen[1].json_schema,undefined);
  assert.equal(seen[1].stop,undefined,'do not restore roleplay stop sequences');
  assert.deepEqual(seen[0].messages,seen[1].messages);
  assert.ok(progress.some(s=>/兼容格式/.test(s)));
@@ -219,7 +231,7 @@ test('asset first assessment can correct a syntax-only JSON failure while keepin
   let calls=0;
   f.reply(options=>{
    calls++;const body=JSON.parse(options.body);
-   assert.deepEqual(body.response_format,{type:'json_object'});
+   assert.deepEqual(body.json_schema,phoneJsonSchema());assert.equal(body.response_format,undefined);
    assert.equal(body.max_tokens,8192);
    if(calls===1)return "{'initial':{'balance':5000}}"; // Not legal JSON, never copied or guessed.
    assert.match(body.messages.at(-1).content,/小榴莲格式恢复/);
@@ -244,11 +256,11 @@ test('independent legacy repair sends final schema and reads wrapped JSON once; 
   await f.memory.commit(ticket,[{collection:'assets',key:'wallet',value:wallet}]);const before=structuredClone(f.phone.snapshot().assets);
   let calls=0;
   f.reply(options=>{calls++;const body=JSON.parse(options.body);assert.match(body.messages.at(-1).content,/recoveredAssets/);assert.match(body.messages.at(-1).content,/不是角色扮演正文续写/);return '收到，我会核对这些物品。';});
-  const failure=await assets.update();assert.equal(failure.ok,false);assert.equal(failure.code,'MODEL_JSON_MISSING');assert.deepEqual(f.phone.snapshot().assets,before);assert.equal(calls,1);
+  const failure=await assets.update();assert.equal(failure.ok,false);assert.equal(failure.code,'MODEL_JSON_MISSING');assert.deepEqual(f.phone.snapshot().assets,before);assert.equal(calls,2);
   f.reply(()=>{calls++;return '<!--'+JSON.stringify({recoveredAssets:[{sourceIndex:1,evidence,name:'礼服',owner:'user',category:'luxury',amount:null,marketValue:2000}]})+'-->';});
-  const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(result.value.repaired,true);assert.equal(calls,2);
+  const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(result.value.repaired,true);assert.equal(calls,3);
   assert.equal(cashBalance(f.phone.snapshot()),100000);assert.equal(assetRows(f.phone.snapshot(),'holding').length,1);
-  assert.equal((await assets.update()).ok,false);assert.equal(calls,2);
+  assert.equal((await assets.update()).ok,false);assert.equal(calls,3);
  }finally{f.close();}
 });
 
@@ -292,17 +304,17 @@ test('empty final-text failures keep HTTP, request and safe response metadata th
     });
 });
 
-test('empty SMS is not repeatedly requested; unchanged manual retry succeeds without duplicating the message',async()=>{
+test('empty SMS receives only one recovery; unchanged manual retry succeeds without duplicating the message',async()=>{
     const errors=[],f=phoneFixture(e=>errors.push(e));try{
         await f.phone.scan();f.settings.retries=15;const bodies=[];
         f.reply(options=>{bodies.push(JSON.parse(options.body));return {ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{content:''}}]})};});
         await f.phone.sendMessage('card:alex.png','Keep original');
-        assert.equal(bodies.length,1);assert.equal(errors.at(-1).code,'API_EMPTY_OUTPUT');
+        assert.equal(bodies.length,2);assert.equal(errors.at(-1).code,'API_EMPTY_OUTPUT');
         assert.match(errors.at(-1).diagnostic,/HTTP：200/);assert.match(errors.at(-1).diagnostic,/正在读取模型回复文字/);
         const sent=Object.values(f.phone.snapshot().messages)[0];assert.equal(sent.replyStatus,'failed');
         f.reply(options=>{bodies.push(JSON.parse(options.body));return {ok:true,status:200,json:async()=>({choices:[{text:'{"status":"reply","text":"Successful retry"}',finish_reason:'stop'}]})};});
         await f.phone.retryMessage(sent.id);
-        assert.deepEqual(bodies[1],bodies[0]);
+        assert.deepEqual(bodies[2],bodies[0]);
         const messages=Object.values(f.phone.snapshot().messages);assert.equal(messages.length,2);assert.equal(messages[1].text,'Successful retry');
     }finally{f.close();}
 });
