@@ -2,6 +2,7 @@ import { walletCurrency, majorAmount, formatMoney, validCurrency } from './curre
 import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.2';
 import { dateDay, readStoryClock } from './story-clock.js?v=1.2';
 import { shopImageKey, AMAZON_IMAGE_KEYS } from './amazon-art.js?v=1.2.14';
+import { parseModelObject } from './model-json.js?v=1.2.59';
 const shopText=(s,n=2000)=>typeof s==='string'?s.trim().slice(0,n):'';
 export const shopItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const shopMoney=(minor,currency)=>formatMoney(minor,currency)+' '+currency;
@@ -52,6 +53,23 @@ export function resolveGiftRecipient(key,state,context){
         ...(candidate.contactId?{contactId:candidate.contactId}:{}),
         ...(candidate.characterId!==null?{characterId:candidate.characterId}:{})};
 }
+// Amazon requires one complete product collection. A model may wrap the JSON
+// in display prose/fences or return the products directly as a root array.
+// Never mine incomplete text or synthesize prices, currencies or brands.
+export function parseAmazonResponse(raw) {
+    try {
+        const parsed = parseModelObject(raw, { allowTrailingCommas: true, allowRootArray: true });
+        return Array.isArray(parsed) ? { products: parsed } : parsed;
+    } catch (error) {
+        throw Object.assign(new Error('Amazon 商品搜索没有返回完整可用的 JSON，请重试搜索。'), {
+            code: error.code || 'AMAZON_JSON_INVALID',
+            diagnostic: '任务：Amazon 商品搜索；错误代码：' + (error.code || 'AMAZON_JSON_INVALID')
+                + '；返回字符数：' + String(raw ?? '').length
+                + (error.diagnostic ? '；原解析情况：' + error.diagnostic.replace(/任务：资产评估；?/g, '') : ''),
+        });
+    }
+}
+
 export function validateProducts(data,currency = null) {
     if(!Array.isArray(data?.products)||data.products.length>8)throw Error('商品信息格式不正确，请重试。');
     return data.products.map(p=>{
@@ -82,7 +100,14 @@ export function createAmazon({memory,phone,getContext,getSettings,paymentRequest
             const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.amazon+'\n'+getSettings().prompts.amazonShopping+
                 '\n当前任务：Amazon 商品搜索。商品按 '+(currency||'user 人设和正文的常住地当地币种（不依据语言或旅行地点）')+' 定价。购物需求：'+JSON.stringify(q)+'。当前经济资料：'+JSON.stringify(economy)+'。余额为 null 表示尚未建账，不能当成零或臆造已知余额；推荐档次结合人设、已有财产和可用资金，用户明确预算/偏好优先。'+
                 '\n给出 4—6 件可选择的具体商品。image 只能从 '+AMAZON_IMAGE_KEYS.join('、')+' 中选一个最接近商品类别的彩色图标编号，不生成图像或图片网址。输出 {"products":[{"name":"款式/系列与品名","brand":"品牌名；无品牌商品可空","luxury":false,"description":"材质、特点与商品说明","image":"headphone","price":"单件价格数字，按币种精度","currency":"符合剧情的货币","variants":["规格/颜色/尺寸，可选项均为同一价格"],"reviews":[{"name":"买家网名","rating":5,"text":"简短买家评价"}]}]}。不返回 user 已购买、付款、收货或新增资产等结论，不替 user 决定。';
-            const products=await request(prompt,data=>validateProducts(data,currency),current);
+            const outputRule = '当前仅执行 Amazon 商品搜索，不续写剧情或购物操作。最终只返回唯一完整 JSON 对象，不输出推理、解释、Markdown、代码块或额外对象。顶层必须是 products 数组，包含 4—6 件商品。每项包含 name、brand、luxury（布尔值）、description、image、price（数字字符串）、currency、variants（字符串数组）和 reviews（评价数组）；每条评价包含 name、rating（1到5）和 text。价格必须为正且与当地币种一致，奢侈品必须有品牌。格式示例：{"products":[{"name":"商品名","brand":"品牌名","luxury":false,"description":"商品简介","image":"headphone","price":"100","currency":"USD","variants":["标准款"],"reviews":[{"name":"买家","rating":5,"text":"评价"}]}]}。示例只说明字段形状，实际须按本次购物需求生成 4—6 件；不能照抄示例价格或币种。';
+            const products=await request(prompt,data=>{
+                try { return validateProducts(data,currency); }
+                catch(error){ throw Object.assign(new Error(error.message), {code:'AMAZON_DATA_INVALID'}); }
+            },current,null,{
+                retries: 0, parseResponse: parseAmazonResponse, formatRetryOnce: true,
+                maxTokens: 4096, finalOutputContract: outputRule,
+            });
             const changes=shopItems(state,'product').map(p=>({collection:'orders',key:p.id,value:null}));
             changes.push(...products.map(shopSet),shopSet({id:'catalog',type:'catalog',query:q}));await commit(changes);
         });},
