@@ -24,7 +24,7 @@ export function createCalendar({ memory, phone, getContext }) {
                 catch (error) { throw Object.assign(new Error(error.message), { code: 'CALENDAR_DATA_INVALID' }); }
             }, current, null, {
                 retries: 0, skipExternalMemory: true, parseResponse: parseCalendarResponse,
-                formatRetryOnce: true, maxTokens: 4096, finalOutputContract: outputRule,
+                formatRetryOnce: true, requireJsonObject:true, maxTokens: 4096, finalOutputContract: outputRule,
             });
             if (!current()) throw Error('聊天或地点已变化，本次刷新未保存。');
             const latest = await memory.read();
