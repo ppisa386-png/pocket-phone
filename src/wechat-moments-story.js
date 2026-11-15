@@ -5,7 +5,7 @@ import {wxFriends,canViewWxMoment,wxMoments} from './wechat-moments.js?v=1.2.71'
 
 const short=(value,max)=>typeof value==='string'&&value.trim()&&value.length<=max?value.trim():null;
 const record=value=>value&&typeof value==='object'&&!Array.isArray(value);
-const publishAction=/(?:发表|发布|发出|发到|更新|上传).{0,30}朋友圈|朋友圈.{0,30}(?:发表|发布|发出|更新|上传)|(?:posted|published).{0,30}moments?/i;
+const publishAction=/(?:发表|发布|发出|发到|发了|晒了|晒出|更新|上传|分享).{0,30}朋友圈|朋友圈.{0,30}(?:发表|发布|发出|发到|发了|晒了|晒出|更新|上传|分享)|(?:posted|published|uploaded).{0,30}moments?/i;
 const abandoned=/(?:打算|准备|计划|想要|还没|尚未|并未|没有|未曾|取消|草稿).{0,18}(?:发|发表|发布|朋友圈|post|publish)/i;
 const allowedModes=new Set(['all','private','include','exclude']);
 
@@ -61,7 +61,7 @@ export function importStoryWechatMoments(raw,revisions,chat,context) {
                     audienceIds.some(id=>typeof id!=='string'||!friends.has(id)))continue;
                 const audience=[...new Set(audienceIds)];
                 if(['include','exclude'].includes(visibility)&&!audience.length)continue;
-                if(isUser&&visibility==='all'&&/(?:仅自己可见|仅我可见|设为私密|部分可见|不给谁看|仅[^，。；\n]{1,18}可见)/.test(nearby))continue;
+                if(isUser&&visibility==='all'&&/(?:仅自己可见|仅我可见|设为私密|部分可见|不给谁看|只给[^，。；\n]{1,24}看|不给[^，。；\n]{1,24}看|仅[^，。；\n]{1,18}可见)/.test(nearby))continue;
                 const imageDescription=images.join('\n');
                 if(wxMoments(state).some(p=>p.authorId===account.id&&p.text===text&&
                     (p.imageDescription||'')===imageDescription))continue;
