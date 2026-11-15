@@ -1,4 +1,4 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.66';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.70';
 import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.66';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.66';
