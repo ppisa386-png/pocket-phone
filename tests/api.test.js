@@ -18,7 +18,7 @@ import { cashBalance, assetRows } from '../src/assets-core.js';
 test('published version cache-busts all changed weather and story importers', () => {
  const files = {
   'index.js': ['weather.js','daily.js','story-phone.js','memory.js','ui.js','config.js'],
-  'src/weather.js': ['weather-climate-source.js'],
+  'src/weather.js': ['weather-model.js'],
   'src/weather-view.js': ['weather.js'],
   'src/ui.js': ['weather-view.js','config.js'],
   'src/memory.js': ['weather.js'],
