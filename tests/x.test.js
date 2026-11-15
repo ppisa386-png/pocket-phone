@@ -10,17 +10,20 @@ import {buildContinuityPrompt} from '../src/continuity.js';
 import {xStoryPrompt} from '../src/x-story.js';
 import {xAudience, audienceChanges} from '../src/x-audience.js';
 
-test('narrative X catalog contains only user original posts, excluding comments, NPC posts, private messages and trends',()=>{
- const state={x:{profile:{alias:'Moon'},mine:{id:'mine',type:'post',author:'user',text:'MY_PUBLISHED_POST',imageDescription:'MY_IMAGE',createdAt:1},
+test('X narrative index does not duplicate the full public-history record, NPC posts, DMs or trends',()=>{
+ const state={x:{profile:{alias:'Moon'},mine:{id:'mine',type:'post',author:'user',text:'MY_PUBLISHED_POST',imageDescription:'MY_IMAGE',createdAt:1,storyTime:{date:'2026-11-14',time:'12:00'}},
   npc:{id:'npc',type:'post',author:'another',text:'NPC_FEED_SECRET',createdAt:2},
   square:{id:'square',type:'post',author:'crowd',text:'SQUARE_SECRET',feed:'square',createdAt:3},
   reply:{id:'reply',type:'comment',postId:'mine',author:'another',text:'MY_COMMENTS_SECRET'},
   dm:{id:'dm',type:'message',accountId:'another',role:'assistant',text:'DM_SECRET'},
   'trend-edition':{id:'trend-edition',type:'trends',topics:[{title:'TREND_SECRET',injected:true}]}}};
- const prompt=xStoryPrompt(state);
- assert.match(prompt,/MY_PUBLISHED_POST/);assert.match(prompt,/MY_IMAGE/);
+ const now={date:'2026-11-14',time:'13:00'};
+ const prompt=xStoryPrompt(state,now);
+ assert.match(prompt,/"id":"mine"/);assert.doesNotMatch(prompt,/MY_PUBLISHED_POST|MY_IMAGE/,'full facts live only in continuity');
+ const history=buildContinuityPrompt({contacts:{},messages:{},calls:{},x:state.x},{name:'Alex',nameIsUnique:true},{instruction:'Remember',allParticipants:true,currentStoryTime:now});
+ assert.match(history,/MY_PUBLISHED_POST/);assert.match(history,/MY_IMAGE/);
  for(const secret of ['NPC_FEED_SECRET','SQUARE_SECRET','MY_COMMENTS_SECRET','DM_SECRET','TREND_SECRET'])assert.doesNotMatch(prompt,new RegExp(secret));
- assert.equal(buildContinuityPrompt({contacts:{},messages:{},calls:{},x:state.x},{name:'Alex',nameIsUnique:true},{instruction:'Remember'}),'');
+ assert.equal(buildContinuityPrompt({contacts:{},messages:{},calls:{},x:state.x},{name:'Alex',nameIsUnique:true},{instruction:'Remember'}),'','invalid current story date cannot produce historical events');
 });
 
 test('X launcher unread counts only incoming unread direct messages, never public mentions or comments',()=>{
@@ -1520,18 +1523,22 @@ for(const independent of [false,true])test('X DM sends only latest ten records a
 test('public post contexts carry user replies with ancestors, excluding unrelated comments and DMs',async()=>{
  const {xUserReplyContext}=await import('../src/x-comments.js');
  const f=setup();try{
+  f.context.chat.push({mes:'2026-11-14 12:00'});
   const id=await account(f,'open');ok(await f.x.publish('THREAD_POST'));
   const post=xItems(f.state(),'post').find(p=>p.author==='user');
   const rows=[{id:'root',type:'comment',postId:post.id,author:id,text:'PARENT_PUBLIC_COMMENT'},
-   {id:'mine',type:'comment',postId:post.id,author:'user',text:'USER_PUBLIC_REPLY',replyTo:'root'},
+   {id:'mine',type:'comment',postId:post.id,author:'user',text:'USER_PUBLIC_REPLY',replyTo:'root',storyTime:{date:'2026-11-14',time:'12:00'}},
    {id:'unrelated',type:'comment',postId:post.id,author:id,text:'UNRELATED_COMMENT'},
    {id:'foreign',type:'comment',postId:'other-post',author:'user',text:'FOREIGN_POST_COMMENT'},
    {id:'private',type:'message',accountId:id,role:'assistant',text:'PRIVATE_MESSAGE',createdAt:1}];
   await f.memory.commit(await f.memory.begin(),rows.map(value=>({collection:'x',key:value.id,value})));
   const before=JSON.stringify(f.state().x), selected=xUserReplyContext(f.state(),post.id);
   assert.deepEqual(selected.map(c=>c.id),['root','mine']);assert.equal(selected[1].replyTo,'root');assert.equal(JSON.stringify(f.state().x),before);
-  const narrative=xStoryPrompt(f.state());assert.match(narrative,/PARENT_PUBLIC_COMMENT/);assert.match(narrative,/USER_PUBLIC_REPLY/);
+  const now={date:'2026-11-14',time:'12:00'};
+  const narrative=buildContinuityPrompt(f.state(),{name:'Alex',nameIsUnique:true},{instruction:'记住事实',allParticipants:true,currentStoryTime:now,budget:20000});
+  assert.match(narrative,/PARENT_PUBLIC_COMMENT/);assert.match(narrative,/USER_PUBLIC_REPLY/);
   assert.doesNotMatch(narrative,/UNRELATED_COMMENT|FOREIGN_POST_COMMENT|PRIVATE_MESSAGE/);
+  assert.doesNotMatch(xStoryPrompt(f.state(),now),/PARENT_PUBLIC_COMMENT|USER_PUBLIC_REPLY/,'narrative index never duplicates the original discussion');
   f.reply({status:'reply',text:'Understood'});ok(await f.x.send(id,'What did you think of my post?'));
   assert.match(f.prompt(),/USER_PUBLIC_REPLY/);assert.match(f.prompt(),/PARENT_PUBLIC_COMMENT/);
   f.reply(feedResult({posts:[]}));ok(await f.x.refresh());assert.match(f.prompt(),/"userReplies":/);assert.match(f.prompt(),/USER_PUBLIC_REPLY/);
