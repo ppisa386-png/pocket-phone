@@ -1329,6 +1329,13 @@ test('public X follow, unfollow, like and repost form non-directed one-shot home
   ok(await f.x.react(post.id,'liked'));
   ok(await f.x.react(post.id,'reposted'));
   assert.deepEqual(xPendingPublicActivities(f.state()).map(x=>x.action).sort(),['unlike','unrepost']);
+  const history=Object.values(f.state().x).filter(row=>row.type==='public-history');
+  assert.deepEqual(history.map(row=>row.action),['follow','like','repost','unfollow','unlike','unrepost'],'opposite actions keep every real event beyond the coalesced pulse');
+  assert.equal(new Set(history.map(row=>row.id)).size,6,'each action has a unique permanent event ID');
+  const {xPublicHistoryRecords}=await import('../src/x-history.js');
+  const narrative=xPublicHistoryRecords(f.state(),{date:'2026-11-05',time:'10:00'});
+  assert.deepEqual(narrative.map(row=>row.data.action),['follow','like','repost','unfollow','unlike','unrepost']);
+  assert.equal(xPendingPublicActivities(f.state()).length,2,'reading the narrative history does not consume homepage pulses');
  }finally{f.close();}
 });
 
