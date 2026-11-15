@@ -1,5 +1,6 @@
-// Shared story location and the local random weather engine. The narrative AI
-// only tags city changes; every weather value here is sampled locally.
+// Shared story location, externally researched climate profiles, and local
+// deterministic story-weather simulation. Manual refresh researches climate;
+// normal story time progression never requests external weather data.
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { effectiveReply } from './contact-policy.js?v=1.2.57';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
