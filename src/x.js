@@ -1,7 +1,7 @@
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
-import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2.57';
+import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges,strongReachFloors,requireReachResolution} from './x-floor.js?v=1.2.72';
 import {readXMemory} from './external-memory.js?v=1.2.53';
 import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.66';
 import {JOURNAL_KEY} from './journal.js?v=1.2.57';
@@ -417,7 +417,10 @@ export function createX({memory,phone,getContext,getSettings}) {
         const loadedPosts=xItems(state,'post').filter(p=>!combined||p.author!=='user'||userPosts.includes(p)).slice(-20);
         const providedReplyIds=new Set([...catalogIds,...loadedPosts.map(p=>p.id)].flatMap(id=>xUserReplyContext(state,id).map(c=>c.id)));
         const reachPosts=userPosts.filter(p=>!combined||state.x['impact:post:'+p.id]).map(p=>({postId:p.id,publicText:p.text,imageDescription:p.imageDescription,userReplies:xUserReplyContext(state,p.id),postedAtStory:p.postedAtStory||null,sourceIndex:p.sourceIndex??null,counts:xCounts(state,p)}));
+        const reachScene=combined&&!square?storyEvidenceRows(chat).filter(row=>row.index<=refreshFloor(chat))
+            .slice(-12).map(row=>({sourceIndex:row.index,role:row.role,text:row.text.slice(-2400)})):[];
         const reachTask=reachPosts.length ? REACH_CONTEXT+publicationScenePrompt(getContext(),userPosts)+
+            '\n刷新时可见的近期正文（供判断当前推文传播、热度和公开数据；私人内容不是网友已经获知的事实）：'+JSON.stringify(reachScene)+
             `
 根据 user 每条推文实际公开的内容，估算累计点赞、转发和回复数量。
 
@@ -633,21 +636,27 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 });
                 const remembered=needsCatchUp?[]:JSON.parse(readXMemory(context,getSettings(),
                     {floorIndices:batch.rows.map(row=>row.sourceIndex)}).text||'[]');
-                const contract='只返回 {"effects":[{"postId":"已有 user 推文 ID","gained":非负整数,"lost":非负整数}]}。没有符合条件的新增影响返回 {"effects":[]}；同一帖最多一次，不返回无关字段。';
+                const strongFloors=strongReachFloors(batch.rows);
+                const contract='只返回 JSON 对象：{"effects":[{"postId":"已有 user 推文 ID","gained":非负整数,"lost":非负整数}],"noGrowthReview":[{"sourceIndex":有效剧情楼层索引,"classification":"unrelated或already_counted或no_new_audience","reason":"具体事实原因"}]}。effects 是本批剧情产生的新增传播影响，只结算一次。同一帖最多一次。通常省略 noGrowthReview；若本批正文明确描述公开帖子爆火、数据暴涨或疯传，却判断所有推文都没有额外涨粉或掉粉，必须按所给重点核实楼层逐条填写 noGrowthReview，说明是其他人的帖子、纯粹重述此前已结算的热度，还是确实没有新增受众。不能不核实就返回空 effects。';
                 const task='当前任务：X 未结算剧情楼层的新增粉丝影响。'+REACH_CONTEXT+
                     '\n逐楼阅读本次未结算的有效正文，以及同楼已保存的千千结摘要。它们是同一剧情的两种资料，不得重复计数。'+
-                    '判断既有 user 推文是否在本批剧情里继续获得传播、围观、分享、讨论、关注或取关。发布几天后的旧帖依然可以涨粉。'+
+                    '判断既有 user 推文是否在本批剧情里继续获得传播、围观、分享、讨论、关注或取关。发布几天后的旧帖依然可以涨粉。正文明确写出这条推文大爆、互动数据暴涨或被新圈层大量传播时，必须与上次已结算的数据对照，估算由本批新受众带来的额外关注；不得因为该帖过去已经涨过粉就返回零。'+
                     '正文确实出现许多人谈论、分享或传播一条公开推文时，应把这看作新增曝光与潜在关注的依据，并合理估算新增粉丝；不要求正文明确写出“增加了多少粉丝”或每个人点击关注。'+
                     '区分有新受众的持续传播与同一批人重复讨论。公开推文被私下谈论不等于那些私谈内容本身已经公开，不推断网友看到了私密细节。'+
                     '只估计本批剧情额外带来的关注与取关；首次发帖的粉丝收益和已结算的七日自然影响不再次发放。'+
                     '只有确实没有新增传播或关注影响时才返回空数组。结合讨论人数、传播范围、公开内容吸引力、受众规模和账号身份估计，不使用固定比例。'+
                     (needsCatchUp?'本次为旧存档补结算：只补此前可能遗漏的后续影响，不能把推文发布时已经计过的首日收益重新发放。':'')+
                     '\n用户账号：'+JSON.stringify({name:context.name1,alias:profile(staged).alias,bio:profile(staged).bio})+
+                    '\n本批明确传播热点的重点核实楼层索引（可能是别人的帖子，不代表必然给 user 涨粉）：'+JSON.stringify(strongFloors)+
                     '\n本次楼层和可见正文：'+JSON.stringify(batch.rows)+
                     '\n同楼千千结正式摘要（可能为空）：'+JSON.stringify(remembered)+
                     '\n此前已评估的 user 推文、首日收益和刷新前后互动数据：'+JSON.stringify(selected)+
                     '\n当前粉丝：'+JSON.stringify(xAudience(staged)?.followers??null)+'\n'+contract;
-                const delta=await refreshRequest(task,d=>floorAudienceChanges(staged,d.effects),valid,null,{
+                const delta=await refreshRequest(task,d=>{
+                    const updates=floorAudienceChanges(staged,d.effects);
+                    requireReachResolution(d,batch.rows);
+                    return updates;
+                },valid,null,{
                     skipExternalMemory:true,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
                 collect(delta);
             }
