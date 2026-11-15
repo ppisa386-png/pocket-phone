@@ -51,3 +51,26 @@ export function visibleXComments(comments) {
     }
     return comments.filter(c=>selected.has(c.id));
 }
+
+// A single user reply's indispensable ancestor chain, including replies to
+// other people's posts. A broken parent link is not silently rewritten.
+export function xUserReplyChain(state, commentId) {
+    const rows=xComments(state),byId=new Map(rows.map(row=>[row.id,row]));
+    const reply=byId.get(commentId);
+    if (reply?.author!=='user') return null;
+    const post=state.x?.[reply.postId];
+    if (post?.type!=='post') return null;
+    const chain=[],visited=new Set();
+    for(let current=reply;current;current=byId.get(current.replyTo)){
+        if(visited.has(current.id)||current.postId!==post.id)return null;
+        visited.add(current.id);
+        chain.push({id:current.id,author:current.author,
+            name:current.author==='user'?state.x?.profile?.alias||'user':state.x?.[current.author]?.name||current.name||current.author,
+            text:current.text,replyTo:current.replyTo||null});
+        if(current.replyTo&&!byId.has(current.replyTo))return null;
+    }
+    return {post:{id:post.id,author:post.author,
+        name:post.author==='user'?state.x?.profile?.alias||'user':state.x?.[post.author]?.name||post.alias||post.author,
+        text:post.text??'',...(post.imageDescription!==undefined?{imageDescription:post.imageDescription}:{})},
+        comments:chain.reverse()};
+}

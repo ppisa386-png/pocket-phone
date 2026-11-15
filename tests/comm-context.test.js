@@ -263,30 +263,31 @@ test('home-feed X posts and backfilled samples join the sidecar; square posts st
     assert.doesNotMatch(prompt,/backfilled sample/,'samples on other threads stay out of the history');
 });
 
-test('the narrative catalog keeps every reference but degrades expired or shown post content',async()=>{
-    const state=channelState();
-    state.x.fresh={id:'fresh',type:'post',author:'user',feed:'home',text:'未过期的帖子完整内容应该出现在目录里供正文参考',createdAt:1,liked:false,reposted:false};
-    state.x.old={id:'old',type:'post',author:'user',feed:'home',text:'已过期的帖子内容不应该再提供给正文AI',createdAt:2,liked:false,reposted:false};
-    state.x.shown={id:'shown',type:'post',author:'user',feed:'home',text:'已展示的帖子正文只需梗概其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉其余省略掉',createdAt:3,liked:false,reposted:false};
-    state.commContext={
-        'x:fresh':{version:1,category:'B',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:false,shown:false},
-        'x:old':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','09:00'),anchorSource:'source-floor',expired:true,shown:false},
-        'x:shown':{version:1,category:'A',classification:'classified',anchor:stamp('2026-11-01','12:00'),anchorSource:'source-floor',expired:false,shown:true},
-    };
-    const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-11-02','12:00')).split('已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：')[1].trim());
-    const rows=Object.fromEntries(catalog.map(p=>[p.id,p]));
-    assert.equal(rows.fresh.text.includes('未过期的帖子完整内容'),true,'fresh content stays available');
-    assert.equal(rows.old.text,undefined,'expired post degrades to a bare reference');
-    assert.ok(rows.old.id,'the full catalog keeps the expired reference');
-    assert.equal(rows.shown.text,undefined,'shown posts omit text completely');
-    assert.equal(rows.shown.imageDescription,undefined,'shown posts omit imagery completely');
-    assert.equal(rows.shown.shown,true,'shown metadata still identifies the post');
-    const updated=xStoryChanges(state,[{action:'metrics',postId:'shown',metrics:{likes:{value:5}}}],[{mes:'正文写出点赞数'}],0,'metrics-check',{name1:'Sam'});
-    assert.equal(updated.find(change=>change.key==='shown').value.metrics.likes,5,'shown posts can still update engagement by ID');
-    const ignored=xStoryChanges(state,[{action:'metrics',postId:'fresh',metrics:{likes:{value:5}}}],[{mes:'正文写出点赞数'}],0,'metrics-check',{name1:'Sam'});
-    assert.equal(ignored.length,0,'unshown posts still require matching post text');
+test('X public history includes full old and shown post content without duplicating the story index',()=>{
+ const state=channelState();
+ for(const [id,text] of [['fresh','UNSHOWN_PUBLIC_POST'],['old','EXPIRED_PUBLIC_POST'],['shown','ALREADY_SHOWN_PUBLIC_POST']])
+  state.x[id]={id,type:'post',author:'user',text,imageDescription:'Image of '+id,createdAt:1};
+ state.commContext={
+  'x:fresh':{category:'B',anchor:stamp('2026-11-01','12:00'),shown:false},
+  'x:old':{category:'A',anchor:stamp('2026-11-01','09:00'),expired:true,shown:false},
+  'x:shown':{category:'A',anchor:stamp('2026-11-01','12:00'),shown:true}
+ };
+ const now=stamp('2026-11-02','12:00');
+ const history=JSON.parse(fixturePrompt(state,speaker,{instruction:'参考',currentStoryTime:now,allParticipants:true,budget:50000}).split('\n').at(-2)).records;
+ for(const id of ['fresh','old','shown']){
+  const post=history.find(r=>r.recordId===id);
+  assert.ok(post,id);assert.equal(post.text,state.x[id].text);
+  assert.equal(post.imageDescription,'Image of '+id);
+  assert.equal(post.shown,undefined,'shown stays internal only');
+ }
+ const catalog=xStoryPrompt(state,now);
+ for(const id of ['fresh','old','shown'])assert.match(catalog,new RegExp('"id":"'+id+'"'));
+ for(const value of ['UNSHOWN_PUBLIC_POST','EXPIRED_PUBLIC_POST','ALREADY_SHOWN_PUBLIC_POST'])assert.doesNotMatch(catalog,new RegExp(value),'content is injected only once');
+ const changes=xStoryChanges(state,[{action:'metrics',postId:'shown',metrics:{likes:{value:5}}}],[{mes:'正文写出点赞数'}],0,'metrics-check',{name1:'Sam'});
+ assert.equal(changes.find(change=>change.key==='shown').value.metrics.likes,5,'internal shown flag still permits ID-only metric updates');
+ const ignored=xStoryChanges(state,[{action:'metrics',postId:'fresh',metrics:{likes:{value:5}}}],[{mes:'正文写出点赞数'}],0,'metrics-check',{name1:'Sam'});
+ assert.equal(ignored.length,0,'unshown post still requires source quote for metric changes');
 });
-
 test('expired posts stop serving as re-outreach catalysts',async()=>{
     const state=channelState();
     state.messages.m1={id:'m1',contactId:'card:alex.png',role:'assistant',text:'还在吗',createdAt:1};
@@ -326,7 +327,8 @@ test('an X DM actually sent in narrative is imported as shown, not re-presented 
     state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
     assert.equal(Object.values(state.x).filter(r=>r.type==='message').length,1,'later floors do not re-import old prose');
     const prompt=fixturePrompt(state,speaker,{instruction:'延续既有交流',allParticipants:true,userName:'Sam',currentStoryTime:stamp('2024-10-07','15:30'),budget:40000});
-    assert.equal(prompt,'','shown X DM is absent from the next narrative context');
+    assert.match(prompt,/Tuesday at 4:15 PM works/,'a previously shown X DM remains a historical fact');
+    assert.equal(JSON.parse(prompt.split('\n').at(-2)).records.filter(r=>r.channel==='X 私信').length,1);
     const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,0)).journal);
     assert.equal(Object.values(rolled.x).filter(r=>r.type==='message').length,0,'message rolls back with source floor');
 });
@@ -346,8 +348,8 @@ test('X narrative replies are shown, while app-only X replies remain unshown',as
     state.x[unshown.id]=unshown;
     assert.equal(inferShown({platform:'x',id:unshown.id,record:unshown}),false);
     const continuity=fixturePrompt(state,speaker,{instruction:'衔接',allParticipants:true});
-    assert.doesNotMatch(continuity,/周二见。/,'shown reply is absent');
-    assert.doesNotMatch(continuity,/Later followup/,'app-only private messages stay inside X');
+    assert.doesNotMatch(continuity,/周二见。/,'messages older than the seven-day story window are omitted');
+    assert.doesNotMatch(continuity,/Later followup/,'app-only message without verifiable narrative date is omitted');
     const entryPrompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),context.chat);
     assert.match(entryPrompt,/短信和私信只使用已读／未读状态/);
     assert.match(entryPrompt,/"platform":"x"/);
@@ -380,22 +382,22 @@ test('anonymous X retains narrative DM markers even with no other outgoing chann
 });
 
 
-test('X catalog uses source story dates and does not repeatedly send old pending post text',()=>{
+test('X public post history uses true story dates and seven-day limits rather than 72h or device dates',()=>{
  const state=channelState(),day=Date.UTC(2026,9,4)/86400000;
- state.x.p={id:'p',type:'post',author:'user',feed:'home',text:'十月四号发的公开推文',postedAtStory:{day,hour:10},createdAt:Date.now()};
- const row=now=>JSON.parse(xStoryPrompt(state,now).split('已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：')[1].trim())[0];
- assert.equal(row(stamp('2026-10-05','12:00')).postedDate,'2026-10-04');
- assert.equal(row(stamp('2026-10-05','12:00')).storyDaysAgo,1);
- assert.equal(row(stamp('2026-10-07','10:00')).text,state.x.p.text,'72h boundary remains visible');
- assert.equal(row(stamp('2026-10-07','10:01')).text,undefined);
- assert.equal(row(stamp('2026-11-09','12:00')).storyDaysAgo,36);
- assert.equal(row(stamp('2026-11-09','12:00')).id,'p');
- assert.equal(row(stamp('2026-11-09','12:00')).text,undefined);
+ state.x.p={id:'p',type:'post',author:'user',feed:'home',text:'OCTOBER_FOUR_POST',postedAtStory:{day,hour:10},createdAt:Date.now()};
+ const history=now=>JSON.parse(fixturePrompt(state,speaker,{instruction:'参考',currentStoryTime:now,budget:20000,allParticipants:true}).split('\n').at(-2)).records;
+ const index=now=>JSON.parse(xStoryPrompt(state,now).split('已有帖子定位索引仅含ID与时间，不重复注入帖文、评论或私信；正文需要原文时仅参照统一七天历史：')[1].trim());
+ assert.equal(index(stamp('2026-10-05','12:00'))[0].postedDate,'2026-10-04');
+ assert.equal(index(stamp('2026-10-05','12:00'))[0].storyDaysAgo,1);
+ assert.equal(history(stamp('2026-10-08','12:00'))[0].text,'OCTOBER_FOUR_POST','full content beyond 72 hours');
+ assert.equal(history(stamp('2026-10-11','10:00'))[0].text,'OCTOBER_FOUR_POST','exact 168 hour boundary');
+ assert.equal(fixturePrompt(state,speaker,{instruction:'参考',currentStoryTime:stamp('2026-10-11','10:01'),allParticipants:true}),'','beyond 168 hours');
+ assert.deepEqual(index(stamp('2026-11-09','12:00')),[],'old posts are outside the current X index');
  state.x.p.postedAtStory={day,hour:null};
- assert.equal(row(stamp('2026-10-07','12:00')).text,state.x.p.text,'unknown hour does not guess cutoff');
- assert.equal(row(stamp('2026-10-08','12:00')).text,undefined);
+ assert.equal(history(stamp('2026-10-10','12:00'))[0].text,'OCTOBER_FOUR_POST');
+ assert.equal(fixturePrompt(state,speaker,{instruction:'参考',currentStoryTime:stamp('2026-10-11','12:00'),allParticipants:true}),'','unknown hour uses six previous calendar days');
  delete state.x.p.postedAtStory;
- assert.equal(row(stamp('2026-11-09','12:00')).postedDate,undefined,'missing date does not use createdAt');
+ assert.equal(fixturePrompt(state,speaker,{instruction:'参考',currentStoryTime:stamp('2026-10-05','12:00'),allParticipants:true}),'','createdAt is not a narrative timestamp');
 });
 test('existing X post is marked shown on first prose mention and reverts on floor rollback',async()=>{
  const ctx={name1:'Sam',name2:'Alex',chatId:'x-post-shown',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[],chatMetadata:{}};
@@ -410,8 +412,9 @@ test('existing X post is marked shown on first prose mention and reverts on floo
  journal=importStoryPhone(journal,rev,ctx.chat,ctx).journal;
  const state=replayJournal(syncCommContext(journal,rev,ctx.chat).journal);
  assert.equal(commMeta(state,'x','old').shown,true);
- const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-10-05','10:00')).split('已保存的 user 本人帖子（仅附 user 参与的公开评论及其被回复链，不提供无关评论、NPC 帖子、广场、趋势及私信）：')[1].trim());
+ const catalog=JSON.parse(xStoryPrompt(state,stamp('2026-10-05','10:00')).split('已有帖子定位索引仅含ID与时间，不重复注入帖文、评论或私信；正文需要原文时仅参照统一七天历史：')[1].trim());
  assert.equal(catalog[0].text,undefined);assert.equal(catalog[0].postedDate,'2026-10-04');
+ assert.match(fixturePrompt(state,speaker,{instruction:'参考',currentStoryTime:stamp('2026-10-05','10:00'),allParticipants:true}),/十月四日发的公开内容/,'shown post original text remains available');
  assert.equal(commMeta(replayJournal(reconcileJournal(journal,rev.slice(0,1)).journal),'x','old').shown,false);
 });
 test('X comment references use the original post date, not the comment timestamp',()=>{
@@ -445,10 +448,11 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
         saved.push({platform,id:message.id});
     }
     const before=fixturePrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000});
-    assert.doesNotMatch(before,/HIDDEN_X_PRIVATE/,'X private messages stay local');
+    assert.match(before,/HIDDEN_X_PRIVATE/,'unread X DM is supplied with read=false to the narrative, not presented as a new event');
     assert.match(before,/HIDDEN_WA_PRIVATE/,'notification state cannot suppress background memory');
     const whenReading=fixturePrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000,readingPhone:true});
     assert.match(whenReading,/HIDDEN_WA_PRIVATE/,'explicitly opening the phone can still reveal the original message');
+    assert.match(whenReading,/HIDDEN_X_PRIVATE/,'X private chat is also available with explicit reading');
     assert.match(whenReading,/noticeMentioned=true/);
     context.chat.push({mes:'Sam实际打开手机阅读了这两条信息。'+saved.map(row=>
         '<!--durian-message-shown:'+JSON.stringify(row)+'-->').join('')});

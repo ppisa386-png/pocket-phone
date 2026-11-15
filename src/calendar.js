@@ -1,5 +1,5 @@
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
-import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from './calendar-core.js?v=1.2.65';
+import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from './calendar-core.js?v=1.2.66';
 
 export function createCalendar({ memory, phone, getContext }) {
     return {

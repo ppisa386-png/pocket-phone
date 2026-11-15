@@ -1,4 +1,4 @@
-import { communicationTime, displayCommunicationTime } from './communication-time.js?v=1.2.65';
+import { communicationTime, displayCommunicationTime } from './communication-time.js?v=1.2.66';
 import {visibleXComments,X_COMMENT_LIMIT} from './x-comments.js?v=1.2.55';
 import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.2';
 import {pageFields,objectFields} from './x-edit.js?v=1.2';
@@ -7,7 +7,7 @@ import {X_FLOOR_LEDGER,hasUnsettledFloors} from './x-floor.js?v=1.2.57';
 import { icon } from './icons.js?v=1.2.57';
 import { squareStatus, squareExpiry } from './square-core.js?v=1.2.65';
 import { displayStoryTime } from './story-clock.js?v=1.2';
-import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.65';
+import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.66';
 import { xAudience } from './x-audience.js?v=1.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {

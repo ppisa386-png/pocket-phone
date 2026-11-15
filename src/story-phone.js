@@ -1,13 +1,13 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.65';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.66';
 import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
-import {businessPrompt,importBusiness} from './x-business.js?v=1.2.65';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.65';
-import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.65';
-import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.65';
-import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.65';
+import {businessPrompt,importBusiness} from './x-business.js?v=1.2.66';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.66';
+import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.66';
+import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.66';
+import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.66';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
-import { smsReplyClassification } from './sms-context.js?v=1.2.65';
-import { COMM_PLATFORMS, commKey, commEntries, commCanNotify, commHasPhoneRead, commNotificationChange, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.65';
+import { smsReplyClassification } from './sms-context.js?v=1.2.66';
+import { COMM_PLATFORMS, commKey, commEntries, commCanNotify, commHasPhoneRead, commNotificationChange, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.66';
 import { exactStoryTime } from './story-clock.js?v=1.2';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2.58';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.2.58';
@@ -367,7 +367,7 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const scene=sceneBackground(state,chat,settings);
     // When the shared notification block is present, X reuses its read
     // and notification rules. X-only setups still receive the full rules.
-    const xDm=settings.apps.x?'\n【X 私信文尾同步是必需步骤】只要本楼明确描写 user 在 X 私信对话框输入回复、点击发送并显示已发出/已送达，即使场景随后切换到其他事件，也必须在正文末尾逐条输出 durian-message 标记；正文的【消息原文】不是标记，不能代替它。'+(hasChannels?'':'X 私信只标记已读／未读；read=true 表示 user 已经看过消息，除非剧情需要，否则不用主动提起，不要求一定展示；read=false 不要求安排查看。')+'X 私信正文仍遵守既有规则，不进入通用正文通信历史。手机保存的旧私信不是本轮必须展示的内容，不应逐条重述、补演接收或安排查看；当情节确实需要提及已有消息，最多自然点明相关事实，不复读聊天记录。只有本楼小说正文实际写出 user 在 X/Twitter 私信中发送或收到的一条新消息，且不是手机里已经保存的历史记录时，才在文尾逐条附 <!--durian-message:{"platform":"x","action":"sent或received（相对user）","sender":"user或对方账号名称","recipient":"对方账号名称或user","accountId":"已知X账号准确ID，未知省略","kind":"text","text":"实际已经发送或收到的完整私信内容","category":"A或B，实际约定、合作或待办填B","read":false}-->。'+(hasChannels?'':'只有本楼明确写出user实际阅读消息时，正文才可呈现收到的私信内容；只出现通知时正文不透露内容，标记仍保存全文；只提醒一次，旧消息不能每楼重复提醒。')+'user实际发送的内容按已发送处理；不得将准备发、草稿、回忆、查询既有私信或对方未实际发送的回复标为新消息，不替user发消息；已经存于X里的消息只在本楼确实写出 user 阅读后用durian-message-read 标记对应记录ID，不要再次创建。商业邀约已经用durian-business offer、主动联系已经用durian-outreach记录时，不再为同一条私信加durian-message。除真实发信和收信外无消息则不标记。' : '';
+    const xDm=settings.apps.x?'\n【X 私信文尾同步是必需步骤】只要本楼明确描写 user 在 X 私信对话框输入回复、点击发送并显示已发出/已送达，即使场景随后切换到其他事件，也必须在正文末尾逐条输出 durian-message 标记；正文的【消息原文】不是标记，不能代替它。'+(hasChannels?'':'X 私信只标记已读／未读；read=true 表示 user 已经看过消息，除非剧情需要，否则不用主动提起，不要求一定展示；read=false 不要求安排查看。')+'X 私信也进入统一七天正文历史，本段仅负责本楼真正新发生的私信保存与同步，不重复注入历史。手机保存的旧私信不是本轮必须展示的内容，不应逐条重述、补演接收或安排查看；当情节确实需要提及已有消息，最多自然点明相关事实，不复读聊天记录。只有本楼小说正文实际写出 user 在 X/Twitter 私信中发送或收到的一条新消息，且不是手机里已经保存的历史记录时，才在文尾逐条附 <!--durian-message:{"platform":"x","action":"sent或received（相对user）","sender":"user或对方账号名称","recipient":"对方账号名称或user","accountId":"已知X账号准确ID，未知省略","kind":"text","text":"实际已经发送或收到的完整私信内容","category":"A或B，实际约定、合作或待办填B","read":false}-->。'+(hasChannels?'':'只有本楼明确写出user实际阅读消息时，正文才可呈现收到的私信内容；只出现通知时正文不透露内容，标记仍保存全文；只提醒一次，旧消息不能每楼重复提醒。')+'user实际发送的内容按已发送处理；不得将准备发、草稿、回忆、查询既有私信或对方未实际发送的回复标为新消息，不替user发消息；已经存于X里的消息只在本楼确实写出 user 阅读后用durian-message-read 标记对应记录ID，不要再次创建。商业邀约已经用durian-business offer、主动联系已经用durian-outreach记录时，不再为同一条私信加durian-message。除真实发信和收信外无消息则不标记。' : '';
     if(!hasChannels)return x+xDm+moments+business+(scene?'\n'+scene:'');
     const due=(narrativeReplyCount(chat)+1)%5===0;
     const contacts=Object.values(state.contacts).map(c=>({id:c.id,name:c.name}));

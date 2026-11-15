@@ -8,7 +8,7 @@ import { importStoryPhone } from '../src/story-phone.js';
 const fixtureClock={date:'2026-11-14',time:'12:00'};
 function fixturePrompt(state,speaker,options={}){
  const dated=structuredClone(state);
- for(const collection of ['messages','calls','whatsapp','wechat','snapchat'])for(const record of Object.values(dated[collection]||{})){
+ for(const collection of ['messages','calls','whatsapp','wechat','snapchat','x'])for(const record of Object.values(dated[collection]||{})){
   const platform=collection==='messages'?'sms':collection==='calls'?'call':collection;
   if(!record.storyTime&&!dated.commContext?.[platform+':'+record.id]?.anchor)record.storyTime={...fixtureClock};
  }
@@ -168,12 +168,13 @@ test('each relevant channel keeps at most twenty records; ordinary and anonymous
   state.messages['m'+i]={contactId:'card:alex.png',role:'user',text:'SMS '+i,createdAt:i};
   state.calls['c'+i]={contactId:'card:alex.png',status:'missed',turns:[],createdAt:i};
   state.snapchat['s'+i]={type:'message',accountId:'a',role:'user',text:'Snap casual '+i,createdAt:i};
-  state.x['x'+i]={type:'message',accountId:'a',role:'user',text:'X casual '+i,createdAt:i};
+  state.x['x'+i]={id:'x'+i,type:'message',accountId:'a',role:'user',text:'X casual '+i,createdAt:i};
  }
  state.messages.other={contactId:'card:bea.png',role:'user',text:'BEA_PRIVATE',createdAt:50};
  const prompt=fixturePrompt(state,{avatar:'alex.png',name:'Alex',nameIsUnique:true},{instruction:'Remember',userName:'Sam',budget:50000}),records=JSON.parse(prompt.split('\n').at(-2)).records;
- for(const channel of ['短信','电话','Snapchat'])assert.equal(records.filter(r=>r.channel===channel).length,20);
- assert.doesNotMatch(prompt,/X casual|X 私信|ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/,'narrative continuity excludes all X DM records');
+ for(const channel of ['短信','Snapchat','X 私信'])assert.equal(records.filter(r=>r.channel===channel).length,20);
+ assert.equal(records.filter(r=>r.kind==='call-status').length,20,'missed calls use a separate status quota');
+ assert.doesNotMatch(prompt,/ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/,'excluded contacts and financial records stay isolated');
 });
 
 
@@ -199,13 +200,13 @@ test('final outgoing request and earlier memory snapshot include exact history o
   await f.bus.emit('CHAT_CHANGED');const switched={type:'normal',messages:[]};await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',switched);assert.equal(switched.messages.length,0);
  }finally{f.close();}
 });
-test('twenty per conversation counts both sides and ordinary NPC messages do not need a matching current card',()=>{
+test('twenty SMS per platform counts both directions and all contacts together',()=>{
  const state={contacts:{'name:a':{id:'name:a',name:'阿甲'},'name:b':{id:'name:b',name:'阿乙'}},messages:{},calls:{}};
  for(const id of ['a','b'])for(let n=0;n<24;n++)state.messages[id+n]={contactId:'name:'+id,role:n%2?'user':'assistant',text:id+n,createdAt:n};
  const text=fixturePrompt(state,{name:'另一角色',nameIsUnique:true},{instruction:'记忆',allParticipants:true,budget:50000});
  const records=JSON.parse(text.split('\n').at(-2)).records;
- assert.equal(records.length,40);assert.equal(records.filter(r=>r.counterpart==='阿甲').length,20);
- assert.equal(records.filter(r=>r.speaker==='user').length,20);assert.ok(!records.some(r=>r.text==='a0'));
+ assert.equal(records.length,20);assert.equal(records.filter(r=>r.counterpart==='阿甲').length,10);
+ assert.equal(records.filter(r=>r.speaker==='user').length,10);assert.ok(!records.some(r=>r.text==='a0'));
  assert.match(text,/不得编造 user 曾发过的消息/);assert.match(text,/剩余时间、已过时间与总时长/);
 });
 
