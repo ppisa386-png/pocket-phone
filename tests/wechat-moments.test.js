@@ -363,6 +363,13 @@ test('narrative WeChat user multi-photo and image-only posts import as one real 
   assert.deepEqual(posts[0].images,images.slice(0,2));
   f.ctx.chat.pop();await f.memory.read();
   assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,0);
+  const noText={action:'published',authorId:'user',images:images.slice(0,2)};
+  f.ctx.chat.push({mes:'2026-11-15 17:31 Sam 发了朋友圈，晒出两张照片。<!--durian-wechat-moment:'+JSON.stringify(noText)+'-->',is_user:false,name:'Alex'});
+  await f.memory.read();posts=wxMoments(f.state()).filter(p=>p.origin==='narrative');
+  assert.equal(posts.length,1,'image-only markers can omit the text field entirely');
+  assert.deepEqual(posts[0].images,images.slice(0,2));
+  f.ctx.chat.pop();await f.memory.read();
+  assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,0);
   assert.equal(f.count(),count,'narrative import does not call a model');
  }finally{f.close();}
 });
