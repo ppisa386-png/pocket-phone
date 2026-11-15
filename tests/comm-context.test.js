@@ -10,6 +10,16 @@ import { xTriggerCandidates } from '../src/outreach.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { normalizeSettings } from '../src/config.js';
 
+const fixtureClock={date:'2026-11-13',time:'12:00'};
+function fixturePrompt(state,speaker,options={}){
+ const dated=structuredClone(state);
+ for(const collection of ['messages','calls','whatsapp','wechat','snapchat'])for(const record of Object.values(dated[collection]||{})){
+  const platform=collection==='messages'?'sms':collection==='calls'?'call':collection;
+  if(!record.storyTime&&!dated.commContext?.[platform+':'+record.id]?.anchor)record.storyTime={...fixtureClock};
+ }
+ return buildContinuityPrompt(dated,speaker,{currentStoryTime:fixtureClock,...options});
+}
+
 const stamp = (date,time='12:00') => ({date,time,precision:'exact'});
 const set = (collection,key,value) => ({collection,key,value});
 const speaker = { name:'Alex',avatar:'alex.png',nameIsUnique:true };
@@ -124,7 +134,7 @@ test('narrative shown markers flip existing records only, ignore invented ids, r
     assert.equal(commMeta(rolled,'whatsapp','旧消息1'),undefined,'rollback removes the marker with its floor');
 });
 
-test('continuity omits all X records and shown records from other channels',()=>{
+test('continuity retains recent communication regardless of legacy shown status and still excludes X',()=>{
     const state=channelState(),who={id:'card:alex.png',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:true};
     state.messages.unshown={id:'unshown',contactId:who.id,role:'assistant',text:'UNSHOWN_SMS',createdAt:1};
     state.messages.shown={id:'shown',contactId:who.id,role:'assistant',text:'SHOWN_SMS',createdAt:2};
@@ -144,20 +154,20 @@ test('continuity omits all X records and shown records from other channels',()=>
     state.x.comment={id:'comment',type:'comment',postId:'post',author:who.id,text:'UNSHOWN_X_COMMENT',createdAt:7};
     state.commContext['x:post']={shown:true};
     state.commContext['x:comment']={shown:false};
-    const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
+    const prompt=fixturePrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
     assert.match(prompt,/UNSHOWN_SMS/);
     for(const app of ['whatsapp','wechat','snapchat'])assert.match(prompt,new RegExp('UNSHOWN_'+app));
     assert.doesNotMatch(prompt,/UNSHOWN_X_COMMENT|UNSHOWN_x/,'X comments and DMs remain phone-only');
-    assert.doesNotMatch(prompt,/"text":"SHOWN_SMS"|"text":"SHOWN_(?:whatsapp|wechat|snapchat|x)"|SHOWN_CALL|SHOWN_X_POST/);
+    assert.match(prompt,/"text":"SHOWN_SMS"/);assert.match(prompt,/SHOWN_CALL/);assert.doesNotMatch(prompt,/"text":"SHOWN_x"|SHOWN_X_POST/);
     const records=JSON.parse(prompt.split('\n').at(-2)).records;
-    assert.ok(records.every(record=>record.shown===false),'only unshown records enter the payload');
+    assert.ok(records.every(record=>!Object.hasOwn(record,'shown')),'presentation labels never enter communication payloads');
     assert.equal(state.messages.shown.text,'SHOWN_SMS','phone history remains unchanged');
     const fullyShown=structuredClone(state);
     for(const meta of Object.values(fullyShown.commContext))meta.shown=true;
-    assert.equal(buildContinuityPrompt(fullyShown,speaker,{instruction:'衔接',allParticipants:true}),'');
+    assert.equal(fixturePrompt(fullyShown,speaker,{instruction:'衔接',allParticipants:true,budget:50000}),prompt,'legacy presentation flags cannot alter the request');
 
-    state.commContext['sms:unshown'].expired=true;
-    const expired=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true});
+    state.messages.unshown.storyTime=stamp('2026-11-01');state.commContext['sms:unshown'].expired=true;
+    const expired=fixturePrompt(state,speaker,{instruction:'衔接',allParticipants:true});
     assert.doesNotMatch(expired,/UNSHOWN_SMS/,'expiry still filters unshown records');
 });
 
@@ -248,7 +258,7 @@ test('home-feed X posts and backfilled samples join the sidecar; square posts st
     assert.equal(commMeta(state,'x','home1').shown,false,'phone-side posts default to unshown');
     assert.equal(commMeta(state,'x','sample').classification,'pending');
     // X comments remain saved in the sidecar but never enter narrative history.
-    const prompt=buildContinuityPrompt({...state,contacts:{'name:u1':{id:'name:u1',name:'U1'}},profiles:{}},{name:'U1',nameIsUnique:true},{instruction:'参考',currentStoryTime:stamp('2026-11-02')});
+    const prompt=fixturePrompt({...state,contacts:{'name:u1':{id:'name:u1',name:'U1'}},profiles:{}},{name:'U1',nameIsUnique:true},{instruction:'参考',currentStoryTime:stamp('2026-11-02')});
     assert.doesNotMatch(prompt,/reply to user thread/,'user-thread X comments are not sent to narrative');
     assert.doesNotMatch(prompt,/backfilled sample/,'samples on other threads stay out of the history');
 });
@@ -315,7 +325,7 @@ test('an X DM actually sent in narrative is imported as shown, not re-presented 
     journal=importStoryPhone(journal,rev,context.chat,context).journal;
     state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
     assert.equal(Object.values(state.x).filter(r=>r.type==='message').length,1,'later floors do not re-import old prose');
-    const prompt=buildContinuityPrompt(state,speaker,{instruction:'延续既有交流',allParticipants:true,userName:'Sam',currentStoryTime:stamp('2024-10-07','15:30'),budget:40000});
+    const prompt=fixturePrompt(state,speaker,{instruction:'延续既有交流',allParticipants:true,userName:'Sam',currentStoryTime:stamp('2024-10-07','15:30'),budget:40000});
     assert.equal(prompt,'','shown X DM is absent from the next narrative context');
     const rolled=replayJournal(reconcileJournal(journal,rev.slice(0,0)).journal);
     assert.equal(Object.values(rolled.x).filter(r=>r.type==='message').length,0,'message rolls back with source floor');
@@ -335,11 +345,11 @@ test('X narrative replies are shown, while app-only X replies remain unshown',as
     const unshown={id:'app-only',type:'message',accountId:message.accountId,role:'assistant',text:'Later followup',createdAt:50};
     state.x[unshown.id]=unshown;
     assert.equal(inferShown({platform:'x',id:unshown.id,record:unshown}),false);
-    const continuity=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true});
+    const continuity=fixturePrompt(state,speaker,{instruction:'衔接',allParticipants:true});
     assert.doesNotMatch(continuity,/周二见。/,'shown reply is absent');
     assert.doesNotMatch(continuity,/Later followup/,'app-only private messages stay inside X');
     const entryPrompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),context.chat);
-    assert.match(entryPrompt,/WhatsApp 和 X 私信的 read 是手机阅读状态，shown 是小说正文展示状态，两者独立/);
+    assert.match(entryPrompt,/短信和私信只使用已读／未读状态/);
     assert.match(entryPrompt,/"platform":"x"/);
 });
 
@@ -364,7 +374,7 @@ test('anonymous X retains narrative DM markers even with no other outgoing chann
  const settings=normalizeSettings({apps:{phone:false,messages:false,whatsapp:false,wechat:false,snapchat:false,x:true,daily:false,assets:false,amazon:false,food:false}});
  const state=channelState();state.x.profile={id:'profile',type:'profile',alias:'Moon'};
  const prompt=buildStoryPhonePrompt(state,{name1:'Sam',characters:[],characterId:0},settings,[{mes:'2024-10-07 15:00'}]);
- assert.match(prompt,/X 私信与其他通信使用同一已展示\/未展示记录机制/);
+ assert.match(prompt,/X 私信只标记已读／未读/);
  assert.match(prompt,/商业邀约已经用durian-business offer/);
  assert.match(prompt,/"platform":"x"/);
 });
@@ -410,7 +420,7 @@ test('X comment references use the original post date, not the comment timestamp
  state.x.p={id:'p',type:'post',author:'user',feed:'home',text:'十月四日原帖',postedAtStory:{day,hour:10},createdAt:1};
  state.x.c={id:'c',type:'comment',postId:'p',author:'a',text:'这是一条刚发出的旧帖评论',createdAt:2};
  state.commContext['x:c']={shown:false};
- const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,currentStoryTime:stamp('2026-11-09','12:00')});
+ const prompt=fixturePrompt(state,speaker,{instruction:'衔接',allParticipants:true,currentStoryTime:stamp('2026-11-09','12:00')});
  assert.doesNotMatch(prompt,/这是一条刚发出的旧帖评论/);
  assert.equal(prompt,'','X comments have no continuity injection even when dated');
 });
@@ -422,7 +432,7 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
         {platform:'whatsapp',action:'received',sender:'Alex',recipient:'user',kind:'text',text:'HIDDEN_WA_PRIVATE',category:'A',shown:false},
     ];
     const notice='手机在口袋里短暂震动。';
-    context.chat.push({mes:notice+rows.map(row=>'<!--durian-message:'+JSON.stringify(row)+'-->').join('')});
+    context.chat.push({mes:'2026-11-13 12:00\n'+notice+rows.map(row=>'<!--durian-message:'+JSON.stringify(row)+'-->').join('')});
     let rev=await revisionsFor(messageSignatures(context.chat));
     let journal=importStoryPhone(undefined,rev,context.chat,context).journal;
     let state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
@@ -434,10 +444,10 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
         assert.ok(!notice.includes(secret));
         saved.push({platform,id:message.id});
     }
-    const before=buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000});
+    const before=fixturePrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000});
     assert.doesNotMatch(before,/HIDDEN_X_PRIVATE/,'X private messages stay local');
-    assert.doesNotMatch(before,/HIDDEN_WA_PRIVATE/,'already-mentioned unread WhatsApp notice stays silent');
-    const whenReading=buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000,readingPhone:true});
+    assert.match(before,/HIDDEN_WA_PRIVATE/,'notification state cannot suppress background memory');
+    const whenReading=fixturePrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000,readingPhone:true});
     assert.match(whenReading,/HIDDEN_WA_PRIVATE/,'explicitly opening the phone can still reveal the original message');
     assert.match(whenReading,/noticeMentioned=true/);
     context.chat.push({mes:'Sam实际打开手机阅读了这两条信息。'+saved.map(row=>
@@ -446,7 +456,7 @@ test('notification-only incoming X and WhatsApp messages stay unshown until pros
     journal=importStoryPhone(journal,rev,context.chat,context).journal;
     state=replayJournal(syncCommContext(journal,rev,context.chat).journal);
     for(const row of saved)assert.equal(commMeta(state,row.platform,row.id)?.shown,true,'explicit reading marks '+row.platform+' as shown');
-    assert.equal(buildContinuityPrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000}),'');
+    assert.match(fixturePrompt(state,speaker,{instruction:'衔接通信',allParticipants:true,budget:50000}),/HIDDEN_WA_PRIVATE/);
     const restored=replayJournal(reconcileJournal(journal,rev.slice(0,-1)).journal);
     for(const row of saved)assert.equal(commMeta(restored,row.platform,row.id)?.shown,false,'rolling back reading restores unshown');
 });
@@ -503,18 +513,18 @@ test('continuity explicitly distinguishes WhatsApp and WeChat read-but-unshown f
     state.commContext['whatsapp:unread']={shown:false,read:false,expired:false};
     state.commContext['wechat:wechat-read']={shown:false,read:true,expired:false};
     state.commContext['wechat:wechat-unread']={shown:false,read:false,expired:false};
-    const prompt=buildContinuityPrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
+    const prompt=fixturePrompt(state,speaker,{instruction:'衔接',allParticipants:true,budget:50000});
     const records=JSON.parse(prompt.split('\n').at(-2)).records;
     const read=records.find(row=>row.recordId==='read'),unread=records.find(row=>row.recordId==='unread');
     const wechatRead=records.find(row=>row.recordId==='wechat-read'),wechatUnread=records.find(row=>row.recordId==='wechat-unread');
-    assert.equal(read.shown,false);assert.equal(read.read,true);
-    assert.equal(unread.shown,false);assert.equal(unread.read,false);
-    assert.equal(wechatRead.shown,false);assert.equal(wechatRead.read,true);
-    assert.equal(wechatUnread.shown,false);assert.equal(wechatUnread.read,false);
+    assert.equal(read.shown,undefined);assert.equal(read.read,true);
+    assert.equal(unread.shown,undefined);assert.equal(unread.read,false);
+    assert.equal(wechatRead.shown,undefined);assert.equal(wechatRead.read,true);
+    assert.equal(wechatUnread.shown,undefined);assert.equal(wechatUnread.read,false);
     assert.match(prompt,/WECHAT_ALREADY_READ_CONTENT/);assert.match(prompt,/WECHAT_NOT_READ_CONTENT/);
-    assert.match(prompt,/shown 与 read 是两个独立状态/);
+    assert.match(prompt,/已读／未读状态/);
     assert.match(prompt,/不得再称其未读、刚收到/);
-    assert.match(prompt,/不能把多条未展示记录一律写成一串未读消息/);
+    assert.match(prompt,/不能把多条历史记录一律写成一串未读消息/);
     assert.doesNotMatch(prompt,/read:true.*read:false/,'states are structured, not flattened into a single unread label');
 });
 
@@ -542,9 +552,9 @@ test('a prose reminder consumes the unread-notice opportunity but does not read 
     assert.equal(state.commContext['sms:sms-old'].shown,false);
     assert.equal(state.commContext['whatsapp:wa-old'].shown,false);
     const opts={instruction:'剧情衔接',allParticipants:true,budget:20000};
-    const silent=buildContinuityPrompt(state,speaker,opts);
-    assert.doesNotMatch(silent,/SMS_SECRET|WA_SECRET/,'old unread messages are no longer offered to generate another reminder');
-    const reading=buildContinuityPrompt(state,speaker,{...opts,readingPhone:true});
+    const silent=fixturePrompt(state,speaker,opts);
+    assert.match(silent,/SMS_SECRET/);assert.match(silent,/WA_SECRET/);assert.match(silent,/绝不可再描写同一旧消息/);
+    const reading=fixturePrompt(state,speaker,{...opts,readingPhone:true});
     assert.match(reading,/SMS_SECRET/);
     assert.match(reading,/WA_SECRET/);
     assert.match(reading,/noticeMentioned":true/);
@@ -552,8 +562,8 @@ test('a prose reminder consumes the unread-notice opportunity but does not read 
     const newMessage={id:'sms-new',contactId:accountId,role:'assistant',text:'A_FRESH_MESSAGE',read:false,createdAt:3};
     journal=appendChange(journal,rev,[set('messages','sms-new',newMessage)]);
     state=replayJournal(syncCommContext(journal,rev,chat).journal);
-    assert.match(buildContinuityPrompt(state,speaker,opts),/A_FRESH_MESSAGE/,'later genuine messages can still notify');
-    assert.doesNotMatch(buildContinuityPrompt(state,speaker,opts),/SMS_SECRET|WA_SECRET/);
+    assert.match(fixturePrompt(state,speaker,opts),/A_FRESH_MESSAGE/,'later genuine messages can still notify');
+    assert.match(fixturePrompt(state,speaker,opts),/SMS_SECRET/);
     const reverted=replayJournal(reconcileJournal(journal,rev.slice(0,1)).journal);
     assert.notEqual(reverted.commContext['sms:sms-old']?.noticeMentioned,true,'removing the notifying floor restores the notice opportunity');
 });
@@ -575,8 +585,8 @@ test('exact notice markers apply to specified records only and never change anot
     assert.equal(state.commContext['whatsapp:wa-old'].noticeMentioned,false);
     assert.equal(state.commContext['wechat:wc-old'].shown,false);
     assert.equal(state.wechat['wc-old'].read,false);
-    const prompt=buildContinuityPrompt(state,speaker,{instruction:'延续',allParticipants:true,budget:20000});
-    assert.doesNotMatch(prompt,/WC_SECRET/);
+    const prompt=fixturePrompt(state,speaker,{instruction:'延续',allParticipants:true,budget:20000});
+    assert.match(prompt,/WC_SECRET/);
     assert.match(prompt,/WA_SECRET/);
     const invalidChat=[chat[0],{mes:evidence+'<!--durian-message-noticed:'+JSON.stringify({platform:'wechat',ids:['not-real'],evidence})+'-->',name:'Alex',is_user:false}];
     const rev2=await revisionsFor(messageSignatures(invalidChat));

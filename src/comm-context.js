@@ -245,7 +245,7 @@ export function syncCommContext(journal, revisions, chat) {
         if (tracksPhoneRead(entry)) meta.read = entry.record.read === true;
         if (entry.fixedCategory && !meta.category) { meta.category = 'A'; meta.classification = 'classified'; }
         if (everQueued.has(collectionOf(entry.platform) + ':' + entry.id) && !entry.element) meta.sentAfterQueue = true;
-        if (!meta.anchor || (dateDay(meta.anchor.date) === null && meta.anchorSource !== 'source-floor')) {
+        if (!meta.anchor || dateDay(meta.anchor.date) === null) {
             const index = entry.element ? elementFloor.get(key) : first.get(collectionOf(entry.platform) + ':' + entry.id);
             meta.anchor = (Number.isInteger(index) ? clockAt(index) : null) || meta.anchor || { date: '', time: '', precision: 'exact' };
             meta.anchorSource = 'source-floor';

@@ -12,7 +12,7 @@ const tags=(pairs)=>({mes:pairs.map(([channel,sender])=>{
     const evidence=sender+'发来了联系。';
     return evidence+'<!--durian-outreach:'+JSON.stringify({channel,sender,recipient:'user',text,evidence,media:'image'})+'-->';
 }).join('\n')});
-const four=Array.from({length:4},()=>({mes:'剧情继续。'}));
+const four=Array.from({length:4},()=>({mes:'2026-11-13 12:00\n剧情继续。'}));
 async function capture(chat,journal,ctx=context){
     const rev=await revisionsFor(messageSignatures(chat));
     return importStoryPhone(journal,rev,chat,ctx).journal;
@@ -66,13 +66,13 @@ test('proactive notifications store complete private messages without marking th
 
     const prompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),chat);
     assert.match(prompt,/不能仅凭消息抵达就写出完整消息、摘要、主题/);
-    assert.match(prompt,/"shown":false/);
+    assert.match(prompt,/"read":false/);
     const continuity=buildContinuityPrompt(state,{name:'Sam Lee'},{
-        instruction:'衔接实际通信',allParticipants:true,budget:50000,
+        currentStoryTime:{date:'2026-11-13',time:'12:00'},instruction:'衔接实际通信',allParticipants:true,budget:50000,
     });
-    assert.doesNotMatch(continuity,/HIDDEN_SMS_CONTENT|HIDDEN_WHATSAPP_CONTENT|HIDDEN_WECHAT_CONTENT/,
-        'old messages whose first notification was narrated must not generate reminders again');
-    const reading=buildContinuityPrompt(state,{name:'Sam Lee'},{instruction:'衔接实际通信',allParticipants:true,budget:50000,readingPhone:true});
+    for(const text of ['HIDDEN_SMS_CONTENT','HIDDEN_WHATSAPP_CONTENT','HIDDEN_WECHAT_CONTENT'])assert.ok(continuity.includes(text));
+    assert.match(continuity,/绝不可再描写同一旧消息/);
+    const reading=buildContinuityPrompt(state,{name:'Sam Lee'},{currentStoryTime:{date:'2026-11-13',time:'12:00'},instruction:'衔接实际通信',allParticipants:true,budget:50000,readingPhone:true});
     assert.match(reading,/HIDDEN_SMS_CONTENT/,'the text is still available when user explicitly reads the phone');
     assert.match(reading,/HIDDEN_WHATSAPP_CONTENT/);
     assert.match(reading,/HIDDEN_WECHAT_CONTENT/);

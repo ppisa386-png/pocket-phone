@@ -1,10 +1,11 @@
+import { exactStoryTime } from './story-clock.js?v=1.2';
 import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.64';
+import { parseAppObject } from './model-json.js?v=1.2.65';
 import { requireCash, moneyMinor } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
 import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';
-import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.57';
+import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.65';
 // Fictional Snapchat: all media/calls are text roleplay; no real social API,
 // microphone, camera, geolocation, payment or media hosting is used.
 export const snapItems = (state, type) => Object.values(state.snapchat || {}).filter(item => item.type === type);
@@ -152,7 +153,7 @@ export function createSnapchat({memory,phone,getContext,getSettings,app = 'snapc
         flushMessages(id){return run(async(state,current,request,commit)=>{
             const a=friendBy(state,id),queued=snapItems(state,'message').filter(m=>m.accountId===id&&m.role==='user'&&m.status==='queued');
             if(!queued.length)throw new Error('请先填写消息。');
-            const batchId=crypto.randomUUID(),batch=queued.map(m=>({...m,status:'pending',batchId})),last=batch.at(-1);
+            const batchId=crypto.randomUUID(),batch=queued.map(m=>({...m,status:'pending',batchId,storyTime:exactStoryTime(getContext().chat)})),last=batch.at(-1);
             await commit(batch.map(setSnap));
             const fresh=await memory.read(),ticket=await memory.begin(fresh);
             try{await answerMessage(fresh.state,a,last,request,current,async changes=>{if(!current())throw new Error('聊天已变化。');await memory.commit(ticket,changes);});}

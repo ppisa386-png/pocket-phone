@@ -1,13 +1,13 @@
 import { exactStoryTime } from './story-clock.js?v=1.2';
-import { smsForAI } from './sms-context.js?v=1.2.57';
-import { commExpired, commMeta } from './comm-context.js?v=1.2.57';
+import { smsForAI } from './sms-context.js?v=1.2.65';
+import { commExpired, commMeta } from './comm-context.js?v=1.2.65';
 
 // Input is oldest-first. Apply the same per-thread cap to communication
 // facts and to the lighter timing metadata sent to the narrative model.
-export function recentPerConversation(records,key){
+export function recentPerConversation(records,key,limit=3){
     const counts=new Map();
     return [...records].reverse().filter(row=>{
-        const k=key(row),n=counts.get(k)||0;counts.set(k,n+1);return n<3;
+        const k=key(row),n=counts.get(k)||0;counts.set(k,n+1);return n<limit;
     }).reverse();
 }
 // Only timing/direction metadata: no expired message text, excerpts or topic summaries.

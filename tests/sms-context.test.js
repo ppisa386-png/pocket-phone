@@ -42,12 +42,12 @@ test('missing/fuzzy story time is not device time or invented elapsed duration',
     assert.equal(smsExpired({...retention('A'),expired:true},null),true);
 });
 
-test('both AI history builders filter identically while every original bubble remains visible', () => {
+test('narrative seven-day history is independent of SMS app A/B retention; original bubbles remain visible', () => {
     const state={contacts:{'card:alex.png':{id:'card:alex.png',name:'Alex'}},messages:{a:message('a'),b:message('b'),other:message('other','card:bea.png')},commContext:{'sms:a':retention('A'),'sms:b':retention('B'),'sms:other':retention('A')},calls:{},profiles:{}};
     const now=stamp('2026-10-03');
     assert.deepEqual(smsForAI(state,'card:alex.png',now).map(m=>m.id),['b']);
     const prompt=buildContinuityPrompt(state,speaker,{instruction:'continue',currentStoryTime:now});
-    assert.doesNotMatch(prompt,/TEXT_a|TEXT_other/);assert.match(prompt,/TEXT_b/);
+    assert.doesNotMatch(prompt,/TEXT_other/);assert.match(prompt,/TEXT_a/);assert.match(prompt,/TEXT_b/);
     const html=renderMessagesScreen(state,'card:alex.png',false,{});
     assert.match(html,/TEXT_a/);assert.match(html,/TEXT_b/);
     assert.doesNotMatch(html,/expired|classification|已过期|时效/);
@@ -149,7 +149,7 @@ for(const independent of [false,true])test(`real SMS request and saved classific
     }finally{f.close();}
 });
 
-test('phone request, proactive sources, event evidence and narrative injection cannot leak expired SMS',async()=>{
+test('phone request and proactive evidence retain A/B expiry while narrative uses seven days',async()=>{
     const f=await fixture();
     try{
         await f.advance('2026-10-05 12:00');
@@ -163,7 +163,7 @@ test('phone request, proactive sources, event evidence and narrative injection c
         f.respond(prompt=>{assert.doesNotMatch(prompt,/TEXT_a|TEXT_b|TEXT_other/);return {status:'answered',text:'Call reply'};});
         const result=await f.service.dial('card:alex.png');assert.equal(result.ok,true);
         const prompt=buildContinuityPrompt(f.service.snapshot(),speaker,{instruction:'continue',currentStoryTime:stamp('2026-10-05')});
-        assert.doesNotMatch(prompt,/TEXT_a|TEXT_b/);assert.match(prompt,/Call reply/);
+        assert.match(prompt,/TEXT_a/);assert.match(prompt,/TEXT_b/);assert.match(prompt,/Call reply/);
     }finally{f.close();}
 });
 

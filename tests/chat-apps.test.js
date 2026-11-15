@@ -10,7 +10,7 @@ import {buildContinuityPrompt,createContinuityBridge} from '../src/continuity.js
 import {cashBalance,reservedCash} from '../src/assets-core.js';
 const ok=r=>assert.equal(r.ok,true,r.error);
 const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};
-const history=state=>buildContinuityPrompt(state,speaker,{instruction:'Remember',userName:'Sam',budget:30000});
+const history=state=>buildContinuityPrompt(state,speaker,{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember',userName:'Sam',budget:30000});
 for(const app of ['wechat','whatsapp'])test(app+': actual app exchange reaches the next ordinary narrative request',async()=>{
  const f=fixture(app);let bridge;
  try{
@@ -126,7 +126,7 @@ test('same people in both apps keep independent recognition, messages, history b
         f.reply({status:'accepted'});ok(await f.api.settle(waTransfer.value));assert.equal(cashBalance(f.state()),4000);assert.equal((await f.api.settle(waTransfer.value)).ok,false);
         f.reply({status:'reply',messages:[{text:'WA private'}]});ok(await f.api.send(id,'text','Hi WA'));f.reply({status:'reply',messages:[{text:'WC private'}]});ok(await wc.send(wid,'text','Hi WC'));assert.doesNotMatch(f.prompt(),/WA private/);
         const text=history(f.state());assert.match(text,/WhatsApp/);assert.match(text,/微信/);assert.match(text,/WA private/);assert.match(text,/WC private/);
-        const other=buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'});assert.equal(other,'');
+        const other=buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember'});assert.equal(other,'');
     }finally{f.close();}
 });
 
@@ -191,5 +191,17 @@ test('WhatsApp accepts delimited names in one submit and isolates refusals and d
   const r=await f.api.addByName(' Alex、 Bea 、Alex、');ok(r);
   assert.equal(r.value.added,1);assert.deepEqual(r.value.details.map(x=>x.status),['已添加','未通过']);
   assert.equal(f.count(),2);assert.equal(chatItems(f.state(),'whatsapp','account').length,1);
+ }finally{f.close();}
+});
+
+for(const app of ['wechat','whatsapp'])test(app+': delayed draft stores the actual send date and exact reply time',async()=>{
+ const f=fixture(app);try{
+  const id=await add(f);ok(await f.api.queueMessage(id,'text','晚一点发出的消息'));
+  f.ctx.chat.push({mes:'2026-11-02 16:45'});await f.memory.read();
+  f.reply({status:'reply',messages:[{kind:'text',text:'收到。'}]});ok(await f.api.flushMessages(id));
+  const rows=chatItems(f.state(),app,'message');assert.equal(rows.length,2);
+  for(const row of rows)assert.deepEqual(row.storyTime,{date:'2026-11-02',time:'16:45',precision:'exact'});
+  f.ctx.chat.push({mes:'2026-11-03 08:10'});await f.memory.read();ok(await f.api.markRead(id));
+  for(const row of chatItems(f.state(),app,'message'))assert.equal(row.storyTime.date,'2026-11-02');
  }finally{f.close();}
 });

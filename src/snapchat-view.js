@@ -1,14 +1,15 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
-import { displayStoryTime } from './story-clock.js?v=1.2';
+import { displayCommunicationTime } from './communication-time.js?v=1.2.65';
 import { icon } from './icons.js?v=1.2.57';
-import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=1.2.64';
+import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=1.2.65';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapKind = {text:'文字',voice:'语音',image:'照片',video:'视频'};
 const snapMoney = item => item.currency + ' ' + majorAmount(item.amountMinor,item.currency);
-const snapTime = item => displayStoryTime(item);
+
 
 export function createSnapPanel({adapter,getView,redraw,notice}) {
+    const snapTime=item=>displayCommunicationTime(item,adapter.storyChat?.()||[],getView().commContext?.['snapchat:'+item.id]);
     let editingId=null;
     const selectedAccounts=new Set();
     let tab='chat', accountId=null, page='', drafts=Object.create(null), status='', reading=false, posting=false, epoch=0;

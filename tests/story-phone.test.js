@@ -429,12 +429,12 @@ test('X-only narrative keeps notification and read boundaries when shared phone 
   const state={contacts:{},calls:{},messages:{},profiles:{},x:{profile:{alias:'Anonymous'}}};
   Object.assign(f.settings.apps,{phone:false,messages:false,whatsapp:false,wechat:false});
   const isolated=buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat);
-  assert.match(isolated,/shown:false 直接称作未读/);
+  assert.match(isolated,/X 私信只标记已读／未读/);
   assert.match(isolated,/只出现通知时正文不透露内容，标记仍保存全文/);
   assert.match(isolated,/durian-message:/);
   f.settings.apps.whatsapp=true;
   const shared=buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat);
-  assert.match(shared,/shown 是小说正文展示状态，两者独立/);
+  assert.match(shared,/短信和私信只使用已读／未读状态/);
   assert.match(shared,/不能仅凭消息抵达就写出完整消息、摘要/);
   assert.match(shared,/新消息的全文及必要译文完整写入/);
   assert.doesNotMatch(shared,/只出现通知时正文不透露内容，标记仍保存全文/,'duplicate X wording is replaced by the shared rule');

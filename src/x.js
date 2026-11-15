@@ -3,18 +3,18 @@ import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
 import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from './x-floor.js?v=1.2.57';
 import {readXMemory} from './external-memory.js?v=1.2.53';
-import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.57';
+import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.65';
 import {JOURNAL_KEY} from './journal.js?v=1.2.57';
-import {readStoryClock,storyTime,exactStoryTime} from './story-clock.js?v=1.2';
+import {readStoryClock,exactStoryTime} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.55';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.64';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.65';
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.64';
-import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.57';
+import { parseAppObject } from './model-json.js?v=1.2.65';
+import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.65';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.2';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);
@@ -326,7 +326,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             const context=getContext(),replyId='reply:'+m.id;
             const refusal='抱歉，这次合作的回复期限已经过了，我们这边已安排其他合作档期，暂时无法继续推进。感谢理解。';
             const changes=[xSet({...a,dmAccepted:true}),xSet({...m,status:'answered'}),
-                xSet({id:replyId,type:'message',accountId:a.id,role:'assistant',text:refusal,createdAt:Date.now(),read:false,storyTime:storyTime(context.chat)}),
+                xSet({id:replyId,type:'message',accountId:a.id,role:'assistant',text:refusal,createdAt:Date.now(),read:false,storyTime:exactStoryTime(context.chat)}),
                 ...dealDecision(businessPlan,'reject',state.business?.counter?.turn??0,readStoryClock(context.chat).day),
                 ...commReplyClassification('x',replyId,a.id,'B',state)];
             await commit(changes);return;
@@ -335,7 +335,7 @@ export function createX({memory,phone,getContext,getSettings}) {
             '\n根据角色判断是否接受并回复。输出 {"status":"reply/no_reply/request","text":"回复内容；不回复时为空","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B"}。requests 且未通过时可返回 request（等待对方接受），reply 表示本次同意并回复，no_reply 表示保持沉默。'+dmDealTask(state,a.id),d=>{if(!['reply','no_reply','request'].includes(d.status)||d.status==='reply'&&!xText(d.text))throw Error('私信回复格式不正确。');return {status:d.status,text:xText(d.text),deal:d.deal,category:smsCategory(d.category)};},{memoryTopic:m.text,maxTokens:4096});
         const changes=[xSet({...a,dmAccepted:a.dmAccepted||result.status==='reply'}),xSet({...m,status:result.status==='reply'?'answered':result.status})];
         if(result.status==='reply'){
-            changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false,storyTime:storyTime(getContext().chat)}));
+            changes.push(xSet({id:'reply:'+m.id,type:'message',accountId:a.id,role:'assistant',text:result.text,createdAt:Date.now(),read:false,storyTime:exactStoryTime(getContext().chat)}));
             if(result.category)changes.push(...commReplyClassification('x','reply:'+m.id,a.id,result.category,state));
         }
         const deal=result.deal,p=state.business?.[deal?.id];
@@ -546,7 +546,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                 xSet(socialEvent(state,'follow',id,next?'follow':'unfollow',{accountId:id}))]);
         });},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true})]);});},
-        reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:storyTime(getContext().chat)}))]);});},
+        reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:exactStoryTime(getContext().chat)}))]);});},
         publish(value,imageDescription=''){return run(async(state,current,request,commit)=>{
             const media=xText(imageDescription,2000);
             const chat=getContext().chat,post=xRecord('post',{author:'user',alias:profile(state).alias,text:xRequired(value,'帖子内容'),
@@ -732,7 +732,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         });},
         send(id,value){return run(async(state,current,request,commit)=>{
             const a=known(state,xAccount(state,id));if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');
-            const context=getContext(),sceneTime=storyTime(context.chat),exactTime=exactStoryTime(context.chat);
+            const context=getContext(),sceneTime=exactStoryTime(context.chat),exactTime=exactStoryTime(context.chat);
             const m=xRecord('message',{accountId:id,role:'user',text:xRequired(value,'消息'),status:'pending',read:true,storyTime:sceneTime});
             const changes=[xSet(a),xSet(m)];
             const plan=Object.values(state.business||{}).find(p=>p?.accountId===id&&p.status==='invited'&&p.replyBy&&!p.lateReplyDecision);

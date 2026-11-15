@@ -208,8 +208,8 @@ test('X private messages save and display their story-local send and receive tim
   f.reply({status:'reply',text:'收到。'});ok(await f.x.send(id,'你好'));
   const messages=xItems(f.state(),'message').filter(m=>m.accountId===id).sort((a,b)=>a.createdAt-b.createdAt);
   assert.equal(messages.length,2);
-  assert.deepEqual(messages[0].storyTime,{date:'2026-11-10',time:'09:30',precision:'scene'});
-  assert.deepEqual(messages[1].storyTime,{date:'2026-11-10',time:'09:30',precision:'scene'});
+  assert.deepEqual(messages[0].storyTime,{date:'2026-11-10',time:'09:30',precision:'exact'});
+  assert.deepEqual(messages[1].storyTime,{date:'2026-11-10',time:'09:30',precision:'exact'});
   const {createXPanel}=await import('../src/x-view.js');
   const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>f.state(),redraw(){},notice(){}});
   await panel.action('tab','messages');

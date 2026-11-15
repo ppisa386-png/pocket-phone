@@ -2277,3 +2277,6 @@ h2, p { margin: 0; }
 .pp-x .pp-x-feed-tabs>.pp-x-refresh{align-self:center;margin-left:3px}
 @keyframes pp-x-refresh-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.pp-x .pp-x-refresh,.pp-x .pp-x-refresh.is-loading svg{transition:none;animation:none}}
+
+/* Date labels keep their own width; the conversation preview yields space. */
+.pp-wechat .pp-chat-row-meta,.pp-whatsapp .pp-chat-row-meta{max-width:none;flex-shrink:0}

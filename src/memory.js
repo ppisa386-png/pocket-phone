@@ -2,12 +2,12 @@ import {timedAudienceChanges} from './x-influence.js?v=1.2.57';
 import {privilegeRows} from './x-privilege.js?v=1.2';
 import { reservedCash } from './assets-core.js?v=1.2';
 import { migrateDailyArchives } from './daily-archive.js?v=1.2.57';
-import { syncCommContext, COMM_RECORD_COLLECTIONS } from './comm-context.js?v=1.2.57';
-import { storyTime,readStoryClock } from './story-clock.js?v=1.2';
-import { importStoryAssets } from './assets-story.js?v=1.2.64';
+import { syncCommContext, COMM_RECORD_COLLECTIONS } from './comm-context.js?v=1.2.65';
+import { exactStoryTime,readStoryClock } from './story-clock.js?v=1.2';
+import { importStoryAssets } from './assets-story.js?v=1.2.65';
 import { importStorySquare } from './x-opinion.js?v=1.2.57';
-import { importStoryPhone } from './story-phone.js?v=1.2.64';
-import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.64';
+import { importStoryPhone } from './story-phone.js?v=1.2.65';
+import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.65';
 import { importStoryLocation } from './weather.js?v=1.2.57';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 
@@ -239,13 +239,14 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 for (const batch of batches) {
                     const index = batch.sourceIndex ?? snapshot.revisions.length - 1;
                     if (!Number.isInteger(index) || index < 0 || index >= snapshot.revisions.length) throw new Error('记录来源楼层无效。');
-                    const state=replayJournal(next), clock=storyTime(snapshot.context.chat.slice(0,index+1));
+                    const state=replayJournal(next), clock=exactStoryTime(snapshot.context.chat.slice(0,index+1));
                     const changes=batch.changes.map(change=>{
                         const v=change.value, old=state[change.collection]?.[change.key];
                         const communication=['messages','calls'].includes(change.collection)||(['snapchat','whatsapp','wechat','x'].includes(change.collection)&&['message','call','post','story','clip','comment','transfer'].includes(v?.type));
                         if(!v||!communication)return change;
                         const value={...v};
                         if(!old&&!Object.hasOwn(value,'storyTime'))value.storyTime=clock;
+                        if(old&&(old.status==='queued'||old.replyStatus==='queued')&&value.status!=='queued'&&value.replyStatus!=='queued')value.storyTime=clock;
                         if(old?.storyTime&&!value.storyTime)value.storyTime=old.storyTime;
                         if(Array.isArray(value.turns))value.turns=value.turns.map((t,i)=>i<(old?.turns?.length||0)?t:{...t,storyTime:t.storyTime||clock});
                         return {...change,value};

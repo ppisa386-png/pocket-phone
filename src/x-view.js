@@ -1,12 +1,13 @@
+import { communicationTime, displayCommunicationTime } from './communication-time.js?v=1.2.65';
 import {visibleXComments,X_COMMENT_LIMIT} from './x-comments.js?v=1.2.55';
 import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.2';
 import {pageFields,objectFields} from './x-edit.js?v=1.2';
 import {refreshFloor} from './x-influence.js?v=1.2.57';
 import {X_FLOOR_LEDGER,hasUnsettledFloors} from './x-floor.js?v=1.2.57';
 import { icon } from './icons.js?v=1.2.57';
-import { squareStatus, squareExpiry } from './square-core.js?v=1.2.64';
+import { squareStatus, squareExpiry } from './square-core.js?v=1.2.65';
 import { displayStoryTime } from './story-clock.js?v=1.2';
-import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.64';
+import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.65';
 import { xAudience } from './x-audience.js?v=1.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function createXPanel({adapter,getView,redraw,notice}) {
@@ -75,9 +76,8 @@ export function createXPanel({adapter,getView,redraw,notice}) {
                 empty(edition?'当前暂无趋势话题':'刷新后查看当前话题趋势'))+'</section>';
     }
     function messageTimestamp(m,extraClass=''){
-        const date=/^\d{4}-\d{2}-\d{2}$/.test(m.storyTime?.date||'')?m.storyTime.date:'';
-        const time=/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(m.storyTime?.time||'')?m.storyTime.time:'';
-        const value=date&&time?date+' '+time:date||time||'时间未记录';
+        const {date,time}=communicationTime(m,getView().commContext?.['x:'+m.id]);
+        const value=displayCommunicationTime(m,adapter.storyChat?.()||[],getView().commContext?.['x:'+m.id]);
         const datetime=date&&time?' datetime="'+date+'T'+time+'"':'';
         const role=m.role==='user'?'发送时间':'收信时间';
         return '<time class="pp-x-message-time'+(extraClass?' '+extraClass:'')+'" title="'+role+'"'+datetime+'>'+xEscape(value)+'</time>';

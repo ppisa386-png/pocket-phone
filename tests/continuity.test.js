@@ -1,10 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createContinuityBridge, buildContinuityPrompt, resolveSpeaker, communicationSceneScope, CONTINUITY_KEY } from '../src/continuity.js';
+import { createContinuityBridge, buildContinuityPrompt, resolveSpeaker, CONTINUITY_KEY } from '../src/continuity.js';
 import { JOURNAL_KEY, revisionsFor, messageSignatures, appendChange } from '../src/journal.js';
 import { createPhoneMemory } from '../src/memory.js';
 import { normalizeSettings } from '../src/config.js';
 import { importStoryPhone } from '../src/story-phone.js';
+const fixtureClock={date:'2026-11-14',time:'12:00'};
+function fixturePrompt(state,speaker,options={}){
+ const dated=structuredClone(state);
+ for(const collection of ['messages','calls','whatsapp','wechat','snapchat'])for(const record of Object.values(dated[collection]||{})){
+  const platform=collection==='messages'?'sms':collection==='calls'?'call':collection;
+  if(!record.storyTime&&!dated.commContext?.[platform+':'+record.id]?.anchor)record.storyTime={...fixtureClock};
+ }
+ return buildContinuityPrompt(dated,speaker,{currentStoryTime:fixtureClock,...options});
+}
+
 class Events {
     listeners = new Map();
     on(type, fn) { this.listeners.set(type, [...(this.listeners.get(type) || []), fn]); }
@@ -13,7 +23,7 @@ class Events {
     async emit(type, ...args) { for (const fn of this.listeners.get(type) || []) await fn(...args); }
 }
 const set = (collection, key, value) => ({ collection, key, value });
-async function fixture({ group = false, legacy = false, withMemory = false, beforeBridge = null } = {}) {
+async function fixture({ group = false, legacy = false, withMemory = false, beforeBridge = null, date = '2026-11-14' } = {}) {
     const bus = new Events();
     const names = ['GENERATION_STARTED', 'GENERATION_ENDED', 'GENERATION_STOPPED', 'CHAT_CHANGED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'GROUP_MEMBER_DRAFTED', 'GROUP_WRAPPER_FINISHED'];
     if (!legacy) names.push('GENERATION_AFTER_COMMANDS'); names.push('CHAT_COMPLETION_PROMPT_READY','CHAT_COMPLETION_SETTINGS_READY');
@@ -22,7 +32,7 @@ async function fixture({ group = false, legacy = false, withMemory = false, befo
         name1: 'Sam', name2: 'Alex', chatId: 'story', characterId: 0,
         characters: [{ name: 'Alex', avatar: 'alex.png' }, { name: 'Bea', avatar: 'bea.png' }],
         groupId: group ? 'group1' : null, groups: [{ id: 'group1', members: ['alex.png', 'bea.png'] }],
-        chat: [{ mes: 'You and Alex exchanged numbers. 两人谈起 Alex 和 Bea 之前短信里说的事，以及电话里的承诺。', name: 'Alex', is_user: false }],
+        chat: [{ mes: date+' 12:00\nYou and Alex exchanged numbers. 两人谈起 Alex 和 Bea 之前短信里说的事，以及电话里的承诺。', name: 'Alex', is_user: false }],
         chatMetadata: {}, eventSource: bus, event_types: Object.fromEntries(names.map(n => [n, n])),
         saveMetadata: async () => {},
         setExtensionPrompt(key, value, position, depth, scan, role, filter) { prompts[key] = { value, position, depth, scan, role, filter }; },
@@ -121,18 +131,18 @@ test('reordered character indices remain safe and ambiguous name-only contacts a
     await f.generate(); assert.match(f.prompts[CONTINUITY_KEY].value, /A_PRIVATE_MEETING/);
     const state = { contacts: { named: { id: 'name:alex', name: 'Alex' } }, messages: { named: { contactId: 'name:alex', role: 'user', text: 'AMBIGUOUS', createdAt: 1 } }, calls: {} };
     f.context.characters.push({ name: 'Alex', avatar: 'different-alex.png' });
-    assert.equal(buildContinuityPrompt(state, resolveSpeaker(f.context), { instruction: 'Use memory.' }), '');
+    assert.equal(fixturePrompt(state, resolveSpeaker(f.context), { instruction: 'Use memory.' }), '');
     f.close();
 });
 
 test('long data is bounded and phone-text macros remain literal data', async () => {
     const state = { contacts: { a: { id: 'card:a.png', name: 'A' } }, calls: {}, messages: { a: { contactId: 'card:a.png', role: 'user', text: '{{setvar::private::oops}}', createdAt: 1 } } };
     const speaker = { name: 'A', avatar: 'a.png', nameIsUnique: true };
-    const prompt = buildContinuityPrompt(state, speaker, { instruction: 'Use memory.' });
+    const prompt = fixturePrompt(state, speaker, { instruction: 'Use memory.' });
     assert.doesNotMatch(prompt, /\{\{setvar/);
     assert.equal(JSON.parse(prompt.split('\n').at(-2)).records[0].text, '{{setvar::private::oops}}');
     state.messages.a.text = 'older '.repeat(5000) + 'LATEST';
-    const bounded = JSON.parse(buildContinuityPrompt(state, speaker, { instruction: 'Use memory.', budget: 512 }).split('\n').at(-2));
+    const bounded = JSON.parse(fixturePrompt(state, speaker, { instruction: 'Use memory.', budget: 512 }).split('\n').at(-2));
     assert.equal(bounded.partial, true); assert.ok(JSON.stringify(bounded.records).length <= 512);
     assert.deepEqual(bounded.records, [], 'oversized original messages are omitted intact, never rewritten');
 });
@@ -152,17 +162,17 @@ test('unknown data schema does not overwrite the stored journal or block normal 
     f.close();
 });
 
-test('each relevant channel keeps at most three records; ordinary and anonymous dialogue remain while other people and private assets stay out',()=>{
+test('each relevant channel keeps at most twenty records; ordinary and anonymous dialogue remain while other people and private assets stay out',()=>{
  const state={contacts:{alex:{id:'card:alex.png',name:'Alex'}},messages:{},calls:{},snapchat:{profile:{alias:'Moon'},a:{id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}},x:{profile:{alias:'Moon'},a:{id:'a',type:'account',name:'Alex',characterId:'card:alex.png',identityKnown:false}},orders:{secret:'ORDER_SECRET'},assets:{secret:'ASSET_SECRET'}};
- for(let i=0;i<15;i++){
+ for(let i=0;i<25;i++){
   state.messages['m'+i]={contactId:'card:alex.png',role:'user',text:'SMS '+i,createdAt:i};
   state.calls['c'+i]={contactId:'card:alex.png',status:'missed',turns:[],createdAt:i};
   state.snapchat['s'+i]={type:'message',accountId:'a',role:'user',text:'Snap casual '+i,createdAt:i};
   state.x['x'+i]={type:'message',accountId:'a',role:'user',text:'X casual '+i,createdAt:i};
  }
  state.messages.other={contactId:'card:bea.png',role:'user',text:'BEA_PRIVATE',createdAt:50};
- const prompt=buildContinuityPrompt(state,{avatar:'alex.png',name:'Alex',nameIsUnique:true},{instruction:'Remember',userName:'Sam',budget:50000}),records=JSON.parse(prompt.split('\n').at(-2)).records;
- for(const channel of ['短信','电话','Snapchat'])assert.equal(records.filter(r=>r.channel===channel).length,3);
+ const prompt=fixturePrompt(state,{avatar:'alex.png',name:'Alex',nameIsUnique:true},{instruction:'Remember',userName:'Sam',budget:50000}),records=JSON.parse(prompt.split('\n').at(-2)).records;
+ for(const channel of ['短信','电话','Snapchat'])assert.equal(records.filter(r=>r.channel===channel).length,20);
  assert.doesNotMatch(prompt,/X casual|X 私信|ORDER_SECRET|ASSET_SECRET|BEA_PRIVATE/,'narrative continuity excludes all X DM records');
 });
 
@@ -189,13 +199,13 @@ test('final outgoing request and earlier memory snapshot include exact history o
   await f.bus.emit('CHAT_CHANGED');const switched={type:'normal',messages:[]};await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',switched);assert.equal(switched.messages.length,0);
  }finally{f.close();}
 });
-test('three per conversation counts both sides and ordinary NPC messages do not need a matching current card',()=>{
+test('twenty per conversation counts both sides and ordinary NPC messages do not need a matching current card',()=>{
  const state={contacts:{'name:a':{id:'name:a',name:'阿甲'},'name:b':{id:'name:b',name:'阿乙'}},messages:{},calls:{}};
- for(const id of ['a','b'])for(let n=0;n<14;n++)state.messages[id+n]={contactId:'name:'+id,role:n%2?'user':'assistant',text:id+n,createdAt:n};
- const text=buildContinuityPrompt(state,{name:'另一角色',nameIsUnique:true},{instruction:'记忆',allParticipants:true,budget:50000});
+ for(const id of ['a','b'])for(let n=0;n<24;n++)state.messages[id+n]={contactId:'name:'+id,role:n%2?'user':'assistant',text:id+n,createdAt:n};
+ const text=fixturePrompt(state,{name:'另一角色',nameIsUnique:true},{instruction:'记忆',allParticipants:true,budget:50000});
  const records=JSON.parse(text.split('\n').at(-2)).records;
- assert.equal(records.length,6);assert.equal(records.filter(r=>r.counterpart==='阿甲').length,3);
- assert.equal(records.filter(r=>r.speaker==='user').length,4);assert.ok(!records.some(r=>r.text==='a0'));
+ assert.equal(records.length,40);assert.equal(records.filter(r=>r.counterpart==='阿甲').length,20);
+ assert.equal(records.filter(r=>r.speaker==='user').length,20);assert.ok(!records.some(r=>r.text==='a0'));
  assert.match(text,/不得编造 user 曾发过的消息/);assert.match(text,/剩余时间、已过时间与总时长/);
 });
 
@@ -214,7 +224,7 @@ test('erased SMS clears prepared slot and is absent from next actual narrative p
 });
 
 test('actual narrative payload expires SMS by story time before persistence and keeps phone UI history',async()=>{
- const f=await fixture({withMemory:true});try{
+ const f=await fixture({withMemory:true,date:'2026-10-01'});try{
   await f.memory.read();
   await f.memory.commit(await f.memory.begin(),[
    set('smsContext','a',{category:'A',anchor:{date:'2026-10-01',time:'12:00'},expired:false}),
@@ -224,16 +234,16 @@ test('actual narrative payload expires SMS by story time before persistence and 
   await f.generate();
   const payload={chat:[{role:'user',content:'Continue'}]};
   await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',payload);
-  assert.doesNotMatch(JSON.stringify(payload),/A_PRIVATE_MEETING/);
+  assert.match(JSON.stringify(payload),/A_PRIVATE_MEETING/);
   assert.match(JSON.stringify(payload),/B_PRIVATE_PLAN/);
   await f.bus.emit('GENERATION_ENDED');await f.memory.read();
   assert.equal((await f.memory.read()).state.commContext['sms:a'].expired,true);
-  f.context.chat.push({mes:'2026-10-04 12:01\n他们继续讨论电话里的约定。',name:'Alex',is_user:false});
+  f.context.chat.push({mes:'2026-10-09 12:01\n他们继续讨论电话里的约定。',name:'Alex',is_user:false});
   await f.generate();
   const next={type:'normal',messages:[{role:'user',content:'Continue'}]};
   await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',next);
   assert.doesNotMatch(JSON.stringify(next),/A_PRIVATE_MEETING|B_PRIVATE_PLAN/);
-  assert.match(JSON.stringify(next),/A_CALL_PROMISE/);
+  assert.doesNotMatch(JSON.stringify(next),/A_CALL_PROMISE/);
   await f.bus.emit('GENERATION_ENDED');
   const state=(await f.memory.read()).state;
   assert.equal(state.commContext['sms:b'].expired,true);
@@ -241,7 +251,7 @@ test('actual narrative payload expires SMS by story time before persistence and 
  }finally{f.close();}
 });
 
-test('unrelated scenes stay free of old messages, but an actual topic restores exact memory with the right story age',async()=>{
+test('every ordinary scene receives exact communication memory with the right story age',async()=>{
  const f=await fixture();try{
   const c=f.context;c.chat=[{mes:'2026-10-30 21:15\n短信送达。'}];
   const rev=await revisionsFor(messageSignatures(c.chat));
@@ -250,7 +260,7 @@ test('unrelated scenes stay free of old messages, but an actual topic restores e
   const saved=JSON.stringify(c.chatMetadata);
   for(const mes of ['2026-10-31 09:00\n两人照常去上课。','他们讨论了作业。']){
    c.chat.push({mes});await f.generate();
-   assert.equal(f.prompts[CONTINUITY_KEY].value,'','unshown messages cannot force an unrelated scene to display them');
+   assert.match(f.prompts[CONTINUITY_KEY].value,/昨晚那件事，我知道了。/,'ordinary scenes still receive background memory');
   }
   c.chat.push({mes:'Sam 这才谈起短信里说过的话，Alex 已经听明白了。'});await f.generate();
   let prompt=f.prompts[CONTINUITY_KEY].value;
@@ -260,28 +270,13 @@ test('unrelated scenes stay free of old messages, but an actual topic restores e
   assert.equal(sms.text,record.text);assert.equal(sms.storyDaysAgo,1);
   assert.equal(sms.storyTime.date,'2026-10-30');assert.equal(sms.storyTime.time,'21:15');
   c.chat.push({mes:'2026-11-01 08:00\n他们又继续上课。'});await f.generate();
-  assert.equal(f.prompts[CONTINUITY_KEY].value,'','history disappears from the next unrelated prose turn');
+  assert.match(f.prompts[CONTINUITY_KEY].value,/昨晚那件事，我知道了。/,'history remains available without a keyword');
   c.chat.push({mes:'他们再次谈起短信里的约定。'});await f.generate();
   prompt=f.prompts[CONTINUITY_KEY].value;
   [sms]=JSON.parse(prompt.split('\n').at(-2)).records;
   assert.equal(sms.text,record.text);assert.equal(sms.storyDaysAgo,2,'same original fact, never a new message');
   assert.equal(JSON.stringify(c.chatMetadata),saved,'selective context does not consume, delete or mark phone history');
  }finally{f.close();}
-});
-
-test('communication scene cues require genuine plot relevance and never treat picking up a phone as reading',()=>{
- const state={contacts:{a:{id:'card:a',name:'Alex'},b:{id:'card:b',name:'Bea'}},whatsapp:{a:{type:'account',name:'Alex'},b:{type:'account',name:'Bea'}}};
- const speaker={name:'Alex'};
- assert.equal(communicationSceneScope(state,speaker,[{mes:'她把手机放在口袋里。'}]),null);
- assert.equal(communicationSceneScope(state,speaker,[{is_user:true,mes:'拿起手机看了看时间，继续走路。'}]),null);
- assert.equal(communicationSceneScope(state,speaker,[{mes:'手机又亮起未读红点。'}]),null);
- const topical=communicationSceneScope(state,speaker,[{is_user:true,mes:'Bea 问起昨天 WhatsApp 里的那段聊天。'}]);
- assert.equal(topical.readingPhone,false);assert.deepEqual(topical.relevantPeople,['Bea']);assert.deepEqual(topical.relevantPlatforms,['whatsapp']);
- const viewing=communicationSceneScope(state,speaker,[{is_user:true,mes:'Sam 打开 WhatsApp 查看和 Bea 的聊天记录。'}]);
- assert.equal(viewing.readingPhone,true);assert.deepEqual(viewing.relevantPeople,['Bea']);
- const all=communicationSceneScope(state,speaker,[{is_user:true,mes:'查看微信里的未读消息。'}]);
- assert.equal(all.readingPhone,true);assert.equal(all.relevantPeople,null);assert.deepEqual(all.relevantPlatforms,['wechat']);
- assert.equal(communicationSceneScope(state,speaker,[{is_user:true,mes:'继续正常上课。'}]),null);
 });
 
 async function chatMemoryFixture(options = {}) {
@@ -300,7 +295,7 @@ async function chatMemoryFixture(options = {}) {
 }
 const historyRecords = prompt => JSON.parse(prompt.split('\n').at(-2)).records;
 
-test('ordinary final requests carry the latest three messages per current-speaker chat without phone keywords',async()=>{
+test('ordinary final requests carry the latest twenty messages per conversation without phone keywords',async()=>{
  const f=await chatMemoryFixture();try{
   const before=JSON.stringify(f.context.chatMetadata);
   await f.generate();
@@ -311,13 +306,13 @@ test('ordinary final requests carry the latest three messages per current-speake
   const blocks=outgoing.messages.filter(m=>m.content.includes('<durian-phone-history>'));
   assert.equal(blocks.length,1);
   const records=historyRecords(blocks[0].content);
-  for(const app of ['wechat','whatsapp'])assert.deepEqual(records.filter(r=>r.platform===app).map(r=>r.recordId),['m3','m4','m5']);
-  assert.equal(records.length,6);assert.doesNotMatch(blocks[0].content,/UNSENT_DRAFT|BEA_PRIVATE/);
-  assert.ok(records.every(r=>r.otherParty==='小雨'&&r.identityKnown===false));
+  for(const app of ['wechat','whatsapp'])assert.deepEqual(records.filter(r=>r.platform===app).map(r=>r.recordId),['m0','m1','m2','m3','m4','m5','private']);
+  assert.equal(records.length,14);assert.doesNotMatch(blocks[0].content,/UNSENT_DRAFT/);assert.match(blocks[0].content,/BEA_PRIVATE/);
+  assert.ok(records.filter(r=>r.counterpart==='Alex').every(r=>r.otherParty==='小雨'&&r.identityKnown===false));
   assert.equal(records.find(r=>r.recordId==='m5').read,false);
   assert.equal(JSON.stringify(f.context.chatMetadata),before,'reading context must not mutate message state');
   f.context.chat.push({is_user:true,mes:'我直接问他约定的地点。'});await f.generate();
-  assert.equal(historyRecords(f.prompts[CONTINUITY_KEY].value).length,6);
+  assert.equal(historyRecords(f.prompts[CONTINUITY_KEY].value).length,14);
  }finally{f.close();}
 });
 
@@ -328,8 +323,8 @@ test('shown and already-notified messages remain speaker memory without becoming
   c.chatMetadata[JOURNAL_KEY]=importStoryPhone(c.chatMetadata[JOURNAL_KEY],await revisionsFor(messageSignatures(c.chat)),c.chat,c).journal;
   await f.generate();
   const text=f.prompts[CONTINUITY_KEY].value,rows=historyRecords(text).filter(r=>r.platform==='wechat');
-  assert.deepEqual(rows.map(r=>r.recordId),['m3','m4','m5']);
-  assert.equal(rows[0].shown,true);assert.equal(rows[2].noticeMentioned,true);assert.equal(rows[2].read,false);
+  assert.deepEqual(rows.map(r=>r.recordId),['m0','m1','m2','m3','m4','m5','private']);
+  assert.equal(rows[0].shown,undefined);assert.equal(rows[3].read,true);assert.equal(rows[5].noticeMentioned,true);assert.equal(rows[5].read,false);
   assert.match(text,/不得.*重复.*通知|绝不可再描写同一旧消息/);
  }finally{f.close();}
 });
@@ -339,7 +334,7 @@ test('chat memory respects app switches, member identity, silent requests and so
   f.settings.apps.whatsapp=false;await f.generate();
   assert.deepEqual(new Set(historyRecords(f.prompts[CONTINUITY_KEY].value).map(r=>r.platform)),new Set(['wechat']));
   const old=f.prompts[CONTINUITY_KEY];f.context.characterId=1;f.context.name2='Bea';assert.equal(old.filter(),false);
-  await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/BEA_PRIVATE/);assert.doesNotMatch(f.prompts[CONTINUITY_KEY].value,/wechat_FACT/);
+  await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/BEA_PRIVATE/);assert.match(f.prompts[CONTINUITY_KEY].value,/wechat_FACT/);assert.match(f.prompts[CONTINUITY_KEY].value,/其他人物不能自动获知/);
   for(const type of ['quiet','impersonate']){await f.generate(type);const payload={messages:[],type};await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',payload);assert.deepEqual(payload.messages,[]);}
   f.context.chat[0].mes='新分支，没有那些交流。';await f.generate();assert.equal(f.prompts[CONTINUITY_KEY].value,'');
  }finally{f.close();}
@@ -348,21 +343,22 @@ test('chat memory respects app switches, member identity, silent requests and so
 test('automatic chat memory preserves expiry and rejects ambiguous or mismatched account identities',()=>{
  const state={contacts:{},messages:{},calls:{},wechat:{
   a:{id:'a',type:'account',name:'阿历克斯',aliases:['Alex']},
-  m:{id:'m',type:'message',accountId:'a',role:'assistant',text:'ALIAS_FACT',read:true,createdAt:1},
+  m:{id:'m',type:'message',accountId:'a',role:'assistant',text:'ALIAS_FACT',read:true,createdAt:1,storyTime:{date:'2026-11-14',time:'08:00'}},
  },commContext:{}};
- const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true},options={instruction:'参考',allParticipants:true,sceneScope:null,currentStoryTime:{date:'2026-11-14',time:'09:00'}};
- assert.match(buildContinuityPrompt(state,speaker,options),/ALIAS_FACT/);
- assert.equal(buildContinuityPrompt(state,{...speaker,nameIsUnique:false},options),'');
- state.wechat.a.characterId='card:other.png';assert.equal(buildContinuityPrompt(state,speaker,options),'');
+ const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true},options={instruction:'参考',allParticipants:false,currentStoryTime:{date:'2026-11-14',time:'09:00'}};
+ assert.match(fixturePrompt(state,speaker,options),/ALIAS_FACT/);
+ assert.equal(fixturePrompt(state,{...speaker,nameIsUnique:false},options),'');
+ state.wechat.a.characterId='card:other.png';assert.equal(fixturePrompt(state,speaker,options),'');
  state.wechat.a.characterId='card:alex.png';
- state.commContext['wechat:m']={shown:true,category:'A',anchor:{date:'2026-11-12',time:'09:00'}};
- assert.equal(buildContinuityPrompt(state,speaker,options),'','existing story-time expiry still applies');
+ state.wechat.m.storyTime={date:'2026-11-06',time:'09:00'};
+ state.commContext['wechat:m']={shown:true,category:'A',anchor:{date:'2026-11-06',time:'09:00'}};
+ assert.equal(fixturePrompt(state,speaker,options),'','existing story-time expiry still applies');
 });
 
-test('scene recall adds named conversations while the current speaker retains their own chat memory',async()=>{
+test('scene keywords no longer filter platforms or conversations in ordinary requests',async()=>{
  const f=await fixture();try{
   const c=f.context;
-  c.chat=[{mes:'Sam 和 Alex 走在街上。'}];
+  c.chat=[{mes:'2026-11-14 12:00\nSam 和 Alex 走在街上。'}];
   const revisions=await revisionsFor(messageSignatures(c.chat));
   c.chatMetadata[JOURNAL_KEY]=appendChange(undefined,revisions,[
    set('contacts','card:alex.png',{id:'card:alex.png',name:'Alex'}),
@@ -375,24 +371,25 @@ test('scene recall adds named conversations while the current speaker retains th
   await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/A_WHATSAPP_PRIVATE/);
   c.chat.push({mes:'Bea 问起之前的短信里说了什么。',is_user:true});
   await f.generate();let text=f.prompts[CONTINUITY_KEY].value;
-  assert.match(text,/B_SMS_PRIVATE/);assert.match(text,/A_WHATSAPP_PRIVATE/);assert.doesNotMatch(text,/A_SMS_PRIVATE/);
+  assert.match(text,/B_SMS_PRIVATE/);assert.match(text,/A_WHATSAPP_PRIVATE/);assert.match(text,/A_SMS_PRIVATE/);
   c.chat.push({mes:'他们转而谈起当天的演出安排。',is_user:false});
   await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/A_WHATSAPP_PRIVATE/);
   c.chat.push({mes:'Sam 打开 WhatsApp 查看和 Alex 的聊天记录。',is_user:true});
   await f.generate();text=f.prompts[CONTINUITY_KEY].value;
-  assert.match(text,/A_WHATSAPP_PRIVATE/);assert.doesNotMatch(text,/B_SMS_PRIVATE|A_SMS_PRIVATE/);
+  assert.match(text,/A_WHATSAPP_PRIVATE/);assert.match(text,/B_SMS_PRIVATE/);assert.match(text,/A_SMS_PRIVATE/);
  }finally{f.close();}
 });
 
 test('missing dates never use wall time; valid stored SMS dates and sidecar dates are preserved',()=>{
  const message={id:'s',contactId:'name:A',role:'assistant',text:'hello',createdAt:Date.now()};
  const state={messages:{s:message},commContext:{},contacts:{'name:A':{id:'name:A',name:'A'}},calls:{}};
- const get=now=>JSON.parse(buildContinuityPrompt(state,{name:'A',nameIsUnique:true},{instruction:'参考',currentStoryTime:now}).split('\n').at(-2)).records[0];
- assert.equal(get({date:'2026-11-01'}).storyTime,null);assert.equal(get({date:'2026-11-01'}).storyDaysAgo,undefined);
+ const get=now=>buildContinuityPrompt(state,{name:'A',nameIsUnique:true},{instruction:'参考',currentStoryTime:now});
+ assert.equal(get({date:'2026-11-01'}),'');
  state.commContext['sms:s']={anchor:{date:'2026-10-30',time:''}};
- assert.equal(get(null).storyTime.date,'2026-10-30');assert.equal(get(null).storyDaysAgo,undefined);
+ assert.equal(get(null),'');
+ assert.equal(JSON.parse(get({date:'2026-11-01'}).split('\n').at(-2)).records[0].storyTime.date,'2026-10-30');
  message.storyTime={date:'2026-10-29',time:'20:10'};
- assert.equal(get({date:'2026-11-01'}).storyDaysAgo,3);
+ assert.equal(JSON.parse(get({date:'2026-11-01'}).split('\n').at(-2)).records[0].storyDaysAgo,3);
 });
 
 test('queued draft anchors to the floor it was actually sent, not the draft or later edits',async()=>{
@@ -416,9 +413,9 @@ test('old built-in continuity text migrates while custom and blank instructions 
 
 test('default continuity preface is deduplicated without removing custom text or record metadata',()=>{
  const settings=normalizeSettings({}),state={contacts:{a:{id:'a',name:'Alex'}},messages:{m:{id:'m',contactId:'a',role:'assistant',text:'UNIQUE_MESSAGE',createdAt:1}},calls:{}};
- const build=instruction=>buildContinuityPrompt(state,{name:'Alex'},{instruction,allParticipants:true});
+ const build=instruction=>fixturePrompt(state,{name:'Alex'},{instruction,allParticipants:true});
  const prompt=build(settings.prompts.continuity);
- assert.match(prompt,/叙事语言遵循酒馆预设/);assert.match(prompt,/匿名账号只知道网名/);assert.match(prompt,/shown 与 read 是两个独立状态/);
+ assert.match(prompt,/叙事语言遵循酒馆预设/);assert.match(prompt,/匿名账号只知道网名/);assert.match(prompt,/已读／未读状态/);assert.doesNotMatch(prompt,/shown|已展示|未展示/);
  assert.equal(prompt.split('UNIQUE_MESSAGE').length-1,1);
  const custom='自定义衔接：特别保留未完成的约定。';assert.ok(build(custom).startsWith(custom+'\n'));
  assert.deepEqual(JSON.parse(prompt.split('\n').at(-2)),JSON.parse(build(custom).split('\n').at(-2)),'only redundant instruction text changes, not the records');

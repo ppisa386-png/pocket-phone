@@ -9,7 +9,7 @@ import {createSnapPanel} from '../src/snapchat-view.js';
 
 function setup() {
  const bus=new EventEmitter();let response={},calls=0,lastPrompt='';
- const context={chatId:'snap',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{name:'Alex',mes:'We meet.'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async options=>{calls++;lastPrompt=options.quietPrompt;return typeof response==='function'?await response(options):JSON.stringify(response);}};
+ const context={chatId:'snap',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{name:'Alex',mes:'2026-10-30 09:30\nWe meet.'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async options=>{calls++;lastPrompt=options.quietPrompt;return typeof response==='function'?await response(options):JSON.stringify(response);}};
  const settings=normalizeSettings({retries:0});const memory=createPhoneMemory({getContext:()=>context});const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});const snap=createSnapchat({memory,phone,getContext:()=>context,getSettings:()=>settings});
  return {snap,memory,phone,settings,context,bus,state:()=>phone.snapshot(),count:()=>calls,prompt:()=>lastPrompt,reply:value=>{response=value;},close(){phone.destroy();memory.destroy();}};
 }
@@ -32,9 +32,9 @@ test('aliases stay private until explicit disclosure; rename never erases recogn
  const f=setup();const id=await friend(f);assert.equal(f.state().snapchat[id].identityKnown,false);
  f.context.chat.push({mes:'Alex JUST_OPENED_THE_BOX with Sam.'});await f.memory.read();
  f.reply({status:'reply',text:'Hello Moon',kind:'voice'});ok(await f.snap.send(id,'text','Hi'));assert.doesNotMatch(f.prompt(),/JUST_OPENED_THE_BOX/);assert.match(f.prompt(),/不知道这个账号是谁/);assert.equal(snapUnread(f.state()),1);
- const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/\"identityKnown\":false/);
+ const speaker={name:'Alex',avatar:'alex.png',nameIsUnique:true};assert.match(buildContinuityPrompt(f.state(),speaker,{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember'}),/Hello Moon/);assert.match(buildContinuityPrompt(f.state(),speaker,{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember'}),/\"identityKnown\":false/);
  ok(await f.snap.markRead(id));assert.equal(snapUnread(f.state()),0);ok(await f.snap.reveal(id));ok(await f.snap.saveProfile({alias:'New name',currency:'USD'}));assert.equal(f.state().snapchat[id].identityKnown,true);
- assert.match(buildContinuityPrompt(f.state(),speaker,{instruction:'Remember'}),/Hello Moon/);assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{instruction:'Remember'}),'');f.close();
+ assert.match(buildContinuityPrompt(f.state(),speaker,{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember'}),/Hello Moon/);assert.equal(buildContinuityPrompt(f.state(),{name:'Bea',avatar:'bea.png',nameIsUnique:true},{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember'}),'');f.close();
 });
 
 test('failed reply retries the same sent message once; all media remain text',async()=>{
@@ -106,7 +106,7 @@ test('queued Snapchat sentences cost no API, flush together, stay private until 
  const f=setup();try{const id=await friend(f,'Sam');const count=f.count();
  ok(await f.snap.queueMessage(id,'text','First thought'));ok(await f.snap.queueMessage(id,'image','Then this photo'));
  assert.equal(f.count(),count);assert.equal(snapItems(f.state(),'message').length,2);
- assert.doesNotMatch(buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{instruction:'Remember'}),/First thought/);
+ assert.doesNotMatch(buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember'}),/First thought/);
  f.context.chat.push({name:'Alex',mes:'Later.'});await f.memory.read();
  f.reply({status:'reply',messages:[{kind:'text',text:'Got it.'},{kind:'text',text:'Nice photo!'}]});ok(await f.snap.flushMessages(id));assert.equal(f.count(),count+1);assert.equal(snapItems(f.state(),'message').length,4);assert.match(f.prompt(),/First thought/);assert.match(f.prompt(),/Then this photo/);
  const before=f.count();assert.equal((await f.snap.flushMessages(id)).ok,false);assert.equal(f.count(),before);
@@ -212,7 +212,7 @@ test('own story replies and likes remain isolated per friend in chat and narrati
  const f=setup();const id=await friend(f);const ticket=await f.memory.begin();await f.memory.commit(ticket,[{collection:'snapchat',key:'bea',value:{id:'bea',type:'account',name:'Bea',handle:'bea',friend:'friends',identityKnown:false}}]);
  ok(await f.snap.publish('image','A public sunset'));const story=snapItems(f.state(),'story')[0];
  f.reply({items:[],reactions:[{storyId:story.id,accountId:id,liked:true,text:'Alex private reply'},{storyId:story.id,accountId:'bea',liked:true,text:'Bea private reply'}]});ok(await f.snap.refresh('stories'));
- const prompt=buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{instruction:'Remember',budget:50000});
+ const prompt=buildContinuityPrompt(f.state(),{name:'Alex',avatar:'alex.png',nameIsUnique:true},{currentStoryTime:{date:'2026-10-30',time:'09:30'},instruction:'Remember',budget:50000});
  assert.match(prompt,/Alex private reply/);assert.match(prompt,/点赞/);assert.doesNotMatch(prompt,/Bea private reply/);assert.match(prompt,/不知道现实身份/);
  f.reply({status:'reply',text:'Thanks'});ok(await f.snap.send(id,'text','Hi'));assert.match(f.prompt(),/Alex private reply/);assert.doesNotMatch(f.prompt(),/Bea private reply/);f.close();
 });
