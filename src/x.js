@@ -8,7 +8,7 @@ import {JOURNAL_KEY} from './journal.js?v=1.2.57';
 import {readStoryClock,exactStoryTime} from './story-clock.js?v=1.2';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
-import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.55';
+import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.66';
 import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.65';
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
@@ -99,6 +99,13 @@ export function createX({memory,phone,getContext,getSettings}) {
         return {id,type:'public-activity',slot,targetId:target,action,shown:false,createdAt:Date.now(),
             storyTime:squareClock(getContext().chat||[]),...fields};
     };
+    // Public history is immutable. Home refresh may still coalesce its pending
+    // pulse, but that must never erase an action which actually occurred.
+    const historyActivity=activity=>xRecord('public-history',{
+        sourceActivityId:activity.id,slot:activity.slot,targetId:activity.targetId,
+        action:activity.action,accountId:activity.accountId,postId:activity.postId,
+        storyTime:exactStoryTime(getContext().chat||[])
+    });
     function publicActivityPrompt(state,rows,candidateMap=new Map()) {
         if(!rows.length)return '';
         const events=rows.map(item=>{
@@ -542,8 +549,8 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         follow(id,value){return run(async(state,_c,_r,commit)=>{
             const a=xAccount(state,id),next=value===true;
             if(!!a.following===next)return;
-            await commit([xSet({...known(state,a),following:next}),
-                xSet(socialEvent(state,'follow',id,next?'follow':'unfollow',{accountId:id}))]);
+            const activity=socialEvent(state,'follow',id,next?'follow':'unfollow',{accountId:id});
+            await commit([xSet({...known(state,a),following:next}),xSet(activity),xSet(historyActivity(activity))]);
         });},
         block(id,value){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id,false);await commit([xSet({...a,blocked:value===true})]);});},
         reveal(id){return run(async(state,_c,_r,commit)=>{const a=xAccount(state,id);if(a.inboundRequest==='pending'||a.inboundRequest==='declined')throw Error('请先接受私信请求。');if(a.dmPolicy==='closed')throw Error('此账号暂不接收私信。');await commit([xSet({...a,identityKnown:true}),xSet(xRecord('message',{accountId:id,role:'user',text:'我是 '+getContext().name1+'。',status:'sent',read:true,storyTime:exactStoryTime(getContext().chat)}))]);});},
@@ -660,8 +667,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             if(p?.type!=='post'||!['liked','reposted'].includes(kind))throw Error('帖子不可用。');
             if(p.author!=='user')xAccount(state,p.author);
             const next=!p[kind],action=kind==='liked'?(next?'like':'unlike'):(next?'repost':'unrepost');
+            const activity=socialEvent(state,kind,id,action,{accountId:p.author,postId:id});
             await commit([xSet({...p,[kind]:next,[kind+'At']:Date.now(),...(kind==='reposted'?{repostedDay:squareClock(getContext().chat).day}:{})}),
-                xSet(socialEvent(state,kind,id,action,{accountId:p.author,postId:id}))]);
+                xSet(activity),xSet(historyActivity(activity))]);
         });},
         comment(id,value,replyTo=null){return run(async(state,current,request,commit)=>{
             const p=state.x[id];if(p?.type!=='post')throw Error('帖子不存在。');
