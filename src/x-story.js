@@ -37,7 +37,7 @@ export function xStoryPrompt(state, now = null) {
             ...(timing.postDaysAgo!==null?{storyDaysAgo:timing.postDaysAgo}:{})};
     }).filter(Boolean);
     return '\nX 正文同步：仅当本楼明确写出 user 已在 X/Twitter 发布新推文，在正文末尾按顺序每帖附一条隐藏 HTML 注释，不用代码块：' +
-        '<!--durian-x:{"action":"published","author":"user","text":"推文逐字原文","imageDescription":"仅单张照片时填写其描述","images":["仅多张照片时填写第1张描述","第2张描述，依次填写"],"replies":[{"name":"实际回复者的姓名或网名","text":"公开回复逐字原文"}],"category":"可选A或B：日常闲聊为A，约定/仍在发展的具体事件为B","shown":true}-->。' +
+        '<!--durian-x:{"action":"published","author":"user","text":"推文逐字原文","images":["第1张照片的真实画面描述","第2张照片的真实画面描述，依次填写"],"replies":[{"name":"实际回复者的姓名或网名","text":"公开回复逐字原文"}],"category":"可选A或B：日常闲聊为A，约定/仍在发展的具体事件为B","shown":true}-->。' +
         '分别抄录文字和配图，不补写；一条推文有多张照片时必须仍输出一条 durian-x 标记，用 images 字符串数组按顺序逐张记录每张照片，不拆成多条推文，也不能因为有多图就省略标记。单张照片只填 imageDescription 字符串，不填 images；多张只填 images，不填 imageDescription；纯图片帖 text 可为空；无配图两个字段均省略。照片画面仅记正文实际明确写出的描述，不凭空推断。发布或回复若明确写出时刻，可附 time（HH:mm）；否则沿用本楼剧情时间。回复只收录正文已经写出的他人公开回复，保留顺序，无回复省略 replies。' +
         '若本楼只新增对既有 user 推文的回复，每条附 <!--durian-x:{"action":"reply","postId":"对应已有帖子ID","name":"实际回复者","text":"回复原文","category":"可选A或B：日常闲聊为A，约定/持续事件为B","shown":true}-->。' +
         '正文明确写出既有 user 或 NPC 推文的累计互动数时，另附 <!--durian-x:{"action":"metrics","postId":"准确的已保存帖子ID","postText":"帖子原文或准确文字片段","metrics":{"replies":{"value":4000}}}-->。' +
