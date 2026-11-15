@@ -37,10 +37,14 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
     const phone = createPhoneService({ memory, getContext: () => c, getSettings: () => settings });
     // Legacy engine tests run without network. Production always uses the live
     // provider; dedicated tests below exercise the actual API boundary.
-    const climateLookup = options.climateLookup || (async name => ({
-        ...climateFor(name), monthlyTemp: Array(12).fill(17),
-        monthlyRainChance: Array(12).fill(.4), source: 'open-meteo-historical',
-    }));
+    const climateLookup = options.climateLookup || (async name => {
+        const template = climateFor(name);
+        const monthlyTemp = Array.from({ length: 12 }, (_, i) => {
+            const date = '2026-' + String(i + 1).padStart(2, '0') + '-15';
+            return initialWeather(template, { day: dateDay(date), hour: 14 }, () => .5).temp - 2;
+        });
+        return { ...template, monthlyTemp, monthlyRainChance: Array(12).fill(.4), source: 'open-meteo-historical' };
+    });
     const fictionalClimateLookup = Object.hasOwn(options, 'fictionalClimateLookup')
         ? options.fictionalClimateLookup
         : async (name, context) => worldClimate(name, context) || climateFor(name, null, 'fictional', context);
@@ -1033,8 +1037,9 @@ test('historical climate with southern seasons uses local-calendar monthly tempe
         monthlyRainChance: Array(12).fill(.3) };
     const sample = date => {
         let total = 0;
-        for (let i=0;i<200;i++)total += initialWeather(climate,{day:dateDay(date),hour:14},freshRng(i)).temp;
-        return total/200;
+        for (let i=0;i<200;i++)for(const hour of [3,14])
+            total += initialWeather(climate,{day:dateDay(date),hour},freshRng(i * 2 + (hour === 3 ? 0 : 1))).temp;
+        return total/400;
     };
     assert.ok(sample('2026-01-15') > 24);
     assert.ok(sample('2026-07-15') < 19);
