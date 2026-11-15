@@ -119,7 +119,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         const attempts = [];
         const modelResponses = [];
-        let normalRetriesLeft = retries, formatRetried = false, lastXRequiredField = null;
+        let normalRetriesLeft = retries, formatRetried = false;
         let maxTokens = options.maxTokens ?? (app === 'daily' ? 16384 : 8192);
         const outputContract = options.finalOutputContract || options.outputContract || MODEL_JSON_CONTRACT;
         const label = {assets:'资产',calendar:'日历',amazon:'Amazon',x:'X'}[app] || '手机任务';
@@ -138,8 +138,6 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     ? '\n榴莲日历格式恢复：上一份回复未提供完整且合法的节日 JSON。只重新完成原地点、原年份的同一任务，按任务给出的 region、timezone、years、holidays 结构返回唯一完整 JSON 对象；节日使用紧凑数组，不输出 Markdown、推理、剧情或其他说明。不得捏造无依据的日期。'
                     : app === 'amazon'
                     ? '\nAmazon 搜索格式恢复：上一份回复未提供可用的完整商品 JSON 或商品必要资料不合法。重新执行相同购物搜索，须生成完整的 4—6 件商品；最终只返回一个 JSON 对象，顶层为 products 数组，每项包含 name、brand、luxury、description、image、price、currency、variants、reviews；币种沿用本次购物要求，价格有效，不新增购买、付款或配送记录。不输出分析、解释、Markdown、代码块或其他对象。'
-                    : app === 'x'
-                    ? '\nX 格式恢复：上一份回复未形成符合本任务约束的完整 JSON 数据'+(lastXRequiredField?'，必需字段 '+lastXRequiredField+' 缺失、类型错误或条数超限':'')+'。只重新执行同一 X 任务，保留全部账号、正文、人物记忆、公开范围和原有业务规则。首页／广场动态任务必须同时包含顶层 posts 和 replies 数组，没有新内容也填写[]；搜索、趋势、私信、粉丝评估等其他 X 任务必须沿用各自规定的顶层字段，不能擅自改成帖子任务。禁止返回空对象、解释、Markdown、思考过程或多个 JSON。'
                     : '\n'+label+' 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
@@ -167,14 +165,12 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');
                 const outputFailure = ['API_EMPTY_OUTPUT','API_OUTPUT_TRUNCATED'].includes(failure.code);
                 const formatFailure = /^MODEL_JSON_/.test(failure.code || '') || outputFailure ||
-                    ['CALENDAR_JSON_INVALID','CALENDAR_DATA_INVALID','AMAZON_JSON_INVALID','AMAZON_DATA_INVALID'].includes(failure.code) ||
-                    (app === 'x' && failure.code === 'X_DATA_SHAPE');
+                    ['CALENDAR_JSON_INVALID','CALENDAR_DATA_INVALID','AMAZON_JSON_INVALID','AMAZON_DATA_INVALID'].includes(failure.code);
                 if (/^MODEL_JSON_/.test(failure.code || '') && typeof responseText === 'string') {
                     modelResponses.push({attempt:attempt+1, code:failure.code, text:responseText,
                         metadata:responseMeta, parser:failure.jsonParse});
                 }
                 if (formatFailure && options.formatRetryOnce !== false && !formatRetried && isCurrent() && (outputFailure || failure.retryable !== false)) {
-                    if (app === 'x' && failure.code === 'X_DATA_SHAPE') lastXRequiredField = failure.requiredField;
                     formatRetried = true;
                     if (['MODEL_JSON_TRUNCATED','API_OUTPUT_TRUNCATED'].includes(failure.code)) maxTokens = Math.min(32768, maxTokens * 2);
                     else if (failure.code === 'API_EMPTY_OUTPUT') maxTokens = Math.min(4096, Math.max(1024, Math.floor(maxTokens / 2)));
