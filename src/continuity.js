@@ -133,7 +133,7 @@ export function buildContinuityPrompt(state, speaker, { instruction, userName = 
                     for(const [i,comment] of (item.comments||[]).entries()){
                         if(comment.accountId!==account.id)continue;
                         add('misc:'+app+':'+account.id,comment.createdAt,{
-                            channel:label+' 故事回复',platform:app,recordId:item.id+'#comment:'+account.id+':'+i,
+                            channel:label+' 故事回复',platform:app,recordId:item.id+'#comment:'+account.id,
                             ...who,storyTime:comment.storyTime||null,speaker:account.name,text:comment.text,post:item.text});
                     }
                     if((item.friendLikes||[]).includes(account.id))
