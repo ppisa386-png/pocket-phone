@@ -690,7 +690,7 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
         });
         const result = await request(prompt,
             data => validateWeatherResearch(data, city),
-            current, null, { retries: 0, maxTokens: 4096 });
+            current, null, { retries: 0, formatRetryOnce: false, maxTokens: 4096 });
         if (!current()) throw Error('剧情或设置已变化，本次天气研究未保存。');
         return result;
     }
