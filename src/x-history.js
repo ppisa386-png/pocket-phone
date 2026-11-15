@@ -19,6 +19,7 @@ export function xHistoryStamp(state, record) {
 export function xPublicHistoryRecords(state, now) {
     const x=state.x||{},rows=Object.values(x),out=[];
     const seen=new Set(),sources=new Set(rows.filter(r=>r.type==='public-history').map(r=>r.sourceActivityId).filter(Boolean));
+    const savedOrder=new Map(rows.map((record,index)=>[record.id,index]));
     const name=id=>id==='user'?x.profile?.alias||'user':x[id]?.name||id;
     const postContext=post=>({id:post.id,author:post.author,name:name(post.author),
         text:post.text??'',...(post.imageDescription!==undefined?{imageDescription:post.imageDescription}:{})});
@@ -26,7 +27,7 @@ export function xPublicHistoryRecords(state, now) {
         const stamp=xHistoryStamp(state,record);
         if(!withinCommunicationWeek(stamp,now)||seen.has(id))return;
         seen.add(id);
-        out.push({time:Number(record.createdAt)||0, data:{
+        out.push({time:Number(record.createdAt)||0,order:savedOrder.get(record.id)??out.length, data:{
             channel:'X 公开动态',platform:'x-public',recordId:record.id,
             eventId:id,action,storyTime:stamp,...extra
         }});
@@ -68,5 +69,5 @@ export function xPublicHistoryRecords(state, now) {
     const score=row=>dateDay(row.data.storyTime.date)*1440+
         (/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(row.data.storyTime.time||'')
             ?Number(row.data.storyTime.time.slice(0,2))*60+Number(row.data.storyTime.time.slice(3)):0);
-    return out.sort((a,b)=>score(a)-score(b)||a.time-b.time||a.data.eventId.localeCompare(b.data.eventId)).slice(-20);
+    return out.sort((a,b)=>score(a)-score(b)||a.time-b.time||a.order-b.order||a.data.eventId.localeCompare(b.data.eventId)).slice(-20);
 }
