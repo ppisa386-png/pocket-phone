@@ -36,7 +36,7 @@ test('SMS, WhatsApp, WeChat, X DMs have independent shared quotas and read field
   s.messages[id]=msg(id,role,time,{contactId:'A'});
   for(const app of ['whatsapp','wechat','x']){
    const mid=app+id;
-   s[app][mid]=msg(mid,role,time,{type:'message',accountId:i%3?'A':'B',status:'sent',read:i%2===0});
+   s[app][mid]=msg(mid,role,time,{type:'message',accountId:i%3?'A':'B',status:'sent',read:i%4===1});
   }
  }
  s.x.pending=msg('pending','user','11:00',{type:'message',accountId:'A',status:'pending'});
