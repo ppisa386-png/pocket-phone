@@ -15,24 +15,24 @@ import { createAssets } from '../src/assets.js';
 import { createX, xItems } from '../src/x.js';
 import { cashBalance, assetRows } from '../src/assets-core.js';
 
-test('published version cache-busts the actual changed independent API and JSON data modules',()=>{
- const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
- for(const module of ['api','amazon','assets','calendar','phone','continuity']){
-  const line=source.split(/\r?\n/).find(s=>s.includes("'./src/"+module+".js?v="));
-  assert.ok(line,'entry must import '+module);
-  assert.ok(line.includes("./src/"+module+".js?v="+VERSION+"'"),module+' must not keep an obsolete import cache key');
- }
- const targets=new Set(['continuity','communication-time','comm-context','proactive-pacing','story-phone','outreach','diagnostics','model-json','api','phone','amazon','assets','calendar-core','daily','snapchat','wechat-moments','x']);
- const pending=[new URL('../index.js',import.meta.url)],visited=new Set(),found=new Set();
- while(pending.length){
-  const url=pending.pop();if(visited.has(url.href))continue;visited.add(url.href);
-  for(const match of readFileSync(url,'utf8').matchAll(/['"](\.\/[^'"]+\.js)\?v=([^'"]+)['"]/g)){
-   const dependency=new URL(match[1],url),name=dependency.pathname.split('/').at(-1).slice(0,-3);
-   if(targets.has(name)){assert.equal(match[2],VERSION,name+' must use the new cache key through every importer');found.add(name);}
-   pending.push(dependency);
+test('published version cache-busts all changed weather and story importers', () => {
+ const files = {
+  'index.js': ['weather.js','daily.js','story-phone.js','memory.js','ui.js','config.js'],
+  'src/weather.js': ['weather-climate-source.js'],
+  'src/weather-view.js': ['weather.js'],
+  'src/ui.js': ['weather-view.js','config.js'],
+  'src/memory.js': ['weather.js'],
+  'src/story-phone.js': ['weather.js'],
+  'src/daily.js': ['weather.js'],
+ };
+ for (const [file, imports] of Object.entries(files)) {
+  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+  for (const name of imports) {
+   const line=source.split(/\r?\n/).find(row=>row.includes('/'+name+'?v='));
+   assert.ok(line,file+' must import '+name);
+   assert.ok(line.includes('/'+name+'?v='+VERSION+"'"),file+' must load the new '+name+' implementation');
   }
  }
- assert.deepEqual(found,targets);
 });
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
