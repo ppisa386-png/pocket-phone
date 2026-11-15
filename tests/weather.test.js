@@ -1,10 +1,10 @@
-// Weather app: local sampling engine, manual refresh, location sharing and
-// prompt gating. All values are engine-local; the narrative AI never decides
-// weather, and no external weather API is involved.
+// Weather app: historical climate research on explicit refresh, local
+// deterministic hourly simulation, worldbook climate and floor-scoped storage.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
+import { lookupLocationClimate, climateFromHistorical } from '../src/weather-climate-source.js';
 import { createPhoneService } from '../src/phone.js';
 import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
@@ -24,7 +24,7 @@ const hash32 = text => { let h = 2166136261; for (let i = 0; i < text.length; i+
 const mulberry32 = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const engineRngAt = (seed, key, hour) => mulberry32(hash32(seed + '|' + key + '|' + hour));
 
-function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。', is_user: false }]) {
+function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。', is_user: false }], options = {}) {
     const bus = new EventEmitter();
     let response = { city: null }, calls = 0, prompt = '';
     const c = { chatId: 'weather', name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }],
@@ -35,7 +35,16 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
     const settings = normalizeSettings({ retries: 0 });
     const memory = createPhoneMemory({ getContext: () => c });
     const phone = createPhoneService({ memory, getContext: () => c, getSettings: () => settings });
-    const weather = createWeather({ memory, phone, getContext: () => c, getSettings: () => settings });
+    // Legacy engine tests run without network. Production always uses the live
+    // provider; dedicated tests below exercise the actual API boundary.
+    const climateLookup = options.climateLookup || (async name => ({
+        ...climateFor(name), monthlyTemp: Array(12).fill(17),
+        monthlyRainChance: Array(12).fill(.4), source: 'open-meteo-historical',
+    }));
+    const fictionalClimateLookup = Object.hasOwn(options, 'fictionalClimateLookup')
+        ? options.fictionalClimateLookup
+        : async (name, context) => worldClimate(name, context) || climateFor(name, null, 'fictional', context);
+    const weather = createWeather({ memory, phone, getContext: () => c, getSettings: () => settings, climateLookup, fictionalClimateLookup });
     const state = async () => (await memory.read()).state;
     return { c, settings, memory, phone, weather, state, reply: r => response = r, calls: () => calls, prompt: () => prompt, close() { phone.destroy(); memory.destroy(); } };
 }
@@ -61,7 +70,8 @@ test('manual refresh samples the first weather locally for the marked city with 
         const state = await f.state();
         const record = state.weather['上海'];
         assert.equal(record.city, '上海');
-        assert.deepEqual(record.climate, { archetype: 'cfa', offset: 1, south: false });
+        assert.equal(record.climate.archetype, 'cfa');
+        assert.equal(record.climate.source, 'open-meteo-historical');
         assert.equal(typeof record.seed, 'string');
         assert.equal(record.hour, dateDay('2026-01-01') * 24 + 10);
         assert.equal(record.date, '2026-01-01');
@@ -102,13 +112,13 @@ test('refresh without a marker probes the recent prose and status bars, saves th
         assert.equal(rolled.weather?.['东京'], undefined);
     } finally { f.close(); }
 });
-test('an existing marker path stays model-free: refresh with a location makes no request', async () => {
+test('an existing marker path stays model-free while refresh queries the real climate source', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
         await f.memory.read();
         const result = await f.weather.refresh();
         assert.equal(result.ok, true, result.error);
-        assert.equal(f.calls(), 0); // 标记路径保持不动，零模型请求
+        assert.equal(f.calls(), 0); // 零模型请求，气候服务独立查询
         assert.equal((await f.state()).location.current.city, '上海');
     } finally { f.close(); }
 });
@@ -129,7 +139,7 @@ test('weather location can be edited from the shared location record without a m
         assert.equal(state.weather['洛杉矶'].climate.archetype,'csa');
         assert.equal(f.weather.report(state).city,'洛杉矶');
         assert.equal(f.weather.report(state).status,'ok');
-        assert.equal(f.calls(),beforeCalls,'editing and locally sampling weather makes no model request');
+        assert.equal(f.calls(),beforeCalls,'editing a real location uses climate API without a model request');
         const panel=createWeatherPanel({adapter:{weather:f.weather},getView:()=>({...state,busy:false}),redraw(){},editLocation(){}});
         assert.match(panel.html(),/data-press="weather-location"/);
         assert.deepEqual(panel.press({dataset:{press:'weather-location'}}).map(a=>a.icon),['edit']);
@@ -931,4 +941,101 @@ test('partly-cloudy forecast icons display both sun and cloud instead of full su
         const panel=createWeatherPanel({adapter:{weather:{report:()=>mock}},getView:()=>state,redraw(){}});
         assert.match(panel.html(),/circle cx="86"/);
     }finally{f.close();}
+});
+
+test('online geocoding and historical reanalysis produce twelve grounded monthly climate values', async () => {
+    const dates = [], temps = [], precip = [], wind = [], humidity = [];
+    for (let month = 1; month <= 12; month++) for (let day = 1; day <= 30; day++) {
+        dates.push('2020-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0'));
+        temps.push(month >= 6 && month <= 8 ? 26 : 7);
+        precip.push(month >= 6 && month <= 8 ? 8 : .2);
+        wind.push(12);
+        humidity.push(75);
+    }
+    const endpoints = [];
+    const fetcher = async url => {
+        endpoints.push(String(url));
+        return { ok: true, json: async () => endpoints.length === 1
+            ? { results: [{ name: '上海', country: '中国', latitude: 31.23, longitude: 121.47 }] }
+            : { daily: { time: dates, temperature_2m_mean: temps, precipitation_sum: precip,
+                wind_speed_10m_mean: wind, relative_humidity_2m_mean: humidity } } };
+    };
+    const climate = await lookupLocationClimate('上海', { fetcher });
+    assert.equal(endpoints.length, 2, 'online lookup must actually fetch geocoding and historical records');
+    assert.match(endpoints[0], /^https:\/\/geocoding-api\.open-meteo\.com\/v1\/search\?/);
+    assert.match(endpoints[1], /^https:\/\/archive-api\.open-meteo\.com\/v1\/archive\?/);
+    assert.equal(climate.source, 'open-meteo-historical');
+    assert.equal(climate.monthlyTemp[0], 7);
+    assert.equal(climate.monthlyTemp[6], 26);
+    assert.ok(climate.monthlyRainChance[6] > climate.monthlyRainChance[0]);
+    assert.equal(climate.typicalHumidity, 75);
+    assert.equal(climate.referencePeriod, '2016-01-01/2025-12-31');
+    assert.equal(climate.monthlyTemp.length, 12);
+});
+
+test('a failed online lookup rejects fake climate and does not replace saved records', async () => {
+    let requests = 0, fail = false;
+    const climateLookup = async city => {
+        requests++;
+        if (fail) throw Object.assign(Error('气候网络不可用'), { code: 'CLIMATE_NETWORK' });
+        return { ...climateFor(city), monthlyTemp: Array(12).fill(18), monthlyRainChance: Array(12).fill(.3),
+            source: 'open-meteo-historical' };
+    };
+    const f = setup(undefined, { climateLookup });
+    try {
+        f.c.chat.push(marker('2026-01-01 10:00\nSam now lives in 上海.', '上海'));
+        await f.memory.read();
+        assert.equal((await f.weather.refresh()).ok, true);
+        assert.equal(requests, 1);
+        const saved = structuredClone((await f.state()).weather['上海']);
+        assert.equal(f.weather.report(await f.state()).status, 'ok');
+        assert.equal(requests, 1, 'reading report and local simulation never calls API');
+        fail = true;
+        const result = await f.weather.refresh();
+        assert.equal(result.ok, false);
+        assert.match(result.error, /气候网络不可用/);
+        assert.equal(requests, 2, 'each explicit refresh makes a new climate query');
+        assert.deepEqual((await f.state()).weather['上海'], saved, 'failure must keep the previous research and forecast');
+        fail = false;
+        assert.equal((await f.weather.refresh()).ok, true);
+        assert.equal(requests, 3);
+        f.c.chat.pop(); f.c.eventSource.emit('MESSAGE_DELETED'); await f.memory.read();
+        assert.equal((await f.state()).weather['上海'], undefined, 'deleting the source floor rolls back weather and climate together');
+    } finally { f.close(); }
+});
+
+test('fictional cities research activated lore via the configured model, not via a geography API', async () => {
+    let geocodingCalls = 0;
+    const f = setup(undefined, { climateLookup: async () => { geocodingCalls++; throw Error('fictional must not use real API'); },
+        fictionalClimateLookup: null });
+    try {
+        f.c.characters[0] = { name: 'Alex', avatar: 'alex.png', data: {
+            character_book: { entries: [{ enabled: true, content: '云京城位于极地冰原，终年积雪。' }] } } };
+        f.c.chat.push(marker('2026-01-01 10:00\nWe arrived at 云京城.', '云京城'));
+        await f.memory.read();
+        f.reply({ known: true, archetype: 'et', offset: -2, south: false });
+        assert.equal((await f.weather.refresh()).ok, true);
+        assert.equal(f.calls(), 1, 'worldbook model research on every manual refresh');
+        assert.equal(geocodingCalls, 0);
+        assert.equal((await f.state()).weather['云京城'].climate.source, 'worldbook-ai');
+        assert.equal((await f.weather.refresh()).ok, true);
+        assert.equal(f.calls(), 2);
+        f.reply({ known: false });
+        const old = structuredClone((await f.state()).weather['云京城']);
+        assert.equal((await f.weather.refresh()).ok, false);
+        assert.deepEqual((await f.state()).weather['云京城'], old);
+    } finally { f.close(); }
+});
+
+test('historical climate with southern seasons uses local-calendar monthly temperatures', () => {
+    const climate = { archetype: 'cfb', offset: 0, south: true,
+        monthlyTemp: [29, 28, 25, 22, 18, 15, 13, 15, 18, 23, 26, 28],
+        monthlyRainChance: Array(12).fill(.3) };
+    const sample = date => {
+        let total = 0;
+        for (let i=0;i<200;i++)total += initialWeather(climate,{day:dateDay(date),hour:14},freshRng(i)).temp;
+        return total/200;
+    };
+    assert.ok(sample('2026-01-15') > 24);
+    assert.ok(sample('2026-07-15') < 19);
 });
