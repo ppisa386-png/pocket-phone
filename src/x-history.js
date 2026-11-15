@@ -22,7 +22,8 @@ export function xPublicHistoryRecords(state, now) {
     const savedOrder=new Map(rows.map((record,index)=>[record.id,index]));
     const name=id=>id==='user'?x.profile?.alias||'user':x[id]?.name||id;
     const postContext=post=>({id:post.id,author:post.author,name:name(post.author),
-        text:post.text??'',...(post.imageDescription!==undefined?{imageDescription:post.imageDescription}:{})});
+        text:post.text??'',...(post.imageDescription!==undefined?{imageDescription:post.imageDescription}:{}),
+        ...(Array.isArray(post.images)?{images:post.images}:{})});
     function add(record,id,action,extra) {
         const stamp=xHistoryStamp(state,record);
         if(!withinCommunicationWeek(stamp,now)||seen.has(id))return;
@@ -37,7 +38,8 @@ export function xPublicHistoryRecords(state, now) {
             (typeof record.text==='string'||typeof record.imageDescription==='string')){
             add(record,'post:'+record.id,'post',{postId:record.id,author:'user',
                 alias:record.alias||name('user'),text:record.text??'',
-                ...(record.imageDescription!==undefined?{imageDescription:record.imageDescription}:{})});
+                ...(record.imageDescription!==undefined?{imageDescription:record.imageDescription}:{}),
+                ...(Array.isArray(record.images)?{images:record.images}:{})});
         }
     }
     const comments=xComments(state);
