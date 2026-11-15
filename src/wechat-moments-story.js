@@ -35,7 +35,7 @@ export function importStoryWechatMoments(raw,revisions,chat,context) {
             if(!account)continue;
             const publishing=row.action==='published';
             if(!publishing&&row.action!=='comment')continue;
-            const text=row.text==null&&publishing?'':short(row.text,publishing?6000:500);
+            const text=publishing&&(row.text==null||(typeof row.text==='string'&&!row.text.trim()))?'':short(row.text,publishing?6000:500);
             if(text===null)continue;
             const prose=String(row.prose||'');
             if(text&&!prose.includes(text))continue;
