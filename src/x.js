@@ -208,19 +208,7 @@ export function createX({memory,phone,getContext,getSettings}) {
         const a=xRecord('account',{name,aliases:identity.aliases,handle,characterId,bio:xText(item.bio,500),followers:metric(item.followers),dmPolicy:['open','requests','closed'].includes(item.dm_policy)?item.dm_policy:'requests',following:false,blocked:false,identityKnown:false,crowd:crowdOnly,...(kind?{authorKind:kind}:{})});
         state.x[a.id]=a;changes.push(xSet(a));return a;
     }
-    const list=(data,key,max)=>{
-        if(!Array.isArray(data?.[key])||data[key].length>max) {
-            // A complete JSON object without its required list is a recoverable
-            // output-contract failure, not a valid empty feed. Preserve the
-            // original error and reject the entire batch if retry also fails.
-            throw Object.assign(new Error('X 返回字段 '+key+' 应为最多 '+max+' 条的数组，当前'+
-                (data?.[key]==null?'缺失':Array.isArray(data[key])?'有 '+data[key].length+' 条':'类型不正确')+'。本次未保存。'),{
-                code:'X_DATA_SHAPE',requiredField:key,
-                diagnostic:'任务：X；错误代码：X_DATA_SHAPE；字段：'+key+'；要求：最多 '+max+' 条的数组',
-            });
-        }
-        return data[key];
-    };
+    const list=(data,key,max)=>{if(!Array.isArray(data?.[key])||data[key].length>max)throw Error('X 返回字段 '+key+' 应为最多 '+max+' 条的数组，当前'+(data?.[key]==null?'缺失':Array.isArray(data[key])?'有 '+data[key].length+' 条':'类型不正确')+'。本次未保存。');return data[key];};
     const engagementRules = () => '\n'+getSettings().prompts.xInteractions;
     const engagementShape = '\n每条 post 可附 metrics:{"likes":0,"reposts":0,"replies":0} 以及 comments:[{"key":"本帖内唯一标记","accountId":"已知评论者账号 ID，未知留空","name":"评论者姓名或网名","handle":"账号名","text":"评论内容","replyTo":"回复本帖某条 comment 的 key；回复帖子留空","isAuthor":false,"category":"可选时效分类：A=日常闲聊/短时回应，B=约定/待办/仍在发展的具体事件"}]。作者发言用 isAuthor:true，不必再给姓名。按累计评论数给出最多15条具体评论，0～15条时全部给出，超过15条时选15条有代表性的评论。已有具体评论计入目标，不重写或重复。先给原评论再给它的回复；metrics.replies 为含这些样本的累计数。评论只属于本帖。';
     const findComment=(state,postId,author,body,parent=null)=>{
