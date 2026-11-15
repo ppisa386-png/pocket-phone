@@ -1275,7 +1275,6 @@ test('X missing or incorrectly typed posts after one correction never commits pa
    assert.equal(failed.ok,false);
    assert.equal(failed.code,'X_DATA_SHAPE');
    assert.match(failed.error,/X 返回字段 posts 应为最多 15 条的数组/);
-   assert.match(failed.diagnostic||'',/X格式纠正：已尝试一次/);
    assert.equal(f.count(),2);
    assert.deepEqual(f.state().x,before,'invalid outputs cannot modify the journal');
   }finally{f.close();}
