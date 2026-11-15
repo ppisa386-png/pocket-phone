@@ -141,7 +141,7 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
  }finally{globalThis.qqj_v3_public_bridge_v1=original;f.close();}
 });
 
-test('X home accepts wrapped results and retries invalid list shapes only once',async()=>{
+test('X home accepts one complete wrapped result and explains invalid fields without retrying',async()=>{
  const f=setup();try{
   f.settings.retries=4;
   f.reply(()=>'<think>choose topics</think>\n动态如下：<content>'+JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',has_account:true,text:'Open day'}]}))+'</content>');
@@ -150,7 +150,7 @@ test('X home accepts wrapped results and retries invalid list shapes only once',
   const before=structuredClone(f.state().x);
   f.reply(()=>'{"posts":');const bad=await f.x.refresh();assert.equal(bad.ok,false);assert.match(bad.error,/X 数据返回格式不正确.*不完整/);
   assert.deepEqual(f.state().x,before);assert.equal(f.count(),3);
-  f.reply({posts:'not-array'});const wrong=await f.x.refresh();assert.equal(wrong.ok,false);assert.match(wrong.error,/字段 posts/);assert.equal(f.count(),5);
+  f.reply({posts:'not-array'});const wrong=await f.x.refresh();assert.equal(wrong.ok,false);assert.match(wrong.error,/字段 posts/);assert.equal(f.count(),4);
   f.reply(()=>'{"posts":[]}\n{"posts":[]}');assert.equal((await f.x.refresh()).ok,false);assert.deepEqual(f.state().x,before);
  }finally{f.close();}
 });
@@ -675,7 +675,7 @@ test('short NPC batches are valid; unsupported, duplicate-only or oversized batc
   for(const posts of [good.map(p=>({...p,name:'Same',handle:'same'})),good.map(p=>({...p,handle:''})),[...good,...good]]){
    const before=structuredClone((await f.memory.read()).state.x),count=f.count();f.reply({posts});
    const result=await f.x.refresh();assert.equal(result.ok,false);
-   assert.match(result.error,/有效新增 0 条|最多 15/);assert.equal(f.count(),count+(posts.length>15?2:1));assert.deepEqual(f.state().x,before);
+   assert.match(result.error,/有效新增 0 条|最多 15/);assert.equal(f.count(),count+1);assert.deepEqual(f.state().x,before);
   }
   f.reply({accounts:good});assert.equal((await f.x.refresh()).ok,false);
  }finally{f.close();}
@@ -1250,48 +1250,6 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   assert.equal(f.count(),2);assert.equal(replies,2);
   assert.match(f.prompt(),/X 格式恢复/);
   assert.equal(xItems(f.state(),'post').length,10);
- }finally{f.close();}
-});
-
-
-for(const independent of [false,true])test('X '+(independent?'independent':'host')+' repairs a five-character parseable reply missing posts',async()=>{
- const f=setup(undefined,independent);try{
-  let replies=0;f.reply(()=>++replies===1?'{}   ':JSON.stringify(feedResult()));
-  ok(await f.x.refresh());
-  assert.equal(replies,2,'one and only one same-task correction request');
-  assert.equal(f.count(),2);
-  assert.match(f.prompt(),/X 格式恢复/);
-  assert.match(f.prompt(),/必需字段 posts/);
-  assert.equal(xItems(f.state(),'post').length,10);
- }finally{f.close();}
-});
-
-test('X missing or incorrectly typed posts after one correction never commits partial feed',async()=>{
- for(const second of ['{"replies":[]}','{"posts":false,"replies":[]}']){
-  const f=setup();try{
-   const before=structuredClone(f.state().x||{});let replies=0;
-   f.reply(()=>++replies===1?'{}   ':second);
-   const failed=await f.x.refresh();
-   assert.equal(failed.ok,false);
-   assert.equal(failed.code,'X_DATA_SHAPE');
-   assert.match(failed.error,/X 返回字段 posts 应为最多 15 条的数组/);
-   assert.equal(f.count(),2);
-   assert.deepEqual(f.state().x,before,'invalid outputs cannot modify the journal');
-  }finally{f.close();}
- }
-});
-
-test('X home refresh does not settle followers or consume a floor if posts remain missing after recovery',async()=>{
- const f=setup();try{
-  f.context.chat[0].mes='2026-11-15 20:00\\nThe user published a new hit.';
-  ok(await f.x.publish('新专辑上线。'));
-  const before=structuredClone(f.state().x);let replies=0;
-  f.reply(()=>{replies++;return '{}   ';});
-  const failed=await f.x.refreshPublic();
-  assert.equal(failed.ok,false);assert.equal(failed.code,'X_DATA_SHAPE');
-  assert.equal(replies,2,'home feed is retried once before any influence settlement');
-  assert.deepEqual(f.state().x,before);
-  assert.equal(f.state().x['follower-floor-ledger'],undefined);
  }finally{f.close();}
 });
 
