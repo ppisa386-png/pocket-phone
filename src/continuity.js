@@ -1,4 +1,4 @@
-import { xPublicHistoryRecords } from './x-history.js?v=1.2.66';
+import { xPublicHistoryRecords } from './x-history.js?v=1.2.70';
 import { majorAmount } from './currency.js?v=1.2';
 import { communicationTime, withinCommunicationWeek } from './communication-time.js?v=1.2.66';
 import { syncCommContext, commMetaOrInfer, commReadStatus } from './comm-context.js?v=1.2.66';
