@@ -43,16 +43,16 @@ test('new narrative message markers honor explicit read values for SMS, WhatsApp
  }
 });
 
-test('communication prompt examples have only read status and preserve original per-conversation windows',()=>{
+test('communication prompt uses platform-wide chat and call-turn quotas with independent read status',()=>{
  const state={contacts:{a:{id:'a',name:'Alex'},b:{id:'b',name:'Bea'}},messages:{},calls:{},wechat:{},whatsapp:{},snapchat:{},x:{},profiles:{},commContext:{}};
  for(const who of ['a','b']){
   for(const app of ['whatsapp','wechat','snapchat'])state[app][who]={id:who,type:'account',name:who,identityKnown:false};
   for(let i=0;i<26;i++){
    const id=who+i,role=i%2?'assistant':'user';
-   state.messages[id]={id,contactId:who,role,text:'sms'+id,read:i===7,createdAt:i,storyTime:{date:'2026-11-14',time:'09:00'}};
+   state.messages[id]={id,contactId:who,role,text:'sms'+id,read:i===23,createdAt:i,storyTime:{date:'2026-11-14',time:'09:00'}};
    state.commContext['sms:'+id]={shown:i%2===0,noticeMentioned:true};
    for(const app of ['whatsapp','wechat','snapchat']){
-    state[app][id]={id,type:'message',accountId:who,role,text:app+id,read:i===7,createdAt:i,storyTime:{date:'2026-11-14',time:'09:00'}};
+    state[app][id]={id,type:'message',accountId:who,role,text:app+id,read:i===23,createdAt:i,storyTime:{date:'2026-11-14',time:'09:00'}};
     state.commContext[app+':'+id]={shown:i%2===0,noticeMentioned:true};
    }
    state.calls[id]={id,contactId:who,status:'ended',createdAt:i,storyTime:{date:'2026-11-14',time:'09:00'},turns:Array.from({length:15},(_,n)=>({role:n%2?'assistant':'user',text:'turn'+n}))};
@@ -62,12 +62,23 @@ test('communication prompt examples have only read status and preserve original 
  const text=buildContinuityPrompt(state,{name:'Alex'},{instruction:'参考',allParticipants:true,budget:500000,currentStoryTime:{date:'2026-11-14',time:'10:00'}});
  assert.doesNotMatch(text,/shown|已展示|未展示|sceneScope/);
  const records=JSON.parse(text.split('\n').at(-2)).records;
- for(const who of ['a','b'])for(const platform of ['sms','call','whatsapp','wechat','snapchat']){
-  const rows=records.filter(r=>r.conversation===who&&r.platform===platform);
-  assert.deepEqual(rows.map(r=>r.recordId),Array.from({length:20},(_,i)=>who+(i+6)));
-  if(platform==='call')assert.ok(rows.every(r=>r.turns.length===10&&r.turns[0].text==='turn5'));
-  else{assert.equal(rows[1].read,true);assert.equal(rows[0].read,undefined);assert.equal(rows[3].read,false);}
+ for(const platform of ['sms','whatsapp','wechat','snapchat']){
+  const all=records.filter(r=>r.platform===platform);
+  assert.equal(all.length,platform==='snapchat'?40:20,platform+' platform limit');
+  for(const who of ['a','b']){
+   const rows=all.filter(r=>r.conversation===who);
+   const start=platform==='snapchat'?6:16;
+   assert.deepEqual(rows.map(r=>r.recordId),Array.from({length:26-start},(_,i)=>who+(i+start)));
+   assert.equal(rows.find(r=>r.recordId===who+'23').read,true,'read status survives shared quota');
+   assert.equal(rows.find(r=>r.recordId===who+'22').read,undefined,'outgoing has no receiver read flag');
+   assert.equal(rows.find(r=>r.recordId===who+'21').read,false,'incoming unread survives');
+  }
  }
+ const calls=records.filter(r=>r.platform==='call'&&r.kind==='call-turn');
+ assert.equal(calls.length,20,'multiple calls and contacts share exactly 20 turns');
+ assert.ok(calls.every(r=>r.text.startsWith('turn')&&!('turns' in r)));
+ assert.equal(calls.filter(r=>r.recordId==='b25').length,15);
+ assert.equal(calls.filter(r=>r.recordId==='a25').length,5);
  assert.deepEqual(state,before);
  const settings=normalizeSettings({apps:{x:false}});
  for(const prompt of [buildStoryPhonePrompt(state,context,settings,[]),outreachPrompt(settings,state,'Sam',true,null)]){
