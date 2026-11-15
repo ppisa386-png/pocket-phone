@@ -1,4 +1,4 @@
-import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.67';
+import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.68';
 import { sceneIcon, metricIcon, weatherWindow } from './weather-art.js?v=1.2.41';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -196,10 +196,14 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
         }).join('');
 
         const dateLabel = storyDateLabel(w.date || info.date || '', w.time || '');
-        const climateSource = info.climateSource === 'open-meteo-historical'
-            ? '<p class="pp-weather-source">气候参考：<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> 历史气象资料；页面天气为剧情模拟，非实时观测。</p>'
-            : info.climateSource === 'worldbook-ai'
-                ? '<p class="pp-weather-source">气候参考：当前角色的世界书设定；页面天气为剧情模拟。</p>' : '';
+        const climateSource = info.climateSource === 'ai-offline-research'
+            ? '<p class="pp-weather-source">气候参考：' +
+                (info.climateOrigin === 'real_knowledge' ? 'AI 离线气候知识'
+                : info.climateOrigin === 'fictional_worldbook' ? 'AI 读取世界书与人物设定'
+                : info.climateOrigin === 'fictional_random' ? 'AI 为空白架空地点生成的气候'
+                : 'AI 离线研究') +
+                '；天气为剧情模拟，非实时气象观测。</p>'
+            : '<p class="pp-weather-source">天气为剧情模拟，非实时气象观测。</p>';
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '">' +
             '<div class="pp-weather-scroll">' +
             hero(w, theme, city, busy, today, '', '', dateLabel) +
