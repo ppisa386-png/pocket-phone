@@ -1,5 +1,5 @@
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.65';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.71';
 import { displayCommunicationTime } from './communication-time.js?v=1.2.66';
 import { icon } from './icons.js?v=1.2.57';
 import { wxMoments,wxFriends,canViewWxMoment,momentImages } from './wechat-moments.js?v=1.2.71';
