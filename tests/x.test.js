@@ -1537,7 +1537,8 @@ test('public post contexts carry user replies with ancestors, excluding unrelate
   const now={date:'2026-11-14',time:'12:00'};
   const narrative=buildContinuityPrompt(f.state(),{name:'Alex',nameIsUnique:true},{instruction:'记住事实',allParticipants:true,currentStoryTime:now,budget:20000});
   assert.match(narrative,/PARENT_PUBLIC_COMMENT/);assert.match(narrative,/USER_PUBLIC_REPLY/);
-  assert.doesNotMatch(narrative,/UNRELATED_COMMENT|FOREIGN_POST_COMMENT|PRIVATE_MESSAGE/);
+  assert.doesNotMatch(narrative,/UNRELATED_COMMENT|FOREIGN_POST_COMMENT/);
+  assert.match(narrative,/PRIVATE_MESSAGE/,'private X DM is independently present in the same narrative history');
   assert.doesNotMatch(xStoryPrompt(f.state(),now),/PARENT_PUBLIC_COMMENT|USER_PUBLIC_REPLY/,'narrative index never duplicates the original discussion');
   f.reply({status:'reply',text:'Understood'});ok(await f.x.send(id,'What did you think of my post?'));
   assert.match(f.prompt(),/USER_PUBLIC_REPLY/);assert.match(f.prompt(),/PARENT_PUBLIC_COMMENT/);
