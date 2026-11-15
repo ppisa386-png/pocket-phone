@@ -56,7 +56,10 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             const commenter=c=>c.author==='user'?profile().alias:state.x[c.author]?.name||'用户';
             const time=(p.storyTime?.date?xEscape(p.storyTime.date)+' ':'')+displayStoryTime(p);
             const author='<header><button type="button" class="pp-x-post-avatar" data-x-action="'+(self?'profile':'account')+'" data-x-id="'+xEscape(p.author)+'" aria-label="查看 '+xEscape(name)+' 的主页">'+xEscape(name.slice(0,1))+'</button><div class="pp-x-author"><div class="pp-x-author-line">'+(self?'<strong>'+xEscape(name)+'</strong>':button('account',name,p.author))+(!self&&a?.handle?'<small class="pp-x-handle">@'+xEscape(a.handle)+'</small>':'')+'</div><small class="pp-x-time">'+time+'</small></div></header>';
-            const media=p.imageDescription?'<div class="pp-x-post-media"><span class="pp-x-media-label">配图描述</span><p>'+xEscape(p.imageDescription)+'</p></div>':'';
+            const images=Array.isArray(p.images)&&p.images.length?p.images.filter(image=>typeof image==='string'&&image.trim()):
+                (p.imageDescription?[p.imageDescription]:[]);
+            const media=images.length?'<div class="pp-x-post-media"><span class="pp-x-media-label">配图描述'+(images.length>1?' · '+images.length+'张':'')+'</span>'+
+                images.map((image,i)=>'<p>'+(images.length>1?'<strong>图'+(i+1)+'</strong> ':'')+xEscape(image)+'</p>').join('')+'</div>':'';
             const reactions='<div class="pp-snap-actions pp-x-reactions">'+button('comments','回复 '+counts.replies,p.id)+button('repost',(p.reposted?'已转发 ':'转发 ')+counts.reposts,p.id,'aria-pressed="'+!!p.reposted+'"')+button('like',(p.liked?'已赞 ':'赞 ')+counts.likes,p.id,'aria-pressed="'+!!p.liked+'"')+'</div>';
             const detail=page==='post:'+p.id?'<div class="pp-x-comments">'+visibleXComments(comments).map(c=>{
                 const parent=comments.find(other=>other.id===c.replyTo);

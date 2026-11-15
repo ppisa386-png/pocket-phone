@@ -293,6 +293,48 @@ test('narrative X publishes an image and original text under the alias, threads 
  }finally{f.close();}
 });
 
+test('narrative X multiple photos synchronize as one post, preserve image order and rollback',async()=>{
+ const f=setup();
+ try{
+  const apps=Object.fromEntries(Object.keys(f.settings.apps).map(k=>[k,k==='x']));
+  f.context.extensionSettings={personal_pocket_phone:{apps,proactiveEnabled:false}};
+  Object.assign(f.settings,{apps,proactiveEnabled:false});
+  await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[{collection:'x',key:'profile',value:{id:'profile',type:'profile',alias:'Moon'}}]);
+  await f.bridge.prepare();
+  assert.match(f.prompts[STORY_PHONE_KEY].value,/多张照片时必须仍输出一条 durian-x 标记/);
+  const images=['蓝色雨伞立在咖啡馆门口','黄色雨衣挂在衣架上','窗边玻璃杯映着街灯'];
+  const row={action:'published',author:'user',text:'Three photos from tonight.',images,shown:true,time:'18:00'};
+  f.context.chat.push(xFloor('2026-11-15 18:00 Sam published a three-photo X post.',row));
+  const readX=async()=>(await f.memory.read()).state.x;
+  let x=await readX(),posts=Object.values(x).filter(p=>p.type==='post');
+  assert.equal(posts.length,1,'one publication must not create three posts');
+  assert.deepEqual(posts[0].images,images);
+  assert.equal(posts[0].imageDescription,images.join('\n'));
+  const {createXPanel}=await import('../src/x-view.js');
+  const panel=createXPanel({adapter:{userName:()=>f.context.name1},getView:()=>({x}),redraw(){},notice(){}});
+  await panel.action('profile');
+  const html=panel.html();
+  assert.match(html,/配图描述 · 3张/);
+  for(let i=0;i<images.length;i++)assert.match(html,new RegExp('图'+(i+1)+'.*'+images[i]));
+  const {xPublicHistoryRecords}=await import('../src/x-history.js');
+  const history=xPublicHistoryRecords({x},{date:'2026-11-15',time:'18:30'});
+  assert.equal(history.filter(entry=>entry.data.action==='post').length,1);
+  assert.deepEqual(history.find(entry=>entry.data.action==='post').data.images,images);
+  f.context.chatMetadata=JSON.parse(JSON.stringify(f.context.chatMetadata));
+  assert.deepEqual((await readX())[posts[0].id].images,images);
+  const revised=xFloor('2026-11-15 18:00 Sam published the photos.',{action:'published',author:'user',text:'',imageDescription:images,time:'18:00'});
+  f.context.chat[1]=revised;
+  x=await readX();posts=Object.values(x).filter(p=>p.type==='post');
+  assert.equal(posts.length,1,'imageDescription array from an older model is accepted');
+  assert.equal(posts[0].text,'');
+  assert.deepEqual(posts[0].images,images);
+  f.context.chat.pop();
+  assert.equal(Object.values(await readX()).filter(p=>p.type==='post').length,0);
+  assert.equal(f.requests(),0,'narrative sync never requests another model');
+ }finally{f.close();}
+});
+
 test('X imports only evidenced user posts from completed narrative and respects the app switch',async()=>{
  const f=setup();
  try{
