@@ -74,7 +74,7 @@ test('manual refresh samples the first weather locally for the marked city with 
         assert.equal(refused.ok, false);
         assert.match(refused.error, /你太神秘了/); // 探测无果才失败，提示保持剧情内口吻
         assert.equal(f.calls(), 1);
-        assert.match(f.prompt(), /判断 user 此刻身处哪座城市/);
+        assert.match(f.prompt(), /目前实际所在的地点/);
         assert.match(f.prompt(), /"city":null/);
         assert.equal(f.state().location?.current, undefined); // 探测无果不写地点
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
@@ -111,12 +111,12 @@ test('refresh without a marker probes the recent prose and status bars, saves th
         const result = await f.weather.refresh();
         assert.equal(result.ok, true, result.error);
         assert.equal(f.calls(), 1); // 一次探测请求；天气采样仍是本地随机
-        assert.match(f.prompt(), /判断 user 此刻身处哪座城市/);
-        assert.match(f.prompt(), /状态栏明确给出位置时优先采用/);
-        assert.match(f.prompt(), /user 的名字："Sam"/);
+        assert.match(f.prompt(), /目前实际所在的地点/);
+        assert.match(f.prompt(), /近期剧情及状态栏/);
+        assert.match(f.prompt(), /"user":"Sam"/);
         assert.match(f.prompt(), /位置：东京·新宿/); // 历史正文与状态栏进入探测上下文
         assert.match(f.prompt(), /计划下周去大阪/); // 干扰项也在上下文里，由提示词排除
-        assert.match(f.prompt(), /{"city":"城市名称"}/);
+        assert.match(f.prompt(), /"city":"城市"/);
         const state = await f.state();
         assert.equal(state.location.current.city, '东京'); // 与标记路径写同一条位置记录
         assert.equal(state.location.current.sourceIndex, 1);
@@ -561,20 +561,19 @@ test('an extreme today or tomorrow keeps its full warning detail inside the day 
     assert.ok(!background.includes('未来极端天气预警'), 'no duplicated warning block for today or tomorrow');
 });
 
-test('forecast and warning machinery never calls the model', async () => {
-    const f = setup(); try {
-        let modelCalls = 0;
-        f.c.generateQuietPrompt = async () => { modelCalls++; return '{}'; };
-        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+test('after one model research call, forecast and warning rendering make zero further calls',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
         await f.memory.read();
-        await f.weather.refresh();
+        assert.equal((await f.weather.refresh()).ok,true);
+        assert.equal(f.calls(),1);
         f.weather.report(await f.state());
-        weatherBackground(await f.state(), f.c.chat);
-        f.c.chat.push({ mes: '2026-01-01 12:00\n中午逛街。', is_user: false });
+        weatherBackground(await f.state(),f.c.chat);
+        f.c.chat.push({mes:'2026-01-01 12:00\n中午逛街。',is_user:false});
         await f.memory.read();
-        f.weather.report(await f.state()).forecast;
-        assert.equal(modelCalls, 0, 'no model request for forecast, hourly evolution or warnings');
-    } finally { f.close(); }
+        assert.equal(f.weather.report(await f.state()).status,'ok');
+        assert.equal(f.calls(),1,'hourly simulation, future weather and warnings never call AI');
+    }finally{f.close();}
 });
 
 test('deleted floors remove the record together with its forecast window', async () => {
