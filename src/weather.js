@@ -5,7 +5,7 @@ import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { effectiveReply } from './contact-policy.js?v=1.2.57';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
-import { weatherResearchPrompt, validateWeatherResearch } from './weather-model.js?v=1.2.68';
+import { weatherResearchPrompt, validateWeatherResearch } from './weather-model.js?v=1.2.69';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
 
