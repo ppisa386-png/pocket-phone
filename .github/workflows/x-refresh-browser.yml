@@ -13,7 +13,7 @@ permissions:
   contents: read
 jobs:
   x-browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CODEX_PRIMARY_RUNTIME_NODE_MODULES: ${{ github.workspace }}/node_modules
