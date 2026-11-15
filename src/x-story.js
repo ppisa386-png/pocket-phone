@@ -2,8 +2,8 @@ import { localizedPerson, sameNamedPerson } from './names.js?v=1.2';
 import { readStoryClock, storyTime, dateDay, dayDate } from './story-clock.js?v=1.2';
 import { xComments, xCommentKey, xUserReplyContext } from './x-comments.js?v=1.2.66';
 import { xAudience } from './x-audience.js?v=1.2';
-import { commRecordPatch, commMetaOrInfer } from './comm-context.js?v=1.2.65';
-import { withinCommunicationWeek } from './communication-time.js?v=1.2.65';
+import { commRecordPatch, commMetaOrInfer } from './comm-context.js?v=1.2.66';
+import { withinCommunicationWeek } from './communication-time.js?v=1.2.66';
 import { xPublicHistoryRecords } from './x-history.js?v=1.2.66';
 
 // Publication dates are anchored to story time, never the wall clock or
