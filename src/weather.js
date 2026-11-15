@@ -4,6 +4,7 @@ import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { effectiveReply } from './contact-policy.js?v=1.2.57';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
+import { lookupLocationClimate } from './weather-climate-source.js?v=1.2.67';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
 
@@ -240,16 +241,18 @@ const monthOf = day => { const date = dayDate(day); return date ? +date.slice(5,
 const seasonOf = month => month === 11 || month <= 1 ? 'winter' : month <= 4 ? 'spring' : month <= 7 ? 'summer' : 'autumn';
 
 function conditions(climate, day, hourOfDay) {
-    const arch = ARCHETYPES[climate.archetype] || ARCHETYPES.cfb;
+    const base = ARCHETYPES[climate.archetype] || ARCHETYPES.cfb;
+    const arch = { ...base, wind: climate.typicalWind ?? base.wind, humid: climate.typicalHumidity ?? base.humid };
     const month = monthOf(day);
-    // Southern-hemisphere cities read the monthly table shifted by six months.
+    // Live source profiles are indexed by actual calendar month; built-in
+    // fictional templates still rotate the northern month for southern regions.
     const effMonth = month == null ? null : (climate.south ? (month + 6) % 12 : month);
     const season = seasonOf(effMonth ?? 4);
-    const rainProb = effMonth == null ? .35 : arch.rain[effMonth];
+    const rainProb = month == null ? .35 : climate.monthlyRainChance?.[month] ?? arch.rain[effMonth];
     const typhoonSeason = !!arch.typhoon && (climate.south ? (month === null || month >= 9 || month <= 2) : (month != null && month >= 5 && month <= 9));
     return {
         arch, month: effMonth ?? 4, season, rainProb,
-        baseTemp: (effMonth == null ? 15 : arch.temp[effMonth]) + (climate.offset || 0),
+        baseTemp: (month == null ? 15 : climate.monthlyTemp?.[month] ?? arch.temp[effMonth]) + (climate.offset || 0),
         diurnal: arch.diurnal * Math.cos((hourOfDay - 14) / 24 * 2 * Math.PI),
         summer: season === 'summer', winter: season === 'winter',
         arid: !!arch.arid, typhoon: typhoonSeason,
@@ -672,10 +675,53 @@ export function locationProbePrompt(chat, context) {
         '\n只输出 JSON：{"city":"城市名称"}；找不到可靠依据时输出 {"city":null}，不要猜测。';
 }
 
-export function createWeather({ memory, phone, getContext, getSettings }) {
+export function createWeather({ memory, phone, getContext, getSettings, climateLookup = lookupLocationClimate, fictionalClimateLookup = null }) {
+    const archetypes = new Set(ARCH_IDS);
+    async function resolveClimate(cityName, view, current, request) {
+        const context = getContext(), detected = locationKind(cityName, context);
+        if (detected !== 'fictional') {
+            try {
+                // A manual refresh always performs a fresh, real historical-data
+                // lookup. Saved profiles are used only between user refreshes.
+                const climate = await climateLookup(cityName);
+                if (!current()) throw Error('剧情或地点已变化，本次气候查询未保存。');
+                if (!climate || !archetypes.has(climate.archetype)
+                    || !Array.isArray(climate.monthlyTemp) || climate.monthlyTemp.length !== 12
+                    || !Array.isArray(climate.monthlyRainChance) || climate.monthlyRainChance.length !== 12
+                    || climate.monthlyTemp.some(n => typeof n !== 'number' || !Number.isFinite(n))
+                    || climate.monthlyRainChance.some(n => typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 1))
+                    throw Error('在线气候资料不完整，没有覆盖原有天气档案。');
+                return { kind: 'real', climate };
+            } catch (error) {
+                if (detected !== 'unconfirmed' || error.code !== 'CLIMATE_LOCATION_NOT_FOUND') throw error;
+                // Unknown names may belong to a fictional world. Ask the model
+                // to examine ACTIVE world info rather than inventing a climate.
+            }
+        }
+        if (fictionalClimateLookup) {
+            const climate = await fictionalClimateLookup(cityName, context, view);
+            if (!current()) throw Error('剧情或地点已变化，本次气候查询未保存。');
+            return { kind: 'fictional', climate };
+        }
+        const material = worldMaterial(context).filter(text => text.includes(cityName)).slice(0, 12).map(text => text.slice(0, 2500));
+        const prompt = '当前任务：为架空城市建立可长期保存的气候基础档案。地点：' + JSON.stringify(cityName) +
+            '。只能依据本次酒馆模型请求中已经实际激活的世界书、角色卡、场景和下列已有设定，提取此城市明确的地理/季节/温度/降雨规律，不得把现实同名城市当作依据，不得凭名字、世界观常识或天气想象编造设定。'+
+            '允许把明确的设定归纳成最接近的气候原型；若资料不足以判定气候，known=false。资料：' +
+            JSON.stringify(material) + '。气候代码只能是：' + [...archetypes].join(',') +
+            '。只输出 JSON：{"known":true,"archetype":"dfb","offset":0,"south":false}。无明确设定时只输出 {"known":false}。';
+        const result = await request(prompt, data => {
+            if (data?.known !== true || !archetypes.has(data.archetype))
+                throw Object.assign(Error('未从世界书中找到该架空地点明确的气候设定，无法可靠模拟；请确认相关世界书在本次静默请求中已激活。'), { retryable: false });
+            const offset = Number(data.offset ?? 0);
+            if (!Number.isFinite(offset) || offset < -15 || offset > 15 || typeof data.south !== 'boolean')
+                throw Error('架空气候设定返回格式不正确。');
+            return { archetype: data.archetype, offset, south: data.south, fromWorld: true, fictional: true, source: 'worldbook-ai' };
+        }, current, null, { retries: 0 });
+        return { kind: 'fictional', climate: result };
+    }
     return {
         open: () => memory.read(),
-        editLocation(city, previousCity) { return phone.appTask(async (view,current) => {
+        editLocation(city, previousCity) { return phone.appTask(async (view,current,request) => {
             const name=typeof city==='string'?city.trim():'';
             if(!name||name.length>60||/[\r\n<>]/.test(name))
                 throw Error('请输入有效的地点名称（最多60字）。');
@@ -686,8 +732,8 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
             const clock=readStoryClock(chat);
             const changes=[{collection:'location',key:'current',value:{city:name,sourceIndex:Math.max(0,chat.length-1),manual:true}}];
             if(clock.day!=null&&clock.hour!=null){
-                const key=normCity(name),kind=locationKind(name,getContext());
-                const climate=climateFor(name,view.state.weather?.[key]?.climate,kind,getContext());
+                const key=normCity(name);
+                const { kind, climate } = await resolveClimate(name,view,current,request);
                 const hour=clock.day*24+Math.floor(clock.hour),seed=crypto.randomUUID();
                 changes.push({collection:'weather',key,value:{city:name,climate,kind,seed,hour,date:dayDate(clock.day),state:initialWeather(climate,clock,rngAt(seed,key,hour)),refreshedAt:Date.now()}});
             }
@@ -703,7 +749,7 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
             const record = state?.weather?.[normCity(location.city)];
             if (!record || normCity(record.city) !== normCity(location.city)) return { status: 'pending', city: location.city, clock };
             if (clock.day == null || clock.hour == null) return { status: 'unknown-time', city: location.city, weather: weatherAt(record, { day: Math.floor(record.hour / 24), hour: record.hour % 24 }), date: record.date, clock };
-            return { status: 'ok', city: location.city, report: weatherAt(record, clock), forecast: buildForecast(record, clock), clock };
+            return { status: 'ok', city: location.city, report: weatherAt(record, clock), forecast: buildForecast(record, clock), climateSource: record.climate?.source || null, climatePlace: record.climate?.locationLabel || null, clock };
         },
         // Manual refresh is the only entry point for initial weather. Two ways
         // in: a narrative durian-location marker (captured passively), or —
@@ -727,8 +773,7 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
             }
             if (clock.day == null || clock.hour == null) throw new Error('当前剧情没有明确的日期和时间，暂不能刷新天气。');
             const key = normCity(location.city);
-            const kind = locationKind(location.city, getContext());
-            const climate = climateFor(location.city, view.state.weather?.[key]?.climate, kind, getContext());
+            const { kind, climate } = await resolveClimate(location.city, view, current, request);
             const hour = clock.day * 24 + Math.floor(clock.hour);
             const seed = crypto.randomUUID();
             const state = initialWeather(climate, clock, rngAt(seed, key, hour));
