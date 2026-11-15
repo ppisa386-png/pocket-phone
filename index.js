@@ -1,7 +1,7 @@
 import { createCalendar } from './src/calendar.js?v=1.2.66';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.69';
-import { createWeather } from './src/weather.js?v=1.2.69';
+import { createDaily } from './src/daily.js?v=1.2.70';
+import { createWeather } from './src/weather.js?v=1.2.70';
 import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
 import { createAssets } from './src/assets.js?v=1.2.66';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
@@ -19,7 +19,7 @@ import { createApiClient, createKeyStore } from './src/api.js?v=1.2.66';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
 import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.70';
 import { mountPhone } from './src/ui.js?v=1.2.70';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.69';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.70';
 import { createPhoneService } from './src/phone.js?v=1.2.66';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.70';
 import { normalizeSettings } from './src/config.js?v=1.2.70';
@@ -70,7 +70,7 @@ async function start() {
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
-            fetch(new URL('./style-weather.css?v=1.2.69', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-weather.css?v=1.2.70', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./assets/weather/fonts/weather-fonts.css', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-daily.css?v=1.2.45', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-calendar.css?v=1.2.61', import.meta.url), { cache: 'no-cache' }),
