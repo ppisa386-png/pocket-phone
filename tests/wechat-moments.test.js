@@ -244,7 +244,9 @@ test('narrative WeChat Moments respect the current speaker and story-day expiry 
         assert.doesNotMatch(wechatMomentsStoryPrompt(state,f.ctx,f.ctx.chat),/PUBLIC_STORY|ALEX_STORY/,'old Moments are not repeated indefinitely');
         f.ctx.chat.pop();
         f.ctx.characters.push({name:'Other',avatar:'other.png'});f.ctx.characterId=1;
-        assert.equal(wechatMomentsStoryPrompt(state,f.ctx,f.ctx.chat),'','unrelated character cannot read restricted user Moments');
+        const otherPrompt=wechatMomentsStoryPrompt(state,f.ctx,f.ctx.chat);
+        assert.match(otherPrompt,/微信朋友圈文尾同步/,'user publication sync applies without a matching friend');
+        assert.doesNotMatch(otherPrompt,/PUBLIC_STORY|ALEX_STORY|PRIVATE_STORY|EXCLUDED_STORY/,'unrelated character cannot read restricted user Moments');
         f.ctx.characterId=0;f.settings.apps.wechat=false;
         assert.doesNotMatch(buildStoryPhonePrompt(state,f.ctx,f.settings,f.ctx.chat),/ALEX_STORY/);
     }finally{f.close();}
@@ -327,4 +329,99 @@ test('WeChat direct chats see only that friend’s authorized recent Moments wit
         assert.match(f.prompt(),/VISIBLE_TO_ALL/);assert.match(f.prompt(),/NOT_ALEX/);
         assert.doesNotMatch(f.prompt(),/ONLY_ALEX|PRIVATE_DIARY/);
     }finally{f.close();}
+});
+
+test('narrative WeChat user multi-photo and image-only posts import as one real Moment and rollback',async()=>{
+ const f=fixture();try{
+  await f.api.open();const alex=await friend(f);
+  const images=['雨伞放在咖啡店的玻璃门旁','蓝色马克杯在窗台上','一只黑猫趴在椅子边'];
+  const text='周日下午的三张照片';
+  const prose='2026-11-15 17:30 Sam 在微信朋友圈发表「'+text+'」，附了三张照片。';
+  const row={action:'published',authorId:'user',text,images,visibility:'include',audienceIds:[alex]};
+  f.ctx.chat.push({mes:prose+'<!--durian-wechat-moment:'+JSON.stringify(row)+'-->',is_user:false,name:'Alex'});
+  const count=f.count();
+  await f.memory.read();
+  let posts=wxMoments(f.state()).filter(p=>p.authorId==='user'&&p.origin==='narrative');
+  assert.equal(posts.length,1);
+  assert.deepEqual(posts[0].images,images);
+  assert.equal(posts[0].imageDescription,images.join('\n'));
+  assert.equal(posts[0].visibility,'include');
+  assert.deepEqual(posts[0].audienceIds,[alex]);
+  const panel=createChatPanel({app:'wechat',adapter:{userName:()=> 'Sam'},getView:()=>f.state(),redraw(){},notice(){}});
+  await panel.action('moment-feed');const html=panel.html();
+  for(let i=0;i<images.length;i++)assert.match(html,new RegExp('图'+(i+1)+'.*'+images[i]));
+  const story=wechatMomentsStoryPrompt(f.state(),f.ctx,f.ctx.chat);
+  for(const image of images)assert.match(story,new RegExp(image));
+  await f.memory.read();
+  assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,1,'repeat read never duplicates a post');
+  f.ctx.chat.pop();await f.memory.read();
+  assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,0);
+  const pure={action:'published',authorId:'user',text:'',imageDescription:[images[0],images[1]]};
+  f.ctx.chat.push({mes:'2026-11-15 17:30 Sam 在朋友圈上传两张照片。<!--durian-wechat-moment:'+JSON.stringify(pure)+'-->',is_user:false,name:'Alex'});
+  await f.memory.read();posts=wxMoments(f.state()).filter(p=>p.origin==='narrative');
+  assert.equal(posts.length,1);assert.equal(posts[0].text,'');
+  assert.deepEqual(posts[0].images,images.slice(0,2));
+  f.ctx.chat.pop();await f.memory.read();
+  assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,0);
+  const noText={action:'published',authorId:'user',images:images.slice(0,2)};
+  f.ctx.chat.push({mes:'2026-11-15 17:31 Sam 发了朋友圈，晒出两张照片。<!--durian-wechat-moment:'+JSON.stringify(noText)+'-->',is_user:false,name:'Alex'});
+  await f.memory.read();posts=wxMoments(f.state()).filter(p=>p.origin==='narrative');
+  assert.equal(posts.length,1,'image-only markers can omit the text field entirely');
+  assert.deepEqual(posts[0].images,images.slice(0,2));
+  f.ctx.chat.pop();await f.memory.read();
+  assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,0);
+  assert.equal(f.count(),count,'narrative import does not call a model');
+ }finally{f.close();}
+});
+
+test('narrative NPC multi-photo Moments keep order and do not fabricate additional posts',async()=>{
+ const f=fixture();try{
+  await f.api.open();const alex=await friend(f);
+  const row={action:'published',authorId:alex,text:'排练结束了',images:['空舞台上的两把吉他','散落在桌上的谱纸']};
+  const prose='2026-11-15 18:00 Alex 发表朋友圈：「排练结束了」，附上两张照片。';
+  f.ctx.chat.push({mes:prose+'<!--durian-wechat-moment:'+JSON.stringify(row)+'-->'+'<!--durian-wechat-moment:'+JSON.stringify(row)+'-->',is_user:false,name:'Alex'});
+  await f.memory.read();
+  const posts=wxMoments(f.state()).filter(p=>p.authorId===alex);
+  assert.equal(posts.length,1);
+  assert.deepEqual(posts[0].images,row.images);
+  f.ctx.chat.pop();await f.memory.read();
+  assert.equal(wxMoments(f.state()).filter(p=>p.authorId===alex).length,0);
+ }finally{f.close();}
+});
+
+test('WeChat multi-photo refresh saves each image but rejects malformed payload atomically',async()=>{
+ const f=fixture();try{
+  await f.api.open();const alex=await friend(f);
+  const photos=['窗边的一株绿植','木桌上的一本书'];
+  f.reply({moments:[{authorId:alex,text:'今天的角落',images:photos}],interactions:[]});
+  const before=f.count();ok(await f.api.refreshMoments());assert.equal(f.count(),before+1);
+  const post=wxMoments(f.state()).find(p=>p.authorId===alex);
+  assert.deepEqual(post.images,photos);
+  assert.equal(post.imageDescription,photos.join('\n'));
+  assert.match(f.prompt(),/多张仅填 images 数组/);
+  const snapshot=JSON.stringify(f.state().wechat);
+  f.reply({moments:[{authorId:alex,text:'不能入库',images:[photos[0],123]}],interactions:[]});
+  assert.equal((await f.api.refreshMoments()).ok,false);
+  assert.equal(JSON.stringify(f.state().wechat),snapshot);
+ }finally{f.close();}
+});
+
+test('narrative Moments reject malformed galleries, drafts and unknown private audience instead of leaking',async()=>{
+ const f=fixture();try{
+  await f.api.open();const alex=await friend(f);
+  const common={action:'published',authorId:'user',text:'新的照片'};
+  const bad=[
+    {mes:'Sam 在朋友圈发表「新的照片」，配图两张。',row:{...common,images:['图一',42]}},
+    {mes:'Sam 在朋友圈发表「新的照片」，设为部分可见。',row:{...common,images:['图一','图二'],visibility:'include',audienceIds:[]}},
+    {mes:'Sam 在朋友圈发表「新的照片」，设为仅自己可见。',row:{...common,images:['图一','图二'],visibility:'all'}},
+    {mes:'Sam 准备发表朋友圈：「新的照片」。',row:{...common,images:['图一','图二']}},
+  ];
+  for(const {mes,row} of bad){
+   f.ctx.chat.push({mes:mes+'<!--durian-wechat-moment:'+JSON.stringify(row)+'-->',is_user:false,name:'Alex'});
+   await f.memory.read();
+   assert.equal(wxMoments(f.state()).filter(p=>p.origin==='narrative').length,0,mes);
+   f.ctx.chat.pop();await f.memory.read();
+  }
+  assert.ok(alex);
+ }finally{f.close();}
 });

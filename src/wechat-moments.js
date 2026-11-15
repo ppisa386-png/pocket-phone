@@ -5,6 +5,18 @@ const MAX_POSTS = 5;
 const plain = (value, max) => String(value ?? '').trim().slice(0,max);
 const allowedModes = new Set(['all','private','include','exclude']);
 export const wxMoments = state => Object.values(state.wechat||{}).filter(item=>item.type==='moment');
+// A single legacy image stays a string; a gallery keeps each supplied picture
+// separately. The synthesized string remains available to older consumers.
+export const momentImages = moment => Array.isArray(moment?.images)&&moment.images.length
+    ?moment.images.filter(image=>typeof image==='string'&&image.trim())
+    :typeof moment?.imageDescription==='string'&&moment.imageDescription.trim()?[moment.imageDescription]:[];
+const momentMedia = (item,max=1500) => {
+    const raw=item?.images??item?.imageDescriptions??item?.imageDescription??'';
+    const images=Array.isArray(raw)?raw:typeof raw==='string'?(raw.trim()?[raw]:[]):null;
+    if(!images||images.length>9||images.some(image=>typeof image!=='string'||!image.trim()||image.length>max))
+        throw Error('朋友圈图片描述无效。');
+    return images.map(image=>image.trim());
+};
 export const wxFriends = state => Object.values(state.wechat||{}).filter(x=>x.type==='account').filter(a=>a.friend==='friends'&&!a.blocked);
 
 export function canViewWxMoment(moment,accountId) {
@@ -21,7 +33,7 @@ export function canViewWxMoment(moment,accountId) {
 }
 
 const norm = value => String(value||'').normalize('NFKC').trim().toLowerCase();
-const validMoment = moment => moment?.type==='moment' && (moment.text||moment.imageDescription);
+const validMoment = moment => moment?.type==='moment' && (moment.text||momentImages(moment).length);
 const recentMoments = state => wxMoments(state).filter(validMoment).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 const shownComments = (moment,actorId) => (moment.comments||[]).filter(c=>c.authorId==='user'||c.authorId===actorId);
 
@@ -35,6 +47,7 @@ export function wechatMomentsAccountPrompt(state,accountId,chat) {
         .filter(m=>!(Number.isInteger(now.day)&&Number.isInteger(m.storyTime?.day)&&now.day-m.storyTime.day>3))
         .slice(0,8).map(m=>({
             id:m.id,text:plain(m.text,600),imageDescription:plain(m.imageDescription,200),
+            ...(Array.isArray(m.images)?{images:m.images.map(image=>plain(image,160))}:{}),
             storyTime:m.storyTime||null,
             comments:shownComments(m,friend.id).slice(-6).map(c=>({
                 author:c.authorId==='user'?'user':friend.name,text:plain(c.text,250),replyTo:c.replyTo||null,
@@ -51,21 +64,23 @@ export function wechatMomentsStoryPrompt(state,context,chat) {
     // The narrative speaker is one actual chat character. Do not expose a
     // restricted Moment to any other speaker merely because the author is user.
     const actor=context.characters?.[context.characterId];
-    if(!actor?.name)return '';
+    const userRules='\n【微信朋友圈文尾同步】仅当本楼小说正文确实写出 user 已经在微信朋友圈发表新动态，正文末尾必须附一条 <!--durian-wechat-moment:{"action":"published","authorId":"user","text":"已实际发布的文字，纯图片可为空","images":["第一张照片的画面描述","第二张照片的画面描述"],"visibility":"all"}-->。单张照片仅填 imageDescription 字符串，多张照片必须仍用同一条标记中的 images 数组逐张按顺序记录；无图省略配图字段，纯图片帖 text 可为空。仅保存实际写出的照片，不凭空补充；不是每张照片各输出一条朋友圈。默认公开可省略 visibility；明确仅自己可见须填 private；部分可见/不给谁看须填 include/exclude 和真实微信好友 audienceIds，否则不要同步成公开。准备、草稿、取消、回忆、已存旧动态均不记，绝不为了标记额外安排 user 发文；没有本楼真实新发表就不输出。';
+    if(!actor?.name)return userRules;
     const unique=context.characters.filter(c=>norm(c.name)===norm(actor.name)).length===1;
     const accounts=wxFriends(state).filter(a=>a.characterId==='card:'+actor.avatar||
         (!a.characterId&&unique&&norm(a.name)===norm(actor.name)));
-    if(accounts.length!==1)return '';
+    if(accounts.length!==1)return userRules;
     const friend=accounts[0],now=readStoryClock(chat);
     const moments=recentMoments(state).filter(m=>m.authorId==='user'&&canViewWxMoment(m,friend.id))
         .filter(m=>!(Number.isInteger(now.day)&&Number.isInteger(m.storyTime?.day)&&now.day-m.storyTime.day>3))
         .slice(0,8).map(m=>({
             id:m.id,author:m.authorName,identityKnown:friend.identityKnown===true,
             text:plain(m.text,600),imageDescription:plain(m.imageDescription,220),
+            ...(Array.isArray(m.images)?{images:m.images.map(image=>plain(image,160))}:{}),
             storyTime:m.storyTime||null,
             comments:shownComments(m,friend.id).slice(-6).map(c=>({id:c.id,author:c.authorId==='user'?m.authorName:friend.name,text:plain(c.text,300),replyTo:c.replyTo||null})),
         }));
-    const rules='\n微信朋友圈与正文同步：仅当本楼小说正文明确描写当前人物已实际发表一条新朋友圈，且写出真实发表内容时，末尾附 <!--durian-wechat-moment:{"action":"published","authorId":"'+friend.id+'","text":"实际发出的朋友圈文字","imageDescription":"如明确发布图片则填写文字描述"}-->；仅当本楼明确描写该人物已在以下可见朋友圈发表评论时，末尾附 <!--durian-wechat-moment:{"action":"comment","authorId":"'+friend.id+'","momentId":"以下已有朋友圈准确ID","text":"实际已发表的评论文字","replyTo":"回复已有评论ID或不填写"}-->。只记录真实已经发生、正文实际写出的评论和发帖；打算、草稿、回忆、手机中已有内容均不重记，不为了生成标记而安排额外动作。没有本楼新发文或评论就不输出标记。';
+    const rules=userRules+'\n当前微信好友正文同步：仅当本楼确实写出当前人物实际发表一条新朋友圈，末尾附 <!--durian-wechat-moment:{"action":"published","authorId":"'+friend.id+'","text":"实际发表的文字，纯图片可为空","images":["第一张照片画面","第二张照片画面"]}-->；单张仍填 imageDescription 字符串，多张必须仍输出一条标记并逐张记录 images，不为每张照片制造新帖；仅描写该人物在以下可见朋友圈发表评论时附 <!--durian-wechat-moment:{"action":"comment","authorId":"'+friend.id+'","momentId":"以下已有朋友圈准确ID","text":"实际已发表的评论文字","replyTo":"回复已有评论ID或不填写"}-->。仅记录真实完成的发帖及评论；打算、草稿、回忆、手机已有内容不重记。没有发生就不输出。';
     if(!moments.length)return rules;
     return rules+'\n微信朋友圈·当前人物可见记录：'+JSON.stringify({account:friend.name,userAlias:state.wechat?.profile?.alias||context.name1,moments})+
         '。这些朋友圈已经发表且对当前人物可见，不是尚待发送的消息；只供自然延续人物认知，' +
@@ -127,7 +142,8 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
             const candidates=cohort.friends.map(a=>({id:a.id,name:a.name,aliases:(a.aliases||[]).slice(0,3)}));
             const visible=cohort.visible.map(m=>({
                 id:m.id,authorId:m.authorId,authorName:m.authorName,
-                text:plain(m.text,600),imageDescription:plain(m.imageDescription,200),storyTime:m.storyTime||null,
+                text:plain(m.text,600),imageDescription:plain(m.imageDescription,200),
+                ...(Array.isArray(m.images)?{images:m.images.map(image=>plain(image,160))}:{}),storyTime:m.storyTime||null,
                 comments:(m.comments||[]).filter(c=>c.authorId==='user')
                     .slice(-8).map(c=>({id:c.id,authorId:'user',text:plain(c.text,300),replyTo:c.replyTo||null})),
             }));
@@ -140,7 +156,7 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                 '\n这些好友此前的朋友圈（避免重复）：'+JSON.stringify(previous)+
                 '\n可见范围由程序按好友预先分组；只依据本次可见列表，不能推断私人、仅其他好友可见、聊天私信或隐藏身份的内容。'+
                 '人物可以不发表评论、不点赞或不发新动态；不要让所有人围着 user 转，也不要重复旧评论。'+
-                '\n只输出一个 JSON 对象：{"moments":[{"authorId":"本批好友账号id","text":"新朋友圈内容","imageDescription":"可选图片文字描述"}],"interactions":[{"momentId":"可见朋友圈id","authorId":"本批好友账号id","kind":"like 或 comment","text":"评论正文；like 时为空字符串","replyTo":"回复的已有 user 评论id；普通评论留空"}]}。'+
+                '\n只输出一个 JSON 对象：{"moments":[{"authorId":"本批好友账号id","text":"新朋友圈内容","imageDescription":"单张图片描述；无图省略","images":["多图时第一张画面","第二张画面"]}],"interactions":[{"momentId":"可见朋友圈id","authorId":"本批好友账号id","kind":"like 或 comment","text":"评论正文；like 时为空字符串","replyTo":"回复的已有 user 评论id；普通评论留空"}]}。单张仅填 imageDescription，多张仅填 images 数组且按顺序，不把一条多图朋友圈拆成多条，也不为图片编造内容。'+
                 'moments 最多'+remaining+'条，正文1～300字；interactions最多12条。作者和目标必须使用提供的准确ID，不需要互动时返回空数组。';
             const data=await request(prompt,value=>{
                 if(!Array.isArray(value.moments)||value.moments.length>remaining||
@@ -149,10 +165,11 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                 const accounts=new Map(cohort.friends.map(a=>[a.id,a]));
                 const posts=value.moments.map(item=>{
                     const a=accounts.get(item?.authorId);
-                    if(!a||typeof item.text!=='string'||!item.text.trim()||item.text.length>300||
-                        (item.imageDescription!=null&&(typeof item.imageDescription!=='string'||item.imageDescription.length>600)))
+                    if(!a||typeof item.text!=='string'||!item.text.trim()||item.text.length>300)
                         throw Error('朋友圈作者或正文无效。');
-                    return {authorId:a.id,authorName:a.name,text:item.text.trim(),imageDescription:plain(item.imageDescription,600)};
+                    const images=momentMedia(item,600);
+                    return {authorId:a.id,authorName:a.name,text:item.text.trim(),
+                        imageDescription:images.join('\n'),...(images.length>1?{images}:{})};
                 });
                 const visibleIds=new Map(cohort.visible.map(m=>[m.id,m]));
                 const interactions=(value.interactions||[]).map(item=>{
