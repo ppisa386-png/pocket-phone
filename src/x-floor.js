@@ -42,6 +42,34 @@ export function pendingFloorBatch(chat,ranges,floor,maxChars=32000,recentFirst=f
     return {rows,lastIndex:rows.at(-1)?.sourceIndex??null};
 }
 export const coverThrough=(ranges,end)=>end===null?coveredFloors(ranges):coveredFloors([...(ranges||[]),[0,end]]);
+// A strong public-virality statement warrants a reviewed audience outcome,
+// not an automatic multiplier. An unresolved response must not consume its floor.
+const PUBLIC_REACH_CUE = /(?:\bX\b|推文|推特|发推|帖子|发帖|热搜|转发|点赞|评论区|粉丝|账号|视频|社交平台|Twitter)/i;
+const STRONG_REACH_CUE = /(?:大爆|爆火|爆红|爆款|爆了|疯传|刷屏|出圈|火遍|病毒式传播|(?:数据|阅读量|浏览量|播放量|点赞数|点赞量|转发量|评论数|粉丝数|粉丝量|互动量|热度)(?:明显)?(?:暴涨|激增|飙升|暴增|猛增|翻倍|创新高|破(?:了)?[千万亿0-9]+)|\b(?:went viral|going viral|blew up|trending everywhere)\b)/gi;
+const NEGATED_REACH_CUE = /(?:没有|并未|不曾|尚未|未曾|不可能|并非|不是|假如|如果|计划|打算|希望|并不)\s*$/;
+export function strongReachFloors(rows=[]) {
+    return (Array.isArray(rows)?rows:[]).filter(row=>{
+        if(!Number.isInteger(row?.sourceIndex)||typeof row.text!=='string')return false;
+        for(const match of row.text.matchAll(STRONG_REACH_CUE)){
+            const at=match.index,nearby=row.text.slice(Math.max(0,at-100),Math.min(row.text.length,at+match[0].length+100));
+            const prefix=row.text.slice(Math.max(0,at-16),at);
+            if(PUBLIC_REACH_CUE.test(nearby)&&!NEGATED_REACH_CUE.test(prefix))return true;
+        }
+        return false;
+    }).map(row=>row.sourceIndex);
+}
+export function requireReachResolution(result,rows) {
+    const focused=strongReachFloors(rows);
+    if(!focused.length||(Array.isArray(result?.effects)&&result.effects.some(e=>e.gained>0||e.lost>0)))return;
+    for(const index of focused){
+        const review=Array.isArray(result?.noGrowthReview)?result.noGrowthReview.find(r=>
+            r?.sourceIndex===index&&['unrelated','already_counted','no_new_audience'].includes(r.classification)&&
+            typeof r.reason==='string'&&r.reason.trim().length>=8):null;
+        if(!review)throw Object.assign(new Error('第'+(index+1)+'楼明确提到公开传播爆发，但 X 模型未确认新增影响、也未说明为什么无需新增结算。本次没有保存或划掉该楼层，可重新刷新。'),
+            {code:'X_REACH_UNRESOLVED',retryable:false});
+    }
+}
+
 export function floorAudienceChanges(state,effects){
     if(!Array.isArray(effects))throw Error('楼层粉丝变化缺少 effects 数组。');
     const audience=xAudience(state);

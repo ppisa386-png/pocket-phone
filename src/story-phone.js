@@ -15,7 +15,7 @@ import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?
 import { effectiveReply, narrativeReplyCount } from './contact-policy.js?v=1.2.58';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { financialEvidenceMatches } from './assets-policy.js?v=1.2';
-import { sceneBackground } from './weather.js?v=1.2.71';
+import { sceneBackground } from './weather.js?v=1.2.72';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});

@@ -29,9 +29,10 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     const fonts = read('assets/weather/fonts/weather-fonts.css');
     assert.match(index, /style-weather\.css\?v=1.2.71/);
     assert.match(index, /assets\/weather\/fonts\/weather-fonts\.css/);
-    assert.match(ui, /weather-view\.js\?v=1.2.71/);
+
     const version = /VERSION = '(\d+\.\d+\.\d+)'/.exec(config)?.[1];
     assert.ok(version, 'config.js must declare a semantic version');
+    assert.ok(ui.includes('/weather-view.js?v='+version+"'"), 'weather view module uses the current published cache key');
     assert.match(browser, /\[640,390,360,330,320,280\]/);
     assert.match(browser, /phone:\{subscribe:\(\)=>\(\)=>\{\},markCallsRead:\(\)=>\{\},markMessagesRead:\(\)=>\{\}\}/);
     assert.match(browser, /weather:\{report:\(\)=>window\.fixtureWeather,open:\(\)=>\{\},refresh:/);
