@@ -2,7 +2,7 @@ import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
 import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.65';
 import { displayCommunicationTime } from './communication-time.js?v=1.2.66';
 import { icon } from './icons.js?v=1.2.57';
-import { wxMoments,wxFriends,canViewWxMoment } from './wechat-moments.js?v=1.2.66';
+import { wxMoments,wxFriends,canViewWxMoment,momentImages } from './wechat-moments.js?v=1.2.71';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const chatKinds={text:'文字',voice:'语音',image:'照片',video:'视频',music:'音乐'};
@@ -76,6 +76,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
         return '<div class="pp-wx-moments"><div class="pp-wx-cover"><div class="pp-wx-cover-name">'+chatEsc(profile().alias)+'</div>'+avatar(profile().alias)+'</div>'+
             (rows.length?rows.map(m=>{
                 const own=m.authorId==='user',liked=(m.likes||[]).includes('user');
+                const pictures=momentImages(m);
                 const author=own?profile().alias:(state.wechat?.[m.authorId]?.name||m.authorName);
                 const likes=(m.likes||[]).filter(id=>id==='user'||canViewWxMoment(m,id))
                     .map(id=>id==='user'?profile().alias:state.wechat?.[id]?.name).filter(Boolean);
@@ -83,7 +84,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
                     '<div class="pp-wx-moment-avatar">'+avatar(author)+'</div><div class="pp-wx-moment-main">'+
                     '<strong class="pp-wx-moment-author">'+chatEsc(author)+'</strong>'+
                     (m.text?'<p class="pp-wx-moment-body">'+chatEsc(m.text)+'</p>':'')+
-                    (m.imageDescription?'<div class="pp-wx-moment-picture">'+icon('image')+'<span>'+chatEsc(m.imageDescription)+'</span></div>':'')+
+                    (pictures.length?'<div class="pp-wx-moment-picture">'+icon('image')+'<div class="pp-wx-photo-list">'+pictures.map((picture,i)=>'<p class="pp-wx-photo-item">'+(pictures.length>1?'<strong>图'+(i+1)+'</strong> ':'')+chatEsc(picture)+'</p>').join('')+'</div></div>':'')+
                     '<div class="pp-wx-moment-foot"><time>'+chatEsc(displayStoryTime(m))+'</time>'+
                     (own?'<span class="pp-wx-moment-privacy">'+audienceLabel(m.visibility)+'</span>':'')+
                     '<button type="button" data-chat-action="moment-actions" data-chat-id="'+chatEsc(m.id)+'" aria-label="朋友圈操作">'+icon('more')+'</button></div>'+
