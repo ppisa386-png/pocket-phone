@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,hasUnsettledFloors,pendingFloorBatch,coverThrough,floorAudienceChanges} from '../src/x-floor.js';
+import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,hasUnsettledFloors,pendingFloorBatch,coverThrough,floorAudienceChanges,strongReachFloors,requireReachResolution} from '../src/x-floor.js';
 
 const chat=()=>[
     {mes:'第一楼已经公开传播。'},
@@ -48,4 +48,18 @@ test('catch-up prioritizes recent prose in a long visible story',()=>{
     assert.deepEqual(newest.rows.map(x=>x.sourceIndex),[1]);
     assert.match(newest.rows[0].text,/大家都在转发/);
     assert.deepEqual(pendingFloorBatch(messages,[],1,200).rows.map(x=>x.sourceIndex),[0]);
+});
+
+test('explicit new viral X post must be resolved before marking its floor',()=>{
+ const rows=[{sourceIndex:3,text:'这条推文在 X 上又大爆了，点赞和转发数据暴涨！'},
+  {sourceIndex:4,text:'这条推文并没有大爆，大家只是正常讨论。'},
+  {sourceIndex:5,text:'Alex 的推文在 X 上大爆，与 user 无关。'}];
+ assert.deepEqual(strongReachFloors(rows),[3,5]);
+ assert.throws(()=>requireReachResolution({effects:[]},rows),/第4楼.*没有保存/);
+ assert.doesNotThrow(()=>requireReachResolution({effects:[{postId:'p',gained:120,lost:0}]},rows));
+ assert.doesNotThrow(()=>requireReachResolution({effects:[],noGrowthReview:[
+  {sourceIndex:3,classification:'already_counted',reason:'这里只是此前结算的同一批关注，没有新受众。'},
+  {sourceIndex:5,classification:'unrelated',reason:'这次是 Alex 的帖子爆火，并非 user 的帖子。'}]},rows));
+ assert.throws(()=>requireReachResolution({effects:[],noGrowthReview:[
+  {sourceIndex:3,classification:'already_counted',reason:'这里只是此前结算的同一批关注，没有新受众。'}]},rows),/第6楼.*没有保存/);
 });

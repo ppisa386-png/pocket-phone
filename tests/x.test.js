@@ -1552,3 +1552,61 @@ test('public post contexts carry user replies with ancestors, excluding unrelate
   f.reply(feedResult({posts:[]}));ok(await f.x.refresh());assert.match(f.prompt(),/"userReplies":/);assert.match(f.prompt(),/USER_PUBLIC_REPLY/);
  }finally{f.close();}
 });
+
+test('X second home refresh reads a new viral floor, refuses unresolved zero and settles incremental gains once',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01 10:00\nUser 已在 X 发表公开演出视频。';
+  await f.memory.read();ok(await f.x.publish('演出现场的视频'));
+  const p=xItems(f.state(),'post').find(row=>row.author==='user');
+  const first=[feedResult(),{initialFollowers:100,stats:[{postId:p.id,likes:500,reposts:60,replies:30,gained:25,lost:0}]}];
+  f.reply(()=>JSON.stringify(first.shift()));ok(await f.x.refreshPublic());
+  assert.equal(f.state().x.audience.followers,125);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
+  f.context.chat.push({mes:'2026-06-01 16:00\n这条推文在X上再度大爆，播放量破百万，点赞、转发数据暴涨，更多观众正在分享视频。'});
+  await f.memory.read();
+  let resolve=false;const prompts=[];
+  f.reply(({quietPrompt})=>{
+   prompts.push(quietPrompt);
+   if(quietPrompt.includes('当前任务：X 未结算剧情楼层'))return JSON.stringify(resolve?
+    {effects:[{postId:p.id,gained:95,lost:1}]}:{effects:[]});
+   return JSON.stringify(feedResult({posts:[],engagementUpdates:[{postId:p.id,metrics:{likes:38000,reposts:7400,replies:2900}}]}));
+  });
+  const failed=await f.x.refreshPublic();
+  assert.equal(failed.ok,false);
+  assert.equal(failed.code,'X_REACH_UNRESOLVED');
+  assert.match(failed.error,/没有保存或划掉/);
+  assert.equal(f.state().x.audience.followers,125);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,0]]);
+  assert.deepEqual(f.state().x[p.id].metrics,{likes:500,reposts:60,replies:30});
+  assert.ok(prompts[0].includes('这条推文在X上再度大爆'),'home engagement receives latest prose');
+  assert.match(prompts[1],/本次楼层和可见正文/);
+  assert.match(prompts[1],/此前已评估的 user 推文/);
+  resolve=true;ok(await f.x.refreshPublic());
+  assert.equal(f.state().x.audience.followers,219,'125 + 95 - 1; do not replay first growth');
+  assert.deepEqual(f.state().x[p.id].metrics,{likes:38000,reposts:7400,replies:2900});
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,1]]);
+  const count=f.count();assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),count);
+  f.context.chat.pop();await f.memory.read();
+  assert.equal(f.state().x.audience.followers,125,'new floor rollback preserves earlier follower growth');
+ }finally{f.close();}
+});
+test('unrelated viral tweets can be reviewed as zero without giving user followers',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01 10:00\nAn ordinary user X post.';
+  await f.memory.read();ok(await f.x.publish('今天散步。'));
+  const p=xItems(f.state(),'post').find(row=>row.author==='user');
+  const first=[feedResult(),{initialFollowers:40,stats:[{postId:p.id,likes:2,reposts:0,replies:0,gained:0,lost:0}]}];
+  f.reply(()=>JSON.stringify(first.shift()));ok(await f.x.refreshPublic());
+  f.context.chat.push({mes:'2026-06-01 16:00\n另一个歌手的推文在X上大爆，与 user 这条散步帖无关。'});await f.memory.read();
+  let checked=false;
+  f.reply(({quietPrompt})=>{
+   if(quietPrompt.includes('当前任务：X 未结算剧情楼层')){
+    checked=true;return JSON.stringify({effects:[],noGrowthReview:[{sourceIndex:1,classification:'unrelated',reason:'大爆的是另一位歌手的公开推文，user 的散步帖没有新增受众。'}]});
+   }
+   return JSON.stringify(feedResult());
+  });
+  ok(await f.x.refreshPublic());assert.equal(checked,true);
+  assert.equal(f.state().x.audience.followers,40);
+  assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,1]]);
+ }finally{f.close();}
+});
