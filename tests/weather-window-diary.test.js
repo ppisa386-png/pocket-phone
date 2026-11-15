@@ -27,9 +27,9 @@ test('weather-only styles and Fontsource files are wired into runtime and previe
     const styles = read('style-weather.css');
     const base = read('style.css');
     const fonts = read('assets/weather/fonts/weather-fonts.css');
-    assert.match(index, /style-weather\.css\?v=1.2.41/);
+    assert.match(index, /style-weather\.css\?v=1.2.69/);
     assert.match(index, /assets\/weather\/fonts\/weather-fonts\.css/);
-    assert.match(ui, /weather-view\.js\?v=1.2.68/);
+    assert.match(ui, /weather-view\.js\?v=1.2.69/);
     const version = /VERSION = '(\d+\.\d+\.\d+)'/.exec(config)?.[1];
     assert.ok(version, 'config.js must declare a semantic version');
     assert.match(browser, /\[640,390,360,330,320,280\]/);

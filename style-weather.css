@@ -113,6 +113,3 @@
  .pp-weather-hourly,.pp-weather-week-section{margin-bottom:10px}
 }
 
-/* Historical climate reference, distinct from simulated story weather. */
-.pp-weather-source{margin:14px 18px 20px;color:#76838D;font-size:10px;line-height:1.6;text-align:center;}
-.pp-weather-source a{color:inherit;text-decoration:underline;text-underline-offset:2px;}

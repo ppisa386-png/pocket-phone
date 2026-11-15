@@ -196,19 +196,11 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
         }).join('');
 
         const dateLabel = storyDateLabel(w.date || info.date || '', w.time || '');
-        const climateSource = info.climateSource === 'ai-offline-research'
-            ? '<p class="pp-weather-source">气候参考：' +
-                (info.climateOrigin === 'real_knowledge' ? 'AI 离线气候知识'
-                : info.climateOrigin === 'fictional_worldbook' ? 'AI 读取世界书与人物设定'
-                : info.climateOrigin === 'fictional_random' ? 'AI 为空白架空地点生成的气候'
-                : 'AI 离线研究') +
-                '；天气为剧情模拟，非实时气象观测。</p>'
-            : '<p class="pp-weather-source">天气为剧情模拟，非实时气象观测。</p>';
         return '<section class="pp-weather" data-wtheme="' + theme + '" data-weather="' + family + '">' +
             '<div class="pp-weather-scroll">' +
             hero(w, theme, city, busy, today, '', '', dateLabel) +
             (warningMarkup ? '<div class="pp-weather-warning-list">' + warningMarkup + '</div>' : '') +
-            statusMarkup() + hourly + week + metrics + climateSource +
+            statusMarkup() + hourly + week + metrics +
             '</div></section>';
     }
 

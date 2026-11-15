@@ -17,12 +17,12 @@ import { createChatApp } from './src/chat-apps.js?v=1.2.66';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.66';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.68';
-import { mountPhone } from './src/ui.js?v=1.2.68';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.69';
+import { mountPhone } from './src/ui.js?v=1.2.69';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.68';
 import { createPhoneService } from './src/phone.js?v=1.2.66';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.66';
-import { normalizeSettings } from './src/config.js?v=1.2.68';
+import { normalizeSettings } from './src/config.js?v=1.2.69';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.68';
 
@@ -70,7 +70,7 @@ async function start() {
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
-            fetch(new URL('./style-weather.css?v=1.2.41', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style-weather.css?v=1.2.69', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./assets/weather/fonts/weather-fonts.css', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-daily.css?v=1.2.45', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-calendar.css?v=1.2.61', import.meta.url), { cache: 'no-cache' }),
