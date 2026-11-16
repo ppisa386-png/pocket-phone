@@ -1,5 +1,5 @@
 import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.79';
-import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.2.78';
+import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.2.79';
 import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.2';
 import { changeWalletCurrency } from './assets-currency.js?v=1.2';
 import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2.57';

@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.79';
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
@@ -539,7 +539,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const saved=xAudience(state);
             if(saved){await commit([xSet({...saved,followers:saved.initialFollowers})]);return;}
             const data=await ask(state,null,request,current,'当前任务：X 初始粉丝。'+AUDIENCE_RULES+'只确定初始值，不计算发帖后的增长。输出 {"initialFollowers":整数}。',d=>{
-                if(d.initialFollowers==null)throw Error('X 初始粉丝返回缺少 initialFollowers。');
+                if(!Number.isSafeInteger(d.initialFollowers)||d.initialFollowers<0)throw modelProtocolError('phone_x_initial_followers',['initialFollowers'],'X 初始粉丝结果无效');
                 return audienceChanges(state,{initialFollowers:d.initialFollowers});
             },{jsonSchema:TASK_SCHEMAS.xInitial});
             await commit(data);

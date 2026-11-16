@@ -19,12 +19,23 @@ const RESIDENCE_PLACE_GROUPS = [
 // Accept a single explicit residence field in User Persona, not scenery,
 // nationality, other people's homes, or a travel destination.
 export function explicitPersonaResidence(persona) {
-    const source=String(persona||'').normalize('NFKC');
-    const pattern=/(?:^|[\n\r。；;])\s*(?:(?:[\p{L}\p{N}·.]{1,30})\s*(?:的)?\s*)?(?:常驻地|常住地|常居地|现居地|居住地|定居地|长期居住地|residence|home\s*base)\s*[:：]\s*([^\n\r。；;]{1,100})/gimu;
+    // Normalize only the Markdown label wrapper, not the field value.
+    const source=String(persona||'').normalize('NFKC').split(/\r?\n/).map(line=>
+        line.replace(/^(\s*(?:[-*+]\s+|\d+[.)、]\s+)?)(?:\*\*|__)([^\n*]{1,50})(?:\*\*|__)\s*([:：])/, '$1$2$3')
+            .replace(/^(\s*(?:[-*+]\s+|\d+[.)、]\s+)?)(?:\*\*|__)([^\n*]{1,50}[:：])(?:\*\*|__)/, '$1$2')
+    ).join('\n');
+    // Match only an explicit, unnegated user field. Don't infer a home from
+    // somebody else's residence, birthplace, language, travel or prose.
+    const pattern=/(?:^|[\n\r。；;])\s*(?:[-*+]\s+|\d+[.)、]\s+)?(?:(?:user|本人|我|我的)\s*(?:的)?\s*)?(?:常驻地|常住地|常居地|现居地|居住地|定居地|长期居住地|residence|home\s*base)\s*[:：]\s*([^\n\r。；;]{1,100})/gimu;
     const matches=[...source.matchAll(pattern)];
     if(matches.length!==1)return null;
-    const place=matches[0][1].split(/[,，、（(]/,1)[0].trim();
+    const place=matches[0][1].trim().replace(/^(?:\*\*|__)/,'').replace(/(?:\*\*|__)$/,'').trim();
     if(!place||/^(?:未知|未定|不详|不明|没有|不是|并非|unknown|none|not\b)/i.test(place))return null;
+    // Inspect the entire field before determining its region. A list of
+    // multiple residences must not silently become the first listed city.
+    // Chicago, IL/Illinois is a single familiar US address, not two homes.
+    if(/[、，/／]/.test(place)||/,(?!\s*(?:IL|Illinois)\b)/i.test(place)||
+        /(?:\s+(?:and|or)\s+|(?:和|与|及|或)(?=[^\s]))/i.test(place))return null;
     const matchesRegion=RESIDENCE_PLACE_GROUPS.filter(item=>item.names.test(place));
     if(matchesRegion.length!==1)return null;
     return {region:matchesRegion[0].region,currency:matchesRegion[0].currency};
