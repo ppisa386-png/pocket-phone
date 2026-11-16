@@ -1024,3 +1024,69 @@ test("manual delete removes the row without touching balance, blocks AI re-regis
         assert.equal(f.state().assets["holding:t3"].active, true);
     } finally { f.close(); }
 });
+
+
+test('first setup accepts User Persona Chicago despite absent model residence',async()=>{
+ const f=setup();try{
+  f.c.powerUserSettings.persona_description='年龄：22岁\n常驻地：芝加哥\n职业：摄影师';
+  f.c.chat=[{mes:'日期：2026-01-01\n芝加哥的夜风掠过街角，Sam走出了大楼。',is_user:false}];
+  f.reply({date:'2026-01-01',initial:{balance:2100,holdings:[],jobs:[]}});
+  ok(await f.assets.update());
+  assert.equal(f.state().assets.wallet.region,'US');
+  assert.equal(f.state().assets.wallet.currency,'USD');
+  assert.equal(cashBalance(f.state()),210000);
+  assert.equal(f.count(),1);
+  assert.match(f.prompt(),/首次必须与initial并列返回顶层residence/);
+ }finally{f.close();}
+});
+
+test('explicit Chicago IL fallback and model-supplied home priority',async()=>{
+ const f=setup();try{
+  f.c.powerUserSettings.persona_description='Sam的常驻地: Chicago, IL';
+  f.reply({date:'2026-01-01',residence:null,initial:{balance:100,holdings:[],jobs:[]}});
+  ok(await f.assets.update());
+  assert.equal(f.state().assets.wallet.region,'US');
+ }finally{f.close();}
+ const g=setup();try{
+  g.c.powerUserSettings.persona_description='常驻地：芝加哥';
+  g.reply({date:'2026-01-01',residence:{region:'JP',currency:'JPY',place:'东京'},initial:{balance:100,holdings:[],jobs:[]}});
+  ok(await g.assets.update());
+  assert.equal(g.state().assets.wallet.region,'JP');
+ }finally{g.close();}
+});
+
+test('scenery and travel cannot establish or change wallet residence',async()=>{
+ const f=setup();try{
+  f.c.powerUserSettings.persona_description='Sam是一名旅行摄影师。';
+  f.c.chat=[{mes:'日期：2026-01-01\n芝加哥的夜风吹过，Sam在当地短途旅行。',is_user:false}];
+  f.reply({date:'2026-01-01',residence:null,initial:{balance:100,holdings:[],jobs:[]}});
+  const result=await f.assets.update();assert.equal(result.ok,false);
+  assert.match(result.error,/无法确定 user 常住地区/);
+  assert.equal(f.state().assets.wallet,undefined);
+ }finally{f.close();}
+ const g=setup();try{
+  g.c.powerUserSettings.persona_description='常驻地：芝加哥';
+  g.reply({date:'2026-01-01',residence:null,initial:{balance:100,holdings:[],jobs:[]}});
+  ok(await g.assets.update());
+  await g.append('Sam抵达东京旅行，支付了餐费。','2026-01-02');
+  g.c.powerUserSettings.persona_description='常驻地：东京';
+  g.reply({...evaluation('2026-01-02'),residence:null});
+  ok(await g.assets.update());
+  assert.equal(g.state().assets.wallet.region,'US');
+  assert.equal(g.state().assets.wallet.currency,'USD');
+ }finally{g.close();}
+});
+
+test('ambiguous User Persona is not inferred; invalid explicit model region remains rejected',async()=>{
+ const {explicitPersonaResidence}=await import('../src/assets-residence.js');
+ assert.equal(explicitPersonaResidence('常驻地：火星城'),null);
+ assert.equal(explicitPersonaResidence('国籍：美国\n旅游目的地：芝加哥'),null);
+ assert.equal(explicitPersonaResidence('常驻地：芝加哥/东京'),null);
+ assert.deepEqual(explicitPersonaResidence('常驻地：芝加哥'),{region:'US',currency:'USD'});
+ assert.deepEqual(explicitPersonaResidence('Sam的常驻地: Chicago, IL'),{region:'US',currency:'USD'});
+ const f=setup();try{
+  f.c.powerUserSettings.persona_description='常驻地：芝加哥';
+  f.reply({date:'2026-01-01',residence:{region:'JP',currency:'CNY'},initial:{balance:100,holdings:[],jobs:[]}});
+  assert.equal((await f.assets.update()).ok,false);
+ }finally{f.close();}
+});
