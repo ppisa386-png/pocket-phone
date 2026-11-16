@@ -15,12 +15,12 @@ import { createDiagnostics } from './src/diagnostics.js?v=1.2.66';
 import { createX } from './src/x.js?v=1.2.73';
 import { createChatApp } from './src/chat-apps.js?v=1.2.71';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
-import { createApiClient, createKeyStore } from './src/api.js?v=1.2.66';
+import { createApiClient, createKeyStore } from './src/api.js?v=1.2.74';
 import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.73';
-import { mountPhone } from './src/ui.js?v=1.2.73';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.74';
+import { mountPhone } from './src/ui.js?v=1.2.74';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.73';
-import { createPhoneService } from './src/phone.js?v=1.2.71';
+import { createPhoneService } from './src/phone.js?v=1.2.74';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
 import { normalizeSettings } from './src/config.js?v=1.2.73';
 
@@ -89,7 +89,7 @@ async function start() {
         const generationState=createGenerationReader(hostModule,()=>globalThis.SillyTavern.getContext(),hostGenerationState);
         function mountRuntime(showSettings = false) {
             const enabled = normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).enabled;
-            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: url => keyStore.get(url,normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId), prepareRequest: captureHostRequest });
+            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId), prepareRequest: captureHostRequest });
             if (enabled) {
                 memory = createPhoneMemory({
                     assetEnabled: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apps.assets,
@@ -202,7 +202,7 @@ async function start() {
             observer = new MutationObserver(() => { if (attachPanel()) { observer.disconnect(); observer = null; } });
             observer.observe(document.body, { childList: true, subtree: true });
         }
-        // Phone and SMS share the selected host or independent connection.
+        // Each App may use a saved API profile and its own model; others follow the shared connection.
         console.info('[榴莲手机] v' + VERSION + ' 已加载');
     } catch (error) {
         diagnostics.add(error,'初始化');
