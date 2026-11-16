@@ -84,7 +84,7 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
     const required=contract.name==='phone_assets_update' && !migration
         ? ['events','living','business'] : migration ? ['residenceChange'] : (contract.value.required||[]);
     if(contract.name==='phone_x_feed'&&!Array.isArray(data?.posts)&&!Array.isArray(data?.accounts))
-        throw modelProtocolError(contract.name,['posts 或 accounts']);
+        throw modelProtocolError(contract.name,['posts 或 accounts'],'字段 posts 缺失');
     if(contract.name==='phone_friends_response'&&typeof data?.accepted!=='boolean'&&data?.ambiguous!==true)
         throw modelProtocolError(contract.name,['accepted 或 ambiguous']);
     const missing=required.filter(key=>!optionalMissing.includes(key)&&
@@ -95,7 +95,6 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
 }
 export function commonTaskSchema(app,prompt) {
     if(String(prompt).includes('当前任务：NPC 代付判断。'))return TASK_SCHEMAS.payment;
-    if(app==='contacts')return TASK_SCHEMAS.contacts;
     if(app==='messages') {
         if(prompt.includes('仅基于此前交流重写'))return TASK_SCHEMAS.textRewrite;
         if(/只输出 JSON：[\\s\\S]*?\\{"status":"reply 或 no_reply"/.test(prompt))return TASK_SCHEMAS.sms;
@@ -112,15 +111,18 @@ export function commonTaskSchema(app,prompt) {
         if(prompt.includes('输出 {"posts":[{'))return TASK_SCHEMAS.xFeed;
     }
     if(['snapchat','whatsapp','wechat'].includes(app)) {
-        if(prompt.includes('动态评论。'))return TASK_SCHEMAS.snapComment;
-        if(prompt.includes('仅重写选中的一条'))return TASK_SCHEMAS.textRewrite;
-        if(prompt.includes(' 新增联系人。'))return TASK_SCHEMAS.snapSearch;
-        if(prompt.includes('批量 ')&&prompt.includes(' 好友邀请。'))return TASK_SCHEMAS.snapBatch;
-        if(prompt.includes(' 好友邀请。'))return TASK_SCHEMAS.snapInvite;
-        if(prompt.includes(' 聊天。'))return TASK_SCHEMAS.snapChat;
-        if(prompt.includes(' 收款判断。'))return TASK_SCHEMAS.snapTransfer;
-        if(prompt.includes('语音通话')||prompt.includes('视频通话'))return TASK_SCHEMAS.snapCall;
-        if(prompt.includes(' 刷新。'))return TASK_SCHEMAS.snapFeed;
+        const name={snapchat:'Snapchat',whatsapp:'WhatsApp',wechat:'微信'}[app];
+        if(prompt.includes('当前任务：'+name+' stories 刷新。')||
+            prompt.includes('当前任务：'+name+' spotlight 刷新。')||
+            prompt.includes('当前任务：'+name+' map 刷新。'))return TASK_SCHEMAS.snapFeed;
+        if(prompt.includes('当前任务：'+name+' 动态评论。'))return TASK_SCHEMAS.snapComment;
+        if(prompt.includes('当前任务：仅重写选中的一条 '+name+' 消息。'))return TASK_SCHEMAS.textRewrite;
+        if(prompt.includes('当前任务：'+name+' 新增联系人。'))return TASK_SCHEMAS.snapSearch;
+        if(prompt.includes('当前任务：批量 '+name+' 好友邀请。'))return TASK_SCHEMAS.snapBatch;
+        if(prompt.includes('当前任务：'+name+' 好友邀请。'))return TASK_SCHEMAS.snapInvite;
+        if(prompt.includes('当前任务：'+name+' 聊天。'))return TASK_SCHEMAS.snapChat;
+        if(prompt.includes('当前任务：'+name+' 语音通话')||prompt.includes('当前任务：'+name+' 视频通话'))return TASK_SCHEMAS.snapCall;
+        if(prompt.includes('当前任务：'+(app==='snapchat'?'Snapcash':name+' 转账')+' 收款判断。'))return TASK_SCHEMAS.snapTransfer;
     }
     return null;
 }

@@ -434,7 +434,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                         retryable: false, diagnostic: '候选人数：' + data.contacts.length + '；通过人数：0\n' + rejected.join('\n'),
                     });
                     return found;
-                }, valid, null, { retries: 0, establishedImport:true }, current.job);
+                }, valid, null, { retries: 0, establishedImport:true, jsonSchema:TASK_SCHEMAS.contacts }, current.job);
                 if (!valid()) return;
                 const additions = contacts.filter(contact => !view.state.contacts[contact.id]);
                 const renamed = contacts.filter(contact => view.state.contacts[contact.id] && view.state.contacts[contact.id].name !== contact.name);
@@ -459,7 +459,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const found=validateContacts(data,chat,context,sources,Object.values(view.state.contacts));
                     if(data.contacts?.length&&!found.length)throw new Error('未能核对返回的联系人资料，请重试。');
                     return found;
-                }, valid, null, {}, current.job);
+                }, valid, null, {jsonSchema:TASK_SCHEMAS.contacts}, current.job);
                 if (!valid()) return;
                 const additions = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
                     const old = view.state.contacts[c.id];
