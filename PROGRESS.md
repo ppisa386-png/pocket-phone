@@ -1,7 +1,7 @@
 ## v1.2.78 · 小榴莲首次建账识别 Persona 常驻地（2026-11-16）
 **问题与证据**：user 已在 User Persona 写“常驻地：芝加哥”，正文出现芝加哥夜风，首次资产建账仍报“无法确定 user 常住地区”。核查发现首次评估 JSON 示例只展示 initial 而没有顶层 residence；resolveResidence 忽略传入的人设和正文信息，模型回复遗漏或置空 residence 就直接失败。
 **实现**：首次契约明确必须在 initial 旁返回 residence；资产模块在首次缺 residence 时仅对明确且单一的 User Persona 常驻地标签做本地地名/地区/货币映射兜底（芝加哥→US/USD）。模型已提供的有效结果优先，非法地区与货币配对不被掩盖，未知/含糊地名和无明确常住字段的天气描述不会被认定为定居。账本建立后原有常住地锁定及迁居/换币规则不变。
-**验证**：补充 Chicago 中文和 Chicago, IL 人设、模型漏字段/null、没有常住地的芝加哥夜风与旅游误判、已建账不受改人设和旅行影响、多地模糊以及非法地区/币种拒绝等回归。未使用 user 真实模型密钥；完整 GitHub Actions 测试结果以发布提交为准。
+**验证与发布**：补充 Chicago 中文和 Chicago, IL 人设、模型漏字段/null、没有常住地的芝加哥夜风与旅游误判、已建账不受改人设和旅行影响、多地模糊以及非法地区/币种拒绝等回归。为 v1.2.78 同步入口天气/正文 import 缓存版本后，GitHub Actions 主分支提交 b7c63b8e6466a1a05248b99cdc46342567e79502 的回归运行 https://github.com/ppisa386-png/pocket-phone/actions/runs/43866277841：npm test 912/912 成功，npm run build:preview 成功。未使用 user 真实模型密钥进行在线联调。
 **范围**：assets-residence、assets、专项测试，版本 1.2.78 和文档；不变更天气、通信、资产其它规则及视觉。
  
 ## v1.2.77 · 取消正文请求对手机模型请求的并发限制（2026-11-16）
