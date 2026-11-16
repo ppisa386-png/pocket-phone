@@ -5,7 +5,7 @@ import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { effectiveReply } from './contact-policy.js?v=1.2.57';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
-import { weatherResearchPrompt, validateWeatherResearch } from './weather-model.js?v=1.2.72';
+import { weatherResearchPrompt, validateWeatherResearch } from './weather-model.js?v=1.2.73';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
 
@@ -265,6 +265,40 @@ function conditions(climate, day, hourOfDay) {
     };
 }
 
+// Rain-day frequency is a DAILY climate statistic, never an hourly trigger.
+// Derive a persistent daily event independently of the hourly transition RNG.
+// The bounded, aligned block makes every historical/forecast date reproducible
+// without replaying a whole year or changing a forecast when the window slides.
+const PRECIPITATION_PERSISTENCE = .42;
+const hasPrecipitation = type => (TYPES[type]?.precip || 0) > 0;
+export function precipitationPlan(record, day) {
+    const climate = climateFor(record.city, record.climate);
+    const key = normCity(record.city);
+    const startDay = Math.floor(day / 64) * 64;
+    let wet = false;
+    const anchorDay = Math.floor(record.hour / 24);
+    for (let d = startDay; d <= day; d++) {
+        const p = clamp(conditions(climate, d, 12).rainProb, 0, 1);
+        // P(wet) converges to p, while allowing weather systems to last
+        // multiple days. A season change uses that day's own monthly rate.
+        const chance = p === 0 ? 0 : p === 1 ? 1 : d === startDay ? p
+            : p * (1 - PRECIPITATION_PERSISTENCE) + (wet ? PRECIPITATION_PERSISTENCE : 0);
+        wet = rngAt(record.seed, key + '|wet-day', d)() < chance;
+        // The model-observed current weather is an established fact, not a
+        // random forecast to be contradicted by the local rain-day draw.
+        if (d === anchorDay && hasPrecipitation(record.state.type)) wet = true;
+    }
+    const rng = rngAt(record.seed, key + '|wet-hours', day);
+    let start = Math.floor(rng() * 21);
+    let end = Math.min(24, start + 3 + Math.floor(rng() * 10));
+    if (day === anchorDay && hasPrecipitation(record.state.type)) {
+        const observedHour = ((record.hour % 24) + 24) % 24;
+        start = Math.min(start, observedHour);
+        end = Math.min(24, Math.max(end, observedHour + 2));
+    }
+    return { wet, start: wet ? start : -1, end: wet ? end : -1 };
+}
+
 const RAIN_TO_SNOW = { drizzle: 'lightsnow', rain: 'snow', heavy: 'heavysnow', storm: 'blizzard', thunder: 'snow', severe: 'blizzard' };
 const SNOW_TO_RAIN = { lightsnow: 'drizzle', sleet: 'drizzle', snow: 'rain', heavysnow: 'heavy', blizzard: 'storm' };
 // Rain falls as snow once the air is cold enough, and snow falls as rain when
@@ -297,11 +331,16 @@ function initialWeights(ctx, temperature) {
 }
 
 // First sample at manual refresh. Weather types, not dates, drive randomness.
-export function initialWeather(climate, clock, rng) {
+export function initialWeather(climate, clock, rng, plan = null) {
     const hourOfDay = Math.floor(clock.hour);
     const ctx = conditions(climate, clock.day, hourOfDay);
     const rawTemp = ctx.baseTemp + ctx.diurnal + (rng() * 2 - 1) * 3.2;
-    const type = snowAdjust(pick(initialWeights(ctx, rawTemp), rng), rawTemp);
+    let type = snowAdjust(pick(initialWeights(ctx, rawTemp), rng), rawTemp);
+    if (plan) {
+        const rainingNow = plan.wet && hourOfDay >= plan.start && hourOfDay < plan.end;
+        if (!rainingNow && hasPrecipitation(type)) type = 'overcast';
+        else if (rainingNow && !hasPrecipitation(type)) type = snowAdjust('rain', rawTemp);
+    }
     return settle(type, ctx, rawTemp, rng);
 }
 
@@ -352,7 +391,7 @@ const DRIFT = { drizzle: ['drizzle', 'rain'], rain: ['drizzle', 'rain', 'heavy']
 
 // One story hour of evolution: the weather may persist, drift in intensity,
 // or switch; temperature, wind and humidity move toward the type's regime.
-export function advanceWeather(previous, climate, absHour, rng) {
+export function advanceWeather(previous, climate, absHour, rng, plan = null) {
     const hourOfDay = absHour % 24, day = Math.floor(absHour / 24);
     const ctx = conditions(climate, day, hourOfDay);
     const current = TYPES[previous.type] || TYPES.partly;
@@ -366,6 +405,22 @@ export function advanceWeather(previous, climate, absHour, rng) {
     if (type === 'sunny' && hourOfDay >= 5 && hourOfDay <= 8 && rng() < .02 * (ctx.arch.humid >= 70 ? 3 : 1)) type = 'fog';
     if (type === 'fog' && (hourOfDay < 4 || hourOfDay > 10) && rng() < .6) type = 'partly';
     if (type === 'fog' && ctx.arid) type = 'partly';
+
+    if (plan) {
+        const rainingNow = plan.wet && hourOfDay >= plan.start && hourOfDay < plan.end;
+        if (!rainingNow && hasPrecipitation(type)) {
+            // Never turn a 5%-wet-day climate into hourly opportunities for rain.
+            type = pick([['overcast', .55], ['partly', .35], ['sunny', .1]], rng);
+        } else if (rainingNow && !hasPrecipitation(type)) {
+            // A sampled wet day contains a bounded rain/snow episode; the
+            // existing dynamics still control intensity, temperature and wind.
+            type = snowAdjust(pick([
+                ['drizzle', .48], ['rain', .37], ['heavy', .12],
+                ['thunder', ctx.summer ? .025 : .008],
+                ['storm', .008], ['severe', ctx.summer ? .004 : .001],
+            ], rng), ctx.baseTemp + ctx.diurnal);
+        }
+    }
 
     const t = TYPES[type] || TYPES.partly;
     const target = ctx.baseTemp + ctx.diurnal + t.temp;
@@ -501,28 +556,40 @@ const STRENGTH_NAMES = ['', '较弱', '中等', '较强', '强烈'];
 // stable per-day re-anchor beyond that. Current weather, the prompt background
 // and the seven-day forecast all walk this same chain, so today's actual
 // weather always equals what the forecast chain predicted for this hour.
+function advancePlanned(state, record, climate, key, absHour, plans) {
+    const day = Math.floor(absHour / 24);
+    if (!plans.has(day)) plans.set(day, precipitationPlan(record, day));
+    return advanceWeather(state, climate, absHour,
+        rngAt(record.seed, key, absHour), plans.get(day));
+}
+
 function stateAtHour(record, climate, key, absHour) {
+    const plans = new Map();
     if (absHour <= record.hour) return record.state;
     if (absHour - record.hour <= MAX_FOLD) {
         let state = record.state;
-        for (let hour = record.hour + 1; hour <= absHour; hour++) state = advanceWeather(state, climate, hour, rngAt(record.seed, key, hour));
+        for (let hour = record.hour + 1; hour <= absHour; hour++)
+            state = advancePlanned(state, record, climate, key, hour, plans);
         return state;
     }
     const day = Math.floor(absHour / 24);
-    let state = initialWeather(climate, { day, hour: 0 }, rngAt(record.seed, key, day * 24));
-    for (let hour = day * 24 + 1; hour <= absHour; hour++) state = advanceWeather(state, climate, hour, rngAt(record.seed, key, hour));
+    let state = initialWeather(climate, { day, hour: 0 },
+        rngAt(record.seed, key, day * 24), precipitationPlan(record, day));
+    for (let hour = day * 24 + 1; hour <= absHour; hour++)
+        state = advancePlanned(state, record, climate, key, hour, plans);
     return state;
 }
 
 const dayHours = (record, climate, key, day) => {
     const start = day * 24;
     const row = (state, h) => ({ hour: h, type: state.type, temp: state.temp, wind: state.wind, humidity: state.humidity });
-    const hours = [];
+    const hours = [], plans = new Map();
     if (start - record.hour > MAX_FOLD) {
         // Stale record: anchor the day exactly like stateAtHour does, then walk it.
-        let state = initialWeather(climate, { day, hour: 0 }, rngAt(record.seed, key, start));
+        let state = initialWeather(climate, { day, hour: 0 },
+            rngAt(record.seed, key, start), precipitationPlan(record, day));
         for (let h = 0; h < 24; h++) {
-            if (h > 0) state = advanceWeather(state, climate, start + h, rngAt(record.seed, key, start + h));
+            if (h > 0) state = advancePlanned(state, record, climate, key, start + h, plans);
             hours.push(row(state, h));
         }
         return hours;
@@ -533,7 +600,7 @@ const dayHours = (record, climate, key, day) => {
         if (abs <= record.hour) { hours.push(row(record.state, h)); continue; }
         while (walkedTo < abs) {
             walkedTo++;
-            state = advanceWeather(state, climate, walkedTo, rngAt(record.seed, key, walkedTo));
+            state = advancePlanned(state, record, climate, key, walkedTo, plans);
         }
         hours.push(row(state, h));
     }
