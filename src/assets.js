@@ -469,7 +469,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 }
                 return applyAssessment(view.state,data,{chat,index,revision:view.revision,memoryText,persona,residenceSummaries,userName:context.name1});
             }, current, null, { summarySnapshot:prepared, retries: 0, parseResponse: parseAssetResponse, formatRetryOnce:true, requireJsonObject:true, maxTokens:8192,
-                jsonSchema:currencyOnly ? TASK_SCHEMAS.assetsResidence : wallet ? TASK_SCHEMAS.assetsUpdate : TASK_SCHEMAS.assetsInitial,
+                jsonSchema:wallet && !hasResidence(wallet) ? TASK_SCHEMAS.assetsResidence : wallet ? TASK_SCHEMAS.assetsUpdate : TASK_SCHEMAS.assetsInitial,
                 optionalMissingFields:wallet ? [] : ['residence'], finalOutputContract: ASSET_OUTPUT_CONTRACT + homeContract + dateContract + pendingContract + (wallet ? '已有账本，返回events/salaries/valuations/living/business，不得重置initial。' : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? '本次已有账本：只使用后续格式，禁止 initial。' : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + (hasResidence(wallet)?'沿用已确认常住地；无明确迁居返回residenceChange:null。':'首次必须与initial并列返回顶层residence:{region,currency,place,inferred}。明确的User人设常驻城市足以判断地区与当地币种；确实无法确定才用residence:null。') + '金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
             if (!current()) throw Error('剧情或设置已变化，本次评估未保存。');
             if (persona!==(getContext().powerUserSettings?.persona_description||'')) throw Error('user 人设已变化，请重新一键更新。');
