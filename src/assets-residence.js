@@ -1,9 +1,38 @@
 import { resolveResidence, RESIDENCE_RULE } from './currency.js?v=1.2';
 
 
+
+const RESIDENCE_PLACE_GROUPS = [
+    { region:'US', currency:'USD', names:/芝加哥|纽约|洛杉矶|洛杉磯|旧金山|舊金山|美国|美國|\b(?:chicago|new york|los angeles|san francisco|united states|usa)\b/i },
+    { region:'CN', currency:'CNY', names:/中国|中國|北京|上海|广州|廣州|深圳|杭州|成都|重庆|重慶|\b(?:china|beijing|shanghai|guangzhou|shenzhen|chengdu)\b/i },
+    { region:'JP', currency:'JPY', names:/日本|东京|東京|大阪|京都|\b(?:japan|tokyo|osaka|kyoto)\b/i },
+    { region:'GB', currency:'GBP', names:/英国|英國|伦敦|倫敦|\b(?:united kingdom|britain|england|london)\b/i },
+    { region:'FR', currency:'EUR', names:/法国|法國|巴黎|\b(?:france|paris)\b/i },
+    { region:'DE', currency:'EUR', names:/德国|德國|柏林|慕尼黑|\b(?:germany|berlin|munich)\b/i },
+    { region:'CA', currency:'CAD', names:/加拿大|多伦多|多倫多|温哥华|溫哥華|\b(?:canada|toronto|vancouver)\b/i },
+    { region:'AU', currency:'AUD', names:/澳大利亚|澳大利亞|澳洲|悉尼|墨尔本|墨爾本|\b(?:australia|sydney|melbourne)\b/i },
+    { region:'KR', currency:'KRW', names:/韩国|韓國|首尔|首爾|\b(?:south korea|seoul)\b/i },
+    { region:'SG', currency:'SGD', names:/新加坡|\bsingapore\b/i },
+    { region:'HK', currency:'HKD', names:/香港|\bhong kong\b/i },
+    { region:'TW', currency:'TWD', names:/台湾|臺灣|台灣|台北|臺北|\b(?:taiwan|taipei)\b/i },
+];
+// Accept a single explicit residence field in User Persona, not scenery,
+// nationality, other people's homes, or a travel destination.
+export function explicitPersonaResidence(persona) {
+    const source=String(persona||'').normalize('NFKC');
+    const pattern=/(?:^|[\n\r。；;])\s*(?:(?:[\p{L}\p{N}·.]{1,30})\s*(?:的)?\s*)?(?:常驻地|常住地|常居地|现居地|居住地|定居地|长期居住地|residence|home\s*base)\s*[:：]\s*([^\n\r。；;]{1,100})/gimu;
+    const matches=[...source.matchAll(pattern)];
+    if(matches.length!==1)return null;
+    const place=matches[0][1].split(/[,，、（(]/,1)[0].trim();
+    if(!place||/^(?:未知|未定|不详|不明|没有|不是|并非|unknown|none|not\b)/i.test(place))return null;
+    const matchesRegion=RESIDENCE_PLACE_GROUPS.filter(item=>item.names.test(place));
+    if(matchesRegion.length!==1)return null;
+    return {region:matchesRegion[0].region,currency:matchesRegion[0].currency};
+}
+
 export const hasResidence = wallet => !!(wallet?.region && wallet?.currency);
 export function residenceContract(wallet) {
-    if (!hasResidence(wallet)) return RESIDENCE_RULE;
+    if (!hasResidence(wallet)) return RESIDENCE_RULE + '首次建账必须返回与 initial 并列的顶层 residence。User 人设明确写有“常驻地：芝加哥”等常居城市时直接据此判断真实国家地区与对应货币，不要求正文再次声明国家；只有完全无法推断时才 residence:null。';
     return '常住地已经确认并保存为 '+wallet.region+'，账本币种 '+wallet.currency+'。本次沿用，不重新核实人设或正文居住依据，不要求返回residence。只检查本次正式摘要中 messageIndex 属于 expenseSummaryIndices 的花费楼层，是否明确说明user已经改变长期常住地；旅行、出差、计划、假设、他人搬家和仅出现外国消费均不算迁居。摘要缺失或没有明确变动就返回residenceChange:null，正常完成原币结算。确已迁居才返回residenceChange:{sourceIndex:摘要的messageIndex,subject:"user",status:"completed",region:新地区代码,currency:当地币种,place:摘要里的地名}。不从人设或其他楼层猜测迁居。跨币区时仅返回该变更与目标currency等待换币确认；同币区照常结算。';
 }
 
@@ -19,7 +48,7 @@ export function expenseFloorSummaries(state, floors) {
 }
 
 export function assessmentResidence(wallet, data, persona, prose, summaries=[]) {
-    if(!hasResidence(wallet))return resolveResidence(data.residence,persona,prose,{allowInference:true});
+    if(!hasResidence(wallet))return resolveResidence(data.residence,persona,prose,{allowInference:true}) || explicitPersonaResidence(persona);
     const change=data.residenceChange;
     if(!change||change.subject!=='user'||change.status!=='completed')return null;
     // Structural guard only: a declared migration must point at a real
