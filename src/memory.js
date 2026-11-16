@@ -8,7 +8,7 @@ import { importStoryAssets } from './assets-story.js?v=1.2.65';
 import { importStorySquare } from './x-opinion.js?v=1.2.57';
 import { importStoryPhone } from './story-phone.js?v=1.2.76';
 import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.71';
-import { importStoryLocation } from './weather.js?v=1.2.76';
+import { importStoryLocation } from './weather.js?v=1.2.77';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
@@ -64,10 +64,13 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const value = { scope: active?.scope ?? null, revision: active?.revisions?.at(-1) ?? null, state: replayJournal(active?.journal) };
         for (const listener of listeners) listener(structuredClone(value));
     }
+    // A new story floor can be appended while a phone request runs. Only
+    // changes to the established prefix invalidate the original ticket.
     function sameChat(snapshot) {
         const now = getContext();
         return !disposed && chatScope(now) === snapshot.scope && now.chatMetadata === snapshot.metadata &&
-            JSON.stringify(messageSignatures(now.chat)) === JSON.stringify(snapshot.signatures);
+            Array.isArray(now.chat) && now.chat.length >= snapshot.signatures.length &&
+            JSON.stringify(messageSignatures(now.chat.slice(0, snapshot.signatures.length))) === JSON.stringify(snapshot.signatures);
     }
     async function save(snapshot, journal) {
         if (!sameChat(snapshot)) throw new Error('聊天已变化，本次手机操作已取消。');
@@ -87,8 +90,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const scope = chatScope(current);
         if (!scope) { unavailable='NO_CHAT';active = null; notify(); return null; }
         const snapshot = { scope, metadata: current.chatMetadata, context: current, signatures: messageSignatures(current.chat) };
-        // Do not persist a transient streaming revision. Final generation events
-        // reconcile it; phone actions are blocked until that point.
+        // Never treat unfinished streamed prose as a committed source floor.
         const processor = current.streamingProcessor;
         const hostGenerating = getGenerationState();lastHostState=hostGenerating;
         if (hostGenerating === false) {
@@ -98,17 +100,29 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const streaming = processor && processor !== settledProcessor && processor.isFinished === false &&
             processor.isStopped !== true && !processor.abortController?.signal?.aborted;
         if (hostGenerating === true || generating || streaming) {
+            if (active && sameChat(active)) {
+                unavailable = active.revisions.length ? null : 'EMPTY_CHAT';
+                return active;
+            }
             unavailable='GENERATING';
-            if (active?.scope !== scope || active?.metadata !== snapshot.metadata) { active = null; notify(); }
+            if (active?.scope !== scope || active?.metadata !== snapshot.metadata || !sameChat(active)) {
+                active = null; notify();
+            }
             return null;
         }
         snapshot.revisions = await revisionsFor(snapshot.signatures);
-        // A generation may start while revision hashing is in flight. Do not
-        // migrate/save metadata underneath a prepared narrative prompt.
-        if (generating || getGenerationState() === true) { unavailable='GENERATING'; return null; }
+        // A concurrently starting narrative does not invalidate a settled
+        // prefix already available to phone operations.
+        if (generating || getGenerationState() === true) {
+            if (active && sameChat(active)) return active;
+            unavailable='GENERATING'; return null;
+        }
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         const legacyRevisions = current.chat.some(isMemoryHidden) ? await revisionsFor(messageSignatures(current.chat, true)) : null;
-        if (generating || getGenerationState() === true) { unavailable='GENERATING'; return null; }
+        if (generating || getGenerationState() === true) {
+            if (active && sameChat(active)) return active;
+            unavailable='GENERATING'; return null;
+        }
         if (!sameChat(snapshot)) { unavailable='CHANGED'; return null; }
         const reconciled = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
         const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
@@ -154,12 +168,11 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         }
     }
     for (const name of EVENTS) listen(name, () => {
-        // Invalidate in-flight model results even if the user later restores the
-        // same text/swipe, or switches away and back before the request finishes.
-        // Quiet prompt preparation may finish through STOPPED as well as ENDED.
-        // Neither is a new narrative revision on its own. A real narrative
-        // STARTED already invalidates tasks; edits/switches still do so below.
-        if (!['GENERATION_ENDED', 'GENERATION_STOPPED'].includes(name) || generating) generation++;
+        // Normal story appends and generation completion do not cancel phone
+        // tasks. Existing-floor edits, deletes, swipes and switches still do.
+        const appended = ['MESSAGE_SENT', 'MESSAGE_RECEIVED', 'MESSAGE_UPDATED'].includes(name) &&
+            active && sameChat(active);
+        if (!['GENERATION_ENDED', 'GENERATION_STOPPED'].includes(name) && !appended) generation++;
         if (name === 'GENERATION_ENDED' || name === 'GENERATION_STOPPED' || name === 'CHAT_CHANGED') {
             generating = false;
             settledProcessor = getContext().streamingProcessor ?? null;
@@ -178,7 +191,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
     });
     listen('GENERATION_STARTED', (type, _options, dryRun) => {
         // Host prompt previews emit STARTED without a matching ENDED event.
-        if (!dryRun && type !== 'quiet') { generating = true; settledProcessor = null; generation++; }
+        if (!dryRun && type !== 'quiet') { generating = true; settledProcessor = null; }
     });
     backgroundRefresh();
 
@@ -193,7 +206,8 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 if (!snapshot?.revisions.length) throw unavailableError();
                 if (view && (view.scope !== snapshot.scope || view.revision !== snapshot.revisions.at(-1))) throw new Error('聊天已变化，请重新操作。');
                 const ticket = {};
-                tickets.set(ticket, { scope: snapshot.scope, metadata: snapshot.metadata, revision: snapshot.revisions.at(-1), generation, state: view ? structuredClone(view.state) : replayJournal(snapshot.journal) });
+                tickets.set(ticket, { scope: snapshot.scope, metadata: snapshot.metadata, sourceIndex: snapshot.revisions.length - 1,
+                    revision: snapshot.revisions.at(-1), generation, state: view ? structuredClone(view.state) : replayJournal(snapshot.journal) });
                 return ticket;
             });
         },
@@ -204,7 +218,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
             return schedule(async () => {
                 const basis = tickets.get(ticket), snapshot = await sync();
                 if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
-                    basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
+                    basis.revision !== snapshot.revisions[basis.sourceIndex] || basis.generation !== generation) throw new Error('聊天已变化，本次删除已取消。');
                 if (!replayJournal(snapshot.journal)[collection]?.[recordId]) throw new Error('这条记录已不存在。');
                 let next = eraseRecordFromJournal(snapshot.journal, collection, recordId);
                 if (COMM_RECORD_COLLECTIONS.includes(collection)) next = syncCommContext(next,snapshot.revisions,snapshot.context.chat).journal;
@@ -222,7 +236,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 const basis = tickets.get(ticket);
                 const snapshot = await sync();
                 if (!basis || !snapshot || basis.scope !== snapshot.scope || basis.metadata !== snapshot.metadata ||
-                    basis.revision !== snapshot.revisions.at(-1) || basis.generation !== generation) {
+                    basis.revision !== snapshot.revisions[basis.sourceIndex] || basis.generation !== generation) {
                     throw new Error('聊天已变化，本次手机操作已取消。');
                 }
                 const latest = replayJournal(snapshot.journal);
@@ -237,7 +251,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
                 }
                 let next = snapshot.journal;
                 for (const batch of batches) {
-                    const index = batch.sourceIndex ?? snapshot.revisions.length - 1;
+                    const index = batch.sourceIndex ?? basis.sourceIndex;
                     if (!Number.isInteger(index) || index < 0 || index >= snapshot.revisions.length) throw new Error('记录来源楼层无效。');
                     const state=replayJournal(next), clock=exactStoryTime(snapshot.context.chat.slice(0,index+1));
                     const changes=batch.changes.map(change=>{
