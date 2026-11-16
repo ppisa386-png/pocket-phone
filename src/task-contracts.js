@@ -46,6 +46,26 @@ export const TASK_SCHEMAS={
     payment:schema('npc_payment',obj(['accept'],{accept:bool})),
     snapComment:schema('social_comment_reply',obj(['text'],{text:str})),
     wechatMoments:schema('wechat_moments',obj(['moments','interactions'],{moments:arr({type:'object'}),interactions:arr({type:'object'})})),
+    xDm:schema('x_dm',obj(['status'],{status:{type:'string',enum:['reply','no_reply','request']},text:str,category:str,deal:{type:'object'}})),
+    xFeed:schema('x_feed',{...obj([],{posts:arr({type:'object'}),replies:arr({type:'object'}),accounts:arr({type:'object'}),activityReactions:arr({type:'object'}),engagementUpdates:arr({type:'object'})}),anyOf:[{required:['posts']},{required:['accounts']}]}),
+    xComments:schema('x_comments',obj(['comments'],{comments:arr({type:'object'})})),
+    xPublic:schema('x_public_comment',obj(['text'],{text:str,reactions:arr({type:'object'})})),
+    xTrends:schema('x_trends',obj(['topics'],{topics:arr({type:'object'})})),
+    xStats:schema('x_post_impact',obj(['stats'],{stats:arr({type:'object'}),initialFollowers:integer})),
+    xFloor:schema('x_floor_impact',obj(['effects'],{effects:arr({type:'object'}),noGrowthReview:arr({type:'object'})})),
+    xPrivilege:schema('x_privilege',obj(['stance'],{stance:{type:'string',enum:['none','praise','attack']},target:str,identity:str,targetId:str})),
+    snapChat:schema('social_chat',obj(['status'],{status:{type:'string',enum:['reply','no_reply']},messages:arr({type:'object'}),text:str,kind:str,transfer:{anyOf:[{type:'null'},{type:'object'}]}})),
+    snapInvite:schema('social_invite',obj(['status'],{status:{type:'string',enum:['friends','pending','declined']}})),
+    snapBatch:schema('social_invites_batch',obj(['results'],{results:arr({type:'object'})})),
+    snapSearch:schema('social_accounts',obj(['accounts'],{accounts:arr({type:'object'})})),
+    snapFeed:schema('social_feed',obj(['items'],{items:arr({type:'object'}),reactions:arr({type:'object'})})),
+    snapCall:schema('social_call',obj(['status'],{status:{type:'string',enum:['answered','no_answer']},text:str,category:str})),
+    snapTransfer:schema('social_transfer',obj(['status'],{status:{type:'string',enum:['accepted','declined','pending']}})),
+    textRewrite:schema('message_rewrite',obj(['text'],{text:str})),
+    friends:schema('friends_response',{...obj([],{accepted:bool,name:str,aliases:arr(str),ambiguous:bool}),anyOf:[{required:['accepted']},{required:['ambiguous']}]}),
+    contacts:schema('contacts',obj(['contacts'],{contacts:arr({type:'object'})})),
+    food:schema('food_search',obj(['currency','shops'],{currency:str,shops:arr({type:'object'})})),
+
     accounts:schema('accounts_search',obj(['accounts'],{accounts:arr({type:'object'})})),
     contacts:schema('contacts_import',obj(['contacts'],{contacts:arr({type:'object'})})),
 };
@@ -63,6 +83,8 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
         currentCurrency!==data.residenceChange.currency;
     const required=contract.name==='phone_assets_update' && !migration
         ? ['events','living','business'] : migration ? ['residenceChange'] : (contract.value.required||[]);
+    if(contract.name==='phone_x_feed'&&!Array.isArray(data?.posts)&&!Array.isArray(data?.accounts))
+        throw modelProtocolError(contract.name,['posts 或 accounts']);
     const missing=required.filter(key=>!optionalMissing.includes(key)&&
         (!data||typeof data!=='object'||Array.isArray(data)||!Object.hasOwn(data,key)||data[key]===undefined));
     if(missing.length)throw modelProtocolError(contract.name,missing,
@@ -71,7 +93,32 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
 }
 export function commonTaskSchema(app,prompt) {
     if(String(prompt).includes('当前任务：NPC 代付判断。'))return TASK_SCHEMAS.payment;
-    if(app==='messages'&&/只输出 JSON：[\s\S]*?\{"status":"reply 或 no_reply"/.test(prompt))return TASK_SCHEMAS.sms;
-    if((app==='phone'||app==='incoming')&&/只输出 JSON：[\s\S]*?\{"status":"answered 或 no_answer 或 declined"/.test(prompt))return TASK_SCHEMAS.call;
+    if(app==='contacts')return TASK_SCHEMAS.contacts;
+    if(app==='messages') {
+        if(prompt.includes('仅基于此前交流重写'))return TASK_SCHEMAS.textRewrite;
+        if(/只输出 JSON：[\\s\\S]*?\\{"status":"reply 或 no_reply"/.test(prompt))return TASK_SCHEMAS.sms;
+    }
+    if((app==='phone'||app==='incoming')&&/只输出 JSON：[\\s\\S]*?\\{"status":"answered 或 no_answer 或 declined"/.test(prompt))return TASK_SCHEMAS.call;
+    if(app==='x') {
+        if(prompt.includes('当前任务：X 私信。'))return TASK_SCHEMAS.xDm;
+        if(prompt.includes('当前任务：X 公开评论区互动。'))return TASK_SCHEMAS.xPublic;
+        if(prompt.includes('当前任务：X 未结算剧情楼层'))return TASK_SCHEMAS.xFloor;
+        if(prompt.includes('stats 数组必须恰好覆盖列出的每个 postId'))return TASK_SCHEMAS.xStats;
+        if(prompt.includes('当前任务：补齐此帖已有公开评论。'))return TASK_SCHEMAS.xComments;
+        if(prompt.includes('趋势评估资料（人设用于判断身份'))return TASK_SCHEMAS.xTrends;
+        if(prompt.includes('识别这一条公开推文本身'))return TASK_SCHEMAS.xPrivilege;
+        if(prompt.includes('输出 {"posts":[{'))return TASK_SCHEMAS.xFeed;
+    }
+    if(['snapchat','whatsapp','wechat'].includes(app)) {
+        if(prompt.includes('动态评论。'))return TASK_SCHEMAS.snapComment;
+        if(prompt.includes('仅重写选中的一条'))return TASK_SCHEMAS.textRewrite;
+        if(prompt.includes(' 新增联系人。'))return TASK_SCHEMAS.snapSearch;
+        if(prompt.includes('批量 ')&&prompt.includes(' 好友邀请。'))return TASK_SCHEMAS.snapBatch;
+        if(prompt.includes(' 好友邀请。'))return TASK_SCHEMAS.snapInvite;
+        if(prompt.includes(' 聊天。'))return TASK_SCHEMAS.snapChat;
+        if(prompt.includes(' 收款判断。'))return TASK_SCHEMAS.snapTransfer;
+        if(prompt.includes('语音通话')||prompt.includes('视频通话'))return TASK_SCHEMAS.snapCall;
+        if(prompt.includes(' 刷新。'))return TASK_SCHEMAS.snapFeed;
+    }
     return null;
 }
