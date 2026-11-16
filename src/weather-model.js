@@ -10,6 +10,35 @@ export const WEATHER_RESEARCH_TYPES = Object.freeze([
 ]);
 const CLIMATE_CODES = new Set(['af','am','aw','bwh','bsh','csa','cfa','cfb','dfa','dfb','dwa','et','h']);
 const ORIGINS = new Set(['real_knowledge','fictional_worldbook','fictional_random']);
+// Enumerate the actual task fields: an unconstrained object also accepts {},
+// and gateways may drop additionalProperties when converting provider schemas.
+export function weatherResearchSchema(city = null) {
+    const number = (minimum, maximum) => ({ type: 'number', minimum, maximum });
+    const object = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
+    const months = (minimum, maximum) => ({ type: 'array', items: number(minimum, maximum), minItems: 12, maxItems: 12 });
+    return { name: 'phone_weather', strict: false, value: {
+        type: 'object', additionalProperties: false,
+        properties: {
+            city: { type: ['string', 'null'], description: '当前实际所在城市；已有固定城市时沿用，仅无可靠地点时为 null。' },
+            origin: { type: 'string', enum: [...ORIGINS] },
+            climate: object({
+                archetype: { type: 'string', enum: [...CLIMATE_CODES] },
+                monthlyTemp: months(-80, 70), monthlyRainChance: months(0, 1),
+                typicalWind: number(0, 12), typicalHumidity: number(0, 100), diurnal: number(0, 28),
+                south: { type: 'boolean' }, arid: { type: 'boolean' },
+                typhoon: { type: 'boolean' }, alwaysNight: { type: 'boolean' },
+            }),
+            weather: object({ type: { type: 'string', enum: [...WEATHER_RESEARCH_TYPES] },
+                temp: number(-80, 70), wind: number(0, 12), humidity: number(0, 100) }),
+            locationChange: object({ arrived: { type: 'boolean' }, sourceIndex: { type: 'integer', minimum: 0 }, quote: { type: 'string' } }),
+        },
+        // With no confirmed city, {city:null} must remain possible. Business
+        // validation still requires all climate/weather fields for a real city.
+        required: city ? ['city', 'origin', 'climate', 'weather'] : ['city'],
+    } };
+}
+
+export const WEATHER_OUTPUT_CONTRACT = '当前仅完成天气数据任务，最终回复必须是一个完整 JSON 对象，不能是 {}。已确认城市时沿用该城市；返回 city、origin、climate、weather，climate 包含全部12个月温度与降水日概率及所有风湿和布尔参数，weather 包含 type、temp、wind、humidity。字段、范围与枚举遵守本次天气任务；迁移时另附 locationChange 原文证据。仅在无已存城市且材料确实无法识别当前位置时返回 {"city":null}。最终数据必须写入回复正文，不能只在思考中描述准备输出；不输出说明、Markdown 或小说。';
 const validCity = city => typeof city === 'string' && !!city.trim() && city.trim().length <= 60 && !/[\r\n<>]/.test(city);
 // Used only to compare city identity: never supplies a climate or classifies a place.
 // Unknown cities must match exactly after punctuation and case normalization.
@@ -103,6 +132,7 @@ export function weatherResearchPrompt({ context, chat, city = null, locationSour
 
 export function validateWeatherResearch(data, fixedCity = null, { chat = [], locationSourceIndex = -1 } = {}) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw invalid('天气研究没有返回有效的数据对象。');
+    if (Object.keys(data).length === 0) throw Object.assign(invalid('模型最终回复只有空对象 {}，没有返回天气数据；原有天气已保留。'), { code: 'WEATHER_EMPTY_RESULT' });
     const savedCity = validCity(fixedCity) ? fixedCity.trim() : null;
     const emptyCity = data.city == null || (typeof data.city === 'string' && !data.city.trim());
     if (!emptyCity && !validCity(data.city)) throw invalid('天气研究没有确认有效城市，请检查当前剧情地点。');

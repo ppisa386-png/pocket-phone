@@ -9,6 +9,8 @@ import { normalizeSettings, VERSION } from '../src/config.js';
 import { readFileSync } from 'node:fs';
 import { createPhoneMemory } from '../src/memory.js';
 import { phoneJsonSchema } from '../src/model-json.js';
+import { createWeather } from '../src/weather.js';
+import { weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from '../src/weather-model.js';
 import { createPhoneService } from '../src/phone.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { createAssets } from '../src/assets.js';
@@ -36,6 +38,48 @@ test('published version cache-busts all changed weather and story importers', ()
 });
 
 const apiConfig = () => ({ mode: 'independent', baseUrl: 'https://provider.example/v1', model: 'test-model', timeout: 15, maxTokens: 2048, historyLimit: 2 });
+
+test('weather sends its complete schema through the real phone/API chain and preserves saved data on empty final output', async () => {
+ const f=phoneFixture(), weather=createWeather({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ const sample={city:'Chicago, IL',origin:'real_knowledge',climate:{archetype:'dfa',monthlyTemp:[-4,-2,4,10,16,22,25,24,19,12,5,-1],
+  monthlyRainChance:Array(12).fill(.3),typicalWind:3,typicalHumidity:70,diurnal:8,south:false,arid:false,typhoon:false,alwaysNight:false},
+  weather:{type:'overcast',temp:12,wind:4.5,humidity:78}};
+ const seen=[];
+ try {
+  f.context.chat=[{mes:'2026-10-31 16:28\nSam is in Chicago.<!--durian-location:{"city":"芝加哥"}-->'}];
+  f.reply(options=>{const body=JSON.parse(options.body);seen.push(body);
+   assert.deepEqual(body.json_schema,weatherResearchSchema('芝加哥'));
+   assert.equal(body.messages.at(-1).content,WEATHER_OUTPUT_CONTRACT);
+   assert.equal(body.max_tokens,4096);
+   assert.equal(body.stop,undefined);
+   return JSON.stringify(sample);
+  });
+  const result=await weather.refresh();assert.equal(result.ok,true,result.error);assert.equal(seen.length,1);
+  const before=structuredClone(f.phone.snapshot());
+  assert.equal(before.weather['芝加哥'].state.temp,12);
+  let calls=0;
+  f.reply(()=>{calls++;return {ok:true,status:200,json:async()=>({choices:[{message:{content:'{\n    } ',reasoning_content:'PRIVATE reasoning'},finish_reason:'stop'}],
+   usage:{completion_tokens:6,completion_tokens_details:{reasoning_tokens:2014}}})};});
+  const failed=await weather.refresh();assert.equal(failed.ok,false);assert.equal(failed.code,'WEATHER_EMPTY_RESULT');
+  assert.match(failed.error,/空对象/);assert.doesNotMatch(failed.error,/分类|PRIVATE/);
+  assert.equal(calls,1,'empty final answer must not add automatic weather requests');
+  assert.deepEqual(f.phone.snapshot().weather,before.weather);
+  assert.deepEqual(f.phone.snapshot().location,before.location);
+ } finally {f.close();}
+});
+
+test('weather schema fallback preserves the task and does not mutate the caller schema', async () => {
+ const schema=weatherResearchSchema('芝加哥'),before=structuredClone(schema),seen=[];
+ const f=clientFixture({fetchImpl:async(_url,options)=>{
+  const body=JSON.parse(options.body);seen.push(body);
+  if(seen.length===1)return {ok:false,status:400,json:async()=>({error:{message:'json_schema is not supported'}})};
+  return response('{"city":null}');
+ }});
+ await f.client.generate('weather task',null,()=>true,()=>{},{requireJsonObject:true,jsonSchema:schema,finalOutputContract:WEATHER_OUTPUT_CONTRACT});
+ assert.deepEqual(seen[0].json_schema,before);assert.equal(seen[1].json_schema,undefined);
+ assert.deepEqual(seen[1].messages,seen[0].messages);assert.deepEqual(schema,before);
+ assert.equal(seen.length,2);
+});
 
 test('all X refresh routes preserve old posts after one failed syntax recovery',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;

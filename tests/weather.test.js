@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { weatherResearchPrompt, validateWeatherResearch } from '../src/weather-model.js';
+import { weatherResearchPrompt, validateWeatherResearch, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from '../src/weather-model.js';
 import { createPhoneService } from '../src/phone.js';
 import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
@@ -68,6 +68,35 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
 }
 
 const marker = (prose, city) => ({ mes: prose + `<!--durian-location:{"city":"${city}"}-->`, is_user: false });
+
+test('weather schema declares all data fields while allowing unknown-city and evidence responses', () => {
+    const known=weatherResearchSchema('芝加哥').value, unknown=weatherResearchSchema().value;
+    assert.deepEqual(known.required,['city','origin','climate','weather']);
+    assert.deepEqual(unknown.required,['city']);
+    assert.deepEqual(known.properties.city.type,['string','null']);
+    for(const name of ['climate','weather','locationChange']) {
+        assert.deepEqual(known.properties[name].required,Object.keys(known.properties[name].properties));
+    }
+    for(const name of ['monthlyTemp','monthlyRainChance']) {
+        const field=known.properties.climate.properties[name];
+        assert.equal(field.minItems,12);assert.equal(field.maxItems,12);assert.equal(field.items.type,'number');
+    }
+    for(const city of [null,'芝加哥']) assert.throws(()=>validateWeatherResearch({},city),e=>e.code==='WEATHER_EMPTY_RESULT');
+    assert.deepEqual(validateWeatherResearch({city:null}),{city:null});
+});
+
+test('host weather output contract and empty-object rejection preserve old weather in one request', async () => {
+    const f=setup([marker('2026-10-31 16:28\nSam is in Chicago.','芝加哥')]);
+    try {
+        assert.equal((await f.weather.refresh()).ok,true);
+        assert.ok(f.prompt().includes(WEATHER_OUTPUT_CONTRACT));
+        const before=structuredClone((await f.state()).weather),calls=f.calls();
+        f.reply('{\n    } ');
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,false);assert.equal(result.code,'WEATHER_EMPTY_RESULT');
+        assert.equal(f.calls(),calls+1);assert.deepEqual((await f.state()).weather,before);
+    } finally {f.close();}
+});
 
 test('manual refresh samples the first weather locally for the marked city with its real climate and saved seed', async () => {
     const f = setup(); try {

@@ -1,7 +1,7 @@
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
 import { phoneJsonSchema } from './model-json.js?v=1.2.66';
-import { resolveAppConnection } from './config.js?v=1.2.75';
+import { resolveAppConnection } from './config.js?v=1.2.76';
 export function normalizeApiUrl(value) {
     let url;
     try { url = new URL(String(value ?? '').trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://example.com/v1'); }
@@ -228,7 +228,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 // replace any unrelated roleplay schema for this request only.
                 delete payload.response_format;
                 delete payload.json_schema;
-                if (!unsupportedSchemas.has(schemaEndpoint)) payload.json_schema = phoneJsonSchema();
+                if (!unsupportedSchemas.has(schemaEndpoint)) payload.json_schema = structuredClone(options.jsonSchema || phoneJsonSchema());
             }
             // Only the caller's task contract is appended, after preset hooks.
             // Keep all roleplay context and other portable settings intact.

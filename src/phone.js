@@ -13,7 +13,7 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.66';
-import { resolveAppConnection } from './config.js?v=1.2.75';
+import { resolveAppConnection } from './config.js?v=1.2.76';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -144,6 +144,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
                 const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { app, finalOutputContract: contract, maxTokens, requireJsonObject:true,
+                    jsonSchema: options.jsonSchema,
                     onResponseMeta: (metadata, rawText) => { responseMeta = metadata; responseText = rawText; },
                 }) : await context.generateQuietPrompt({...phoneQuietOptions(context, taskPrompt, contact),responseLength:maxTokens});
                 if (!isCurrent()) throw new Error('本次操作已取消。');
