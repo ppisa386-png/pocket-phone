@@ -158,15 +158,15 @@ test('legacy one-way migration preserves permanent erasure and ignores absent or
 });
 
 
-test('missed call history acknowledgement waits silently during narrative and succeeds after it ends',async()=>{
+test('missed call history acknowledgement can commit while narrative generation runs',async()=>{
  const f=setup();try{
  f.context.chat.push(annotation({recipient:'user',name:'Alex',kind:'call',status:'missed'},'Sam missed a call from Alex.'));
  f.context.chat.push(annotation({recipient:'user',name:'Alex',kind:'sms',text:'Hello',read:false},'Sam received a text from Alex.'));
  await f.memory.read();const id=Object.keys(f.phone.snapshot().calls)[0],sms=Object.values(f.phone.snapshot().messages)[0];
  f.bus.emit('GENERATION_STARTED','normal');
  await assert.doesNotReject(f.phone.markCallsRead());await assert.doesNotReject(f.phone.markMessagesRead(sms.contactId));
- assert.equal(f.phone.snapshot().calls[id].read,false);assert.equal(f.phone.snapshot().messages[sms.id].read,false);
- await assert.rejects(f.memory.begin(),e=>e.code==='GENERATING','real writes remain blocked');
+ assert.equal(f.phone.snapshot().calls[id].read,true);assert.equal(f.phone.snapshot().messages[sms.id].read,true);
+ await assert.doesNotReject(f.memory.begin());
  f.bus.emit('GENERATION_ENDED');await f.phone.open();await f.phone.markCallsRead();await f.phone.markMessagesRead(sms.contactId);
  assert.equal(f.phone.snapshot().calls[id].read,true);assert.equal(f.phone.snapshot().calls[id].status,'missed');assert.equal(f.phone.snapshot().messages[sms.id].read,true);assert.equal(f.requests(),0);
  }finally{f.close();}
