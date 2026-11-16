@@ -44,3 +44,76 @@ test('copied diagnostics distinguish current version from historical error versi
  assert.match(createDiagnostics({storage:local,version:'0.23.1'}).text(),/阶段：解析/);
  current.clear();assert.equal(current.text(),'');
 });
+
+test('new API plan accepts endpoint, key and name without replacing the active connection',async()=>{
+ let settings=normalizeSettings({}),fail=false;
+ const keys=createKeyStore(storage());
+ const p=createApiPanel({adapter:{keyStore:keys},getSettings:()=>settings,
+  persist:patch=>{if(fail)return false;settings=normalizeSettings({...settings,...patch});return true;},redraw(){}});
+ assert.match(p.html(),/data-api-action="profile-new"/);
+ await p.action('profile-new');
+ assert.match(p.html(),/保存新方案/);
+ p.input('baseUrl','https://router.example/v1');
+ p.input('key','my-local-secret');
+ p.input('profileName','备用连接');
+ await p.action('profile-create');
+ assert.equal(settings.api.mode,'host','new profile should not silently activate');
+ assert.equal(settings.apiProfileId,'');
+ assert.equal(settings.apiProfiles.length,1);
+ const saved=settings.apiProfiles[0];
+ assert.equal(saved.name,'备用连接');
+ assert.equal(saved.api.baseUrl,'https://router.example/v1');
+ assert.equal(saved.api.model,'','a model is optional until a specific App selects one');
+ assert.equal(keys.get(saved.api.baseUrl,saved.id),'my-local-secret');
+ assert.doesNotMatch(JSON.stringify(settings),/my-local-secret/);
+ assert.match(p.html(),/data-api-field="connectionProfile"/);
+ await p.action('profile-select:'+saved.id);
+ assert.equal(settings.apiProfileId,saved.id);
+ assert.equal(p.keyValue(),'my-local-secret');
+ p.input('model','picked-model');
+ await p.action('save');
+ assert.equal(settings.apiProfiles[0].api.model,'picked-model');
+
+ await p.action('profile-new');
+ p.input('baseUrl','https://other.example/v1');
+ p.input('profileName','暂不保存');
+ await p.action('profile-cancel');
+ assert.equal(settings.apiProfiles.length,1);
+ assert.equal(p.keyValue(),'my-local-secret');
+
+ await p.action('profile-new');
+ p.input('baseUrl','https://router.example/v1');
+ p.input('key','different-secret');
+ p.input('profileName','第二条');
+ fail=true;
+ await p.action('profile-create');
+ assert.equal(settings.apiProfiles.length,1,'failed persist does not create a profile');
+ assert.equal(keys.secrets().length,1,'failed persist rolls back the new local key');
+ fail=false;
+ await p.action('profile-create');
+ assert.equal(settings.apiProfiles.length,2);
+ assert.equal(settings.apiProfileId,saved.id,'saved new profiles remain opt-in');
+ const other=settings.apiProfiles[1];
+ assert.equal(keys.get(other.api.baseUrl,other.id),'different-secret');
+ await p.action('profile-select:'+other.id);
+ assert.equal(p.keyValue(),'different-secret');
+ await p.action('profile-select:'+saved.id);
+ assert.equal(p.keyValue(),'my-local-secret');
+ p.destroy();
+});
+
+test('deleting a profile also safely drops App overrides without exposing keys',async()=>{
+ let settings=normalizeSettings({});const keys=createKeyStore(storage());
+ const p=createApiPanel({adapter:{keyStore:keys},getSettings:()=>settings,
+  persist:patch=>{settings=normalizeSettings({...settings,...patch});return true;},redraw(){}});
+ await p.action('profile-new');
+ p.input('baseUrl','https://limited.example/v1');p.input('key','hidden-key');p.input('profileName','Limited');
+ await p.action('profile-create');
+ const id=settings.apiProfiles[0].id;
+ settings=normalizeSettings({...settings,appConnections:{x:{profileId:id,model:'some-model'}}});
+ p.input('selectedProfile',id);
+ await p.action('profile-delete');
+ assert.equal(settings.apiProfiles.length,0);
+ assert.equal(Object.keys(settings.appConnections).length,0);
+ assert.equal(keys.secrets().length,0);
+});
