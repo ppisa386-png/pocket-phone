@@ -817,7 +817,10 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
                 value:{city,kind,climate,seed,hour,date:dayDate(clock.day),
                     state:weather,refreshedAt:Date.now()}});
             if (!current()) throw Error('剧情或设置已变化，本次天气研究未保存。');
-            await memory.commit(await memory.begin(view),changes);
+            const ticket = await memory.begin(view);
+            if (existingCity && !sameWeatherCity(existingCity, city))
+                await memory.commitBatch(ticket,[{ changes, sourceIndex: researchResult.locationSourceIndex }]);
+            else await memory.commit(ticket, changes);
             return {refreshed:true};
         }, 'weather'),
 
