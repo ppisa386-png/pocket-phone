@@ -18,7 +18,7 @@ const RESIDENCE_PLACE_GROUPS = [
 ];
 // Accept a single explicit residence field in User Persona, not scenery,
 // nationality, other people's homes, or a travel destination.
-export function explicitPersonaResidence(persona) {
+export function explicitPersonaResidence(persona,userName='') {
     // Normalize only the Markdown label wrapper, not the field value.
     const source=String(persona||'').normalize('NFKC').split(/\r?\n/).map(line=>
         line.replace(/^(\s*(?:[-*+]\s+|\d+[.)、]\s+)?)(?:\*\*|__)([^\n*]{1,50})(?:\*\*|__)\s*([:：])/, '$1$2$3')
@@ -26,10 +26,13 @@ export function explicitPersonaResidence(persona) {
     ).join('\n');
     // Match only an explicit, unnegated user field. Don't infer a home from
     // somebody else's residence, birthplace, language, travel or prose.
-    const pattern=/(?:^|[\n\r。；;])\s*(?:[-*+]\s+|\d+[.)、]\s+)?(?:(?:user|本人|我|我的)\s*(?:的)?\s*)?(?:常驻地|常住地|常居地|现居地|居住地|定居地|长期居住地|residence|home\s*base)\s*[:：]\s*([^\n\r。；;]{1,100})/gimu;
+    const pattern=/(?:^|[\n\r。；;])\s*(?:[-*+]\s+|\d+[.)、]\s+)?(?:(?:([\p{L}\p{N}·.]{1,30})\s*(?:的)?\s*)?(?:常驻地|常住地|常居地|现居地|居住地|定居地|长期居住地|residence|home\s*base))\s*[:：]\s*([^\n\r。；;]{1,100})/gimu;
     const matches=[...source.matchAll(pattern)];
     if(matches.length!==1)return null;
-    const place=matches[0][1].trim().replace(/^(?:\*\*|__)/,'').replace(/(?:\*\*|__)$/,'').trim();
+    const owner=String(matches[0][1]||'').trim();
+    if(owner && /^(?:他|她|别人|朋友|同事|陌生人|NPC|另一位角色)$/i.test(owner))return null;
+    if(userName && owner && !['user','本人','我','我的',userName].some(name=>name.normalize('NFKC').toLowerCase()===owner.toLowerCase()))return null;
+    const place=matches[0][2].trim().replace(/^(?:\*\*|__)/,'').replace(/(?:\*\*|__)$/,'').trim();
     if(!place||/^(?:未知|未定|不详|不明|没有|不是|并非|unknown|none|not\b)/i.test(place))return null;
     // Inspect the entire field before determining its region. A list of
     // multiple residences must not silently become the first listed city.
@@ -58,8 +61,8 @@ export function expenseFloorSummaries(state, floors) {
     return floors.filter(f=>indices.has(f.messageIndex));
 }
 
-export function assessmentResidence(wallet, data, persona, prose, summaries=[]) {
-    if(!hasResidence(wallet))return resolveResidence(data.residence,persona,prose,{allowInference:true}) || explicitPersonaResidence(persona);
+export function assessmentResidence(wallet, data, persona, prose, summaries=[], userName='') {
+    if(!hasResidence(wallet))return resolveResidence(data.residence,persona,prose,{allowInference:true}) || explicitPersonaResidence(persona,userName);
     const change=data.residenceChange;
     if(!change||change.subject!=='user'||change.status!=='completed')return null;
     // Structural guard only: a declared migration must point at a real

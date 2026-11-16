@@ -13,7 +13,7 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
-import { commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.79';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.79';
 import { resolveAppConnection } from './config.js?v=1.2.77';
 
 
@@ -159,7 +159,11 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 stage = '解析返回格式';
                 const data = (options.parseResponse || parseJSON)(text);
                 stage = '校验业务数据';
-                assertTaskResponse(data,taskSchema,{optionalMissing:options.optionalMissingFields||[]});
+                // The weather research schema has its own local city fallback and
+                // WEATHER_EMPTY_RESULT handling. Enforce only this module's
+                // task contracts here, not arbitrary external schema objects.
+                if (Object.values(TASK_SCHEMAS).includes(taskSchema))
+                    assertTaskResponse(data,taskSchema,{optionalMissing:options.optionalMissingFields||[]});
                 const result = validate(data);
                 if (commPlan && isCurrent()) {
                     const changes = commClassificationChanges(data,commPlan,state);
@@ -194,6 +198,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 }
                 if (formatFailure || !isCurrent() || failure.retryable === false || normalRetriesLeft <= 0) {
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
+                        + '；本次请求次数：' + modelRequests + '；实际模型：' + (responseMeta?.model || connection.api.model || '跟随酒馆当前模型')
                         + '；任务标识：' + (taskSchema?.name||app) + '；Schema：' + (taskSchema?.name||'phone_task')
                         + '；插件版本：1.2.79；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
                         + '；不支持参数兼容次数：' + unsupportedParameterRetries
