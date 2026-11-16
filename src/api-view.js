@@ -1,4 +1,4 @@
-import { normalizeApiUrl } from './api.js?v=1.2.66';
+import { normalizeApiUrl } from './api.js?v=1.2.74';
 const apiEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export function createApiPanel({ adapter, getSettings, persist, redraw }) {
@@ -98,7 +98,9 @@ export function createApiPanel({ adapter, getSettings, persist, redraw }) {
                 key = ''; models = []; tab = 'new-profile'; token++; status = ''; statusKind = ''; redraw(); return;
             }
             if (action === 'profile-cancel') {
-                draft = null; key = ''; profileName = ''; models = []; tab = 'connection';
+                draft = structuredClone(getSettings().api);
+                key = adapter.keyStore?.get(draft.baseUrl, activeId()) || '';
+                profileName = ''; models = []; tab = 'connection';
                 token++; status = ''; statusKind = ''; redraw(); return;
             }
             if (action === 'memory-refresh') { redraw(); return; }
