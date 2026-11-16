@@ -83,7 +83,7 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
         currentCurrency!==data.residenceChange.currency;
     const required=contract.name==='phone_assets_update' && !migration
         ? ['events','living','business'] : migration ? ['residenceChange'] : (contract.value.required||[]);
-    if(contract.name==='phone_x_feed'&&!Array.isArray(data?.posts)&&!Array.isArray(data?.accounts))
+    if(contract.name==='phone_x_feed'&&!Object.hasOwn(data||{},'posts')&&!Object.hasOwn(data||{},'accounts'))
         throw modelProtocolError(contract.name,['posts 或 accounts'],'字段 posts 缺失');
     if(contract.name==='phone_friends_response'&&typeof data?.accepted!=='boolean'&&data?.ambiguous!==true)
         throw modelProtocolError(contract.name,['accepted 或 ambiguous']);
