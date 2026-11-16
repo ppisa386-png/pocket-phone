@@ -1,3 +1,4 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { walletCurrency, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
@@ -105,7 +106,7 @@ export function createFood({memory,phone,getContext,getSettings,paymentRequest})
                 '\n当前任务：榴莲外卖店铺搜索。'+(currency?'返回结果的 currency 字段必须是 '+currency+'，所有菜品一律按 '+currency+' 定价，不做汇率换算。':'尚未建立账本，请按剧情所在地和人物背景确定一个合理币种，写入返回结果的 currency 字段；结算前需要先建立账本并重新搜索。')+'想吃的东西：'+JSON.stringify(q)+'。当前资料：'+JSON.stringify(economy)+'。'+
                 '\n一次性返回 '+FOOD_SHOP_COUNT+' 家符合当前世界观、地域、年代的店铺，每家 '+FOOD_MENU_MIN+'—'+FOOD_MENU_MAX+' 道独立菜品，每家覆盖至少 '+FOOD_CATEGORY_MIN+' 个有实际区别的品类；不能用同一种菜的口味、配料或烹饪变化凑数量；同一家店内菜品名称不得重复。每家店有各自的经营特色、菜系和价格档次，符合人物消费水平。菜单描述保持简短，不写买家评价。'+
                 '\n只输出 JSON：{"currency":"三位货币代码","shops":[{"name":"店铺名称","cuisine":"菜系","description":"一句话简介","menu":[{"name":"菜品名称","category":"品类","description":"简短介绍","price":"数字价格"}]}]}。输出必须完整包含全部店铺和菜单，不要省略任何一家。不返回 user 已下单或付款等结论，不替 user 决定。';
-            const shops=await request(prompt,data=>validateShops(data,currency),current,null,{retries:0,maxTokens:32768});
+            const shops=await request(prompt,data=>validateShops(data,currency),current,null,{retries:0,maxTokens:32768,jsonSchema:TASK_SCHEMAS.food});
             const changes=[...foodItems(state,'foodShop').map(s=>({collection:'orders',key:s.id,value:null})),...foodItems(state,'foodCart').map(c=>({collection:'orders',key:c.id,value:null}))];
             changes.push(...shops.map(foodSet),foodSet({id:'foodSearch',type:'foodSearch',query:q,currency:shops[0]?.currency??currency}));
             await commit(changes);

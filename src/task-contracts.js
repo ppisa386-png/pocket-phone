@@ -85,6 +85,8 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
         ? ['events','living','business'] : migration ? ['residenceChange'] : (contract.value.required||[]);
     if(contract.name==='phone_x_feed'&&!Array.isArray(data?.posts)&&!Array.isArray(data?.accounts))
         throw modelProtocolError(contract.name,['posts 或 accounts']);
+    if(contract.name==='phone_friends_response'&&typeof data?.accepted!=='boolean'&&data?.ambiguous!==true)
+        throw modelProtocolError(contract.name,['accepted 或 ambiguous']);
     const missing=required.filter(key=>!optionalMissing.includes(key)&&
         (!data||typeof data!=='object'||Array.isArray(data)||!Object.hasOwn(data,key)||data[key]===undefined));
     if(missing.length)throw modelProtocolError(contract.name,missing,
