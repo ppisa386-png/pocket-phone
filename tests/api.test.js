@@ -499,7 +499,7 @@ test('API config or key changes invalidate generation while context is prepared'
 
 const quote='Alex gives you his number: +1 212 555 0123.';
 function phoneFixture(onError = () => {}) {
-    const bus=new HostEvents(); const event_types=Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]));
+    const bus=new HostEvents(); const event_types=Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_RECEIVED','MESSAGE_SENT','MESSAGE_UPDATED','GENERATION_STARTED','GENERATION_ENDED'].map(k=>[k,k]));
     const context={chatId:'A',powerUserSettings:{persona_description:'Sam 常住美国。'},characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:fixtureCast}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
     installHostGeneration(context);
     const settings=normalizeSettings({api:apiConfig(),retries:0}); let responder=()=>JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:quote}]}); let signal;
@@ -539,6 +539,32 @@ test('independent phone and SMS work with host disconnected and roll back togeth
         f.context.chat.pop(); f.bus.emit('MESSAGE_DELETED'); await f.memory.read();
         assert.equal(Object.keys(f.phone.snapshot().calls).length,0); assert.equal(Object.keys(f.phone.snapshot().messages).length,0);
         assert.ok(f.phone.snapshot().contacts['card:alex.png']);
+    } finally {f.close();}
+});
+
+test('independent SMS can complete concurrently with narrative generation without aborting or moving its source floor',async()=>{
+    const f=phoneFixture();
+    try {
+        await f.phone.scan();
+        let started,release;
+        const ready=new Promise(resolve=>started=resolve);
+        f.reply(()=>new Promise(resolve=>{release=()=>resolve('{"status":"reply","text":"Phone reply arrived."}');started();}));
+        const pending=f.phone.sendMessage('card:alex.png','Hello from phone');
+        await ready;
+        f.bus.emit('GENERATION_STARTED','normal',{},false);
+        f.context.chat.push({mes:'A separate narrative answer.',name:'Alex'});
+        f.bus.emit('MESSAGE_RECEIVED');
+        assert.equal(f.signal().aborted,false,'narrative generation must not abort the phone API');
+        release();
+        const result=await pending;
+        assert.equal(result.ok,true,result.error);
+        assert.equal(f.signal().aborted,false);
+        f.bus.emit('GENERATION_ENDED');
+        const view=await f.memory.read();
+        assert.deepEqual(Object.values(view.state.messages).map(m=>m.role),['user','assistant']);
+        const events=f.context.chatMetadata.durian_phone_history.events.filter(e=>e.changes.some(c=>c.collection==='messages'));
+        assert.ok(events.length>=2);
+        assert.ok(events.every(e=>e.source.index===0),'phone writes retain their original settled floor');
     } finally {f.close();}
 });
 
