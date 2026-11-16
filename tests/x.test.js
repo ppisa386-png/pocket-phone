@@ -1610,3 +1610,18 @@ test('unrelated viral tweets can be reviewed as zero without giving user followe
   assert.deepEqual(f.state().x['follower-floor-ledger'].ranges,[[0,1]]);
  }finally{f.close();}
 });
+
+test('X initial followers reject missing field with one format recovery; an explicit zero is valid',async()=>{
+ const f=setup();try{
+  f.reply({});
+  const missing=await f.x.resetFollowers();
+  assert.equal(missing.ok,false);
+  assert.equal(missing.code,'PHONE_DATA_MISSING');
+  assert.equal(f.count(),2,'empty object gets exactly one format recovery');
+  assert.equal(xAudience(f.state()),null,'no silent zero from missing data');
+  f.reply({initialFollowers:0});
+  ok(await f.x.resetFollowers());
+  assert.equal(xAudience(f.state()).followers,0);
+  assert.equal(f.count(),3);
+ }finally{f.close();}
+});

@@ -267,3 +267,21 @@ test('checkout bubble: recipient then payment steps, NPC payer input, unique con
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
  }finally{globalThis.FormData=OriginalFormData;}
 });
+
+test('Amazon rejected empty or incomplete product batches never erase prior catalog or orders',async()=>{
+ const f=setup();try{
+  ok(await f.amazon.search('首批商品'));
+  const before=JSON.stringify(shopItems(f.state(),'product'));
+  for(const size of [0,1,2,3,7,8]){
+   f.reply({products:Array.from({length:size},(_,i)=>({...product,name:'候选'+i}))});
+   const attempts=f.count(),result=await f.amazon.search('下一批');
+   assert.equal(result.ok,false,'reject '+size+' products');
+   assert.equal(result.code,'AMAZON_DATA_INVALID');
+   assert.equal(f.count(),attempts+2,'one bounded output correction');
+   assert.equal(JSON.stringify(shopItems(f.state(),'product')),before,'existing catalog is atomic');
+  }
+  f.reply({products:catalog});
+  ok(await f.amazon.search('有效四件'));
+  assert.equal(shopItems(f.state(),'product').length,4);
+ }finally{f.close();}
+});

@@ -519,3 +519,22 @@ test('event-first editorial rule follows saved custom preferences and older defa
   assert.equal(f.calls(),1);
  }finally{f.close();}
 });
+
+test('daily App saves nine stories with an external reference tail without rewriting quotation text',async()=>{
+ const f=setup();try{
+  const payload=complete({articles:[{...article('带引用尾标的报道'),body:'正文保留 [ref:INNER]、[1,2] 与原有引号。'}]});
+  f.reply(()=>JSON.stringify(payload)+' [ref:8D3F3N]');
+  const before=f.calls();ok(await f.daily.update());
+  assert.equal(f.calls(),before+1,'a citation is not a second model result');
+  assert.equal(dailyArticles(f.state()).length,9);
+  assert.equal(first(f).body,payload.articles[0].body);
+  const saved=structuredClone(f.state().daily.edition);
+  for(const bad of [JSON.stringify(payload)+JSON.stringify({other:true}), JSON.stringify(payload)+'{\"unfinished\":']){
+   f.reply(()=>bad);const started=f.calls();
+   const failed=await f.daily.update();
+   assert.equal(failed.ok,false);
+   assert.equal(f.calls(),started+2,'a genuinely second or truncated root is not accepted');
+   assert.deepEqual(f.state().daily.edition,saved);
+  }
+ }finally{f.close();}
+});

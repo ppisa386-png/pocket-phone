@@ -244,3 +244,21 @@ test('chat prompt deduplicates only current tail records, preserving same-text o
   assert.equal(snapItems(f.state(),'message').filter(m=>m.id===failed.id).length,1);
  }finally{f.close();}
 });
+
+test('Snapchat story reply distinguishes missing text from explicit silence without duplicating comments',async()=>{
+ const f=setup();try{
+  const who=await friend(f);
+  await f.memory.commit(await f.memory.begin(),[{collection:'snapchat',key:'npc-story',value:{
+    id:'npc-story',type:'story',author:who,name:'Alex',text:'书店近况',comments:[],
+  }}]);
+  f.reply({});
+  const n=f.count(),missing=await f.snap.comment('npc-story','这家店不错');
+  assert.equal(missing.ok,false);
+  assert.equal(missing.code,'PHONE_DATA_MISSING');
+  assert.equal(f.count(),n+2,'missing protocol field uses one recovery');
+  assert.deepEqual(f.state().snapchat['npc-story'].comments,[]);
+  f.reply({text:''});
+  ok(await f.snap.comment('npc-story','这家店不错'));
+  assert.equal(f.state().snapchat['npc-story'].comments.length,1,'explicit no-reply adds only the user comment');
+ }finally{f.close();}
+});

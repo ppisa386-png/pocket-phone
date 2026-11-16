@@ -156,3 +156,27 @@ test('independent calendar requests carry a final JSON contract and isolated out
         assert.equal(f.state().calendar.database.holidays[0].name, '节日甲');
     } finally { f.close(); }
 });
+
+test('calendar independent task schema rejects empty model content even with reasoning metadata, but accepts empty holidays',async()=>{
+ let reply={},calls=0;const schemas=[];
+ const client={generate:async(_prompt,_contact,_current,_progress,options)=>{
+  calls++;schemas.push(options.jsonSchema);
+  const raw=JSON.stringify(reply);
+  options.onResponseMeta?.({finishReason:'stop',completionTokens:100,reasoningTokens:80},raw);
+  return raw;
+ }};
+ const f=await setup(client);
+ try{
+  const failed=await f.calendar.refresh();
+  assert.equal(failed.ok,false);
+  assert.equal(failed.code,'PHONE_DATA_MISSING');
+  assert.equal(calls,2,'one recovery, never a retry loop or a saved empty database');
+  assert.equal(f.state().calendar.database,undefined);
+  assert.ok(schemas.every(row=>row.name==='phone_calendar'));
+  assert.deepEqual(schemas[0].value.required,['region','timezone','years','holidays']);
+  reply={...data(),holidays:[]};
+  ok(await f.calendar.refresh());
+  assert.equal(calls,3);
+  assert.deepEqual(f.state().calendar.database.holidays,[]);
+ }finally{f.close();}
+});

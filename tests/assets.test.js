@@ -1090,3 +1090,20 @@ test('ambiguous User Persona is not inferred; invalid explicit model region rema
   assert.equal((await f.assets.update()).ok,false);
  }finally{f.close();}
 });
+
+test('Persona Markdown home fields are conservative and do not override explicit valid model home',async()=>{
+ const {explicitPersonaResidence}=await import('../src/assets-residence.js');
+ const expected={region:'US',currency:'USD'};
+ for(const input of ['常住地：芝加哥','- 常住地：芝加哥','* **常住地：**芝加哥','**常住地：**芝加哥','Sam的常驻地: Chicago, IL']){
+  assert.deepEqual(explicitPersonaResidence(input,'Sam'),expected,input);
+ }
+ for(const input of ['常住地：芝加哥、东京','常住地：芝加哥/东京','常住地：未知','常住地：火星城','他人的常住地：巴黎','Alex的常住地：巴黎','目前在芝加哥短途旅行。']){
+  assert.equal(explicitPersonaResidence(input,'Sam'),null,input);
+ }
+ const f=setup();try{
+  f.c.powerUserSettings.persona_description='- **常住地：**芝加哥';
+  f.reply({date:'2026-01-01',residence:null,initial:{balance:100,holdings:[],jobs:[]}});
+  ok(await f.assets.update());
+  assert.equal(f.state().assets.wallet.currency,'USD');
+ }finally{f.close();}
+});
