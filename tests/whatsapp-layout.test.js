@@ -58,6 +58,33 @@ test('WhatsApp thread retains messaging, media selection, calls, transfers and l
     assert.match(ui.html(),/data-chat-form="message"/);
 });
 
+test('WhatsApp failed outgoing bubble offers refresh to resend the original message only',async()=>{
+    const state=fixtures(),retries=[];
+    state.whatsapp.failed={id:'failed',type:'message',accountId:'a',role:'user',kind:'text',text:'湖边见！',status:'failed',createdAt:5};
+    state.whatsapp.pending={id:'pending',type:'message',accountId:'a',role:'user',kind:'text',text:'稍等',status:'pending',createdAt:6};
+    state.wechat.failed={...state.whatsapp.failed};
+    const ui=createChatPanel({
+        app:'whatsapp',
+        adapter:{userName:()=> 'Sam',whatsapp:{retryMessage:async id=>{retries.push(id);return {ok:true};}}},
+        getView:()=>state,redraw(){},notice(){},
+    });
+    await ui.action('thread','a');
+    assert.match(ui.html(),/发送失败/);
+    const menu=ui.press({dataset:{chatId:'failed'}});
+    assert.deepEqual(menu.map(item=>item.icon),['refresh','delete']);
+    assert.equal(menu[0].label,'重新发送');
+    assert.equal(ui.press({dataset:{chatId:'sent'}}).some(item=>item.label==='重新发送'),false);
+    assert.equal(ui.press({dataset:{chatId:'pending'}}).some(item=>item.label==='重新发送'),false);
+    assert.equal(ui.press({dataset:{chatId:'received'}}).some(item=>item.label==='重新发送'),false);
+    await menu[0].run();
+    assert.deepEqual(retries,['failed']);
+    assert.equal(Object.values(state.whatsapp).filter(item=>item.type==='message').length,4);
+    state.busy=true;
+    assert.equal(ui.press({dataset:{chatId:'failed'}})[0].disabled,true);
+    const wechat=panel('wechat',state);
+    assert.equal(wechat.press({dataset:{chatId:'failed'}}).some(item=>item.label==='重新发送'),false);
+});
+
 test('WeChat retains its original layout and composer',async()=>{
     const ui=panel('wechat',fixtures());
     await ui.action('tab','contacts');

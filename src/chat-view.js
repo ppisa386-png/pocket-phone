@@ -350,6 +350,8 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
                 actions.push({icon:'edit',label:'修改消息',disabled:busy,run:()=>api.action('edit',id)});
                 actions.push({icon:'refresh',label:'重新生成消息',disabled:busy,run:()=>api.action('reroll',id)});
             }
+            if(!wc&&item.role==='user'&&item.status==='failed')
+                actions.push({icon:'refresh',label:'重新发送',disabled:busy,run:()=>api.action('retry',id)});
             actions.push({icon:'delete',label:'删除消息',danger:true,disabled:busy,run:()=>api.action('delete',id)});
             return actions;
         },
