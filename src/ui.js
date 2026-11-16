@@ -462,7 +462,6 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
     function renderApps() {
         const scroll = content.scrollTop;
-        const options = settings.apiProfiles.map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('');
         const switches = '<div class="pp-card">' + visibleApps.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p>';
         const connections = '<p class="pp-footnote">每个 App 可独立选择已保存方案及模型；未单独设置的 App 使用「API 设置」中的全局连接。切换不修改酒馆正文模型。</p>' +
             (!settings.apiProfiles.length ? '<div class="pp-card pp-info">暂无已保存的 API 方案。请先前往「API 设置」点击「新增方案」。</div>' : '') +
