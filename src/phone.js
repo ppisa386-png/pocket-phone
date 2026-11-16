@@ -13,6 +13,7 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.66';
+import { resolveAppConnection } from './config.js?v=1.2.74';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -76,7 +77,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const checkEnabled = () => { if (getSettings().apps[app] === false) throw Object.assign(new Error('此 App 已关闭，本次生成已取消。'), {retryable:false}); };
         const context = getContext();
         job.contactId = contact?.id ?? null;
-        const independent = getSettings().api?.mode === 'independent';
+        const connection = resolveAppConnection(getSettings(), app);
+        const independent = connection.api.mode === 'independent';
         if (independent && !modelClient) throw new Error('独立 API 尚未初始化，请刷新页面。');
         if (!independent && typeof context.generateQuietPrompt !== 'function') throw new Error('当前酒馆不支持模型调用，请先更新酒馆。');
         if (!independent && context.onlineStatus === 'no_connection') throw new Error('请先在酒馆连接 API，再试一次。');
@@ -141,7 +143,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     : '\n'+label+' 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
-                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { finalOutputContract: contract, maxTokens, requireJsonObject:true,
+                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { app, finalOutputContract: contract, maxTokens, requireJsonObject:true,
                     onResponseMeta: (metadata, rawText) => { responseMeta = metadata; responseText = rawText; },
                 }) : await context.generateQuietPrompt({...phoneQuietOptions(context, taskPrompt, contact),responseLength:maxTokens});
                 if (!isCurrent()) throw new Error('本次操作已取消。');
@@ -212,9 +214,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             if (getSettings().apps[kind] === false) throw new Error('此 App 已关闭。');
             id = operation;
             const epoch = memory.epoch();
-            const apiConfig = JSON.stringify(getSettings().api);
+            const apiConfig = JSON.stringify(resolveAppConnection(getSettings(), kind));
             const current = () => !destroyed && !job.cancelled && id === operation && epoch === memory.epoch()
-                && apiConfig === JSON.stringify(getSettings().api);
+                && apiConfig === JSON.stringify(resolveAppConnection(getSettings(), kind));
             current.job = job;
             const value = await work(view, current);
             return { ok: true, value };

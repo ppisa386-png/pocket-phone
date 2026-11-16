@@ -1,6 +1,7 @@
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
 import { phoneJsonSchema } from './model-json.js?v=1.2.66';
+import { resolveAppConnection } from './config.js?v=1.2.74';
 export function normalizeApiUrl(value) {
     let url;
     try { url = new URL(String(value ?? '').trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://example.com/v1'); }
@@ -183,13 +184,16 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
     return {
         async generate(prompt, contact, isCurrent, onProgress = () => {}, options = {}) {
             if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
-            const config = structuredClone(getSettings().api);
+            const connection = resolveAppConnection(getSettings(), options.app);
+            const config = structuredClone(connection.api);
             normalizeApiUrl(config.baseUrl);
-            if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
-            const key = getKey(config.baseUrl);
-            const fingerprint = JSON.stringify(config), epoch = cancelEpoch;
+            if (!config.model?.trim()) throw failure('请先在 API 设置或 App 管理中选择模型 ID。');
+            const key = getKey(config.baseUrl, connection.profileId);
+            const fingerprint = JSON.stringify(connection), epoch = cancelEpoch;
             const schemaEndpoint = JSON.stringify([config.baseUrl,config.model]);
-            const current = () => epoch === cancelEpoch && isCurrent() && fingerprint === JSON.stringify(getSettings().api) && key === getKey(config.baseUrl);
+            const current = () => epoch === cancelEpoch && isCurrent() &&
+                fingerprint === JSON.stringify(resolveAppConnection(getSettings(), options.app)) &&
+                key === getKey(config.baseUrl, connection.profileId);
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             // The host uses shared prompt hooks. Release this queue before the network call.
             const prepare = async () => {

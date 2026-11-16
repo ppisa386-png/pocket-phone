@@ -2,7 +2,7 @@ import { createCalendarPanel } from './calendar-view.js?v=1.2.69';
 import {paperDraft} from './daily-core.js?v=1.2.65';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2.65';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.73';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.74';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2.57';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.65';
@@ -14,10 +14,10 @@ import { createChatPanel } from './chat-view.js?v=1.2.71';
 import { chatUnread } from './chat-apps.js?v=1.2.71';
 import { createSnapPanel } from './snapchat-view.js?v=1.2.65';
 import { snapUnread } from './snapchat.js?v=1.2.66';
-import { createApiPanel } from './api-view.js?v=1.2.65';
+import { createApiPanel } from './api-view.js?v=1.2.74';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.57';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.73';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.74';
 import { icon } from './icons.js?v=1.2.57';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.57';
 import { renderMessagesScreen } from './messages-view.js?v=1.2.57';
@@ -434,10 +434,64 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         inputViewport.update();
     }
 
-    function renderApps() {
-        content.innerHTML = '<div class="pp-page"><div class="pp-card">' + visibleApps.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p></div>';
+    let appSettingsTab = 'switches';
+    const appModelState = new Map();
+    let appModelSerial = 0;
+    async function fetchAppModels(app) {
+        const choice = settings.appConnections?.[app];
+        const profile = settings.apiProfiles.find(p => p.id === choice?.profileId);
+        if (!profile || profile.api.mode !== 'independent') return;
+        const serial = ++appModelSerial;
+        const current = () => !destroyed && appModelState.get(app)?.serial === serial &&
+            settings.appConnections?.[app]?.profileId === profile.id &&
+            settings.apiProfiles.some(p => p.id === profile.id && p.api.baseUrl === profile.api.baseUrl);
+        appModelState.set(app,{serial,profileId:profile.id,models:[],busy:true,status:'正在获取模型…'});
+        renderApps();
+        try {
+            if (!adapter.api) throw new Error('仅在酒馆内连接 API 后可以获取模型。');
+            const key = adapter.keyStore?.get(profile.api.baseUrl,profile.id) || '';
+            const models = await adapter.api.models(profile.api,key,current);
+            if (!current()) return;
+            appModelState.set(app,{serial,profileId:profile.id,models,busy:false,status:models.length?'请选择模型，或手动填写模型 ID。':'服务未返回模型列表，可手动填写模型 ID。'});
+        } catch (error) {
+            if (!current()) return;
+            adapter.diagnostics?.add(error,'App 模型列表');
+            appModelState.set(app,{serial,profileId:profile.id,models:[],busy:false,status:error.message});
+        }
+        if (!destroyed && route === 'apps' && appSettingsTab === 'connections') renderApps();
     }
-
+    function renderApps() {
+        const scroll = content.scrollTop;
+        const switches = '<div class="pp-card">' + visibleApps.map(app => '<label class="pp-toggle-row"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><span>' + app.name + '</span><input type="checkbox" role="switch" data-enabled="' + app.id + '"' + (settings.apps[app.id] ? ' checked' : '') + ' aria-label="启用' + app.name + '"><span class="pp-switch" aria-hidden="true"></span></label>').join('') + '</div><p class="pp-footnote">关闭后从桌面隐藏，已有内容保留。设置始终可用。</p>';
+        const connections = '<p class="pp-footnote">每个 App 可独立选择已保存方案及模型；未单独设置的 App 使用「API 设置」中的全局连接。切换不修改酒馆正文模型。</p>' +
+            (!settings.apiProfiles.length ? '<div class="pp-card pp-info">暂无已保存的 API 方案。请先前往「API 设置」点击「新增方案」。</div>' : '') +
+            visibleApps.map(app => {
+                const choice = settings.appConnections?.[app.id];
+                const profile = settings.apiProfiles.find(p => p.id === choice?.profileId);
+                const model = choice?.model || '';
+                const data = appModelState.get(app.id);
+                const state = data?.profileId === profile?.id ? data : null;
+                return '<section class="pp-card pp-app-connection-row"><div class="pp-app-connection-heading"><span class="pp-small-app pp-app-' + app.id + '" style="--app-color:' + app.color + '">' + icon(app.id) + '</span><strong>' + esc(app.name) + '</strong></div>' +
+                    '<label class="pp-field"><span>连接方案</span><select data-app-connection-profile="' + app.id + '"><option value="">跟随全局设置</option>' +
+                    settings.apiProfiles.map(p => '<option value="' + esc(p.id) + '"' + (choice?.profileId === p.id ? ' selected' : '') + '>' + esc(p.name) + (p.api.mode === 'host' ? ' · 跟随酒馆' : '') + '</option>').join('') + '</select></label>' +
+                    (profile?.api.mode === 'independent' ?
+                        '<label class="pp-field"><span>此 App 使用的模型 ID</span><input type="text" data-app-model-id="' + app.id + '" value="' + esc(model) + '" maxlength="300" autocomplete="off" spellcheck="false" placeholder="' + esc(profile.api.model || '输入模型 ID') + '"></label>' +
+                        '<div class="pp-api-actions"><button type="button" class="pp-text-button" data-app-get-models="' + app.id + '"' + (state?.busy ? ' disabled' : '') + '>获取模型</button></div>' +
+                        (state?.models?.length ? '<label class="pp-field"><span>已获取的模型</span><select data-app-model-choice="' + app.id + '"><option value="">选择模型</option>' +
+                            state.models.map(id => '<option value="' + esc(id) + '"' + ((model || profile.api.model) === id ? ' selected' : '') + '>' + esc(id) + '</option>').join('') + '</select></label>' : '') +
+                        (state?.status ? '<p class="pp-footnote" role="status">' + esc(state.status) + '</p>' : '') +
+                        '<p class="pp-footnote">留空时使用此方案的默认模型' + (profile.api.model ? '：' + esc(profile.api.model) : '（尚未设置）') + '。</p>'
+                        : profile ? '<p class="pp-footnote">此方案跟随酒馆模型，无法单独指定模型 ID。</p>' : '') +
+                    '</section>';
+            }).join('');
+        content.innerHTML = '<div class="pp-page pp-app-settings-page"><div class="pp-app-settings-body">' +
+            (appSettingsTab === 'switches' ? switches : connections) +
+            '</div><nav class="pp-app-settings-tabs" aria-label="App 管理分页">' +
+            '<button type="button" data-app-settings-tab="switches" aria-pressed="' + (appSettingsTab === 'switches') + '">开关</button>' +
+            '<button type="button" data-app-settings-tab="connections" aria-pressed="' + (appSettingsTab === 'connections') + '">连接方式</button>' +
+            '</nav></div>';
+        content.scrollTop = scroll;
+    }
     function renderPrompts() {
         content.innerHTML = '<div class="pp-page"><label class="pp-field pp-prompt-select"><span>功能</span><select data-prompt-selector>' + Object.entries(PROMPTS).filter(([id]) => !['snapchat','incoming','incomingMessages','storyContact'].includes(id)).map(([id, prompt]) => '<option value="' + id + '"' + (id === promptId ? ' selected' : '') + '>' + prompt.name + '</option>').join('') + '</select></label>' +
             '<label class="pp-editor-label" for="pp-prompt-editor">提示词内容</label><textarea id="pp-prompt-editor" class="pp-editor" data-prompt-editor spellcheck="false" maxlength="30000"></textarea><div class="pp-editor-footer"><span class="pp-save-status" aria-live="polite">修改后自动保存</span><button type="button" class="pp-text-button" data-action="reset-prompt">恢复此项默认</button></div><p class="pp-footnote">内容语言以酒馆预设为准。联系方式识别、电话、主动来电、主动短信、短信、WhatsApp、微信、X 和正文衔接提示词现已生效；其余用于后续功能。</p></div>';
@@ -620,6 +674,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.chatAction) { void currentChat()?.action(target.dataset.chatAction,target.dataset.chatId); return; }
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
         if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
+        if (target.dataset.appSettingsTab) { appSettingsTab = target.dataset.appSettingsTab; content.scrollTop = 0; renderApps(); return; }
+        if (target.dataset.appGetModels) { void fetchAppModels(target.dataset.appGetModels); return; }
         const action = target.dataset.action;
         if (action === 'copy-errors') void copyErrors();
         if (action === 'refresh-errors') renderErrors();
@@ -731,7 +787,24 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if(target.dataset.xField){xPanel.input(target);return;}
         if(target.dataset.chatField){currentChat()?.input(target);return;}
         if(target.dataset.snapField||target.dataset.snapSelect){snapPanel.input(target);return;}
+        if (target.dataset.apiField === 'connectionProfile') { void apiPanel.action('profile-select:' + target.value); return; }
         if (target.dataset.apiField && target.tagName === 'SELECT') { apiPanel.input(target.dataset.apiField, target.value); return; }
+        if (target.dataset.appConnectionProfile) {
+            const app = target.dataset.appConnectionProfile;
+            const next = { ...settings.appConnections };
+            if (target.value && settings.apiProfiles.some(p => p.id === target.value)) next[app] = {profileId:target.value,model:''};
+            else delete next[app];
+            if (!persist({appConnections:next})) notice('连接方案保存失败。');
+            appModelState.delete(app); renderApps(); return;
+        }
+        const modelApp = target.dataset.appModelId || target.dataset.appModelChoice;
+        if (modelApp) {
+            const choice = settings.appConnections?.[modelApp];
+            if (!choice) return;
+            const model = target.value.trim().slice(0,300);
+            if (!persist({appConnections:{...settings.appConnections,[modelApp]:{...choice,model}}})) notice('模型设置保存失败。');
+            renderApps(); return;
+        }
         if (target.dataset.enabled) persist({ apps: { ...settings.apps, [target.dataset.enabled]: target.checked } });
         if (target.hasAttribute('data-prompt-selector')) { promptId = target.value; renderPrompts(); }
         if (target.dataset.setting) {
