@@ -135,16 +135,42 @@ test('late operation rejected after chat switch away and back, and after narrati
     f.memory.destroy();
 });
 
-test('no chat and active generation cannot accept phone records', async () => {
-    const f = fixture();
-    f.bus.emit('GENERATION_STARTED');
-    await assert.rejects(f.memory.begin(), /等待正文/);
-    f.bus.emit('GENERATION_ENDED');
-    await f.put('a', {});
-    f.current().chatId = undefined;
-    await assert.rejects(f.memory.begin(), /打开角色聊天/);
-    assert.equal((await f.memory.read()).scope, null);
-    f.memory.destroy();
+test('concurrent narrative generation keeps phone read/write available on the last settled floor', async () => {
+    const f=fixture();
+    try {
+        await f.put('old',{number:'1'});
+        const ticket=await f.memory.begin();
+        f.bus.emit('GENERATION_STARTED','normal');
+        f.current().streamingProcessor={isFinished:false,isStopped:false};
+        f.current().chat.push(message(2,'unfinished narrative'));
+        assert.equal((await f.memory.read()).state.contacts.old.number,'1');
+        await f.memory.commit(ticket,change('during',{number:'2'}));
+        await f.put('also-during',{number:'3'});
+        assert.deepEqual(f.current().chatMetadata[JOURNAL_KEY].events.map(e=>e.source.index),[0,0,0]);
+        f.current().chat[1].mes='finished narrative';
+        f.bus.emit('GENERATION_ENDED');
+        assert.deepEqual(Object.keys((await f.memory.read()).state.contacts),['old','during','also-during']);
+        f.current().chatId=undefined;
+        await assert.rejects(f.memory.begin(),/打开角色聊天/);
+    } finally {f.memory.destroy();}
+});
+
+test('appended story floors retain pending phone tickets but editing an established floor rejects them', async()=>{
+    const f=fixture();
+    try {
+        const safe=await f.memory.begin();
+        f.bus.emit('GENERATION_STARTED','normal');
+        f.current().chat.push(message(2,'New story floor'));
+        f.bus.emit('MESSAGE_RECEIVED');
+        f.bus.emit('GENERATION_ENDED');
+        await f.memory.commit(safe,change('safe',{number:'1'}));
+        assert.equal(f.current().chatMetadata[JOURNAL_KEY].events.at(-1).source.index,0);
+        const stale=await f.memory.begin();
+        f.current().chat[0].mes='rewritten earlier story';
+        f.bus.emit('MESSAGE_EDITED');
+        await assert.rejects(f.memory.commit(stale,change('stale',{})),/聊天已变化/);
+        assert.equal((await f.memory.read()).state.contacts.stale,undefined);
+    } finally {f.memory.destroy();}
 });
 
 test('empty reads do not write, and failed saves preserve previous metadata', async () => {
@@ -174,13 +200,16 @@ test('host dry-run previews do not lock phone records without an end event', asy
  await f.put('preview-safe',{});assert.ok((await f.memory.read()).scope);f.memory.destroy();
 });
 
-test('stopped, aborted, and completed-event stream objects do not cause a permanent lock',async()=>{
- const f=fixture();f.current().streamingProcessor={isFinished:false,isStopped:true};await f.put('stopped',{});
- f.current().streamingProcessor={isFinished:false,abortController:{signal:{aborted:true}}};await f.put('aborted',{});
- f.current().streamingProcessor={isFinished:false,isStopped:false};await assert.rejects(f.memory.begin(),/等待正文/);
- f.bus.emit('GENERATION_ENDED');await f.put('ended',{});
- f.bus.emit('GENERATION_STARTED','normal');await assert.rejects(f.memory.begin(),/等待正文/);
- f.bus.emit('GENERATION_STOPPED');await f.put('stopped-event',{});f.memory.destroy();
+test('stopped, aborted, and live stream objects do not lock already settled phone state',async()=>{
+ const f=fixture();
+ try {
+  f.current().streamingProcessor={isFinished:false,isStopped:true};await f.put('stopped',{});
+  f.current().streamingProcessor={isFinished:false,abortController:{signal:{aborted:true}}};await f.put('aborted',{});
+  f.current().streamingProcessor={isFinished:false,isStopped:false};await f.put('streaming',{});
+  f.bus.emit('GENERATION_ENDED');await f.put('ended',{});
+  f.bus.emit('GENERATION_STARTED','normal');await f.put('during-start',{});
+  f.bus.emit('GENERATION_STOPPED');await f.put('stopped-event',{});
+ } finally {f.memory.destroy();}
 });
 
 
@@ -194,12 +223,13 @@ test('live host markers distinguish idle, active, and unavailable state',()=>{
 });
 
 
-test('live host readiness overrides stale start/stream state and reports precise block reason',async()=>{
+test('live host readiness reuses a settled snapshot while the narrative API is busy',async()=>{
  let busy=false;const f=fixture(()=>busy);
  try {
   f.bus.emit('GENERATION_STARTED','normal');f.current().streamingProcessor={isFinished:false,isStopped:false};
   await f.put('ready',{});assert.ok((await f.memory.read()).state.contacts.ready);
-  busy=true;await assert.rejects(f.memory.begin(),e=>e.code==='GENERATING'&&JSON.parse(e.diagnostic).hostGenerating===true);
+  busy=true;await f.put('during-host-busy',{});
+  assert.ok((await f.memory.read()).state.contacts['during-host-busy']);
   busy=false;await f.put('ready-again',{});
   f.current().getCurrentChatId=()=>'';await f.put('fallback-id',{});
   f.current().chatId=undefined;await assert.rejects(f.memory.begin(),e=>e.code==='NO_CHAT');
@@ -214,7 +244,7 @@ test('ended event before host idle flag gets a deferred sync without unlocking a
  await f.memory.read();const before=seen;busy=false;
  await new Promise(resolve=>setTimeout(resolve,150));assert.ok(seen>before,'idle final state reaches UI without another click');
  busy=true;f.bus.emit('GENERATION_ENDED');f.bus.emit('GENERATION_STARTED','normal');const activeSeen=seen;
- await new Promise(resolve=>setTimeout(resolve,150));assert.equal(seen,activeSeen);await assert.rejects(f.memory.begin(),e=>e.code==='GENERATING');
+ await new Promise(resolve=>setTimeout(resolve,150));assert.equal(seen,activeSeen);await f.memory.begin();
  unsubscribe();
  }finally{f.memory.destroy();}
 });
