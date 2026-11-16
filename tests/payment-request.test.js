@@ -15,7 +15,7 @@ const ok=r=>assert.equal(r?.ok,true,r?.error);
 // 共用底座：generateQuietPrompt 按提示词分派——代付判断返回 judgment，其余按需返回。
 function setup({accept=true,fail=null,judgment}={}){
  const bus=new EventEmitter();const answers={judgment:judgment??{accept},fail};
- const respond=prompt=>prompt.includes('NPC 代付判断')?(answers.fail?Promise.reject(answers.fail):JSON.stringify(answers.judgment)):prompt.includes('榴莲外卖店铺搜索')?JSON.stringify(answers.shops??shopsPayload()):JSON.stringify({products:[product]});
+ const respond=prompt=>prompt.includes('NPC 代付判断')?(answers.fail?Promise.reject(answers.fail):JSON.stringify(answers.judgment)):prompt.includes('榴莲外卖店铺搜索')?JSON.stringify(answers.shops??shopsPayload()):JSON.stringify({products:[product,...Array.from({length:3},(_,i)=>({...product,name:product.name+' '+(i+2)}))]});
  let count=0;const prompts=[];
  const context={chatId:'pay',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'日期：2026-10-11 14:00\nAlex 和 Sam 吃饭。',is_user:false}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;prompts.push(o.quietPrompt);return respond(o.quietPrompt);}};
  const settings=normalizeSettings({retries:0}),memory=createPhoneMemory({getContext:()=>context}),phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});

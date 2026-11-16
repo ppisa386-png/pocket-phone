@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseModelObject} from '../src/model-json.js';
+import {parseModelObject,parseAppObject} from '../src/model-json.js';
 import {parseXObject} from '../src/x.js';
 import {parseAssetResponse} from '../src/assets.js';
 
@@ -79,4 +79,14 @@ test('asset-specific safe delimiter tolerance keeps amount data exact and never 
  }
  assert.throws(()=>parseModelObject('{"initial":{"balance":1000,}}'),error=>error.code==='MODEL_JSON_SYNTAX',
      'other finance consumers keep strict parsing unless they opted in');
+});
+
+test('one complete result ignores only explicit external reference tails',()=>{
+ const obj={publication:'芝加哥论坛报',articles:[{body:'金额 [ref:8D3F3N]、[1,2] 与引号 \"都属于原文\"'}]};
+ for(const suffix of ['[ref:8D3F3N]',' [ref:8D3F3N] [ref:x7_A]']){
+  assert.deepEqual(parseAppObject(JSON.stringify(obj)+suffix),obj);
+ }
+ for(const suffix of ['{}','[]','{\"second\":','[0]','[ref:INVALID!]'])
+  assert.throws(()=>parseAppObject(JSON.stringify(obj)+suffix),error=>error.code?.startsWith('MODEL_JSON_'));
+ assert.deepEqual(parseAppObject('说明：'+JSON.stringify(obj)+'[ref:8D3F3N]'),obj);
 });

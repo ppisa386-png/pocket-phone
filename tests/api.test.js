@@ -9,6 +9,7 @@ import { normalizeSettings, VERSION } from '../src/config.js';
 import { readFileSync } from 'node:fs';
 import { createPhoneMemory } from '../src/memory.js';
 import { phoneJsonSchema } from '../src/model-json.js';
+import { TASK_SCHEMAS } from '../src/task-contracts.js';
 import { createWeather } from '../src/weather.js';
 import { weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from '../src/weather-model.js';
 import { createPhoneService } from '../src/phone.js';
@@ -275,7 +276,7 @@ test('asset first assessment can correct a syntax-only JSON failure while keepin
   let calls=0;
   f.reply(options=>{
    calls++;const body=JSON.parse(options.body);
-   assert.deepEqual(body.json_schema,phoneJsonSchema());assert.equal(body.response_format,undefined);
+   assert.deepEqual(body.json_schema,TASK_SCHEMAS.assetsInitial);assert.equal(body.response_format,undefined);
    assert.equal(body.max_tokens,8192);
    if(calls===1)return "{'initial':{'balance':5000}}"; // Not legal JSON, never copied or guessed.
    assert.match(body.messages.at(-1).content,/小榴莲格式恢复/);

@@ -277,7 +277,7 @@ test('Amazon receives actual available balance even after more than thirty ledge
     const f=setup(); try {
         ok(await f.assets.update());
         await f.memory.commit(await f.memory.begin(),Array.from({length:35},(_,i)=>({collection:'assets',key:'extra:'+i,value:{id:'extra:'+i,type:'cash_transaction',currency:'USD',deltaMinor:100}})));
-        f.reply({products:[]}); ok(await f.shop.search('外套'));
+        f.reply({products:Array.from({length:4},(_,i)=>({name:'外套'+i,price:'80',currency:'USD'}))}); ok(await f.shop.search('外套'));
         assert.match(f.prompt(),/"balance":1035/); assert.match(f.prompt(),/"available":1035/);
         assert.doesNotMatch(f.prompt(),/extra:34/,'raw recent transactions are not mistaken for wealth');
     } finally { f.close(); }
@@ -406,7 +406,7 @@ test('Snapchat reserves pending payments, rejects insufficient cash, credits inc
 
 test('Amazon checkout checks funds, books once, registers self luxury, and rollback restores cart and cash', async () => {
     const f = setup(); try {
-        ok(await f.assets.update()); f.reply({ products: [{ name: '手袋', brand: '品牌', luxury: true, price: 600, currency: 'USD' }] }); ok(await f.shop.search('手袋'));
+        ok(await f.assets.update()); f.reply({ products: Array.from({length:4},(_,i)=>({ name: '手袋'+i, brand: '品牌', luxury: true, price: 600, currency: 'USD' })) }); ok(await f.shop.search('手袋'));
         const p = Object.values(f.state().orders).find(p => p.type === 'product'); ok(await f.shop.add(p.id, '', 2)); const before = f.count(); assert.equal((await f.shop.checkout()).ok, false); assert.equal(f.count(), before);
         ok(await f.shop.remove(f.state().orders.cart.items[0].id)); ok(await f.shop.add(p.id, '', 1)); await f.append('准备购物。', '2026-01-02'); ok(await f.shop.checkout());
         assert.equal(cashBalance(f.state()), 40000); assert.equal(assetRows(f.state(), 'holding').length, 1);
@@ -416,7 +416,7 @@ test('Amazon checkout checks funds, books once, registers self luxury, and rollb
 
 test('failure makes one model attempt, no partial write; chat change discards late assessment', async () => {
     const f = setup(); try {
-        f.reply({ date: 'invalid' }); assert.equal((await f.assets.update()).ok, false); assert.equal(f.count(), 1); assert.equal(f.state().assets.wallet, undefined);
+        f.reply({ date: 'invalid' }); assert.equal((await f.assets.update()).ok, false); assert.equal(f.count(), 2, 'missing opening fields use only one contract recovery'); assert.equal(f.state().assets.wallet, undefined);
         let finish, start; const started = new Promise(r => start = r); f.reply(() => { start(); return new Promise(r => finish = r); });
         const pending = f.assets.update(); await started; f.c.chatId = 'other'; f.c.chatMetadata = {}; f.bus.emit('CHAT_CHANGED'); await f.memory.read(); finish(JSON.stringify(initial()));
         assert.equal((await pending).ok, false); assert.equal(f.state().assets.wallet, undefined);
@@ -697,7 +697,7 @@ test('Chinese persona and narrative resolve local money, independent of language
    await f.append('Sam 短期去别国旅游。她支付了'+price+'。'+marker({kind:'expense',name:'饮料',currency,amount:price,evidence:'她支付了'+price+'。'}),'2026-01-02');
    assert.equal(cashBalance(f.state()),1000*scale-Math.round(price*scale));
    f.reply({...evaluation('2026-01-02'),residence:null});ok(await f.assets.update());assert.equal(f.state().assets.wallet.currency,currency);
-   f.reply({products:[{name:'水杯',price:String(price),currency}]});ok(await f.shop.search('水杯'));
+   f.reply({products:Array.from({length:4},(_,i)=>({name:'水杯'+i,price:String(price),currency}))});ok(await f.shop.search('水杯'));
    const item=Object.values(f.state().orders).find(r=>r.type==='product');ok(await f.shop.add(item.id,'',1));ok(await f.shop.checkout());
    assert.equal(cashBalance(f.state()),1000*scale-2*Math.round(price*scale));
   }finally{f.close();}

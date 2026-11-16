@@ -9,8 +9,11 @@ import {assetRows} from '../src/assets-core.js';
 import {normalizeSettings} from '../src/config.js';
 import {dateDay} from '../src/story-clock.js';
 const product={name:'Alhambra necklace',brand:'Van Cleef & Arpels',luxury:true,price:'2800.50',currency:'USD',variants:['Gold','Silver'],reviews:[{name:'Ivy',rating:4,text:'Lovely clasp.'}]};
+// Four independent offers satisfy the production search contract; tests that
+// focus on a single selected product can still use the first entry.
+const catalog=[product,...Array.from({length:3},(_,i)=>({...product,name:product.name+' '+(i+2)}))];
 function setup({independentClient=null,retries=0}={}){
- const bus=new EventEmitter();let response={products:[product]},count=0,prompt='';
+ const bus=new EventEmitter();let response={products:catalog},count=0,prompt='';
  const context={chatId:'shopping',name1:'Sam',name2:'Alex',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}],chat:[{mes:'日期：2026-10-11 14:00\nAlex gives you a number.',is_user:false}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'connected',eventSource:bus,event_types:Object.fromEntries(['CHAT_CHANGED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),generateQuietPrompt:async o=>{count++;prompt=o.quietPrompt;return typeof response==='function'?response():JSON.stringify(response);}};
  const errors=[],settings=normalizeSettings({retries,...(independentClient?{api:{mode:'independent'}}:{})}),memory=createPhoneMemory({getContext:()=>context}),phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:independentClient,onError:e=>errors.push(e)}),amazon=createAmazon({memory,phone,getContext:()=>context,getSettings:()=>settings});
  return {context,bus,settings,memory,phone,amazon,errors,state:()=>phone.snapshot(),reply:r=>response=r,count:()=>count,prompt:()=>prompt,close(){phone.destroy();memory.destroy();}};
@@ -34,11 +37,11 @@ test('Amazon parser accepts one complete wrapped collection or a product root ar
 test('Amazon repairs malformed hosted output once and keeps the same genuine catalog until success',async()=>{
  const f=setup({retries:3});try{
   let requests=0;
-  f.reply(()=>{requests++;return requests===1?'这是推荐的商品。':JSON.stringify({products:[product]});});
+  f.reply(()=>{requests++;return requests===1?'这是推荐的商品。':JSON.stringify({products:catalog});});
   const result=await f.amazon.search('项链');
   ok(result);assert.equal(requests,2,'Amazon format errors do not repeat four identical requests');
   assert.match(f.prompt(),/Amazon 搜索格式恢复/);
-  assert.equal(shopItems(f.state(),'product').length,1);
+  assert.equal(shopItems(f.state(),'product').length,4);
   const old=JSON.stringify(shopItems(f.state(),'product'));
   requests=0;f.reply(()=>{requests++;return '没有可用的 JSON';});
   const failure=await f.amazon.search('耳机');
@@ -54,7 +57,7 @@ test('Amazon independent requests append final schema and a 4096-token ceiling w
  let attempts=0;const seen=[];
  const client={generate:async(prompt,contact,current,progress,options)=>{
   attempts++;seen.push({prompt,options});
-  return attempts===1?'抱歉，稍后再试。':JSON.stringify({products:[product]});
+  return attempts===1?'抱歉，稍后再试。':JSON.stringify({products:catalog});
  }};
  const f=setup({independentClient:client,retries:3});try{
   const result=await f.amazon.search('项链');ok(result);
@@ -65,14 +68,14 @@ test('Amazon independent requests append final schema and a 4096-token ceiling w
   assert.equal(seen[0].options.requireJsonObject,true);
   assert.match(seen[1].options.finalOutputContract,/Amazon 搜索格式恢复/);
   assert.match(seen[1].prompt,/Amazon 搜索格式恢复/);
-  assert.equal(shopItems(f.state(),'product').length,1);
+  assert.equal(shopItems(f.state(),'product').length,4);
   assert.equal(f.settings.api.maxTokens,2048,'the user-configured API ceiling remains unchanged');
  }finally{f.close();}
 });
 
 test('Amazon product validation error repairs once, but transport errors are not retried',async()=>{
  let calls=0;const client={generate:async()=>{
-  calls++;return calls===1?JSON.stringify({products:[{...product,price:'no-price'}]}):JSON.stringify({products:[product]});
+  calls++;return calls===1?JSON.stringify({products:[{...product,price:'no-price'}]}):JSON.stringify({products:catalog});
  }};
  const f=setup({independentClient:client,retries:5});try{
   ok(await f.amazon.search('项链'));
@@ -88,7 +91,7 @@ test('Amazon product validation error repairs once, but transport errors are not
 test('shopping search uses one shared request, preserves cart snapshots across catalogs, and local checkout needs no API',async()=>{
  const f=setup();try{
  await f.amazon.open();assert.equal(f.count(),0);const p=await fill(f);assert.equal(f.count(),1);assert.match(f.prompt(),/消费水平/);assert.match(f.prompt(),/奢侈品必须/);
- f.reply({products:[{...product,name:'Another necklace',price:'100'}]});ok(await f.amazon.search('别的项链'));assert.equal(f.state().orders.cart.items[0].product.name,p.name);
+ f.reply({products:catalog.map((p,i)=>({...p,name:'Another necklace '+(i+1),price:'100'}))});ok(await f.amazon.search('别的项链'));assert.equal(f.state().orders.cart.items[0].product.name,p.name);
  ok(await f.amazon.checkout());const order=shopItems(f.state(),'order')[0];assert.equal(order.totals.USD,560100);assert.equal(order.dueDay,dateDay('2026-10-13'));assert.equal(order.recipient.name,'Sam');assert.equal(order.recipient.id,'self');assert.equal(f.state().orders.cart.items.length,0);assert.equal(f.count(),2);
  }finally{f.close();}
 });
@@ -132,7 +135,7 @@ test('delete checkout floor restores cart; deletion and chat switch reject pendi
  const f=setup();try{
  await fill(f);f.context.chat.push({mes:'日期：2026-10-12 12:00',is_user:false});await f.memory.read();ok(await f.amazon.checkout());assert.equal(shopItems(f.state(),'order').length,1);
  f.context.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.equal(shopItems(f.state(),'order').length,0);assert.equal(f.state().orders.cart.items.length,1);
- let finish,start;const started=new Promise(r=>start=r);f.reply(()=>{start();return new Promise(r=>finish=r);});const request=f.amazon.search('coat');await started;f.context.chatId='other';f.context.chatMetadata={};f.bus.emit('CHAT_CHANGED');await f.memory.read();finish(JSON.stringify({products:[product]}));assert.equal((await request).ok,false);assert.equal(shopItems(f.state(),'product').length,0);
+ let finish,start;const started=new Promise(r=>start=r);f.reply(()=>{start();return new Promise(r=>finish=r);});const request=f.amazon.search('coat');await started;f.context.chatId='other';f.context.chatMetadata={};f.bus.emit('CHAT_CHANGED');await f.memory.read();finish(JSON.stringify({products:catalog}));assert.equal((await request).ok,false);assert.equal(shopItems(f.state(),'product').length,0);
  }finally{f.close();}
 });
 test('gift order rolls back with its floor and keeps recipient matching local',async()=>{
