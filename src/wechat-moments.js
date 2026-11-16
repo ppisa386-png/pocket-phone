@@ -1,6 +1,6 @@
 import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { readStoryClock } from './story-clock.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.66';
+import { parseAppObject } from './model-json.js?v=1.2.79';
 
 const MAX_POSTS = 5;
 const plain = (value, max) => String(value ?? '').trim().slice(0,max);
