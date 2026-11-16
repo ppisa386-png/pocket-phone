@@ -1,3 +1,11 @@
+## v1.2.79 · 多 App 模型 JSON 协议、常住地与商品目录原子性修复（2026-11-16）
+**审查基线**：main `d4dbcfc2f2706931d215d7ab8c8615d538f0c046`（v1.2.78）。执行依据：用户提交的《Pocket Phone 多 App 故障修复任务书》（T1–T8）。实施分支：`fix/multi-app-json-20261116`，PR [#28](https://github.com/ppisa386-png/pocket-phone/pull/28)。
+**修复**：`model-json` 对有效外部引用尾标作窄范围忽略，仍拒绝双结果及残缺候选。`task-contracts` 新增按任务输出分支区分的 Schema；`phone` 对真实协议缺字段单次格式恢复，对无效业务结果停止普通重试，诊断补充来源、任务、模型、Schema、次数和脱敏样本；`api` 分别计数不支持 Schema 的兼容请求。天气已有专属校验不被覆盖。日历/X 初始粉丝、资产初始化与结算/跨币区迁居、日报、Amazon、Snapchat/WhatsApp/微信、联系人、外卖及支付入口接入相应字段契约。
+**边界修复**：明确常住地的 Markdown/命名字段可识别，检查整个字段排除含糊多住处；合法模型地区优先、非法币区拒绝、未交付初始资产不可造数。Amazon 的非4—6件结果不会抹去先前目录；Snapchat 评论的缺失 text 不再视为明确沉默；朋友圈必须交付两组数组，空数组合法。日历初始化错误不再统一提示检查网络。
+**保留**：合法零粉丝、合法空日历/无动态/无变化财务核对、正常拒绝/不回复及上一版逐楼和交易原子性；不新增自动联网、真实气象研究、额外背景模型任务、界面改版或更改用户 API/模型连接方案。
+**验证**：新增完整日报+外部引用尾标、真实第二/残缺 JSON、日历最终 `{}`+推理元数据及空 holidays、X 初始粉丝 `{}`/0、Amazon 目录保留/数量边界、Snapchat 评论沉默/缺字段、Persona 格式及任务级 Schema 路由回归。GitHub Actions [完整回归 43875745168](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745168) ：`npm test` **921/921通过，0失败**；`npm run build:preview` 成功。关联 [日历验收 43875745162](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745162)、[日报布局 QA 43875745391](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745391) 均成功。
+**未验证**：没有使用用户的真实模型密钥接入实际酒馆或特定上游供应商；GitHub CI 中的生成、结构化转发与模型回复均为受控模拟，不能推断实际供应商始终遵循 Schema。后续现场如仍收到 `{}`，应依照新版诊断查看最终正文、任务字段、Schema/模型与输出 token，而非采信 reasoning_content。
+
 ## v1.2.78 · 小榴莲首次建账识别 Persona 常驻地（2026-11-16）
 **问题与证据**：user 已在 User Persona 写“常驻地：芝加哥”，正文出现芝加哥夜风，首次资产建账仍报“无法确定 user 常住地区”。核查发现首次评估 JSON 示例只展示 initial 而没有顶层 residence；resolveResidence 忽略传入的人设和正文信息，模型回复遗漏或置空 residence 就直接失败。
 **实现**：首次契约明确必须在 initial 旁返回 residence；资产模块在首次缺 residence 时仅对明确且单一的 User Persona 常驻地标签做本地地名/地区/货币映射兜底（芝加哥→US/USD）。模型已提供的有效结果优先，非法地区与货币配对不被掩盖，未知/含糊地名和无明确常住字段的天气描述不会被认定为定居。账本建立后原有常住地锁定及迁居/换币规则不变。
