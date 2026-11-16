@@ -89,8 +89,19 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
         throw modelProtocolError(contract.name,['accepted 或 ambiguous']);
     const missing=required.filter(key=>!optionalMissing.includes(key)&&
         (!data||typeof data!=='object'||Array.isArray(data)||!Object.hasOwn(data,key)||data[key]===undefined));
-    if(missing.length)throw modelProtocolError(contract.name,missing,
-        contract.name==='phone_assets_update' && missing.includes('living') ? '缺少本期生活开销' : '模型未返回完整任务数据');
+    if(missing.length) {
+        const specific={
+            phone_calendar:'模型未返回完整日历资料',
+            phone_x_initial_followers:'X 初始粉丝数据未交付',
+            phone_assets_initial:'首次建账结果不完整',
+            phone_daily:'模型未返回完整日报资料',
+            phone_amazon_search:'Amazon 商品资料未交付',
+            phone_contacts:'模型未返回完整联系人资料',
+        };
+        const reason=contract.name==='phone_assets_update' && missing.includes('living')
+            ? '缺少本期生活开销' : specific[contract.name] || '模型未返回完整任务数据';
+        throw modelProtocolError(contract.name,missing,reason);
+    }
     return data;
 }
 export function commonTaskSchema(app,prompt) {
