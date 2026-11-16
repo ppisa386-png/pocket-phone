@@ -35,7 +35,7 @@ for(const app of ['daily','assets','amazon','x','snapchat','messages','phone']) 
     });
 }
 for(const mode of ['narrative','switch','edit','disable','destroy']) {
-    test('background work still rejects '+mode,async()=>{
+    test('background work preserves a concurrent narrative but rejects true invalidation: '+mode,async()=>{
         const f=fixture();try {
             const pending=f.run('daily');await f.ready;
             if(mode==='narrative')f.bus.emit('GENERATION_STARTED','normal');
@@ -43,8 +43,9 @@ for(const mode of ['narrative','switch','edit','disable','destroy']) {
             if(mode==='edit'){f.context.chat[0].mes='changed';f.bus.emit('MESSAGE_EDITED');}
             if(mode==='disable')f.settings.apps.daily=false;
             if(mode==='destroy')f.phone.destroy();
-            f.release();assert.equal((await pending).ok,false);
-            assert.equal((await f.memory.read()).state.profiles.daily,undefined);
+            f.release();
+            assert.equal((await pending).ok,mode==='narrative');
+            assert.deepEqual((await f.memory.read()).state.profiles.daily,mode==='narrative'?{result:'saved'}:undefined);
         } finally {f.destroy();}
     });
 }
