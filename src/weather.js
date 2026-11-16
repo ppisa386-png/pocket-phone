@@ -281,8 +281,8 @@ export function precipitationPlan(record, day) {
         const p = clamp(conditions(climate, d, 12).rainProb, 0, 1);
         // P(wet) converges to p, while allowing weather systems to last
         // multiple days. A season change uses that day's own monthly rate.
-        const chance = d === startDay ? p : p * (1 - PRECIPITATION_PERSISTENCE)
-            + (wet ? PRECIPITATION_PERSISTENCE : 0);
+        const chance = p === 0 ? 0 : p === 1 ? 1 : d === startDay ? p
+            : p * (1 - PRECIPITATION_PERSISTENCE) + (wet ? PRECIPITATION_PERSISTENCE : 0);
         wet = rngAt(record.seed, key + '|wet-day', d)() < chance;
         // The model-observed current weather is an established fact, not a
         // random forecast to be contradicted by the local rain-day draw.
