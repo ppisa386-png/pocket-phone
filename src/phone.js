@@ -13,7 +13,7 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.66';
-import { resolveAppConnection } from './config.js?v=1.2.76';
+import { resolveAppConnection } from './config.js?v=1.2.77';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
