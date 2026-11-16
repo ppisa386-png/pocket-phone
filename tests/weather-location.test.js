@@ -53,3 +53,14 @@ test('re-marking the current city adds no event and the result stays a valid {jo
     assert.ok(second.journal && Array.isArray(second.journal.events));
     assert.equal(second.journal.events.length, 1);
 });
+
+test('a translated city marker is not a new location event and does not rename the display city', async () => {
+    const chat = [
+        marker('Sam arrived in Chicago.', '芝加哥'),
+        marker('Sam is still in Chicago, Illinois.', 'Chicago, IL'),
+    ];
+    const revisions = await revisionsOf(chat);
+    const result = importStoryLocation(readJournal(undefined), revisions, chat);
+    assert.equal(result.journal.events.length, 1);
+    assert.equal(replayJournal(result.journal).location.current.city, '芝加哥');
+});
