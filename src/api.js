@@ -248,6 +248,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                     if (options.requireJsonObject === true && error.code === 'API_JSON_MODE_UNSUPPORTED' &&
                         payload.json_schema && current()) {
                         unsupportedSchemas.add(schemaEndpoint);
+                        options.onCompatibilityRetry?.();
                         const fallback = { ...payload };
                         delete fallback.json_schema;
                         delete fallback.response_format;
