@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { weatherResearchPrompt, validateWeatherResearch } from '../src/weather-model.js';
 import { createPhoneService } from '../src/phone.js';
-import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
+import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
@@ -266,7 +266,8 @@ test('the weather advances one story hour at a time, deterministically, with bot
     assert.deepEqual(weatherAt(record, { day, hour: 11 }), weatherAt(record, { day, hour: 11 }), 'no re-roll for the same hour');
     const stepped = weatherAt(record, { day, hour: 13 });
     let steady = record.state;
-    for (let hour = record.hour + 1; hour <= day * 24 + 13; hour++) steady = advanceWeather(steady, climate, hour, engineRngAt(record.seed, key, hour));
+    for (let hour = record.hour + 1; hour <= day * 24 + 13; hour++)
+        steady = advanceWeather(steady, climate, hour, engineRngAt(record.seed, key, hour), precipitationPlan(record, Math.floor(hour / 24)));
     assert.equal(stepped.type, steady.type);
     assert.equal(stepped.temp, steady.temp);
     assert.equal(stepped.wind, steady.wind);
@@ -283,6 +284,53 @@ test('the weather advances one story hour at a time, deterministically, with bot
     assert.deepEqual(folded, weatherAt(record, { day: day + 31, hour: 12 }));
     assert.equal(folded.date, '2026-02-01'); assert.equal(folded.time, '12:00');
     assert.ok(weatherType(folded.type) !== '未知');
+});
+
+test('daily climate precipitation probabilities calibrate wet-day frequency regardless of city name', () => {
+    const start = dateDay('2026-04-01');
+    const frequency = chance => {
+        let wet = 0, sevenWet = 0;
+        for (let seed = 0; seed < 180; seed++) {
+            const record = { city: '同一个测试地点', seed: 'climate-' + seed,
+                hour: (start - 40) * 24 + 10, state: { type: 'partly', temp: 18, wind: 2, humidity: 60 },
+                climate: { archetype: 'cfb', monthlyRainChance: Array(12).fill(chance) } };
+            for (let offset = 0; offset < 30; offset++)
+                wet += Number(precipitationPlan(record, start + offset).wet);
+            if (Array.from({ length: 7 }, (_, i) => precipitationPlan(record, start + i).wet).every(Boolean))
+                sevenWet++;
+        }
+        return { rate: wet / (180 * 30), sevenWet };
+    };
+    const dry = frequency(.05), damp = frequency(.65);
+    assert.ok(Math.abs(dry.rate - .05) < .02, 'rare wet days stay rare: ' + dry.rate);
+    assert.ok(Math.abs(damp.rate - .65) < .06, 'wet climates retain frequent wet days: ' + damp.rate);
+    assert.ok(dry.sevenWet <= 1, 'a dry month almost never has seven consecutive rainy days');
+    assert.ok(damp.rate > dry.rate * 8, 'monthly local rate controls wet-day frequency');
+});
+
+test('a zero-rain climate stays dry hourly, a wet climate rains, and observed rain is retained', () => {
+    const day = dateDay('2026-04-01');
+    const build = (chance, type = 'partly') => ({
+        city: '自由气候地', seed: 'rain-gating',
+        climate: { archetype: 'cfb', monthlyRainChance: Array(12).fill(chance) },
+        hour: day * 24 + 10, date: '2026-04-01',
+        state: { type, temp: 18, wind: 2, humidity: 65 },
+    });
+    const rainy = type => ['drizzle','rain','heavy','storm','thunder','severe','sleet','lightsnow','snow','heavysnow','blizzard','typhoon','hail'].includes(type);
+    const dry = build(0);
+    assert.equal(precipitationPlan(dry, day).wet, false);
+    for (const entry of buildForecast(dry, { day, hour: 10 }).days)
+        assert.ok(entry.hours.every(h => !rainy(h.type)),
+            'zero wet-day probability must never produce spontaneous precipitation on ' + entry.date);
+    const wet = build(1);
+    assert.ok(buildForecast(wet, { day, hour: 10 }).days.slice(1).every(entry =>
+        entry.hours.some(h => rainy(h.type))), 'certain wet days contain actual rainy hours');
+    const observed = build(0, 'rain');
+    assert.equal(precipitationPlan(observed, day).wet, true);
+    assert.equal(weatherAt(observed, { day, hour: 10 }).type, 'rain',
+        'a model-observed weather condition is not discarded to match a climatological average');
+    assert.equal(precipitationPlan(observed, day + 1).wet, false,
+        'observed rain does not make the next day wet when its climate rate is zero');
 });
 
 test('moving to another city re-points the app to the new place while the old record survives', async () => {
