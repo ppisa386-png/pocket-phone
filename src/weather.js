@@ -5,7 +5,7 @@ import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { effectiveReply } from './contact-policy.js?v=1.2.57';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
-import { weatherResearchPrompt, validateWeatherResearch } from './weather-model.js?v=1.2.74';
+import { weatherResearchPrompt, validateWeatherResearch, sameWeatherCity } from './weather-model.js?v=1.2.75';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
 
@@ -105,7 +105,7 @@ export function importStoryLocation(raw, revisions, chat, context) {
         const row = locationAnnotations(chat[index]).at(-1);
         if (!row) continue;
         const current = state.location?.current;
-        if (current && norm(current.city) === norm(row.city)) continue;
+        if (current && sameWeatherCity(current.city, row.city)) continue;
         journal = appendChange(journal, revisions.slice(0, index + 1), [{ collection: 'location', key: 'current', value: { city: row.city, sourceIndex: index } }], id);
         state = replayJournal(journal);
         changed = true;
@@ -752,11 +752,14 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
     async function research(view, current, request, city, clock, chat) {
         const prompt = weatherResearchPrompt({
             context: getContext(), chat, city,
+            locationSourceIndex: view.state.location?.current?.sourceIndex ?? -1,
             storyDate: dayDate(clock.day) || null,
             storyHour: clock.hour,
         });
         const result = await request(prompt,
-            data => validateWeatherResearch(data, city),
+            data => validateWeatherResearch(data, city, {
+                chat, locationSourceIndex: view.state.location?.current?.sourceIndex ?? -1,
+            }),
             current, null, { retries: 0, formatRetryOnce: false, maxTokens: 4096 });
         if (!current()) throw Error('剧情或设置已变化，本次天气研究未保存。');
         return result;
@@ -805,13 +808,19 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
             const key = normCity(city);
             const hour = clock.day * 24 + Math.floor(clock.hour), seed=crypto.randomUUID();
             const changes = [];
-            if (!existingCity) changes.push({collection:'location', key:'current',
-                value:{city,sourceIndex:Math.max(0,chat.length-1)}});
+            if (!existingCity || !sameWeatherCity(existingCity, city)) {
+                const migrated = !!existingCity;
+                changes.push({collection:'location', key:'current',
+                    value:{city,sourceIndex:migrated ? researchResult.locationSourceIndex : Math.max(0,chat.length-1)}});
+            }
             changes.push({collection:'weather',key,
                 value:{city,kind,climate,seed,hour,date:dayDate(clock.day),
                     state:weather,refreshedAt:Date.now()}});
             if (!current()) throw Error('剧情或设置已变化，本次天气研究未保存。');
-            await memory.commit(await memory.begin(view),changes);
+            const ticket = await memory.begin(view);
+            if (existingCity && !sameWeatherCity(existingCity, city))
+                await memory.commitBatch(ticket,[{ changes, sourceIndex: researchResult.locationSourceIndex }]);
+            else await memory.commit(ticket, changes);
             return {refreshed:true};
         }, 'weather'),
 
