@@ -20,7 +20,7 @@ const complete = data => {
   ...article(lead.headline+' · 独立补充事件 '+(i+1)),subject:'world',section:'生活旅游与消费'
  })):[]; 
  const articles=[...rows,...fillers].map((row,index)=>({...row,placement:index===0?'lead':index<=5?'feature':'brief'}));
- return {publication:'城中日报',...data,articles};
+ return {publication:'城中日报',location:'本地',...data,articles};
 };
 function setup(){
  const bus=new EventEmitter();let response=complete({location:'本地',articles:[article()]}),calls=0,lastPrompt='';
@@ -184,7 +184,7 @@ test('legacy editions remain readable, with their recorded outlet retained as pu
 test('world newspaper accepts nine finished stories without technical selection metadata',async()=>{
  const f=setup();try{
   const rows=Array.from({length:9},(_,i)=>({headline:'世界新闻 '+i,body:'根据城市与行业背景展开的新事件。'.repeat(25)}));
-  f.reply(()=>JSON.stringify({publication:'Los Angeles Times',articles:rows}));
+  f.reply(()=>JSON.stringify({publication:'Los Angeles Times',location:'洛杉矶',articles:rows}));
   ok(await f.daily.update());assert.equal(dailyArticles(f.state()).length,9);
   assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='lead').length,1);
   assert.equal(dailyArticles(f.state()).filter(a=>a.placement==='feature').length,5);
@@ -517,5 +517,24 @@ test('event-first editorial rule follows saved custom preferences and older defa
   assert.match(prompt,/随机抽取9个互不重复、最值得刊登的事件/);
   assert.equal(normalizeSettings({prompts:{daily:custom}}).prompts.daily,custom);
   assert.equal(f.calls(),1);
+ }finally{f.close();}
+});
+
+test('daily App saves nine stories with an external reference tail without rewriting quotation text',async()=>{
+ const f=setup();try{
+  const payload=complete({articles:[{...article('带引用尾标的报道'),body:'正文保留 [ref:INNER]、[1,2] 与原有引号。'}]});
+  f.reply(()=>JSON.stringify(payload)+' [ref:8D3F3N]');
+  const before=f.calls();ok(await f.daily.update());
+  assert.equal(f.calls(),before+1,'a citation is not a second model result');
+  assert.equal(dailyArticles(f.state()).length,9);
+  assert.equal(first(f).body,payload.articles[0].body);
+  const saved=structuredClone(f.state().daily.edition);
+  for(const bad of [JSON.stringify(payload)+JSON.stringify({other:true}), JSON.stringify(payload)+'{\"unfinished\":']){
+   f.reply(()=>bad);const started=f.calls();
+   const failed=await f.daily.update();
+   assert.equal(failed.ok,false);
+   assert.equal(f.calls(),started+2,'a genuinely second or truncated root is not accepted');
+   assert.deepEqual(f.state().daily.edition,saved);
+  }
  }finally{f.close();}
 });

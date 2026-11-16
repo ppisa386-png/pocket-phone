@@ -87,6 +87,12 @@ export function parseModelObject(raw, { allowTrailingCommas = false, allowRootAr
                     i = end + 2; continue;
                 }
             }
+            // Ignore only well-formed external citation footers, outside JSON.
+            // An actual second container or unfinished business data still fails.
+            if (c === '[' && candidates.length === 1) {
+                const footer = text.slice(i).match(/^\[ref:[A-Za-z0-9_-]{1,64}\](?=\s*(?:$|\[ref:))/);
+                if (footer) { i += footer[0].length - 1; continue; }
+            }
             if (c !== '{' && c !== '[') continue;
             start = i; stack = [c]; quoted = false; escaped = false; continue;
         }

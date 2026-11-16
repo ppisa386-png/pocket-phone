@@ -5,15 +5,16 @@ import { exactStoryTime } from './story-clock.js?v=1.2';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
 import { phoneQuietOptions } from './api-context.js?v=1.2';
-import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.71';
+import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.79';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
 import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2.53';
 import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1.2';
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
-import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.66';
-import { resolveAppConnection } from './config.js?v=1.2.77';
+import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.79';
+import { resolveAppConnection } from './config.js?v=1.2.79';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -116,12 +117,14 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         // hooks. Keep that final instruction, without a second copy in the task.
         if (options.outputContract && !(independent && options.outputContract === options.finalOutputContract))
             prompt += '\n' + options.outputContract;
+        const taskSchema = options.jsonSchema || commonTaskSchema(app,prompt);
         if (['phone','messages','incoming'].includes(app)) prompt += COMMUNICATION_LANGUAGE_RULE;
         if (social && !options.establishedImport) prompt += SOCIAL_LANGUAGE_RULE;
         const retries = Math.min(15, Math.max(0, options.retries ?? getSettings().retries));
         const attempts = [];
         const modelResponses = [];
         let normalRetriesLeft = retries, formatRetried = false;
+        let modelRequests = 0, formatRecoveries = 0, unsupportedParameterRetries = 0;
         let maxTokens = options.maxTokens ?? (app === 'daily' ? 16384 : 8192);
         const outputContract = options.finalOutputContract || options.outputContract || MODEL_JSON_CONTRACT;
         const label = {assets:'资产',calendar:'日历',amazon:'Amazon',x:'X'}[app] || '手机任务';
@@ -143,8 +146,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     : '\n'+label+' 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
+                modelRequests++;
                 const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { app, finalOutputContract: contract, maxTokens, requireJsonObject:true,
-                    jsonSchema: options.jsonSchema,
+                    jsonSchema: taskSchema || undefined,
+                    onCompatibilityRetry: () => { unsupportedParameterRetries++; },
                     onResponseMeta: (metadata, rawText) => { responseMeta = metadata; responseText = rawText; },
                 }) : await context.generateQuietPrompt({...phoneQuietOptions(context, taskPrompt, contact),responseLength:maxTokens});
                 if (!isCurrent()) throw new Error('本次操作已取消。');
@@ -154,6 +159,11 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 stage = '解析返回格式';
                 const data = (options.parseResponse || parseJSON)(text);
                 stage = '校验业务数据';
+                // The weather research schema has its own local city fallback and
+                // WEATHER_EMPTY_RESULT handling. Enforce only this module's
+                // task contracts here, not arbitrary external schema objects.
+                if (Object.values(TASK_SCHEMAS).includes(taskSchema))
+                    assertTaskResponse(data,taskSchema,{optionalMissing:options.optionalMissingFields||[],currentCurrency:state.assets?.wallet?.currency||null});
                 const result = validate(data);
                 if (commPlan && isCurrent()) {
                     const changes = commClassificationChanges(data,commPlan,state);
@@ -165,16 +175,18 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 }
                 return result;
             } catch (failure) {
+                // Invalid business facts cannot become network retries.
+                if (stage === '校验业务数据' && !failure.code) { failure.code='PHONE_BUSINESS_INVALID'; failure.retryable=false; }
                 const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');
                 const outputFailure = ['API_EMPTY_OUTPUT','API_OUTPUT_TRUNCATED'].includes(failure.code);
-                const formatFailure = /^MODEL_JSON_/.test(failure.code || '') || outputFailure ||
+                const formatFailure = /^(MODEL_JSON_|PHONE_DATA_)/.test(failure.code || '') || outputFailure ||
                     ['CALENDAR_JSON_INVALID','CALENDAR_DATA_INVALID','AMAZON_JSON_INVALID','AMAZON_DATA_INVALID'].includes(failure.code);
-                if (/^MODEL_JSON_/.test(failure.code || '') && typeof responseText === 'string') {
+                if ((/^(MODEL_JSON_|PHONE_DATA_)/.test(failure.code || '') || ['CALENDAR_DATA_INVALID','AMAZON_DATA_INVALID'].includes(failure.code)) && typeof responseText === 'string') {
                     modelResponses.push({attempt:attempt+1, code:failure.code, text:responseText,
                         metadata:responseMeta, parser:failure.jsonParse});
                 }
                 if (formatFailure && options.formatRetryOnce !== false && !formatRetried && isCurrent() && (outputFailure || failure.retryable !== false)) {
-                    formatRetried = true;
+                    formatRetried = true; formatRecoveries++;
                     if (['MODEL_JSON_TRUNCATED','API_OUTPUT_TRUNCATED'].includes(failure.code)) maxTokens = Math.min(32768, maxTokens * 2);
                     else if (failure.code === 'API_EMPTY_OUTPUT') maxTokens = Math.min(4096, Math.max(1024, Math.floor(maxTokens / 2)));
                     attempts.push(summary);
@@ -186,7 +198,13 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 }
                 if (formatFailure || !isCurrent() || failure.retryable === false || normalRetriesLeft <= 0) {
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
-                        + '；本次请求次数：' + (attempt + 1) + (responseLength === null ? '' : '；返回字符数：' + responseLength)
+                        + '；本次请求次数：' + modelRequests + '；实际模型：' + (responseMeta?.model || connection.api.model || '跟随酒馆当前模型')
+                        + '；任务标识：' + (taskSchema?.name||app) + '；Schema：' + (taskSchema?.name||'phone_task')
+                        + '；插件版本：1.2.79；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
+                        + '；不支持参数兼容次数：' + unsupportedParameterRetries
+                        + (responseLength === null ? '' : '；返回字符数：' + responseLength)
+                        + (responseText?.trim()==='{}'?'；最终为空对象：是':'；最终为空对象：否')
+                        + (failure.missingFields?.length?'；缺少字段：'+failure.missingFields.join('、'):'')
                         + (formatRetried ? '；' + label + '格式纠正：已尝试一次' : '')
                         + (responseMeta ? '；接口结束原因：' + responseMeta.finishReason
                             + '；接口输出 token：' + responseMeta.completionTokens
@@ -416,7 +434,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                         retryable: false, diagnostic: '候选人数：' + data.contacts.length + '；通过人数：0\n' + rejected.join('\n'),
                     });
                     return found;
-                }, valid, null, { retries: 0, establishedImport:true }, current.job);
+                }, valid, null, { retries: 0, establishedImport:true, jsonSchema:TASK_SCHEMAS.contacts }, current.job);
                 if (!valid()) return;
                 const additions = contacts.filter(contact => !view.state.contacts[contact.id]);
                 const renamed = contacts.filter(contact => view.state.contacts[contact.id] && view.state.contacts[contact.id].name !== contact.name);
@@ -441,7 +459,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const found=validateContacts(data,chat,context,sources,Object.values(view.state.contacts));
                     if(data.contacts?.length&&!found.length)throw new Error('未能核对返回的联系人资料，请重试。');
                     return found;
-                }, valid, null, {}, current.job);
+                }, valid, null, {jsonSchema:TASK_SCHEMAS.contacts}, current.job);
                 if (!valid()) return;
                 const additions = contacts.sort((a, b) => a.sourceIndex - b.sourceIndex).filter(c => {
                     const old = view.state.contacts[c.id];

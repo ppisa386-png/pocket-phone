@@ -1,3 +1,15 @@
+## v1.2.79 · 多 App 模型交付协议验收（2026-11-16）
+- 基线 `d4dbcfc` / 最终版本1.2.79；核心验证 `npm test`、`npm run build:preview`。GitHub Actions [43875745168](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745168)：**921/921通过、0失败；预览构建成功**。日历验收 [43875745162](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745162) 和日报布局 [43875745391](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745391) 成功。
+- `tests/model-json.test.js`：唯一日报 JSON + `[ref:...]` 忽略尾标，字符串内部原样保留；双 JSON、真实数组或残缺第二对象拒绝。
+- `tests/daily.test.js`：九篇日报真实入口连引用尾标只调用一次并完整保存；歧义/截断拒绝，旧版不变。日报标题、文内金额/引号和知情来源按原业务规则校验。
+- `tests/calendar.test.js`：独立 API 请求带 `phone_calendar` 的 required 字段；最终 `{}`（有 reasoning 元数据）一次格式恢复仍失败，不保存；完整 `holidays:[]` 成功。
+- `tests/x.test.js`：初始粉丝空对象一次格式恢复，缺字段不能写0；显式 `initialFollowers:0` 合法。X feed 已存在但字段类型错误走业务拒绝、不误触缺字段重试。独立于 X 公开热度/楼层结算旧测试。
+- `tests/assets.test.js`：常住地纯文本、列表、加粗、Chicago IL 与多地区/他人/未知排除；旧账缺常住地迁居提案、跨币区需换算、合法同日无变动推进、错误币种/账期/金额、删楼回退均保留。
+- `tests/amazon.test.js` / `tests/amazon-images.test.js` / `tests/payment-request.test.js`：4—6件有效，0—3/7—8件拒绝及旧目录保留；交易和礼物付款仍按原账本执行。
+- `tests/snapchat.test.js` / `tests/wechat-moments.test.js`：明确 `text:''` 可以保持不回复；缺 text 不能悄悄保存。朋友圈无新动态/无互动使用两空数组，既有好友权限、拆分分组和回退仍成立。
+- `tests/task-contracts.test.js`：同一 X App 的私信/趋势/粉丝/公开评论和同一社交 App 的刷新/通话选用不同契约，合法沉默/拒绝/0/空数组有效。跨币区迁居不必在确认汇率前补造本期结算，正常已有账本仍必须交付开销检查字段。
+- 原有 `tests/api.test.js`、`tests/json-reliability.test.js` 与 API Profiles、并发/取消、财务/通讯的完整回归继续验证宿主转发消息形状、结构化参数明确拒绝时单次兼容、设置不变、模型请求/格式恢复界限。未使用用户真实第三方服务或密钥进行在线请求，模拟成功与供应商真实行为严格区分。
+
 ## v1.2.17 · 榴莲外卖视觉与今日特价（2026-11-09）
 
 ## 柔雾珐琅独立主题验收（v1.2.22，2026-11-09）

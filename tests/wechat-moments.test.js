@@ -102,7 +102,7 @@ test('WeChat circle friend refresh uses existing friends but never leaks user re
         await f.api.open();
         const alex=await friend(f);
         ok(await f.api.publish('只有我知道的秘密','','private',[]));
-        f.reply({moments:[{authorId:alex,text:'下午去了书店。',imageDescription:'书架上的旧书'}]});
+        f.reply({moments:[{authorId:alex,text:'下午去了书店。',imageDescription:'书架上的旧书'}],interactions:[]});
         const old=f.count();
         ok(await f.api.refreshMoments());
         assert.equal(f.count(),old+1);

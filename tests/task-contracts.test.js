@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from '../src/task-contracts.js';
+import { validateProducts } from '../src/amazon.js';
+
+test('task schema routing is specific to the subtask, not the whole App',()=>{
+ const cases=[
+  ['x','当前任务：X 私信。',TASK_SCHEMAS.xDm],
+  ['x','当前任务：X 搜索账号。',null],
+  ['x','趋势评估资料（人设用于判断身份）',TASK_SCHEMAS.xTrends],
+  ['x','当前任务：X 未结算剧情楼层的新增粉丝影响。',TASK_SCHEMAS.xFloor],
+  ['x','当前任务：X 公开评论区互动。',TASK_SCHEMAS.xPublic],
+  ['snapchat','当前任务：Snapchat 聊天。',TASK_SCHEMAS.snapChat],
+  ['snapchat','当前任务：Snapchat stories 刷新。录音中提过语音通话',TASK_SCHEMAS.snapFeed],
+  ['snapchat','当前任务：Snapchat 语音通话，只允许听觉内容。',TASK_SCHEMAS.snapCall],
+  ['wechat','当前任务：微信 动态评论。',TASK_SCHEMAS.snapComment],
+  ['whatsapp','当前任务：批量 WhatsApp 好友邀请。',TASK_SCHEMAS.snapBatch],
+  ['messages','仅基于此前交流重写，只输出 {"text":"..."}。',TASK_SCHEMAS.textRewrite],
+  ['contacts','task',null],
+ ];
+ for(const [app,prompt,expected] of cases)
+  assert.equal(commonTaskSchema(app,prompt),expected,app+' '+prompt);
+});
+
+test('protocol requires delivery without forbidding zero, silence, no changes and empty lists',()=>{
+ const valid=[
+  [TASK_SCHEMAS.xInitial,{initialFollowers:0}],
+  [TASK_SCHEMAS.sms,{status:'no_reply',text:''}],
+  [TASK_SCHEMAS.payment,{accept:false}],
+  [TASK_SCHEMAS.snapComment,{text:''}],
+  [TASK_SCHEMAS.wechatMoments,{moments:[],interactions:[]}],
+  [TASK_SCHEMAS.calendar,{region:'无可靠节日的地方',timezone:null,years:[2026,2027],holidays:[]}],
+  [TASK_SCHEMAS.assetsInitial,{residence:null,initial:{balance:0,holdings:[],jobs:[]}}],
+  [TASK_SCHEMAS.assetsUpdate,{events:[],living:{total:0,bookedIds:[]},business:[]}],
+  [TASK_SCHEMAS.xFeed,{posts:[],replies:[]}],
+ ];
+ for(const [contract,value] of valid)assert.equal(assertTaskResponse(value,contract,{currentCurrency:'USD'}),value);
+ for(const contract of [TASK_SCHEMAS.calendar,TASK_SCHEMAS.xInitial,TASK_SCHEMAS.snapComment,TASK_SCHEMAS.wechatMoments,TASK_SCHEMAS.payment,TASK_SCHEMAS.xFeed])
+  assert.throws(()=>assertTaskResponse({},contract),error=>error.code==='PHONE_DATA_MISSING');
+ assert.throws(()=>assertTaskResponse({status:'no_reply'},TASK_SCHEMAS.sms),error=>error.code==='PHONE_DATA_MISSING');
+ assert.throws(()=>assertTaskResponse({events:[],business:[]},TASK_SCHEMAS.assetsUpdate,{currentCurrency:'USD'}),error=>error.code==='PHONE_DATA_MISSING'&&error.message.includes('生活开销'));
+ const migration={residenceChange:{status:'completed',subject:'user',currency:'JPY'}};
+ assert.equal(assertTaskResponse(migration,TASK_SCHEMAS.assetsUpdate,{currentCurrency:'USD'}),migration);
+ assert.throws(()=>assertTaskResponse(migration,TASK_SCHEMAS.assetsUpdate,{currentCurrency:'JPY'}),error=>error.code==='PHONE_DATA_MISSING');
+ const legacy={initial:{balance:100,holdings:[],jobs:[]}};
+ assert.equal(assertTaskResponse(legacy,TASK_SCHEMAS.assetsInitial,{optionalMissing:['residence']}),legacy);
+ assert.throws(()=>validateProducts({products:[]},'USD'));
+});

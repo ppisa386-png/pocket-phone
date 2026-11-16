@@ -1,7 +1,8 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
-import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.66';
+import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.79';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
-import { createWechatMoments } from './wechat-moments.js?v=1.2.71';
+import { createWechatMoments } from './wechat-moments.js?v=1.2.79';
 
 export const CHAT_APPS = {whatsapp:'WhatsApp',wechat:'微信'};
 export const chatItems = (state,app,type) => Object.values(state[app]||{}).filter(i=>i.type===type);
@@ -57,7 +58,7 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
             if(typeof data.accepted!=='boolean')throw Error('好友申请响应缺少有效的同意或拒绝决定。');
             if(data.accepted&&(typeof data.name!=='string'||!data.name.trim()||!(target&&!sameNamedPerson(target,{name})?sameNamedPerson(data,target):matchesFriendName(data,name))))throw Error('响应中的人物与申请对象不符。');
             return data;
-        },valid,null,{memoryQuery:{actors:[{id:target?.id||name,name:target?.name||name,aliases:target?.aliases||[]}],names:[name,target?.name,...(target?.aliases||[])],topic:name},retries:0,parseResponse:raw=>parseSnapObject(raw,label),finalOutputContract:contract});
+        },valid,null,{memoryQuery:{actors:[{id:target?.id||name,name:target?.name||name,aliases:target?.aliases||[]}],names:[name,target?.name,...(target?.aliases||[])],topic:name},retries:0,parseResponse:raw=>parseSnapObject(raw,label),jsonSchema:TASK_SCHEMAS.friends,finalOutputContract:contract});
         if(!valid())throw Error('聊天或设定已变化，本次申请已取消。');
         if(!result.accepted)return {declined:true};
         const person=localizedPerson(result,context,existing);
@@ -100,7 +101,7 @@ export function createChatApp({app,memory,phone,getContext,getSettings}) {
             const contacts=validateEstablishedContacts(data,chat,context,sources,existing,(n,reason)=>{if(rejected.length<10)rejected.push('第 '+n+' 项：'+reason);});
             if(data.contacts?.length&&!contacts.length)throw Object.assign(new Error('未能核对开局人物设定。'),{diagnostic:rejected.join('\n')});
             return contacts;
-        },valid,null,{retries:0,parseResponse:raw=>parseSnapObject(raw,label),establishedImport:true,
+        },valid,null,{retries:0,parseResponse:raw=>parseSnapObject(raw,label),establishedImport:true,jsonSchema:TASK_SCHEMAS.contacts,
             finalOutputContract:'当前任务是从已给编号设定片段提取开局好友。只返回一个有效JSON对象，根字段contacts必须是数组。候选填写name、source_name、aliases、relationship、established:true、incidental:false、evidence_refs及number。没有符合的人物也必须输出{"contacts":[]}，不要留空、续写正文或生成聊天回复。'});
         if(!valid())throw new Error('聊天或设定已变化，本次添加已取消。');
         let added=0,updated=0;

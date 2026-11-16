@@ -1,3 +1,4 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from './calendar-core.js?v=1.2.66';
 
@@ -25,6 +26,7 @@ export function createCalendar({ memory, phone, getContext }) {
             }, current, null, {
                 retries: 0, skipExternalMemory: true, parseResponse: parseCalendarResponse,
                 formatRetryOnce: true, requireJsonObject:true, maxTokens: 4096, finalOutputContract: outputRule,
+                jsonSchema:TASK_SCHEMAS.calendar,
             });
             if (!current()) throw Error('聊天或地点已变化，本次刷新未保存。');
             const latest = await memory.read();

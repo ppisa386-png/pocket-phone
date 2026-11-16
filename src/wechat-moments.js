@@ -1,5 +1,6 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { readStoryClock } from './story-clock.js?v=1.2';
-import { parseAppObject } from './model-json.js?v=1.2.66';
+import { parseAppObject } from './model-json.js?v=1.2.79';
 
 const MAX_POSTS = 5;
 const plain = (value, max) => String(value ?? '').trim().slice(0,max);
@@ -160,7 +161,7 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                 'moments 最多'+remaining+'条，正文1～300字；interactions最多12条。作者和目标必须使用提供的准确ID，不需要互动时返回空数组。';
             const data=await request(prompt,value=>{
                 if(!Array.isArray(value.moments)||value.moments.length>remaining||
-                    (value.interactions!==undefined&&(!Array.isArray(value.interactions)||value.interactions.length>12)))
+                    (!Array.isArray(value.interactions)||value.interactions.length>12))
                     throw Error('朋友圈数据格式不正确。');
                 const accounts=new Map(cohort.friends.map(a=>[a.id,a]));
                 const posts=value.moments.map(item=>{
@@ -172,7 +173,7 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                         imageDescription:images.join('\n'),...(images.length>1?{images}:{})};
                 });
                 const visibleIds=new Map(cohort.visible.map(m=>[m.id,m]));
-                const interactions=(value.interactions||[]).map(item=>{
+                const interactions=value.interactions.map(item=>{
                     const friend=accounts.get(item?.authorId),target=visibleIds.get(item?.momentId);
                     if(!friend||!target||!canViewWxMoment(target,friend.id)||!['like','comment'].includes(item.kind))
                         throw Error('朋友圈互动账号或可见目标无效。');
@@ -186,7 +187,7 @@ export function createWechatMoments({memory,phone,getContext,getSettings}) {
                 });
                 return {posts,interactions};
             },current,null,{retries:0,skipExternalMemory:true,skipSMSClassification:true,
-                parseResponse:parseAppObject,finalOutputContract:'仅返回一个合法 JSON 对象，根字段 moments 和 interactions 均为数组。不能输出正文、说明或隐藏标记。'});
+                jsonSchema:TASK_SCHEMAS.wechatMoments,parseResponse:parseAppObject,finalOutputContract:'仅返回一个合法 JSON 对象，根字段 moments 和 interactions 均为数组。不能输出正文、说明或隐藏标记。'});
             for(const p of data.posts){
                 const dedupe=p.authorId+':'+p.text;
                 if(usedPosts.has(dedupe)||wxMoments(state).some(m=>m.authorId===p.authorId&&m.text===p.text))continue;

@@ -31,10 +31,10 @@ test('product image data accepts curated keys, infers legacy products and reject
     assert.equal(shopImageKey(undefined,'轻便跑鞋'),'shoes');
     assert.equal(shopImageKey(undefined,'客厅落地灯'),'home');
     assert.equal(shopImageKey(undefined,'没有明确分类的商品'),'package');
-    const named=validateProducts({products:[{...offer,image:'headphone'}]},'USD')[0];
+    const named=validateProducts({products:Array.from({length:4},(_,i)=>({...offer,name:offer.name+' '+i,image:'headphone'}))},'USD')[0];
     assert.equal(named.image,'headphone');
     assert.equal(named.priceMinor,12999);
-    const inferred=validateProducts({products:[{...offer,image:'https://wrong-site.test/something.svg'}]},'USD')[0];
+    const inferred=validateProducts({products:Array.from({length:4},(_,i)=>({...offer,name:offer.name+' '+i,image:'https://wrong-site.test/something.svg'}))},'USD')[0];
     assert.equal(inferred.image,'headphone');
     assert.match(shopImageSrc('../../untrusted'),/\/amazon-icons\/package\.svg$/);
 });
