@@ -672,3 +672,56 @@ test('WhatsApp bulk import sends roster references and a contacts contract witho
         assert.equal(result.ok,true,result.error);assert.equal(result.value.added,1);assert.equal(calls,1);
     } finally {f.close();}
 });
+
+test('each App routes generation to its selected saved endpoint, key and model', async()=>{
+ const rawStore=new Map();
+ const keyStore=createKeyStore({getItem:k=>rawStore.get(k)||null,setItem:(k,v)=>rawStore.set(k,v),removeItem:k=>rawStore.delete(k)});
+ const settings=normalizeSettings({
+  api:{...apiConfig(),baseUrl:'https://global.example/v1',model:'global-model'},
+  apiProfiles:[
+   {id:'primary',name:'Main',api:{...apiConfig(),baseUrl:'https://shared.example/v1',model:'profile-main'}},
+   {id:'secondary',name:'Backup',api:{...apiConfig(),baseUrl:'https://shared.example/v1',model:'profile-backup'}},
+  ],
+  appConnections:{x:{profileId:'primary',model:'x-only'},weather:{profileId:'secondary',model:'weather-only'},daily:{profileId:'primary',model:''}},
+ });
+ keyStore.set('https://global.example/v1','global-secret');
+ keyStore.set('https://shared.example/v1','main-secret','primary');
+ keyStore.set('https://shared.example/v1','backup-secret','secondary');
+ const calls=[];
+ const client=createApiClient({
+  getContext:()=>({getRequestHeaders:()=>({'Content-Type':'application/json'})}),
+  getSettings:()=>settings,
+  getKey:(url,id)=>keyStore.get(url,id),
+  prepareRequest:async()=>({messages:[{role:'user',content:'task'}]}),
+  fetchImpl:async(url,options)=>{calls.push(JSON.parse(options.body));return response('OK');},
+ });
+ for(const app of ['x','weather','daily','amazon']){
+  assert.equal(await client.generate('task',null,()=>true,()=>{},{app}), 'OK');
+ }
+ assert.deepEqual(calls.map(c=>c.model),['x-only','weather-only','profile-main','global-model']);
+ assert.deepEqual(calls.map(c=>c.proxy_password),['main-secret','backup-secret','main-secret','global-secret']);
+ assert.deepEqual(calls.map(c=>c.reverse_proxy),['https://shared.example/v1','https://shared.example/v1','https://shared.example/v1','https://global.example/v1']);
+ assert.equal(settings.api.model,'global-model','global connection is unchanged');
+ assert.equal(settings.apiProfiles[0].api.model,'profile-main','individual App choice must not mutate saved profile');
+ assert.doesNotMatch(JSON.stringify(settings),/main-secret|backup-secret|global-secret/);
+});
+
+test('an App profile or model change during prompt preparation cancels the pending generation',async()=>{
+ let finish;
+ const settings=normalizeSettings({
+  api:apiConfig(),
+  apiProfiles:[{id:'primary',name:'Main',api:{...apiConfig(),model:'saved-model'}}],
+  appConnections:{x:{profileId:'primary',model:'initial-model'}},
+ });
+ let requests=0;
+ const client=createApiClient({
+  getContext:()=>({getRequestHeaders:()=>({})}),getSettings:()=>settings,getKey:()=> 'secret',
+  prepareRequest:()=>new Promise(resolve=>{finish=resolve;}),
+  fetchImpl:async()=>{requests++;return response('late');},
+ });
+ const pending=client.generate('task',null,()=>true,()=>{},{app:'x'});
+ settings.appConnections.x.model='changed-model';
+ finish({messages:[{role:'user',content:'something'}]});
+ await assert.rejects(pending,/配置已变化|取消/);
+ assert.equal(requests,0);
+});
