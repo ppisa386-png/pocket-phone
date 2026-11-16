@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSettings, clampPosition, LAUNCHER_SIZE, PROMPTS } from '../src/config.js';
+import { normalizeSettings, resolveAppConnection, clampPosition, LAUNCHER_SIZE, PROMPTS } from '../src/config.js';
 
 test('malformed or old saved settings do not prevent startup', () => {
     for (const value of [null, undefined, [], 'bad', 3]) {
@@ -100,4 +100,34 @@ test('launcher style is independently selectable and preserves pre-update enamel
     assert.equal(normalizeSettings({theme:'light',launcherStyle:'enamel'}).launcherStyle,'enamel');
     assert.equal(normalizeSettings({theme:'dark',launcherStyle:'invalid'}).launcherStyle,'classic');
     assert.deepEqual(normalizeSettings(oldEnamel),oldEnamel,'migrated preferences are stable');
+});
+
+test('saved API profiles can be routed independently per App, with per-App models and safe fallback',()=>{
+ const settings=normalizeSettings({
+  api:{mode:'host',model:'host-snapshot'},
+  apiProfiles:[
+   {id:'main',name:'Primary',api:{mode:'independent',baseUrl:'https://one.example/v1',model:'default-one',timeout:90}},
+   {id:'backup',name:'Backup',api:{mode:'independent',baseUrl:'https://two.example/v1',model:'default-two',timeout:45}},
+  ],
+  appConnections:{
+   x:{profileId:'main',model:'x-specific'},
+   weather:{profileId:'main',model:'weather-specific'},
+   daily:{profileId:'backup',model:''},
+   phone:{profileId:'deleted',model:'orphan'},
+   unknown:{profileId:'main',model:'not-an-app'},
+  },
+ });
+ assert.deepEqual(Object.keys(settings.appConnections).sort(),['daily','weather','x']);
+ assert.equal(resolveAppConnection(settings,'x').api.model,'x-specific');
+ assert.equal(resolveAppConnection(settings,'weather').api.model,'weather-specific');
+ assert.equal(resolveAppConnection(settings,'daily').api.model,'default-two');
+ assert.equal(resolveAppConnection(settings,'x').profileId,'main');
+ assert.equal(resolveAppConnection(settings,'phone').api.mode,'host');
+ assert.equal(settings.apiProfiles[0].api.model,'default-one','choosing a model does not overwrite the saved profile');
+ assert.deepEqual(normalizeSettings(settings),settings);
+ const withoutMain=normalizeSettings({...settings,apiProfiles:settings.apiProfiles.slice(1)});
+ assert.equal(Object.hasOwn(withoutMain.appConnections,'x'),false);
+ assert.equal(resolveAppConnection(withoutMain,'x').api.mode,'host');
+ assert.equal(resolveAppConnection(withoutMain,'daily').api.baseUrl,'https://two.example/v1');
+ assert.doesNotMatch(JSON.stringify(settings),/apiKey|secret-value/);
 });
