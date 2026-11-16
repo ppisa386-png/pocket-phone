@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from './daily-prompts.js?v=1.2.43';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.2.73';
+export const VERSION = '1.2.74';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -81,6 +81,16 @@ export function normalizeApiSettings(value) {
     return { memorySource: api.memorySource === 'none' ? 'none' : 'qqj', mode: api.mode === 'independent' ? 'independent' : 'host', baseUrl: typeof api.baseUrl === 'string' ? api.baseUrl : '', model: typeof api.model === 'string' ? api.model : '', maxTokens: Math.round(numeric(api.maxTokens, 128, 32768, 2048)), timeout: Math.round(numeric(api.timeout, 15, 300, 90)), historyLimit: Math.round(numeric(api.historyLimit, 1, 500, 80)), revision: Math.round(numeric(api.revision, 0, Number.MAX_SAFE_INTEGER, 0)) };
 }
 
+// Returns a snapshot of the connection selected for a specific phone App.
+// App model overrides do not mutate the shared profile or the ST host model.
+export function resolveAppConnection(settings, app) {
+    const choice = settings?.appConnections?.[app];
+    const profile = choice && settings?.apiProfiles?.find(p => p.id === choice.profileId);
+    return profile
+        ? { api: { ...profile.api, model: choice.model || profile.api.model }, profileId: profile.id }
+        : { api: settings.api, profileId: settings.apiProfileId || '' };
+}
+
 export function normalizeSettings(value) {
     const raw = isRecord(value) ? value : {};
     const { contactInterval, unansweredInterval, contactEvents, contactExceptions, ...current } = raw;
@@ -88,12 +98,20 @@ export function normalizeSettings(value) {
     const api = isRecord(raw.api) ? raw.api : {};
     const ids = new Set();
     const apiProfiles = (Array.isArray(raw.apiProfiles) ? raw.apiProfiles : []).filter(p => isRecord(p) && typeof p.id === 'string' && /^[a-zA-Z0-9-]{1,80}$/.test(p.id) && typeof p.name === 'string' && p.name.trim() && !ids.has(p.id) && ids.add(p.id)).map(p => ({ id: p.id, name: p.name.trim().slice(0,80), api: normalizeApiSettings(p.api) }));
+    // Per-App routes reference saved API profiles, never embedded credentials.
+    // Deleted/invalid profile references automatically fall back to the default.
+    const appConnections = Object.fromEntries(Object.entries(isRecord(raw.appConnections) ? raw.appConnections : {})
+        .filter(([app, route]) => APPS.some(item => item.id === app) && isRecord(route) &&
+            typeof route.profileId === 'string' && apiProfiles.some(p => p.id === route.profileId))
+        .map(([app, route]) => [app, { profileId: route.profileId,
+            model: typeof route.model === 'string' ? route.model.trim().slice(0, 300) : '' }]));
     const oldPrompts = isRecord(raw.prompts) ? raw.prompts : {};
     return {
         ...current,
         schemaVersion: 1,
         api: normalizeApiSettings(api),
         apiProfiles,
+        appConnections,
         apiProfileId: apiProfiles.some(p => p.id === raw.apiProfileId) ? raw.apiProfileId : '',
         enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
         launcherVisible: typeof raw.launcherVisible === 'boolean' ? raw.launcherVisible : true,
