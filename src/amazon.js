@@ -1,3 +1,4 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { walletCurrency, majorAmount, formatMoney, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.2';
 import { dateDay, readStoryClock } from './story-clock.js?v=1.2';
@@ -71,7 +72,7 @@ export function parseAmazonResponse(raw) {
 }
 
 export function validateProducts(data,currency = null) {
-    if(!Array.isArray(data?.products)||data.products.length>8)throw Error('商品信息格式不正确，请重试。');
+    if(!Array.isArray(data?.products)||data.products.length<4||data.products.length>6)throw Error('商品搜索必须返回4—6件完整商品，原有商品目录已保留。');
     return data.products.map(p=>{
         const amount=String(p.price??'');if(!validCurrency(p.currency)||p.currency!==(currency||data.products[0]?.currency))throw Error('商品币种与当地账本不一致。');
         if(!shopText(p.name,150)||!shopText(p.currency,20)||!/^\d{1,10}(\.\d{1,4})?$/.test(amount)||Number(amount)<=0)throw Error('商品价格或名称不完整，请重新搜索。');
@@ -107,6 +108,7 @@ export function createAmazon({memory,phone,getContext,getSettings,paymentRequest
             },current,null,{
                 retries: 0, parseResponse: parseAmazonResponse, formatRetryOnce: true,
                 maxTokens: 4096, requireJsonObject:true, finalOutputContract: outputRule,
+                jsonSchema:TASK_SCHEMAS.amazon,
             });
             const changes=shopItems(state,'product').map(p=>({collection:'orders',key:p.id,value:null}));
             changes.push(...products.map(shopSet),shopSet({id:'catalog',type:'catalog',query:q}));await commit(changes);

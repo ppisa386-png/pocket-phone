@@ -1,3 +1,4 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.43';
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
 import { storyEvidenceRows } from './square-core.js?v=1.2.66';
@@ -54,7 +55,7 @@ export function createDaily({memory, phone, getContext, getSettings}) {
             const prompt = getSettings().prompts.general + '\n' + (getSettings().prompts.daily === DAILY_EDITORIAL_PROMPT ? '' : '自定义报刊偏好（服从以下新闻事实边界和事件优先选题流程）：' + getSettings().prompts.daily + '\n') + DAILY_RULES_CORE + dailyHistoryRules(sharedCity ? locationType : 'real') + '\n' + DAILY_EDITORIAL_PROMPT + '\n旧报纸adoption：adopted仅表示正文采用过这篇报道，不证明报道的每个主张；selected_pending是选中未采用，unselected是未选，unknown不可确定。后两类及待采用候选不得当作已发生事实。报道语言遵循当前预设的叙述语言，引语遵循其对白语言与翻译格式；不因真实外文刊名或人物国籍只输出外文，不翻译JSON协议键。\n' + DAILY_OUTPUT
                 + '\n剧情资料：' + JSON.stringify({date:dayDate(day)||null,currentLocation:sharedCity,locationKind:locationType,columns:DAILY_SECTIONS,recentSections:dailySectionCounts(view.state),history:historicalSources(view.state),...(locationType==='fictional'?{worldSetting:worldSettingMaterial(sharedCity,getContext())}:{}),previousEditions:previous});
             const changes = await request(prompt, data=>dailyChanges(data,{prose:storyEvidenceRows(chat),day,chat,sourceIndex:chat.length-1,existing:Object.values(view.state.daily||{})}).map(c=>sharedCity && c.value?.type==='edition' ? {...c,value:{...c.value,location:sharedCity}} : c), current, null,
-                {retries:0,parseResponse:parseDailyObject,outputContract:DAILY_OUTPUT});
+                {retries:0,parseResponse:parseDailyObject,outputContract:DAILY_OUTPUT,jsonSchema:TASK_SCHEMAS.daily});
             if (!current()) throw Error('剧情或设置已变化，本期日报未保存。');
             await memory.commit(ticket,changes);
             return {count:changes.filter(c=>c.value?.type==='article').length};

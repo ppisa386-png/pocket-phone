@@ -78,7 +78,7 @@ export function createCalendarPanel({ adapter, getView, redraw, notice }) {
             if (action === 'refresh') {
                 if (!adapter.calendar) { status = '请安装到酒馆并连接 AI 后使用日历。'; redraw(); return; }
                 const initialized = !!getView().calendar?.database;
-                return run(async () => { const result = await adapter.calendar.refresh(); if (!result.ok) return { ...result, error: (initialized ? '更新失败，已保留原有日历资料。' : '日历初始化失败，请检查网络后重试。') + (result.error ? ' ' + result.error : '') }; return result; }, db => '日历已更新 · ' + db.region);
+                return run(async () => { const result = await adapter.calendar.refresh(); if (!result.ok) return { ...result, error: (initialized ? '更新失败，已保留原有日历资料。' : '日历初始化失败。') + (result.error ? ' ' + result.error : '') }; return result; }, db => '日历已更新 · ' + db.region);
             }
             if (['save', 'delete', 'edit', 'add'].includes(action) && (working || getView().busy)) return;
             if (action === 'settings' || action === 'month') { page = action; status = ''; }

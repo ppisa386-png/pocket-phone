@@ -1,3 +1,4 @@
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
@@ -540,11 +541,11 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const data=await ask(state,null,request,current,'当前任务：X 初始粉丝。'+AUDIENCE_RULES+'只确定初始值，不计算发帖后的增长。输出 {"initialFollowers":整数}。',d=>{
                 if(d.initialFollowers==null)throw Error('X 初始粉丝返回缺少 initialFollowers。');
                 return audienceChanges(state,{initialFollowers:d.initialFollowers});
-            });
+            },{jsonSchema:TASK_SCHEMAS.xInitial});
             await commit(data);
         });},
         discover(query){return run(async(state,current,request,commit)=>{
-            const results=await ask(state,null,request,current,'当前任务：X 搜索账号。搜索词：'+JSON.stringify(xText(query,100))+'。根据角色和世界设定查找使用 X 的人物，char 默认用真名；不能因为已有电话号码或 Snapchat 好友就假定有 X 账号。'+X_SEARCH_OUTPUT,d=>list(d,'accounts',10),{finalOutputContract:X_SEARCH_OUTPUT,memoryTopic:query,arrayKey:'accounts'});
+            const results=await ask(state,null,request,current,'当前任务：X 搜索账号。搜索词：'+JSON.stringify(xText(query,100))+'。根据角色和世界设定查找使用 X 的人物，char 默认用真名；不能因为已有电话号码或 Snapchat 好友就假定有 X 账号。'+X_SEARCH_OUTPUT,d=>list(d,'accounts',10),{finalOutputContract:X_SEARCH_OUTPUT,memoryTopic:query,arrayKey:'accounts',jsonSchema:TASK_SCHEMAS.accounts});
             state=structuredClone(state);state.x||={};const changes=[],ids=[];
             for(const item of results){if(item?.has_account!==true)continue;const a=register(state,item,changes);if(a&&!ids.includes(a.id))ids.push(a.id);}
             await commit(changes);return {ids};
