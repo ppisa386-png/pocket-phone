@@ -1214,7 +1214,13 @@ test('confirmed new-story arrival moves city and weather atomically, with deleti
         assert.equal(f.weather.report(moved).status, 'ok');
         f.reply({city:null});
         assert.equal((await f.weather.refresh()).ok, true, 'new city remains fixed on subsequent refresh');
-        f.c.chat.pop();
+        // Even if subsequent floors and another refresh exist, removing the
+        // actual arrival floor must also invalidate that floor's journal entry.
+        f.c.chat.push({mes:'2026-01-03 10:00\nAnother day passed after the move.',is_user:false});
+        await f.memory.read();
+        f.reply({city:'纽约'});
+        assert.equal((await f.weather.refresh()).ok, true);
+        f.c.chat.splice(1,1);
         f.c.eventSource.emit('MESSAGE_DELETED');
         await f.memory.read();
         const rolled = await f.state();
