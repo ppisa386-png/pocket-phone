@@ -29,7 +29,7 @@ export function explicitPersonaResidence(persona,userName='') {
     const pattern=/(?:^|[\n\r。；;])\s*(?:[-*+]\s+|\d+[.)、]\s+)?(?:(?:([\p{L}\p{N}·.]{1,30})\s*(?:的)?\s*)?(?:常驻地|常住地|常居地|现居地|居住地|定居地|长期居住地|residence|home\s*base))\s*[:：]\s*([^\n\r。；;]{1,100})/gimu;
     const matches=[...source.matchAll(pattern)];
     if(matches.length!==1)return null;
-    const owner=String(matches[0][1]||'').trim();
+    const owner=String(matches[0][1]||'').trim().replace(/的$/,'');
     if(owner && /^(?:他|她|别人|朋友|同事|陌生人|NPC|另一位角色)$/i.test(owner))return null;
     if(userName && owner && !['user','本人','我','我的',userName].some(name=>name.normalize('NFKC').toLowerCase()===owner.toLowerCase()))return null;
     const place=matches[0][2].trim().replace(/^(?:\*\*|__)/,'').replace(/(?:\*\*|__)$/,'').trim();

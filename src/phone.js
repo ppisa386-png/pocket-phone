@@ -163,7 +163,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 // WEATHER_EMPTY_RESULT handling. Enforce only this module's
                 // task contracts here, not arbitrary external schema objects.
                 if (Object.values(TASK_SCHEMAS).includes(taskSchema))
-                    assertTaskResponse(data,taskSchema,{optionalMissing:options.optionalMissingFields||[]});
+                    assertTaskResponse(data,taskSchema,{optionalMissing:options.optionalMissingFields||[],currentCurrency:state.assets?.wallet?.currency||null});
                 const result = validate(data);
                 if (commPlan && isCurrent()) {
                     const changes = commClassificationChanges(data,commPlan,state);

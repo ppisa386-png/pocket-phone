@@ -26,12 +26,17 @@ export const TASK_SCHEMAS={
         date:str,currency:str,residence:{anyOf:[{type:'null'},residence]},
         initial:obj(['balance','holdings','jobs'],{balance:{type:['string','number']},holdings:arr(holding),jobs:arr(job)}),note:str,
     })),
-    assetsUpdate:schema('assets_update',obj(['events','living','business'],{
+    assetsUpdate:schema('assets_update',{
+        ...obj([],{
         date:str,currency:str,residenceChange:{anyOf:[{type:'null'},obj(['sourceIndex','subject','status','region','currency'],{sourceIndex:integer,subject:str,status:str,region:str,currency:str,place:str})]},
         events:arr({type:'object'}),salaries:arr({type:'object'}),valuations:arr({type:'object'}),
         living:obj(['total','bookedIds'],{total:{type:['number','string']},bookedIds:arr(str)}),
         business:arr({type:'object'}),ownership:arr({type:'object'}),classifications:arr({type:'object'}),recoveredAssets:arr({type:'object'}),note:str,
-    })),
+        }),
+        // Migration to another currency is a deliberate early-return task:
+        // it only proposes the new residence until the user supplies a rate.
+        anyOf:[{required:['events','living','business']},{required:['residenceChange']}],
+    }),
     assetsRecovery:schema('assets_recovery',obj(['recoveredAssets'],{recoveredAssets:arr({type:'object'})})),
     assetsResidence:schema('assets_residence_repair',obj(['residence'],{residence:{anyOf:[{type:'null'},residence]},date:str,currency:str})),
     daily:schema('daily',obj(['publication','location','articles'],{publication:str,location:str,articles:arr(article,9,9)})),
@@ -51,11 +56,17 @@ export function modelProtocolError(task,fields,reason='模型未返回完整任�
         diagnostic:'错误分类：模型任务协议缺字段；任务：'+task+'；缺少字段：'+(missing.join('、')||'无'),
     });
 }
-export function assertTaskResponse(data,contract,{optionalMissing=[]}={}) {
-    if(!contract?.value?.required?.length)return data;
-    const missing=contract.value.required.filter(key=>!optionalMissing.includes(key)&&
+export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurrency=null}={}) {
+    if(!contract?.value)return data;
+    const migration=contract.name==='phone_assets_update' && data?.residenceChange?.status==='completed' &&
+        data.residenceChange.subject==='user' && !!currentCurrency && !!data.residenceChange.currency &&
+        currentCurrency!==data.residenceChange.currency;
+    const required=contract.name==='phone_assets_update' && !migration
+        ? ['events','living','business'] : migration ? ['residenceChange'] : (contract.value.required||[]);
+    const missing=required.filter(key=>!optionalMissing.includes(key)&&
         (!data||typeof data!=='object'||Array.isArray(data)||!Object.hasOwn(data,key)||data[key]===undefined));
-    if(missing.length)throw modelProtocolError(contract.name,missing);
+    if(missing.length)throw modelProtocolError(contract.name,missing,
+        contract.name==='phone_assets_update' && missing.includes('living') ? '缺少本期生活开销' : '模型未返回完整任务数据');
     return data;
 }
 export function commonTaskSchema(app,prompt) {
