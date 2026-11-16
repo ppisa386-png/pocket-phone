@@ -193,6 +193,21 @@ h2, p { margin: 0; }
 .pp-api-status[data-kind="success"] { color: #42bd83; }
 .pp-api-status[data-kind="error"] { color: #ed7777; }
 
+/* App management: bottom navigation stays reachable while browsing long lists. */
+.pp-app-settings-page { min-height:100%; display:flex; flex-direction:column; padding-bottom:0; }
+.pp-app-settings-body { flex:1 0 auto; padding-bottom:12px; }
+.pp-app-settings-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; position:sticky; bottom:0; z-index:3; padding:11px 4px 13px; background:var(--pp-bg,#171923); border-top:1px solid var(--pp-line); }
+.pp-app-settings-tabs button { min-height:42px; border:1px solid var(--pp-line); border-radius:12px; background:var(--pp-input); color:var(--pp-text); font:inherit; cursor:pointer; }
+.pp-app-settings-tabs button[aria-pressed="true"] { border-color:var(--pp-accent); background:var(--pp-accent); color:#fff; font-weight:700; }
+.pp-app-connection-row { padding:12px 14px; margin-bottom:12px; }
+.pp-app-connection-heading { display:flex; align-items:center; gap:10px; padding:3px 0 8px; }
+.pp-app-connection-heading strong { font-size:1em; }
+.pp-app-connection-row .pp-field { padding:10px 0; gap:7px; border-bottom:0; }
+.pp-app-connection-row .pp-field input { width:100%; min-width:0; min-height:42px; border-radius:9px; padding:8px 12px; border:1px solid var(--pp-line); background:var(--pp-input); color:var(--pp-text); font:inherit; font-size:max(16px,1em); box-sizing:border-box; }
+.pp-app-connection-row .pp-api-actions { margin:3px 0; }
+.pp-app-connection-row .pp-footnote { margin:6px 0 8px; overflow-wrap:anywhere; }
+
+
 .pp-contact-status { color: #42bd83; margin: 8px 18px; font-size: 12px; line-height: 1.5; }
 
 /* Snapchat: a text-roleplay shell with local history, no real media widgets. */
