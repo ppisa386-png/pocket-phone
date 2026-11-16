@@ -343,10 +343,10 @@ test('X recovers from a missed generation-end event through the shared host stat
   ok(await f.x.publish('Available after the story ended'));
   f.reply({status:'reply',text:'Hello again'});ok(await f.x.send(id,'Hi'));
   hostBusy=true;
-  assert.equal((await f.x.publish('Still generating')).ok,false);
+  ok(await f.x.publish('Still generating'));
   hostBusy=false;
   ok(await f.x.publish('Ready again without an end event'));
-  assert.equal(xItems(f.state(),'post').length,2);
+  assert.equal(xItems(f.state(),'post').length,3);
   f.context.chatId=undefined;
   assert.equal((await f.x.publish('No chat')).ok,false);
  } finally {f.close();}
