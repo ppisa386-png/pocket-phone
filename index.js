@@ -66,7 +66,7 @@ async function start() {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
         const [response, enamelResponse, foodResponse, wechatResponse, weatherStyleResponse, weatherFontsResponse, dailyStyleResponse, calendarStyleResponse] = await Promise.all([
-            fetch(new URL('./style.css?v=1.2.42', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style.css?v=1.2.74', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.71', import.meta.url), { cache: 'no-cache' }),
