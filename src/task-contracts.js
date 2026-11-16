@@ -59,7 +59,7 @@ export function assertTaskResponse(data,contract,{optionalMissing=[]}={}) {
 }
 export function commonTaskSchema(app,prompt) {
     if(String(prompt).includes('当前任务：NPC 代付判断。'))return TASK_SCHEMAS.payment;
-    if(app==='messages')return TASK_SCHEMAS.sms;
-    if(app==='phone'||app==='incoming')return TASK_SCHEMAS.call;
+    if(app==='messages'&&/只输出 JSON：[\s\S]*?\{"status":"reply 或 no_reply"/.test(prompt))return TASK_SCHEMAS.sms;
+    if((app==='phone'||app==='incoming')&&/只输出 JSON：[\s\S]*?\{"status":"answered 或 no_answer 或 declined"/.test(prompt))return TASK_SCHEMAS.call;
     return null;
 }
