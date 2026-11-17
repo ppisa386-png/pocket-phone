@@ -2,7 +2,35 @@ import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { walletCurrency, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
+import { sameWeatherCity } from './weather-model.js?v=1.2.88';
 const foodText=(s,n=200)=>typeof s==='string'?s.trim().slice(0,n):'';
+const GEO_BRANCH_SUFFIX=/^(.+?)\s*[（(]\s*([^（）()]{1,50}店)\s*[）)]$/u;
+const NON_GEO_BRANCH=/^(?:总店|旗舰店|直营店|官方店|专卖店|自营店|体验店|品牌店|网店|本店|老店)$/u;
+// Optional geographic store labels are independent from the merchant name.
+const splitFoodShopName=raw=>{
+    const name=foodText(raw,100),match=name.match(GEO_BRANCH_SUFFIX);
+    if(!match||!match[1].trim()||NON_GEO_BRANCH.test(match[2].trim()))return {name,place:null};
+    return {name:match[1].trim(),place:match[2].trim().replace(/店$/u,'').trim()};
+};
+const branchArea=(value,city='')=>{
+    let area=foodText(value,50).replace(/[（）()<>]/g,'').replace(/(?:分店|门店|店)$/u,'').trim();
+    if(city&&area.toLowerCase().startsWith(city.toLowerCase()))area=area.slice(city.length).replace(/^市/u,'').trim();
+    return area;
+};
+// Only the displayed store name follows Weather location, never delivery.
+export function foodShopName(shop,state){
+    const parsed=splitFoodShopName(shop?.name),city=foodText(state?.location?.current?.city,60);
+    const hasBranch=shop?.hasLocationBranch===true||parsed.place!==null;
+    if(!hasBranch||!city)return parsed.name;
+    if(shop?.hasLocationBranch===true){
+        const area=shop.branchCity&&sameWeatherCity(shop.branchCity,city)?branchArea(shop.branchArea):'';
+        return parsed.name+'（'+city+area+'店）';
+    }
+    // Older cached names have an embedded geographic suffix.
+    const place=parsed.place?.toLowerCase().startsWith(city.toLowerCase())?parsed.place:city;
+    return parsed.name+'（'+place+'店）';
+}
+
 export const foodItems=(state,type)=>Object.values(state.orders||{}).filter(x=>x.type===type);
 export const FOOD_SHOP_COUNT=10,FOOD_MENU_MIN=20,FOOD_MENU_MAX=30,FOOD_CATEGORY_MIN=5,FOOD_SPECIAL_COUNT=5,FOOD_SPECIAL_DISCOUNT=20;
 const dishNameKey=s=>String(s||'').normalize('NFKC').trim().toLowerCase();
@@ -16,7 +44,7 @@ const dishPrice=(value,currency)=>{
 // The ledger currency is the single settlement currency: with a ledger, the
 // API must echo exactly that currency; without one, any story currency is
 // allowed but checkout waits for a ledger and a fresh search.
-export function validateShops(data,ledgerCurrency=null){
+export function validateShops(data,ledgerCurrency=null,locationCity=null){
     const shops=data?.shops;
     if(!Array.isArray(shops)||shops.length!==FOOD_SHOP_COUNT)throw Error(`需要一次返回 ${FOOD_SHOP_COUNT} 家店铺，请重新搜索。`);
     const returned=foodText(data?.currency,20);
@@ -24,7 +52,12 @@ export function validateShops(data,ledgerCurrency=null){
     const currency=ledgerCurrency||returned;
     if(!validCurrency(currency))throw Error('菜单币种无效，请重新搜索。');
     const validated=shops.map((shop,index)=>{
-        const name=foodText(shop?.name,100),cuisine=foodText(shop?.cuisine,60),description=foodText(shop?.description,200);
+        const parsed=splitFoodShopName(shop?.name);
+        const name=parsed.name,cuisine=foodText(shop?.cuisine,60),description=foodText(shop?.description,200);
+        const city=foodText(locationCity,60),declaredBranch=foodText(shop?.branch,50);
+        const hasLocationBranch=!!declaredBranch||parsed.place!==null;
+        const area=declaredBranch?branchArea(declaredBranch,city)
+            :city&&parsed.place?.toLowerCase().startsWith(city.toLowerCase())?branchArea(parsed.place,city):'';
         if(!name)throw Error('店铺信息不完整，请重新搜索。');
         const menu=Array.isArray(shop?.menu)?shop.menu:[];
         if(menu.length<FOOD_MENU_MIN||menu.length>FOOD_MENU_MAX)throw Error(`${name} 的菜单需要 ${FOOD_MENU_MIN}—${FOOD_MENU_MAX} 道菜，请重新搜索。`);
@@ -38,7 +71,8 @@ export function validateShops(data,ledgerCurrency=null){
             return {id:`foodShop:${index}#${position}`,name:dishName,category,description:foodText(dish?.description,200),priceMinor:dishPrice(dish?.price,currency)};
         });
         if(categories.size<FOOD_CATEGORY_MIN)throw Error(`${name} 的菜单至少需要 ${FOOD_CATEGORY_MIN} 个有区别的品类，请重新搜索。`);
-        return {id:`foodShop:${index}`,type:'foodShop',name,cuisine,description,currency,menu:dishes};
+        return {id:`foodShop:${index}`,type:'foodShop',name,cuisine,description,currency,menu:dishes,
+            ...(hasLocationBranch?{hasLocationBranch:true,branchArea:area,branchCity:city||null}:{})};
     });
     return applyDailySpecials(validated);
 }
@@ -102,11 +136,13 @@ export function createFood({memory,phone,getContext,getSettings,paymentRequest})
             const q=foodText(query,300);if(!q)throw Error('请输入想吃的菜系或菜品。');
             const currency=walletCurrency(state);
             const economy={currency,persona:!currency?getContext().powerUserSettings?.persona_description:undefined};
+            const weatherCity=foodText(state.location?.current?.city,60)||null;
             const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.food+'\n'+getSettings().prompts.foodShopping+
-                '\n当前任务：榴莲外卖店铺搜索。'+(currency?'返回结果的 currency 字段必须是 '+currency+'，所有菜品一律按 '+currency+' 定价，不做汇率换算。':'尚未建立账本，请按剧情所在地和人物背景确定一个合理币种，写入返回结果的 currency 字段；结算前需要先建立账本并重新搜索。')+'想吃的东西：'+JSON.stringify(q)+'。当前资料：'+JSON.stringify(economy)+'。'+
+                '\n当前任务：榴莲外卖店铺搜索。'+(currency?'返回结果的 currency 字段必须是 '+currency+'，所有菜品一律按 '+currency+' 定价，不做汇率换算。':'尚未建立账本，请按剧情所在地和人物背景确定一个合理币种，写入返回结果的 currency 字段；结算前需要先建立账本并重新搜索。')+'想吃的东西：'+JSON.stringify(q)+'。当前资料：'+JSON.stringify(economy)+'。天气 App 当前已确认城市（外卖店名地理信息唯一来源）：'+JSON.stringify(weatherCity)+'。此地点仅供店名和分店标识使用，不是配送目的地，不修改之后选择送给谁、送到哪里的流程。'+
                 '\n一次性返回 '+FOOD_SHOP_COUNT+' 家符合当前世界观、地域、年代的店铺，每家 '+FOOD_MENU_MIN+'—'+FOOD_MENU_MAX+' 道独立菜品，每家覆盖至少 '+FOOD_CATEGORY_MIN+' 个有实际区别的品类；不能用同一种菜的口味、配料或烹饪变化凑数量；同一家店内菜品名称不得重复。每家店有各自的经营特色、菜系和价格档次，符合人物消费水平。菜单描述保持简短，不写买家评价。'+
-                '\n只输出 JSON：{"currency":"三位货币代码","shops":[{"name":"店铺名称","cuisine":"菜系","description":"一句话简介","menu":[{"name":"菜品名称","category":"品类","description":"简短介绍","price":"数字价格"}]}]}。输出必须完整包含全部店铺和菜单，不要省略任何一家。不返回 user 已下单或付款等结论，不替 user 决定。';
-            const shops=await request(prompt,data=>validateShops(data,currency),current,null,{retries:0,maxTokens:32768,jsonSchema:TASK_SCHEMAS.food});
+                '\n店名 name 只写商家品牌或商号，不包含城市/街区后缀。如有必要区分当地分店，可额外提供可选的 branch 字段（仅填本城市商圈或街区，例如王府井，不包含城市和“店”字）；不需要给每家店都填 branch。出现分店后缀时城市只准使用前述天气城市，不要沿用其他城市或从币种推断城市；天气城市为 null 时不自行生成地理分店标识。'+
+                '\n只输出 JSON：{"currency":"三位货币代码","shops":[{"name":"不带地点的商家名称","cuisine":"菜系","description":"一句话简介","menu":[{"name":"菜品名称","category":"品类","description":"简短介绍","price":"数字价格"}]}]}。有分店时可在对应 shop 对象内加 branch 字符串；否则省略。输出必须完整包含全部店铺和菜单，不要省略任何一家。不返回 user 已下单或付款等结论，不替 user 决定。';
+            const shops=await request(prompt,data=>validateShops(data,currency,weatherCity),current,null,{retries:0,maxTokens:32768,jsonSchema:TASK_SCHEMAS.food});
             const changes=[...foodItems(state,'foodShop').map(s=>({collection:'orders',key:s.id,value:null})),...foodItems(state,'foodCart').map(c=>({collection:'orders',key:c.id,value:null}))];
             changes.push(...shops.map(foodSet),foodSet({id:'foodSearch',type:'foodSearch',query:q,currency:shops[0]?.currency??currency}));
             await commit(changes);
@@ -146,9 +182,10 @@ export function createFood({memory,phone,getContext,getSettings,paymentRequest})
                     throw error;
                 }
             }
-            await commit([foodSet({id,type:'foodOrder',shopId,shopName:shop?.name||lines[0].shopName,cuisine:shop?.cuisine||lines[0].cuisine||'',items:lines.map(i=>({dishId:i.dishId,name:i.name,category:i.category,priceMinor:i.priceMinor,currency:i.currency,quantity:i.quantity,...(i.specialDiscount?{originalPriceMinor:i.originalPriceMinor,specialDiscount:i.specialDiscount}:{})})),totals,recipient:receiver,createdDay:clock.day,createdHour:clock.hour,sourceIndex:context.chat.length-1,createdAt:Date.now(),paymentMethod:npcPay?'npc':'self',payerName:payer,paymentStatus:'paid'}),
+            const orderedShopName=shop?foodShopName(shop,state):lines[0].shopName;
+            await commit([foodSet({id,type:'foodOrder',shopId,shopName:orderedShopName,cuisine:shop?.cuisine||lines[0].cuisine||'',items:lines.map(i=>({dishId:i.dishId,name:i.name,category:i.category,priceMinor:i.priceMinor,currency:i.currency,quantity:i.quantity,...(i.specialDiscount?{originalPriceMinor:i.originalPriceMinor,specialDiscount:i.specialDiscount}:{})})),totals,recipient:receiver,createdDay:clock.day,createdHour:clock.hour,sourceIndex:context.chat.length-1,createdAt:Date.now(),paymentMethod:npcPay?'npc':'self',payerName:payer,paymentStatus:'paid'}),
                 foodSet({id:'foodCart',type:'foodCart',items:(state.orders.foodCart?.items||[]).filter(i=>i.shopId!==shopId)}),
-                ...(npcPay?[]:[assetSet(cashRecord('foodOrder:'+id,-total,'榴莲外卖 · '+(shop?.name||lines[0].shopName),{currency,source:'food',orderId:id,day:clock.day}))])]);
+                ...(npcPay?[]:[assetSet(cashRecord('foodOrder:'+id,-total,'榴莲外卖 · '+orderedShopName,{currency,source:'food',orderId:id,day:clock.day}))])]);
             return {id};
         });},
     };

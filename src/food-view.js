@@ -1,4 +1,4 @@
-import { foodItems } from './food.js?v=1.2.17';
+import { foodItems, foodShopName } from './food.js?v=1.2.89';
 import { formatMoney } from './currency.js?v=1.2';
 import { dayDate } from './story-clock.js?v=1.2';
 import { foodDeliveryStatus } from './delivery.js?v=1.2.65';
@@ -101,7 +101,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
         const min = prices.length ? money(Math.min(...prices), shop.currency) : '—';
         return '<article class="pp-food-shop-card"><button type="button" class="pp-food-shop-open" data-food-action="shop" data-food-id="' + esc(shop.id) + '"' + disabled() + '>' +
             '<div class="pp-food-shop-thumb" data-tint="' + (index % 6) + '"><img src="' + foodImage(shop.menu?.[0] || {category:shop.cuisine,name:shop.cuisine}) + '" alt="" loading="lazy" decoding="async"></div>' +
-            '<div class="pp-food-shop-content"><div class="pp-food-shop-row"><strong>' + esc(shop.name) + '</strong>' + (count ? '<b class="pp-food-shop-badge" aria-label="已选 ' + count + ' 件">' + count + '</b>' : '') + '</div>' +
+            '<div class="pp-food-shop-content"><div class="pp-food-shop-row"><strong>' + esc(foodShopName(shop,state)) + '</strong>' + (count ? '<b class="pp-food-shop-badge" aria-label="已选 ' + count + ' 件">' + count + '</b>' : '') + '</div>' +
             '<small class="pp-food-cuisine">' + esc(shop.cuisine || '精选餐厅') + '</small>' +
             (shop.description ? '<p>' + esc(shop.description) + '</p>' : '') +
             '<div class="pp-food-shop-foot"><span>' + (shop.menu?.length || 0) + ' 道菜品</span><span class="pp-food-shop-dot">·</span><span>低至 ' + esc(min) + '</span></div>' +
@@ -113,7 +113,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
         return '<article class="pp-food-special-card">' +
             '<button type="button" class="pp-food-special-open" data-food-action="shop" data-food-id="' + esc(shop.id) + '"' + disabled() + '>' +
             '<div class="pp-food-special-photo"><img src="' + foodImage(dish,index) + '" alt="" loading="lazy" decoding="async"><span class="pp-food-special-badge">8折特价</span></div>' +
-            '<div class="pp-food-special-info"><small>' + esc(shop.name) + '</small><strong>' + esc(dish.name) + '</strong>' + priceMarkup(dish,shop.currency) + '</div></button>' +
+            '<div class="pp-food-special-info"><small>' + esc(foodShopName(shop,state)) + '</small><strong>' + esc(dish.name) + '</strong>' + priceMarkup(dish,shop.currency) + '</div></button>' +
             '<button type="button" class="pp-food-special-add" data-food-action="special-add" data-food-id="' + esc(dish.id) + '" data-food-shop="' + esc(shop.id) + '" aria-label="加入购物车：' + esc(dish.name) + '"' + disabled() + '>＋</button>' +
             (line ? '<small class="pp-food-special-picked">已选 ' + line.quantity + ' 份</small>' : '') +
             '</article>';
@@ -172,7 +172,7 @@ export function createFoodPanel({ adapter, getView, redraw, notice, assetBase = 
             [['all', '全部'], ...names.map(n => [n, n])].map(([id, name]) => '<button type="button" data-food-action="category" data-food-id="' + esc(id) + '" aria-pressed="' + (category === id) + '"' + disabled() + '>' + esc(name) + '</button>').join('') + '</div>';
         return '<section class="pp-food-shoppage"><header class="pp-food-store-heading">' +
             '<button type="button" class="pp-food-store-back" data-food-action="back" aria-label="返回餐厅"' + disabled() + '><span aria-hidden="true">‹</span></button>' +
-            '<div class="pp-food-store-title"><h2>' + esc(shop.name) + '</h2><small>' + esc([shop.cuisine, (shop.menu?.length || 0) + ' 道菜品'].filter(Boolean).join(' · ')) + '</small></div></header>' +
+            '<div class="pp-food-store-title"><h2>' + esc(foodShopName(shop,state)) + '</h2><small>' + esc([shop.cuisine, (shop.menu?.length || 0) + ' 道菜品'].filter(Boolean).join(' · ')) + '</small></div></header>' +
             rail + '<div class="pp-food-menu" data-food-menu="shop:' + esc(shop.id) + ':' + esc(category) + '">' + sections + '</div>' +
             (buy ? '<div class="pp-food-buy-popover">' + buyBubble() + '</div>' : '') +
             '<div class="pp-food-bar"><span class="pp-food-bar-status" role="status">' + (lines.length ? '已选择' + lines.length + '样菜品' : '尚未选择菜品') + '</span>' +

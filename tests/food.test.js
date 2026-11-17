@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
 import {createPhoneService} from './phone-fixture.js';
-import {createFood,foodItems,validateShops,FOOD_SHOP_COUNT,FOOD_MENU_MIN,FOOD_MENU_MAX,FOOD_SPECIAL_COUNT,FOOD_SPECIAL_DISCOUNT} from '../src/food.js';
+import {createFood,foodItems,foodShopName,validateShops,FOOD_SHOP_COUNT,FOOD_MENU_MIN,FOOD_MENU_MAX,FOOD_SPECIAL_COUNT,FOOD_SPECIAL_DISCOUNT} from '../src/food.js';
 import {createFoodPanel} from '../src/food-view.js';
 import {assetRows} from '../src/assets-core.js';
 import {normalizeSettings} from '../src/config.js';
@@ -38,6 +38,46 @@ test('一次搜索只发一次请求，十家店铺与完整菜单进入缓存�
   assert.equal(f.count(),1); // 进店铺、回首页、重开手机都不再请求
  }finally{f.close();}
 });
+test('店名分店地点只跟随天气城市，已有订单收件人和历史店名保持原样',async()=>{
+ const payload=shopsPayload();
+ payload.shops[0].name='小院厨房（上海静安店）';
+ payload.shops[1].name='烤物屋';payload.shops[1].branch='王府井';
+ payload.shops[2].name='咖啡所（旗舰店）';
+ payload.shops[3].name='铺子（北京望京店）';
+ const f=setup(payload);
+ try{
+  await seedWallet(f);
+  const ticket=await f.memory.begin();
+  await f.memory.commit(ticket,[{collection:'location',key:'current',value:{city:'北京',sourceIndex:0}}]);
+  ok(await f.food.search('晚餐'));
+  assert.match(f.prompt(),/天气 App 当前已确认城市.*北京/);
+  const [wrong,branch,brand,matching]=foodItems(f.state(),'foodShop');
+  assert.equal(foodShopName(wrong,f.state()),'小院厨房（北京店）');
+  assert.equal(foodShopName(branch,f.state()),'烤物屋（北京王府井店）');
+  assert.equal(foodShopName(brand,f.state()),'咖啡所（旗舰店）');
+  assert.equal(foodShopName(matching,f.state()),'铺子（北京望京店）');
+  ok(await f.food.add(branch.id,branch.menu[0].id));
+  ok(await f.food.checkout(branch.id,'other','Alex'));
+  const order=foodItems(f.state(),'foodOrder')[0];
+  assert.equal(order.shopName,'烤物屋（北京王府井店）');
+  assert.deepEqual(order.recipient,{id:'other',name:'Alex'});
+  const move=await f.memory.begin();
+  await f.memory.commit(move,[{collection:'location',key:'current',value:{city:'上海',sourceIndex:0,manual:true}}]);
+  await f.memory.read();
+  assert.equal(foodShopName(branch,f.state()),'烤物屋（上海店）');
+  assert.equal(foodShopName(matching,f.state()),'铺子（上海店）');
+  assert.equal(order.shopName,'烤物屋（北京王府井店）');
+  assert.equal(f.count(),1);
+ }finally{f.close();}
+});
+test('天气城市未知时店名不显示模型猜测的地理分店，保留非地理店名',()=>{
+ const payload=shopsPayload();payload.shops[0].name='夜食（北京三里屯店）';
+ payload.shops[1].name='夜食旗舰（旗舰店）';
+ const shops=validateShops(payload,'USD');
+ assert.equal(foodShopName(shops[0],{location:{current:null}}),'夜食');
+ assert.equal(foodShopName(shops[1],{location:{current:null}}),'夜食旗舰（旗舰店）');
+});
+
 test('独立 API 下搜索使用本次请求级输出上限且不自动重试',async()=>{
  const calls=[];let payload=shopsPayload();
  const bus=new EventEmitter();
