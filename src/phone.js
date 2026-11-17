@@ -202,7 +202,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + modelRequests + '；实际模型：' + (responseMeta?.model || connection.api.model || '跟随酒馆当前模型')
                         + '；任务标识：' + (taskSchema?.name||app) + '；Schema：' + (taskSchema?.name||'phone_task')
-                        + '；插件版本：1.2.85；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
+                        + '；插件版本：1.2.86；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
                         + '；不支持参数兼容次数：' + unsupportedParameterRetries
                         + (responseLength === null ? '' : '；返回字符数：' + responseLength)
                         + (responseText?.trim()==='{}'?'；最终为空对象：是':'；最终为空对象：否')
