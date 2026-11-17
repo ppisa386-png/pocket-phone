@@ -69,6 +69,30 @@ test('weather sends its complete schema through the real phone/API chain and pre
  } finally {f.close();}
 });
 
+
+test('independent weather repairs missing climate for an identified city through the real phone/API chain', async () => {
+ const f=phoneFixture(), weather=createWeather({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});
+ const partial={city:'莫斯科',origin:'real_knowledge',weather:{type:'overcast',temp:4,wind:2,humidity:86}};
+ const complete={...partial,climate:{archetype:'dfb',monthlyTemp:[-9,-8,-2,6,14,18,21,19,13,6,-1,-6],
+  monthlyRainChance:Array(12).fill(.35),typicalWind:3,typicalHumidity:70,diurnal:8,south:false,arid:false,typhoon:false,alwaysNight:false}};
+ const seen=[];
+ try {
+  f.context.chat=[{mes:'2026-01-01 10:00\n【状态栏】位置：莫斯科'}];
+  f.reply(options=>{
+   const payload=JSON.parse(options.body);seen.push(payload);
+   assert.deepEqual(payload.json_schema,weatherResearchSchema());
+   assert.equal(payload.max_tokens,4096);
+   if(seen.length===2) assert.match(payload.messages.at(-1).content,/天气字段补全/);
+   return JSON.stringify(seen.length===1 ? partial : complete);
+  });
+  const result=await weather.refresh();
+  assert.equal(result.ok,true,result.error);
+  assert.equal(seen.length,2);
+  assert.equal(f.phone.snapshot().location.current.city,'莫斯科');
+  assert.equal(f.phone.snapshot().weather['莫斯科'].state.temp,4);
+ } finally {f.close();}
+});
+
 test('weather schema fallback preserves the task and does not mutate the caller schema', async () => {
  const schema=weatherResearchSchema('芝加哥'),before=structuredClone(schema),seen=[];
  const f=clientFixture({fetchImpl:async(_url,options)=>{

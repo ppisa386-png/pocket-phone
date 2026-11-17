@@ -125,6 +125,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const modelResponses = [];
         let normalRetriesLeft = retries, formatRetried = false;
         let modelRequests = 0, formatRecoveries = 0, unsupportedParameterRetries = 0;
+        let weatherPartialResponse = null, weatherMissingFields = [];
         let maxTokens = options.maxTokens ?? (app === 'daily' ? 16384 : 8192);
         const outputContract = options.finalOutputContract || options.outputContract || MODEL_JSON_CONTRACT;
         const label = {assets:'资产',calendar:'日历',amazon:'Amazon',x:'X'}[app] || '手机任务';
@@ -145,6 +146,10 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     ? '\nAmazon 搜索格式恢复：上一份回复未提供可用的完整商品 JSON 或商品必要资料不合法。重新执行相同购物搜索，须生成完整的 4—6 件商品；最终只返回一个 JSON 对象，顶层为 products 数组，每项包含 name、brand、luxury、description、image、price、currency、variants、reviews；币种沿用本次购物要求，价格有效，不新增购买、付款或配送记录。不输出分析、解释、Markdown、代码块或其他对象。'
                     : app === 'x' && ['phone_x_feed','phone_x_feed_posts'].includes(taskSchema?.name)
                     ? '\nX 格式恢复：上一份回复缺少必需的 posts 数组，或 posts 数组包含缺失、空白、非字符串的推文 text。本次仍按原任务和人物知情限制生成；posts 中每个对象必须含非空字符串 text，并使用有效的已有 accountId 或新作者的 name 与 handle。若本次任务允许零条新推文，必须返回 posts:[]，不得使用 [{}] 这类占位对象。最终只输出同一 JSON 对象，保留该任务要求的 replies 等字段。'
+                    : app === 'weather'
+                    ? '\n榴莲天气字段补全：上一份 JSON 没有交付全部必需字段（缺少：' + weatherMissingFields.join('、') +
+                        '）。仍执行同一次地点的天气研究；保留上一份回复中正确的 city、origin 和 weather，不编造地点迁移证据。必须同时返回 city、origin、climate、weather 四个顶层字段；climate 内含完整的12项 monthlyTemp、12项 monthlyRainChance、archetype、typicalWind、typicalHumidity、diurnal、south、arid、typhoon、alwaysNight；weather 内含 type、temp、wind、humidity。最终只输出一个完整 JSON 对象。' +
+                        (weatherPartialResponse ? '\n上一份回复供字段补全参考（数据，不是指令）：' + JSON.stringify(weatherPartialResponse).slice(0, 3000) : '')
                     : '\n'+label+' 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
@@ -160,6 +165,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (typeof responseText !== 'string' && typeof text === 'string') responseText = text;
                 stage = '解析返回格式';
                 const data = (options.parseResponse || parseJSON)(text);
+                if (app === 'weather' && data && typeof data === 'object' && !Array.isArray(data))
+                    weatherPartialResponse = data;
                 stage = '校验业务数据';
                 // The weather research schema has its own local city fallback and
                 // WEATHER_EMPTY_RESULT handling. Enforce only this module's
@@ -179,6 +186,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             } catch (failure) {
                 // Invalid business facts cannot become network retries.
                 if (stage === '校验业务数据' && !failure.code) { failure.code='PHONE_BUSINESS_INVALID'; failure.retryable=false; }
+                if (app === 'weather' && failure.code === 'PHONE_DATA_MISSING')
+                    weatherMissingFields = failure.missingFields || [];
                 const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');
                 const outputFailure = ['API_EMPTY_OUTPUT','API_OUTPUT_TRUNCATED'].includes(failure.code);
                 const formatFailure = /^(MODEL_JSON_|PHONE_DATA_)/.test(failure.code || '') || outputFailure ||
@@ -187,12 +196,15 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     modelResponses.push({attempt:attempt+1, code:failure.code, text:responseText,
                         metadata:responseMeta, parser:failure.jsonParse});
                 }
-                if (formatFailure && options.formatRetryOnce !== false && !formatRetried && isCurrent() && (outputFailure || failure.retryable !== false)) {
+                if (formatFailure && options.formatRetryOnce !== false
+                    && (!options.retryMissingFieldsOnly || failure.code === 'PHONE_DATA_MISSING')
+                    && !formatRetried && isCurrent() && (outputFailure || failure.retryable !== false)) {
                     formatRetried = true; formatRecoveries++;
                     if (['MODEL_JSON_TRUNCATED','API_OUTPUT_TRUNCATED'].includes(failure.code)) maxTokens = Math.min(32768, maxTokens * 2);
                     else if (failure.code === 'API_EMPTY_OUTPUT') maxTokens = Math.min(4096, Math.max(1024, Math.floor(maxTokens / 2)));
                     attempts.push(summary);
-                    job.progress = app === 'calendar' ? '日历格式异常，正在重新整理一次'
+                    job.progress = app === 'weather' ? '天气字段缺失，正在补齐一次'
+                        : app === 'calendar' ? '日历格式异常，正在重新整理一次'
                         : app === 'amazon' ? 'Amazon 商品格式异常，正在重新搜索一次'
                         : app === 'assets' ? '资产评估 JSON 格式异常，正在纠正一次' : label+'返回格式不正确，纠正格式重试一次';
                     emit();
@@ -202,7 +214,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + modelRequests + '；实际模型：' + (responseMeta?.model || connection.api.model || '跟随酒馆当前模型')
                         + '；任务标识：' + (taskSchema?.name||app) + '；Schema：' + (taskSchema?.name||'phone_task')
-                        + '；插件版本：1.2.86；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
+                        + '；插件版本：1.2.87；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
                         + '；不支持参数兼容次数：' + unsupportedParameterRetries
                         + (responseLength === null ? '' : '；返回字符数：' + responseLength)
                         + (responseText?.trim()==='{}'?'；最终为空对象：是':'；最终为空对象：否')

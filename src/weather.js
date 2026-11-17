@@ -5,7 +5,7 @@ import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { effectiveReply } from './contact-policy.js?v=1.2.57';
 import { isMemoryHidden, replayJournal, appendChange } from './journal.js?v=1.2.57';
 import { establishedSources } from './contacts.js?v=1.2';
-import { weatherResearchPrompt, validateWeatherResearch, sameWeatherCity, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from './weather-model.js?v=1.2.86';
+import { weatherResearchPrompt, validateWeatherResearch, sameWeatherCity, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from './weather-model.js?v=1.2.87';
 
 export const WEATHER_LOCATION_RULE = '仅当本楼 user 首次明确当前城市，或已实际进入另一城市时，在正文末尾附 <!--durian-location:{"city":"城市名称"}-->。未换城市不标记；仅提及、计划前往或他人抵达不算。';
 
@@ -760,7 +760,7 @@ export function createWeather({ memory, phone, getContext, getSettings }) {
             data => validateWeatherResearch(data, city, {
                 chat, locationSourceIndex: view.state.location?.current?.sourceIndex ?? -1,
             }),
-            current, null, { retries: 0, formatRetryOnce: false, maxTokens: 4096,
+            current, null, { retries: 0, formatRetryOnce: true, retryMissingFieldsOnly: true, maxTokens: 4096,
                 jsonSchema: weatherResearchSchema(city), finalOutputContract: WEATHER_OUTPUT_CONTRACT });
         if (!current()) throw Error('剧情或设置已变化，本次天气研究未保存。');
         return result;

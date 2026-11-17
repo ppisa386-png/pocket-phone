@@ -79,6 +79,14 @@ function hasArrivalEvidence(change, city, chat, locationSourceIndex) {
 
 const finite = (n, min, max) => typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
 const invalid = msg => Object.assign(Error(msg), { retryable: false, code: 'WEATHER_RESEARCH_INVALID' });
+// A model that omits required output can be asked once to supply it; invalid
+// geography, bad enums and out-of-range values remain hard failures.
+const incomplete = fields => Object.assign(
+    Error(fields.some(field => field.startsWith('climate'))
+        ? 'AI 返回的12个月气候档案不完整，原有天气已保留。'
+        : 'AI 返回的天气必需字段不完整，原有天气已保留。'),
+    { retryable: true, code: 'PHONE_DATA_MISSING', missingFields: fields },
+);
 
 function recentProse(chat) {
     const rows = [];
@@ -142,9 +150,21 @@ export function validateWeatherResearch(data, fixedCity = null, { chat = [], loc
     if (migrating && !hasArrivalEvidence(data.locationChange, proposedCity, chat, locationSourceIndex))
         throw invalid('AI 返回的地点与手机已捕捉的当前位置不一致，且缺少本次剧情迁移证据；原有天气已保留。');
     const city = savedCity && !migrating ? savedCity : proposedCity;
+    const topMissing = ['origin', 'climate', 'weather'].filter(field => data[field] == null);
+    if (topMissing.length) throw incomplete(topMissing);
     if (!ORIGINS.has(data.origin)) throw invalid('天气研究没有返回有效的现实/架空地点分类。');
     const profile = data.climate;
-    if (!profile || !CLIMATE_CODES.has(profile.archetype)
+    if (typeof profile !== 'object' || Array.isArray(profile))
+        throw invalid('AI 返回的12个月气候档案不完整或数值无效，原有天气已保留。');
+    const climateMissing = ['archetype', 'monthlyTemp', 'monthlyRainChance', 'typicalWind',
+        'typicalHumidity', 'diurnal', 'south', 'arid', 'typhoon', 'alwaysNight']
+        .filter(field => profile[field] == null).map(field => 'climate.' + field);
+    if (climateMissing.length) throw incomplete(climateMissing);
+    const shortMonths = ['monthlyTemp', 'monthlyRainChance']
+        .filter(field => Array.isArray(profile[field]) && profile[field].length !== 12)
+        .map(field => 'climate.' + field);
+    if (shortMonths.length) throw incomplete(shortMonths);
+    if (!CLIMATE_CODES.has(profile.archetype)
         || !Array.isArray(profile.monthlyTemp) || profile.monthlyTemp.length !== 12
         || profile.monthlyTemp.some(n => !finite(n, -80, 70))
         || !Array.isArray(profile.monthlyRainChance) || profile.monthlyRainChance.length !== 12
@@ -158,7 +178,12 @@ export function validateWeatherResearch(data, fixedCity = null, { chat = [], loc
         || typeof profile.alwaysNight !== 'boolean')
         throw invalid('AI 返回的12个月气候档案不完整或数值无效，原有天气已保留。');
     const weather = data.weather;
-    if (!weather || !WEATHER_RESEARCH_TYPES.includes(weather.type)
+    if (typeof weather !== 'object' || Array.isArray(weather))
+        throw invalid('AI 返回的当前天气数据不完整或数值无效，原有天气已保留。');
+    const weatherMissing = ['type', 'temp', 'wind', 'humidity']
+        .filter(field => weather[field] == null).map(field => 'weather.' + field);
+    if (weatherMissing.length) throw incomplete(weatherMissing);
+    if (!WEATHER_RESEARCH_TYPES.includes(weather.type)
         || !finite(weather.temp, -80, 70)
         || !finite(weather.wind, 0, 12)
         || !finite(weather.humidity, 0, 100))
