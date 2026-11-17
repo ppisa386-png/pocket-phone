@@ -85,6 +85,65 @@ test('weather schema declares all data fields while allowing unknown-city and ev
     assert.deepEqual(validateWeatherResearch({city:null}),{city:null});
 });
 
+
+test('weather missing fields are repairable, while invalid values and conflicting cities remain hard failures', () => {
+    const sample = {city:'莫斯科',origin:'real_knowledge',
+        climate:{archetype:'dfb',monthlyTemp:Array(12).fill(4),monthlyRainChance:Array(12).fill(.3),
+            typicalWind:3,typicalHumidity:70,diurnal:8,south:false,arid:false,typhoon:false,alwaysNight:false},
+        weather:{type:'overcast',temp:4,wind:2,humidity:86}};
+    const missingClimate = {...sample}; delete missingClimate.climate;
+    assert.throws(() => validateWeatherResearch(missingClimate), error =>
+        error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('climate'));
+    assert.throws(() => validateWeatherResearch({...sample, climate:{...sample.climate,monthlyTemp:[4]}}), error =>
+        error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('climate.monthlyTemp'));
+    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,humidity:null}}), error =>
+        error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('weather.humidity'));
+    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,temp:100}}), error =>
+        error.code === 'WEATHER_RESEARCH_INVALID');
+    assert.throws(() => validateWeatherResearch({...sample,origin:'not_a_kind'}), error =>
+        error.code === 'WEATHER_RESEARCH_INVALID');
+});
+
+test('first refresh with city and current weather but no climate repairs once and saves atomically', async () => {
+    const f = setup([{mes:'2026-01-01 10:00\n【状态栏】位置：莫斯科',is_user:false}]);
+    try {
+        const partial={city:'莫斯科',origin:'real_knowledge',weather:{type:'overcast',temp:4,wind:2,humidity:86}};
+        const complete={...partial,climate:{archetype:'dfb',monthlyTemp:[-9,-8,-2,6,14,18,21,19,13,6,-1,-6],
+            monthlyRainChance:[.3,.3,.3,.35,.4,.4,.45,.45,.4,.4,.35,.3],
+            typicalWind:3,typicalHumidity:70,diurnal:8,south:false,arid:false,typhoon:false,alwaysNight:false}};
+        const prompts=[]; f.c.generateQuietPrompt=async options=>{
+            prompts.push(options.quietPrompt);
+            return JSON.stringify(prompts.length===1 ? partial : complete);
+        };
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,true,result.error);
+        assert.equal(prompts.length,2,'only one targeted repair is allowed');
+        assert.match(prompts[1],/榴莲天气字段补全/);
+        assert.match(prompts[1],/climate/);
+        const state=await f.state();
+        assert.equal(state.location.current.city,'莫斯科');
+        assert.equal(state.weather['莫斯科'].state.temp,4);
+        assert.equal(state.weather['莫斯科'].climate.monthlyTemp.length,12);
+        assert.equal(f.weather.report(state).status,'ok');
+    } finally {f.close();}
+});
+
+test('two incomplete weather replies never overwrite an existing location or forecast', async () => {
+    const f=setup([marker('2026-01-01 10:00\nSam is in Chicago.','芝加哥')]);
+    try {
+        await f.memory.read();
+        assert.equal((await f.weather.refresh()).ok,true);
+        const before=structuredClone(await f.state());
+        const partial={city:'芝加哥',origin:'real_knowledge',weather:{type:'overcast',temp:4,wind:2,humidity:86}};
+        let calls=0; f.c.generateQuietPrompt=async()=>{calls++;return JSON.stringify(partial);};
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,false);
+        assert.equal(result.code,'PHONE_DATA_MISSING');
+        assert.equal(calls,2);
+        assert.deepEqual(await f.state(),before);
+    } finally {f.close();}
+});
+
 test('host weather output contract and empty-object rejection preserve old weather in one request', async () => {
     const f=setup([marker('2026-10-31 16:28\nSam is in Chicago.','芝加哥')]);
     try {
