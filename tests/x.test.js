@@ -1232,6 +1232,35 @@ test('NPC home and square posts independently keep optional image descriptions',
 });
 
 
+
+for(const independent of [false,true])test('X '+(independent?'independent':'host')+' accepts generated home authors without account eligibility proof',async()=>{
+ const f=setup(undefined,independent);
+ try{
+  f.reply({posts:[
+   {name:'艾米',handle:'amy',text:'新照片',has_account:false,authorKind:'public'},
+   {name:'虚构故事里的人',handle:'story_person',text:'今天喝了咖啡'},
+   {name:'学院播报',handle:'school_feed',text:'公开消息',authorKind:'organization'},
+   {accountId:'unknown-id',name:'诺拉',handle:'nora',text:'下班了'}]});
+  ok(await f.x.refresh());assert.equal(f.count(),1);
+  const posts=xItems(f.state(),'post');
+  assert.deepEqual(posts.map(p=>p.text),['新照片','今天喝了咖啡','公开消息','下班了']);
+  assert.ok(posts.every(p=>p.feed==='home'&&f.state().x[p.author]?.type==='account'));
+  assert.doesNotMatch(f.prompt(),/发帖身份由程序核对|必须附 has_account:true/);
+ }finally{f.close();}
+});
+test('X accepts unverified comment authors and retains duplicate-only protection',async()=>{
+ const f=setup();
+ try{
+  f.reply({posts:[{name:'外地来客',handle:'visitor',text:'到了',has_account:false,
+   comments:[{key:'c1',name:'路人',text:'欢迎',has_account:false}]}]});
+  ok(await f.x.refresh());assert.equal(xItems(f.state(),'post').length,1);
+  assert.equal(xItems(f.state(),'comment').length,1);
+  const initial=JSON.stringify(f.state().x);
+  assert.equal((await f.x.refresh()).ok,false);
+  assert.equal(JSON.stringify(f.state().x),initial);
+ }finally{f.close();}
+});
+
 test('X feed consumes a complete posts array without another model request',async()=>{
  const f=setup();try{
   const id=await account(f);const before=f.count();

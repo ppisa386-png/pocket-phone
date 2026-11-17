@@ -14,6 +14,7 @@ export function xFeedArea(state,post) {
     if (post.author==='user') return 'home';
     if (post.feed==='square') return 'square';
     if(Object.values(state.business||{}).some(deal=>deal?.accountId===post.author))return 'square';
+    if(post.feed==='home')return 'home';
     return ['organization','public'].includes(xAccountKind(state.x?.[post.author])) ? 'square' : 'home';
 }
 export function squareFeedPost(state,post) {
