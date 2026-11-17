@@ -1,7 +1,7 @@
 import { createCalendar } from './src/calendar.js?v=1.2.87';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.88';
-import { createWeather } from './src/weather.js?v=1.2.88';
+import { createDaily } from './src/daily.js?v=1.2.89';
+import { createWeather } from './src/weather.js?v=1.2.89';
 import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
 import { createAssets } from './src/assets.js?v=1.2.80';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
@@ -19,12 +19,12 @@ import { createApiClient, createKeyStore } from './src/api.js?v=1.2.87';
 import { captureHostRequest } from './src/api-context.js?v=1.2.87';
 import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.89';
 import { mountPhone } from './src/ui.js?v=1.2.89';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.88';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.89';
 import { createPhoneService } from './src/phone.js?v=1.2.88';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
 import { normalizeSettings } from './src/config.js?v=1.2.89';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.88';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.89';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
