@@ -2,7 +2,7 @@
 **基线**：main `7938f96ca33fde5089b88ebdaafece2616c7f89e`（v1.2.80）。
 **问题与原因**：用户报告榴莲日历刷新时，上游返回 HTTP 400 `The specified schema produces a constraint that has too many states for serving`，终端同时显示 `region / timezone / years / holidays` 必需字段。核查当前 `phone_calendar` 传输契约发现，`holidays` 以 `maxItems:240` 约束、条目又使用嵌套 `anyOf`（数组元组或对象）；约束解码器可能对每项展开状态导致上游在生成前拒绝整个请求。
 **修复**：只把日历专属的传输 Schema 的 `holidays` 改为轻量字符串元组数组，移除 `maxItems:240` 与嵌套 `anyOf`，保留顶层 required、`years` 精确两年、最终提示词；业务层 `parseCalendarResponse` 和 `validateCalendarDatabase` 原样保留，仍允许旧式对象条目且本地拒绝超过 240 项、无效节日和日期。更新日历与任务层的 Schema 缓存引用及发布版本；其他 App 的 Schema、请求规则与业务模块不变。
-**验证**：新增 `tests/calendar.test.js` 回归，检查独立 API 实际传递的轻量 Schema、240/241 项保存边界、协议缺字段和空节日列表的既有行为；原有日历提醒、刷新与错误回滚测试不改。待 CI 检验，未使用用户私有 API 密钥实测上游。手动上游验证仍需在用户的酒馆环境完成。
+**验证**：新增 `tests/calendar.test.js` 回归，检查独立 API 实际传递的轻量 Schema、240/241 项保存边界、协议缺字段和空节日列表的既有行为；原有日历提醒、刷新与错误回滚测试不改。首次 PR #29 CI 全量 923 项中通过 921 项，日历新增测试和业务均通过；两项失败仅来自此前存在的发布版本缓存一致性断言（`tests/api.test.js`、`tests/weather-window-diary.test.js`）要求天气模块引用与 VERSION 同步，已为 v1.2.81 同步相关 import 查询版本，不变更天气代码和功能。待修正后 CI 再验证；未使用用户私有 API 密钥实测上游。手动上游验证仍需在用户的酒馆环境完成。
 **保持**：天气 App 地址初始化和手动刷新、节前三天/当天的正文提醒、日历个人事件和回执、地域隔离、保留原数据库的失败原子性、其他 App 接口与界面均保持不变。
 
 ## v1.2.80 · WhatsApp 失败消息长按重发（2026-11-16）
