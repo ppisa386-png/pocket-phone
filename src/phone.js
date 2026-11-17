@@ -1,4 +1,4 @@
-import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.2';
+import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.2.88';
 import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.66';
 import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.66';
 import { exactStoryTime } from './story-clock.js?v=1.2';
