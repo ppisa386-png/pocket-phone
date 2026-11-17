@@ -1,7 +1,7 @@
 ## v1.2.81 · 榴莲日历上游 Schema 状态数超限回归（2026-11-17）
 - `tests/calendar.test.js`：`phone_calendar` 的 holidays 传输 Schema 不含 maxItems:240 与嵌套 anyOf，同时仍要求顶层四字段并保留业务存档 240 上限；240 项合法、241 项拒绝。
 - 独立 API 模拟入口检查实际传给生成层的 Schema；空对象仅做一次既有格式恢复而不落盘，`holidays:[]` 仍合法；原有日历提醒/原子存档测试照常执行。
-- 首次 PR #29 GitHub Actions 全量 923 项通过 921 项；新增日历测试通过，失败两项均为跨版本缓存标记不一致。按既有静态断言同步天气相关模块导入标记至 v1.2.81（只变更 ?v=，无业务逻辑修改），再次提交复验。未连接用户私有的上游模型 API。
+- 首次 PR #29 GitHub Actions 全量 923 项通过 921 项；新增日历测试通过，失败两项均为跨版本缓存标记不一致。按既有静态断言同步天气相关模块导入标记至 v1.2.81（只变更 ?v=，无业务逻辑修改），第二次 CI 已通过：完整回归 [43989540903](https://github.com/ppisa386-png/pocket-phone/actions/runs/43989540903) 923/923、预览构建成功；日历 [43989540917](https://github.com/ppisa386-png/pocket-phone/actions/runs/43989540917) 浏览器测试通过；日报 [43989540900](https://github.com/ppisa386-png/pocket-phone/actions/runs/43989540900) 兼容性验收通过。PR #29 squash 合并 main，提交 `6a5b80a50017340e370b25fc7e70d8a861d96d12`。未连接用户私有的上游模型 API。
 
 ## v1.2.79 · 多 App 模型交付协议验收（2026-11-16）
 - 基线 `d4dbcfc` / 最终版本1.2.79；核心验证 `npm test`、`npm run build:preview`。GitHub Actions [43875745168](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745168)：**921/921通过、0失败；预览构建成功**。日历验收 [43875745162](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745162) 和日报布局 [43875745391](https://github.com/ppisa386-png/pocket-phone/actions/runs/43875745391) 成功。
