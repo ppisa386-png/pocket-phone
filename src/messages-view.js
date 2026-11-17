@@ -40,7 +40,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
         (entries.length ? entries.map(item => {
             const last = threadMessages(messages, item.id).at(-1);
             const unread = unreadMessages(messages, item.id);
-            return '<button type="button" class="pp-sms-row" data-sms-contact="' + smsEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('person') + '</span><span class="pp-sms-row-text"><strong>' + smsEscape(item.name) + '</strong>' + (picking ? (item.number ? '<small>' + smsEscape(item.number) + '</small>' : '') : '<small>' + smsEscape(last.text) + '</small>') + '</span>' + (!picking ? '<span class="pp-sms-row-meta"><time>'+smsTime(last)+'</time>' : '<span class="pp-sms-row-meta">') + (unread && !picking ? '<span class="pp-unread-count">' + unread + '</span>' : '') + icon('chevron') + '</span></button>';
+            return '<button type="button" class="pp-sms-row" data-sms-contact="' + smsEscape(item.id) + '"><span class="pp-contact-avatar">' + icon('person') + '</span><span class="pp-sms-row-text"><strong>' + smsEscape(item.name) + '</strong>' + (picking ? (item.number ? '<small>' + smsEscape(item.number) + '</small>' : '') : '<small>' + smsBody(last.text,last.role==='user') + '</small>') + '</span>' + (!picking ? '<span class="pp-sms-row-meta"><time>'+smsTime(last)+'</time>' : '<span class="pp-sms-row-meta">') + (unread && !picking ? '<span class="pp-unread-count">' + unread + '</span>' : '') + icon('chevron') + '</span></button>';
         }).join('') : '<div class="pp-empty"><h2>' + (picking ? '暂无联系人' : '暂无短信') + '</h2><p>' + (picking ? '点击「新增联系人」添加。' : '点击「新建短信」，选择联系人开始交流。') + '</p></div>') +
         '</div>';
 }
