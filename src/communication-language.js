@@ -28,6 +28,7 @@ export function formatPhoneDialogue(value) {
         else if(chinese(b.body)&&!chinese(a.body)&&foreign(a.body)){source=a.body;translation=b.body;}
         else return null;
         source=source.trim();translation=translation.trim();
+        if(/^[（(][\s\S]*[)）]$/.test(translation))translation=translation.slice(1,-1).trim();
         return source&&translation?source+'（'+translation+'）':null;
     };
     const pattern=/<([A-Za-z][\w:.-]{0,63})(?:\s+[^<>]*?)?>\s*([\s\S]*?)\s*<\/\1\s*>|\[([A-Za-z][\w:.-]{0,63})\]\s*([\s\S]*?)\s*\[\/\3\s*\]/g;
@@ -57,7 +58,7 @@ export function formatPhoneDialogue(value) {
             return pair(a,b)??result;
         }
         if(!marked[0]&&!marked[1]&&!chinese(lines[0])&&chinese(lines[1])&&foreign(lines[0]))
-            return lines[0].trim()+'（'+lines[1].trim()+'）';
+            return lines[0].trim()+'（'+lines[1].trim().replace(/^[（(]([\s\S]*?)[)）]$/,'$1')+'）';
     }
     return result;
 }
