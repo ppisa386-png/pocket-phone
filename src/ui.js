@@ -8,21 +8,21 @@ import { createAssetPanel } from './assets-view.js?v=1.2.57';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.65';
 import { createFoodPanel } from './food-view.js?v=1.2.65';
 import { bindComposerKeys } from './composer.js?v=1.2';
-import { createXPanel } from './x-view.js?v=1.2.72';
+import { createXPanel } from './x-view.js?v=1.2.88';
 import { xUnread } from './x.js?v=1.2.87';
-import { createChatPanel } from './chat-view.js?v=1.2.80';
+import { createChatPanel } from './chat-view.js?v=1.2.88';
 import { chatUnread } from './chat-apps.js?v=1.2.71';
-import { createSnapPanel } from './snapchat-view.js?v=1.2.65';
+import { createSnapPanel } from './snapchat-view.js?v=1.2.88';
 import { snapUnread } from './snapchat.js?v=1.2.80';
 import { createApiPanel } from './api-view.js?v=1.2.87';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.57';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.87';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.88';
 import { icon } from './icons.js?v=1.2.57';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.57';
-import { renderMessagesScreen } from './messages-view.js?v=1.2.57';
+import { renderMessagesScreen } from './messages-view.js?v=1.2.88';
 import { unreadMessages, messageParticipants } from './messages.js?v=1.2';
-import { renderPhoneScreen } from './phone-view.js?v=1.2.57';
+import { renderPhoneScreen } from './phone-view.js?v=1.2.88';
 
 const SECTIONS = [
     { id: 'appearance', name: '外观', icon: 'display', note: '主题、悬浮球、壁纸、字号与大小' },
