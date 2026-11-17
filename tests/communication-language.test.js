@@ -9,6 +9,7 @@ import { renderPhoneScreen } from '../src/phone-view.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { HostEvents, installHostGeneration } from './host-fixture.js';
+import { captureHostRequest } from '../src/api-context.js';
 
 const quote = 'Alex gives Sam his number: +1 212 555 0123.';
 const contactId = 'card:alex.png';
@@ -24,19 +25,20 @@ function fixture(mode, narrativeContact = true) {
     context.generateQuietPrompt=async options=>{await hostGenerate(options);return JSON.stringify(response);};
     const settings=normalizeSettings({retries:0,api:{mode,baseUrl:'https://phone.invalid/v1',model:'test-model'}});
     const requests=[];
-    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',
+    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,
         buildHostPayload:async(_c,messages)=>({messages,model:'host-model',chat_completion_source:'custom'}),
         fetchImpl:async (_url,options)=>{requests.push(JSON.parse(options.body));return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(response)}}]}),{status:200,headers:{'Content-Type':'application/json'}});}});
     const memory=createPhoneMemory({getContext:()=>context});
     const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:client,narrativeContact});
     return {context,settings,host,memory,phone,requests,
-        setPreset:value=>{preset=value;context.chatCompletionSettings={prompts:[{identifier:'main',role:'system',content:value}]};},reply:value=>{response=value;},close(){client.destroy();phone.destroy();memory.destroy();}};
+        setPreset:value=>{preset=value;context.chatCompletionSettings={prompts:[{identifier:'main',role:'system',content:value}]};},reply:value=>{response=value;},close(){client.cancel();phone.destroy();memory.destroy();}};
 }
 
 // Mock outputs verify transport, persistence and rendering, not model comprehension.
 for (const mode of ['host','independent']) test(mode+': active dialogue preset survives SMS, reroll and phone without extra calls',async()=>{
     const f=fixture(mode);
     try {
+        const requests=mode==='host'?f.host.requests:f.requests;
         assert.equal((await f.phone.scan()).ok,true);
         const cases=[
             ['正文叙述用英文，角色对白只用中文。','明天见。'],
@@ -47,10 +49,10 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
         ];
         for(const [preset,text] of cases){
             f.setPreset(preset);f.reply({status:'reply',text,sms_reply_category:'A'});
-            const before=f.requests.length;
+            const before=requests.length;
             assert.equal((await f.phone.sendMessage(contactId,'好的')).ok,true);
-            assert.equal(f.requests.length,before+1,'no separate classification or translation request');
-            const payload=f.requests.at(-1);
+            assert.equal(requests.length,before+1,'no separate classification or translation request');
+            const payload=requests.at(-1);
             assert.equal(payload.messages[0].content,preset,'current preset, including narration/dialogue distinction, is unchanged');
             assert.ok(payload.messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
             const state=f.phone.snapshot(), message=Object.values(state.messages).at(-1);
@@ -59,19 +61,19 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
         }
         const text='Gute Nacht.\n（晚安。）';
         f.reply({text});const last=Object.values(f.phone.snapshot().messages).at(-1);
-        let before=f.requests.length;
+        let before=requests.length;
         assert.equal((await f.phone.rerollMessage(last.id)).ok,true);
-        assert.equal(f.requests.length,before+1);
+        assert.equal(requests.length,before+1);
         assert.equal(f.phone.snapshot().messages[last.id].text,text);
-        assert.ok(f.requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
-        f.reply({status:'answered',text});before=f.requests.length;
+        assert.ok(requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
+        f.reply({status:'answered',text});before=requests.length;
         assert.equal((await f.phone.dial(contactId)).ok,true);
         assert.equal((await f.phone.say('听得见吗')).ok,true);
-        assert.equal(f.requests.length,before+2);
+        assert.equal(requests.length,before+2);
         const state=f.phone.snapshot(),call=state.calls[state.activeCallId];
         assert.equal(call.turns[0].text,text);assert.equal(call.turns.at(-1).text,text);
         assert.ok(renderPhoneScreen(state,'calls',call.id,'').includes('>'+text+'</p>'));
-        assert.ok(f.requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
+        assert.ok(requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
         const reloaded=createPhoneMemory({getContext:()=>f.context});
         try{const saved=(await reloaded.read()).state;assert.equal(saved.messages[last.id].text,text);assert.equal(saved.calls[call.id].turns.at(-1).text,text);}finally{reloaded.destroy();}
         if(mode==='independent')assert.equal(f.host.requests.length,0,'preparing full preset never sends a second model request');

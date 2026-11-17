@@ -1,7 +1,7 @@
-import { createCalendar } from './src/calendar.js?v=1.2.83';
+import { createCalendar } from './src/calendar.js?v=1.2.84';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.83';
-import { createWeather } from './src/weather.js?v=1.2.83';
+import { createDaily } from './src/daily.js?v=1.2.84';
+import { createWeather } from './src/weather.js?v=1.2.84';
 import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
 import { createAssets } from './src/assets.js?v=1.2.80';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
@@ -12,18 +12,19 @@ import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2.66';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2.66';
-import { createX } from './src/x.js?v=1.2.83';
+import { createX } from './src/x.js?v=1.2.84';
 import { createChatApp } from './src/chat-apps.js?v=1.2.80';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
-import { createApiClient, createKeyStore } from './src/api.js?v=1.2.83';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.83';
-import { mountPhone } from './src/ui.js?v=1.2.83';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.83';
-import { createPhoneService } from './src/phone.js?v=1.2.83';
+import { createApiClient, createKeyStore } from './src/api.js?v=1.2.84';
+import { captureHostRequest } from './src/api-context.js?v=1.2.84';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.84';
+import { mountPhone } from './src/ui.js?v=1.2.84';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.84';
+import { createPhoneService } from './src/phone.js?v=1.2.84';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
-import { normalizeSettings } from './src/config.js?v=1.2.83';
+import { normalizeSettings } from './src/config.js?v=1.2.84';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.83';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.84';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -51,7 +52,7 @@ let starting = false;
 // Destroying services also invalidates pending writes and prompt hooks.
 function stopRuntime() {
     controller?.destroy(); controller = null;
-    modelClient?.destroy(); modelClient = null;
+    modelClient?.cancel(); modelClient = null;
     for (const service of [incomingWatcher, continuityBridge, deliveryBridge, opinionBridge, assetBridge, dailyBridge, calendarBridge, phoneService, memory]) service?.destroy();
     incomingWatcher = continuityBridge = deliveryBridge = opinionBridge = assetBridge = dailyBridge = calendarBridge = phoneService = memory = null;
 }
@@ -88,7 +89,7 @@ async function start() {
         const generationState=createGenerationReader(hostModule,()=>globalThis.SillyTavern.getContext(),hostGenerationState);
         function mountRuntime(showSettings = false) {
             const enabled = normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).enabled;
-            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId) });
+            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId), prepareRequest: captureHostRequest });
             if (enabled) {
                 memory = createPhoneMemory({
                     assetEnabled: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apps.assets,

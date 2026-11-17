@@ -65,7 +65,14 @@ for (const mode of ['host','independent']) for (const {id} of APPS) test(mode+' 
         assert.equal(result.ok,true,result.error);assert.equal(n,2);
         assert.deepEqual(f.phone.snapshot().profiles[id],{records:['原文\n第二行']});
         for(const request of f.requests) {
-            {
+            if(mode==='host'){
+                // Restored pre-isolation host path uses ST Quiet, not a custom
+                // HTTP schema envelope. It still carries the final JSON contract.
+                assert.equal(request.quietToLoud,false);
+                assert.equal(request.skipWIAN,false);
+                assert.match(request.quietPrompt,/完整 JSON 对象/);
+                assert.ok(request.responseLength>=8192);
+            }else{
                 assert.deepEqual(request.json_schema,phoneJsonSchema());assert.equal(request.response_format,undefined);
                 assert.equal(request.stop,undefined);assert.equal(request.tools,undefined);assert.equal(request.tool_choice,undefined);
                 assert.equal(request.messages[0].content,'KEEP_PRESET');
