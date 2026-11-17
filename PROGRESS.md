@@ -3,7 +3,7 @@
 **基线**：main `e541662231bd42c13780ecc7e40114a6201131ae`（v1.2.83）。
 **实现**：api-context.js、api.js 恢复 v1.2.81 源文件；phone.js 只撤销隔离请求/冻结上下文/请求控制器，恢复跟随酒馆 Quiet 与独立 API captureHostRequest，保留后续 X 空推文重试及其余任务 Schema；index.js 重新接入 prepareRequest 并取消旧实现可选销毁；缓存/版本号/专属旧生成链测试与浏览器 X 夹具同步调整。其他业务、存档、表现均保留。
 **限制**：Quiet 与旧 captureHostRequest 共享宿主生成流水线，正文和手机同时运行可能重新互相停止；不会声称旧方案具备双向并发隔离。
-**验证**：待记录当前提交 CI 和浏览器结果；未连接用户真实酒馆模型端点实测。
+**验证与发布**：PR #32 已合并主分支（提交 `136df3c877812f40c8b7b22d5be3626715311915`），manifest / config / package 统一为 v1.2.84。回退分支 [完整回归 44025992947](https://github.com/ppisa386-png/pocket-phone/actions/runs/44025992947) **928/928 通过，0 失败，预览构建成功**；[X 浏览器验收 44025992943](https://github.com/ppisa386-png/pocket-phone/actions/runs/44025992943) 与 [日报浏览器验收 44025992936](https://github.com/ppisa386-png/pocket-phone/actions/runs/44025992936) 均通过。主分支完整回归 [44026143993](https://github.com/ppisa386-png/pocket-phone/actions/runs/44026143993)、日历 [44026144025](https://github.com/ppisa386-png/pocket-phone/actions/runs/44026144025)、天气窗口 [44026143976](https://github.com/ppisa386-png/pocket-phone/actions/runs/44026143976)、柔雾珐琅 [44026144053](https://github.com/ppisa386-png/pocket-phone/actions/runs/44026144053) 全部成功；X 主分支浏览器验收已显示执行步骤成功（运行 [44026143953](https://github.com/ppisa386-png/pocket-phone/actions/runs/44026143953)）。未使用用户真实酒馆、模型供应商或密钥进行端到端实测，旧 Quiet 链的宿主并发冲突可能复现。
 
 ## v1.2.83 · X 首页空 NPC 推文与格式恢复（2026-11-17）
 **基线**：main `a1298596825fb70469da02aa46c0021dbacfaa0a`（v1.2.82），用户授权修复并推送。
