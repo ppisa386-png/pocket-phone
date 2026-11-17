@@ -1,3 +1,4 @@
+import { formatPhoneDialogue } from './communication-language.js?v=1.2.88';
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
 import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.71';
 import { displayCommunicationTime } from './communication-time.js?v=1.2.66';
@@ -5,6 +6,7 @@ import { icon } from './icons.js?v=1.2.57';
 import { wxMoments,wxFriends,canViewWxMoment,momentImages } from './wechat-moments.js?v=1.2.71';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const chatBody=(value,own=false)=>chatEsc(own?value:formatPhoneDialogue(value));
 const chatKinds={text:'文字',voice:'语音',image:'照片',video:'视频',music:'音乐'};
 const chatCallLabels={connected:'通话中',ended:'已结束',no_answer:'未接听'};
 
@@ -28,7 +30,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
     const empty=(title,copy)=>'<div class="pp-chat-empty">'+icon('messages')+'<strong>'+title+'</strong><p>'+copy+'</p></div>';
     const threadItems=id=>Object.values(getView()[app]||{}).filter(i=>i.accountId===id&&['message','call','transfer'].includes(i.type)).sort((a,b)=>a.createdAt-b.createdAt);
     const parseMusic=i=>{if(i?.kind!=='music')return null;try{const x=JSON.parse(i.text);return typeof x.title==='string'&&typeof x.artist==='string'&&x.title&&x.artist?x:null;}catch{return null;}};
-    const preview=i=>!i?'点击开始聊天':i.kind==='music'?'[音乐] '+(parseMusic(i)?.title||'分享音乐'):i.type==='call'?'['+chatKinds[i.mode]+'通话] '+(chatCallLabels[i.status]||''):i.type==='transfer'?'[转账] '+i.currency+' '+majorAmount(i.amountMinor,i.currency):(i.status==='queued'?'[未发送] ':'')+(i.kind!=='text'?'['+chatKinds[i.kind]+'] ':'')+i.text;
+    const preview=i=>!i?'点击开始聊天':i.kind==='music'?'[音乐] '+(parseMusic(i)?.title||'分享音乐'):i.type==='call'?'['+chatKinds[i.mode]+'通话] '+(chatCallLabels[i.status]||''):i.type==='transfer'?'[转账] '+i.currency+' '+majorAmount(i.amountMinor,i.currency):(i.status==='queued'?'[未发送] ':'')+(i.kind!=='text'?'['+chatKinds[i.kind]+'] ':'')+(i.role==='user'?i.text:formatPhoneDialogue(i.text));
     function row(a,contacts=false) {
         const latest=threadItems(a.id).at(-1),unread=records('message').filter(m=>m.accountId===a.id&&m.role==='assistant'&&!m.read).length;
         return '<button type="button" class="pp-chat-row'+(wc?'':' pp-wa-conversation')+'" data-chat-action="thread" data-chat-id="'+chatEsc(a.id)+'">'+avatar(a.name)+'<span class="pp-chat-row-copy"><strong>'+chatEsc(a.name)+'</strong><span>'+chatEsc(a.blocked?'已拉黑':contacts?(a.number||'好友'):preview(latest))+'</span></span><span class="pp-chat-row-meta"><time>'+chatEsc(latest?displayStoryTime(latest):'')+'</time>'+(unread?'<b class="pp-chat-badge">'+(unread>99?'99+':unread)+'</b>':'')+'</span></button>';
@@ -83,7 +85,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
                 return '<article class="pp-wx-moment" data-wx-moment="'+chatEsc(m.id)+'">'+
                     '<div class="pp-wx-moment-avatar">'+avatar(author)+'</div><div class="pp-wx-moment-main">'+
                     '<strong class="pp-wx-moment-author">'+chatEsc(author)+'</strong>'+
-                    (m.text?'<p class="pp-wx-moment-body">'+chatEsc(m.text)+'</p>':'')+
+                    (m.text?'<p class="pp-wx-moment-body">'+chatBody(m.text,m.authorId==='user')+'</p>':'')+
                     (pictures.length?'<div class="pp-wx-moment-picture">'+icon('image')+'<div class="pp-wx-photo-list">'+pictures.map((picture,i)=>'<p class="pp-wx-photo-item">'+(pictures.length>1?'<strong>图'+(i+1)+'</strong> ':'')+chatEsc(picture)+'</p>').join('')+'</div></div>':'')+
                     '<div class="pp-wx-moment-foot"><time>'+chatEsc(displayStoryTime(m))+'</time>'+
                     (own?'<span class="pp-wx-moment-privacy">'+audienceLabel(m.visibility)+'</span>':'')+
@@ -94,7 +96,7 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
                     (m.comments||[]).map(c=>{
                         const parent=c.replyTo?(m.comments||[]).find(x=>x.id===c.replyTo):null;
                         const label=parent?' 回复 '+(parent.name||'user'):'';
-                        return '<p><b>'+chatEsc(c.name||'user')+chatEsc(label)+'：</b>'+chatEsc(c.text)+
+                        return '<p><b>'+chatEsc(c.name||'user')+chatEsc(label)+'：</b>'+chatBody(c.text,c.authorId==='user')+
                             '<button type="button" class="pp-wx-comment-reply" data-chat-action="moment-comment-reply" data-chat-id="'+chatEsc(c.id)+'" aria-label="回复 '+chatEsc(c.name||'user')+'">回复</button></p>';
                     }).join('')+'</div>':'')+
                     (momentMenuId==='comment:'+m.id?'<form data-chat-form="moment-comment" class="pp-wx-comment-form">'+
@@ -167,13 +169,13 @@ export function createChatPanel({app,adapter,getView,redraw,notice,assetBase='as
         const items=threadItems(a.id);
         return items.map(i=>{
             if(i.type==='transfer')return transferHTML(i,a.blocked);
-            if(i.type==='call')return '<article class="pp-chat-call">'+icon(i.mode==='video'?'video':'phone')+'<strong>'+chatKinds[i.mode]+'通话 · '+chatCallLabels[i.status]+'</strong>'+i.turns.map(t=>'<p><b>'+chatEsc(t.role==='user'?'你':a.name)+'：</b>'+chatEsc(t.text)+'</p>').join('')+'</article>';
+            if(i.type==='call')return '<article class="pp-chat-call">'+icon(i.mode==='video'?'video':'phone')+'<strong>'+chatKinds[i.mode]+'通话 · '+chatCallLabels[i.status]+'</strong>'+i.turns.map(t=>'<p><b>'+chatEsc(t.role==='user'?'你':a.name)+'：</b>'+chatBody(t.text,t.role==='user')+'</p>').join('')+'</article>';
             const own=i.role==='user';
             const editing=editingId===i.id?form('edit',textarea('editText','修改消息'),'保存')+button('cancel-edit','取消修改'):'';
             const stateText={sent:wc?'':'已发送',queued:'未发送',pending:'等待回复',failed:'发送失败',no_reply:'对方暂未回复'}[i.status]||'';
             const music=wc?parseMusic(i):null;
             if(music){return '<article class="pp-chat-message is-user pp-wx-music-message" data-press="chat-message" data-chat-id="'+chatEsc(i.id)+'">'+avatar(profile().alias)+'<div class="pp-wx-music-card"><img src="'+chatEsc(assetBase+'optical_disk_flat.svg')+'" alt="彩色 CD"><div><strong>'+chatEsc(music.title)+'</strong><span>'+chatEsc(music.artist)+'</span><small>音乐分享</small></div>'+(music.note?'<p>'+chatEsc(music.note)+'</p>':'')+'<time>'+chatEsc(displayStoryTime(i))+'</time></div></article>';}
-            return '<article class="pp-chat-message '+(own?'is-user':'')+'" data-press="chat-message" data-chat-id="'+chatEsc(i.id)+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatEsc(i.text)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+editing+(wc&&['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
+            return '<article class="pp-chat-message '+(own?'is-user':'')+'" data-press="chat-message" data-chat-id="'+chatEsc(i.id)+'">'+(wc?avatar(own?profile().alias:a.name):'')+'<div class="pp-chat-bubble">'+(i.kind!=='text'?'<small class="pp-chat-kind">'+icon(i.kind==='voice'?'voice':i.kind==='video'?'video':'image')+chatKinds[i.kind]+'</small>':'')+'<p>'+chatBody(i.text,own)+'</p><div class="pp-chat-message-meta"><time>'+chatEsc(displayStoryTime(i))+'</time>'+(stateText?'<span>'+stateText+'</span>':'')+(!wc&&own&&i.status==='answered'?'<span class="pp-chat-checks" aria-label="已回复">✓✓</span>':'')+'</div>'+editing+(wc&&['failed','pending'].includes(i.status)?button('retry','重试回复',i.id,'',disabled()):'')+'</div></article>';
         }).join('')||'<p class="pp-chat-thread-start">'+chatEsc(a.name)+'</p>';
     }
     function composerHTML(a) {
