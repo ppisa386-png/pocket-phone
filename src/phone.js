@@ -4,7 +4,7 @@ import { commExpired, commMeta, commReplyClassification, commClassificationPlan,
 import { exactStoryTime } from './story-clock.js?v=1.2';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
-import { freezePhoneContext } from './api-context.js?v=1.2.82';
+import { freezePhoneContext } from './api-context.js?v=1.2.83';
 import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.79';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
@@ -13,7 +13,7 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
-import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.82';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.83';
 import { resolveAppConnection } from './config.js?v=1.2.79';
 
 
@@ -142,6 +142,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     ? '\n榴莲日历格式恢复：上一份回复未提供完整且合法的节日 JSON。只重新完成原地点、原年份的同一任务，按任务给出的 region、timezone、years、holidays 结构返回唯一完整 JSON 对象；节日使用紧凑数组，不输出 Markdown、推理、剧情或其他说明。不得捏造无依据的日期。'
                     : app === 'amazon'
                     ? '\nAmazon 搜索格式恢复：上一份回复未提供可用的完整商品 JSON 或商品必要资料不合法。重新执行相同购物搜索，须生成完整的 4—6 件商品；最终只返回一个 JSON 对象，顶层为 products 数组，每项包含 name、brand、luxury、description、image、price、currency、variants、reviews；币种沿用本次购物要求，价格有效，不新增购买、付款或配送记录。不输出分析、解释、Markdown、代码块或其他对象。'
+                    : app === 'x' && taskSchema?.name === 'phone_x_feed'
+                    ? '\nX 格式恢复：上一份回复的 posts 数组含有缺失、空白或非字符串的推文 text。本次仍按原任务和人物知情限制生成；posts 中每个对象必须含非空字符串 text，并使用有效的已有 accountId 或新作者的 name 与 handle。若本次任务允许零条新推文，必须返回 posts:[]，不得使用 [{}] 这类占位对象。最终只输出同一 JSON 对象，保留该任务要求的 replies 等字段。'
                     : '\n'+label+' 格式恢复：上一份回复没有可用的单个 JSON 对象。只重新执行完全相同的任务；最终直接返回完整 JSON 对象，顶层字段严格采用本任务要求的键名；不输出分析、Markdown、代码块、数组根或额外说明。不补造剧情和角色资料。') : '';
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
@@ -199,7 +201,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + modelRequests + '；实际模型：' + (responseMeta?.model || connection.api.model || '跟随酒馆当前模型')
                         + '；任务标识：' + (taskSchema?.name||app) + '；Schema：' + (taskSchema?.name||'phone_task')
-                        + '；插件版本：1.2.82；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
+                        + '；插件版本：1.2.83；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
                         + '；不支持参数兼容次数：' + unsupportedParameterRetries
                         + (responseLength === null ? '' : '；返回字符数：' + responseLength)
                         + (responseText?.trim()==='{}'?'；最终为空对象：是':'；最终为空对象：否')

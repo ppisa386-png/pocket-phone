@@ -50,7 +50,7 @@ export const TASK_SCHEMAS={
     snapComment:schema('social_comment_reply',obj(['text'],{text:str})),
     wechatMoments:schema('wechat_moments',obj(['moments','interactions'],{moments:arr({type:'object'}),interactions:arr({type:'object'})})),
     xDm:schema('x_dm',obj(['status'],{status:{type:'string',enum:['reply','no_reply','request']},text:str,category:str,deal:{type:'object'}})),
-    xFeed:schema('x_feed',{...obj([],{posts:arr({type:'object'}),replies:arr({type:'object'}),accounts:arr({type:'object'}),activityReactions:arr({type:'object'}),engagementUpdates:arr({type:'object'})}),anyOf:[{required:['posts']},{required:['accounts']}]}),
+    xFeed:schema('x_feed',{...obj([],{posts:arr(obj(['text'],{text:str,accountId:str,name:str,handle:str})),replies:arr({type:'object'}),accounts:arr({type:'object'}),activityReactions:arr({type:'object'}),engagementUpdates:arr({type:'object'})}),anyOf:[{required:['posts']},{required:['accounts']}]}),
     xComments:schema('x_comments',obj(['comments'],{comments:arr({type:'object'})})),
     xPublic:schema('x_public_comment',obj(['text'],{text:str,reactions:arr({type:'object'})})),
     xTrends:schema('x_trends',obj(['topics'],{topics:arr({type:'object'})})),

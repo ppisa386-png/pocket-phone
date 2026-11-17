@@ -9,6 +9,7 @@ import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
 import {xStoryPrompt} from '../src/x-story.js';
 import {xAudience, audienceChanges} from '../src/x-audience.js';
+import {TASK_SCHEMAS} from '../src/task-contracts.js';
 
 test('X narrative index does not duplicate the full public-history record, NPC posts, DMs or trends',()=>{
  const state={x:{profile:{alias:'Moon'},mine:{id:'mine',type:'post',author:'user',text:'MY_PUBLISHED_POST',imageDescription:'MY_IMAGE',createdAt:1,storyTime:{date:'2026-11-14',time:'12:00'}},
@@ -1266,6 +1267,80 @@ test('X wrong-shape array is retried once, repeated bad results are not saved or
   assert.match(failed.error,/未返回 JSON/);
   assert.equal(JSON.stringify(f.state().x),prior);
  }finally{f.close();}
+});
+
+
+test('X feed schema requires per-post text but preserves valid empty arrays',()=>{
+  const posts=TASK_SCHEMAS.xFeed.value.properties.posts;
+  assert.deepEqual(posts.items.required,['text']);
+  assert.equal(posts.items.properties.text.type,'string');
+  assert.equal(posts.minItems,0);
+});
+
+for(const independent of [false,true])test('X '+(independent?'independent':'host')+' retries empty NPC post objects once before any write',async()=>{
+  const f=setup(undefined,independent);
+  try{
+    const before=JSON.stringify(f.state().x||{});let calls=0;
+    f.reply(({quietPrompt})=>{
+      calls++;
+      if(calls===1)return JSON.stringify({posts:[{}],replies:[]});
+      assert.equal(JSON.stringify(f.state().x||{}),before,'failed batch does not write account or post records');
+      assert.match(quietPrompt,/X 格式恢复/);
+      assert.match(quietPrompt,/不得使用 \[\{\}\]/);
+      return JSON.stringify(feedResult());
+    });
+    ok(await f.x.refresh());
+    assert.equal(calls,2);
+    assert.equal(f.count(),2);
+    assert.equal(xItems(f.state(),'post').length,10);
+  }finally{f.close();}
+});
+
+test('X home allows a genuine zero-NPC feed without recovery, but refuses two malformed post batches atomically',async()=>{
+  const f=setup();
+  try{
+    f.reply({posts:[],replies:[]});
+    ok(await f.x.refresh());assert.equal(f.count(),1);
+    const original=JSON.stringify(f.state().x);
+    const broken=[{name:'Alex',handle:'alex',text:'   '},{name:'Alex',handle:'alex',text:123}];
+    for(const row of broken){
+      const before=f.count();
+      f.reply(()=>JSON.stringify({posts:[row],replies:[]}));
+      const result=await f.x.refresh();
+      assert.equal(result.ok,false);
+      assert.equal(result.code,'PHONE_DATA_MISSING');
+      assert.match(result.error,/X 推文正文/);
+      assert.equal(f.count(),before+2,'only one format retry, never an unbounded loop');
+      assert.equal(JSON.stringify(f.state().x),original);
+    }
+  }finally{f.close();}
+});
+
+test('X combined home settles followers only after the malformed feed has been recovered',async()=>{
+  const f=setup();
+  try{
+    ok(await f.x.publish('我在舞台上唱了一首新歌。'));
+    const mine=xItems(f.state(),'post').find(p=>p.author==='user');
+    let feedCalls=0,statsCalls=0;
+    f.reply(({quietPrompt})=>{
+      if(quietPrompt.includes('当前任务：X 动态。')){
+        feedCalls++;
+        if(feedCalls===1)return JSON.stringify({posts:[{}],replies:[]});
+        assert.equal(statsCalls,0,'follower judgment must not run before feed validates');
+        return JSON.stringify({posts:[],replies:[]});
+      }
+      if(quietPrompt.includes('逐条独立估计')){
+        statsCalls++;
+        return JSON.stringify({initialFollowers:12,stats:[{postId:mine.id,likes:50,reposts:3,replies:2,gained:5,lost:1}]});
+      }
+      return JSON.stringify({effects:[]});
+    });
+    ok(await f.x.refreshPublic());
+    assert.equal(feedCalls,2);
+    assert.equal(statsCalls,1);
+    assert.equal(xAudience(f.state()).followers,16);
+    assert.equal(xItems(f.state(),'post').length,1);
+  }finally{f.close();}
 });
 
 test('X truncated or syntactically invalid JSON gets one fresh recovery without guessing data',async()=>{
