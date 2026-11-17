@@ -38,7 +38,7 @@ function fixture(mode, narrativeContact = true) {
 for (const mode of ['host','independent']) test(mode+': active dialogue preset survives SMS, reroll and phone without extra calls',async()=>{
     const f=fixture(mode);
     try {
-        const requests=mode==='host'?f.host.requests:requests;
+        const requests=mode==='host'?f.host.requests:f.requests;
         assert.equal((await f.phone.scan()).ok,true);
         const cases=[
             ['正文叙述用英文，角色对白只用中文。','明天见。'],
