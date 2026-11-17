@@ -1,7 +1,7 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from './daily-prompts.js?v=1.2.43';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.2.87';
+export const VERSION = '1.2.88';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },
@@ -87,7 +87,8 @@ export function resolveAppConnection(settings, app) {
     const choice = settings?.appConnections?.[app];
     const profile = choice && settings?.apiProfiles?.find(p => p.id === choice.profileId);
     return profile
-        ? { api: { ...profile.api, model: choice.model || profile.api.model }, profileId: profile.id }
+        ? { api: { ...profile.api, model: choice.model || profile.api.model,
+            ...(Number.isInteger(choice.timeout) && choice.timeout >= 15 && choice.timeout <= 300 ? {timeout: choice.timeout} : {}) }, profileId: profile.id }
         : { api: settings.api, profileId: settings.apiProfileId || '' };
 }
 
@@ -104,7 +105,8 @@ export function normalizeSettings(value) {
         .filter(([app, route]) => APPS.some(item => item.id === app) && isRecord(route) &&
             typeof route.profileId === 'string' && apiProfiles.some(p => p.id === route.profileId))
         .map(([app, route]) => [app, { profileId: route.profileId,
-            model: typeof route.model === 'string' ? route.model.trim().slice(0, 300) : '' }]));
+            model: typeof route.model === 'string' ? route.model.trim().slice(0, 300) : '',
+            ...(Number.isInteger(route.timeout) && route.timeout >= 15 && route.timeout <= 300 ? {timeout:route.timeout} : {}) }]));
     const oldPrompts = isRecord(raw.prompts) ? raw.prompts : {};
     return {
         ...current,
