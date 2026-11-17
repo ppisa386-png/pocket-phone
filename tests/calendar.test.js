@@ -8,6 +8,7 @@ import { createCalendarBridge, CALENDAR_KEY } from '../src/calendar-story.js';
 import { createCalendarPanel } from '../src/calendar-view.js';
 import { calendarOccurrences, calendarMonth, calendarDue, calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from '../src/calendar-core.js';
 import { dateDay } from '../src/story-clock.js';
+import { TASK_SCHEMAS } from '../src/task-contracts.js';
 const data = () => ({ region: '日本 · 东京', timezone: 'Asia/Tokyo', years: [2026, 2027], holidays: [
     { name: '节日甲', date: '2026-11-16', note: '公开节日背景' }, { name: '节日乙', date: '2026-11-16' },
     { name: '元旦', date: '2027-01-01' }, { name: '文化之日', date: '2026-11-03' },
@@ -39,6 +40,20 @@ test('calendar validates years, true dates, IANA zone, malformed data and duplic
     for (const invalid of [{ ...data(), years: [2026] }, { ...data(), timezone: 'Tokyo' }, { ...data(), holidays: [{ name: 'bad', date: '2026-02-29' }] }, { ...data(), holidays: [{ name: 'bad', date: '2028-01-01' }] }]) assert.throws(() => validateCalendarDatabase(invalid, '东京', 2026));
     assert.throws(() => validateCalendarEvent({ name: '', date: '2026-11-13' }, 'x'));
     assert.throws(() => validateCalendarEvent({ name: 'a', date: '2026-02-29', repeat: 'yearly', kind: 'anniversary' }, 'x'));
+});
+test('calendar independent Schema avoids bounded nested grammar expansion; stored records still reject more than 240 holidays', () => {
+    const contract = TASK_SCHEMAS.calendar;
+    assert.equal(contract.name, 'phone_calendar');
+    assert.deepEqual(contract.value.required, ['region', 'timezone', 'years', 'holidays']);
+    assert.deepEqual(contract.value.properties.holidays, {
+        type: 'array', items: { type: 'array', items: { type: 'string' } },
+    });
+    // The upstream constrained decoder must not unroll 240 nested alternatives.
+    assert.equal(JSON.stringify(contract.value).includes('anyOf'), false);
+    const rows = Array.from({ length: 241 }, (_, n) =>
+        ({ date: '2026-11-16', name: '节日' + n }));
+    assert.equal(validateCalendarDatabase({ ...data(), holidays: rows.slice(0, 240) }, '东京', 2026).holidays.length, 240);
+    assert.throws(() => validateCalendarDatabase({ ...data(), holidays: rows }, '东京', 2026), /节日资料不完整/);
 });
 test('month grid starts Sunday, handles six weeks, leap years and centuries without local timezone', () => {
     for (const [y, m] of [[2026,11],[2027,1],[2000,2],[2100,2],[99,1],[2026,8]]) {
@@ -174,6 +189,8 @@ test('calendar independent task schema rejects empty model content even with rea
   assert.equal(f.state().calendar.database,undefined);
   assert.ok(schemas.every(row=>row.name==='phone_calendar'));
   assert.deepEqual(schemas[0].value.required,['region','timezone','years','holidays']);
+  assert.deepEqual(schemas[0].value.properties.holidays,{type:'array',items:{type:'array',items:{type:'string'}}});
+  assert.equal(schemas[0].value.properties.holidays.maxItems,undefined);
   reply={...data(),holidays:[]};
   ok(await f.calendar.refresh());
   assert.equal(calls,3);
