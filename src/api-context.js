@@ -128,11 +128,11 @@ async function fallbackMessages(c, contact, loadWorldModule, isCurrent) {
 // interception, global patch, or persisted story/credential copy.
 export function createPhoneContext({ getContext, loadWorldModule = () => import('/scripts/world-info.js') }) {
     const c = getContext(), bus = c.eventSource, types = c.event_types || c.eventTypes || {}, subscriptions = [];
-    let snapshot = null, generation = null, closed = false;
+    let snapshot = null, previousSnapshot = null, generation = null, closed = false;
     const identity = context => ({ key:chatKey(context), metadata:context.chatMetadata, fingerprint:fingerprint(context) });
     const same = (item, context) => item && item.key === chatKey(context) && item.metadata === context.chatMetadata && item.fingerprint === fingerprint(context);
     const listen = (key, fn) => { if (types[key] && bus?.on) { bus.on(types[key],fn); subscriptions.push([types[key],fn]); } };
-    const invalidate = () => { snapshot = null; generation = null; };
+    const invalidate = () => { snapshot = null; previousSnapshot = null; generation = null; };
     listen('GENERATION_STARTED', (type, _options, dryRun) => {
         generation = !dryRun && storyTypes.includes(type) ? identity(getContext()) : null;
     });
@@ -141,11 +141,13 @@ export function createPhoneContext({ getContext, loadWorldModule = () => import(
         if (!same(generation,now) || now.mainApi !== 'openai' || !storyTypes.includes(data?.type) || !Array.isArray(data?.messages) || !data.messages.length) return;
         // Hold the event argument until preparation, so later async listeners'
         // edits/replacements are visible. We never mutate it or its descriptors.
+        previousSnapshot = snapshot;
         snapshot = { ...identity(now), data, signatures:contextSignatures(now.chat || []) };
     });
     listen('GENERATE_AFTER_DATA', (data, dryRun) => {
         const now = getContext();
         if (dryRun || now.mainApi === 'openai' || !same(generation,now) || typeof data?.prompt !== 'string') return;
+        previousSnapshot = snapshot;
         snapshot = { ...identity(now), data, signatures:contextSignatures(now.chat || []) };
     });
     for (const event of ['CHAT_CHANGED','CHAT_LOADED','CHAT_RENAMED','MESSAGE_EDITED','MESSAGE_DELETED','MESSAGE_SWIPED',
@@ -154,12 +156,15 @@ export function createPhoneContext({ getContext, loadWorldModule = () => import(
         async prepare(context, prompt, contact, isCurrent = () => true, options = {}) {
             if (closed || !isCurrent()) throw cancelled();
             const source = options.context || freezePhoneContext(context);
-            const signatures = contextSignatures(source.chat || []), saved = snapshot;
-            const compatible = same(saved,source) && saved.signatures.length <= signatures.length &&
+            const signatures = contextSignatures(source.chat || []);
+            const compatible = saved => same(saved,source) && saved.signatures.length <= signatures.length &&
                 saved.signatures.every((s,i) => s === signatures[i]) &&
                 !(source.groupId != null && source.groupId !== '' && Number.isInteger(contact?.characterId) && contact.characterId !== Number(source.characterId));
+            // A newer in-flight story request may extend beyond this task's
+            // settled source. Keep one prior processed context for that case.
+            const saved = [snapshot,previousSnapshot].find(compatible);
             let messages, params = {}, mode;
-            if (compatible) {
+            if (saved) {
                 const data = saved.data;
                 messages = Array.isArray(data.messages) ? copy(data.messages) : [{ role:'system',content:data.prompt }];
                 params = Object.fromEntries(portable.filter(k => data[k] !== undefined).map(k => [k,copy(data[k])]));

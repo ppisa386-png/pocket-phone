@@ -179,3 +179,19 @@ test('native host text is parsed but truncation and tool-only output are rejecte
         }finally{f.close();}
     }
 });
+
+test('a newer narrative snapshot does not displace the processed context of an older phone source',async()=>{
+    const f=fixture();try{
+        const first=await publishStorySnapshot(f.context);
+        first.messages[0].content='Processed old-source lore';
+        const source=freezePhoneContext(f.context);
+        f.context.chat.push({mes:'NEW_NARRATIVE_INPUT',is_user:true});
+        const latest=await publishStorySnapshot(f.context);
+        latest.messages[0].content='NEW_NARRATIVE_LORE';
+        const result=await f.reader.prepare(f.context,'Old-source phone task',null,()=>true,{context:source});
+        assert.equal(result.contextMode,'story_snapshot');
+        assert.match(JSON.stringify(result.messages),/Processed old-source lore/);
+        assert.doesNotMatch(JSON.stringify(result.messages),/NEW_NARRATIVE_INPUT|NEW_NARRATIVE_LORE/);
+        assert.match(JSON.stringify((await f.reader.prepare(f.context,'New-source task')).messages),/NEW_NARRATIVE_INPUT/);
+    }finally{f.reader.destroy();}
+});
