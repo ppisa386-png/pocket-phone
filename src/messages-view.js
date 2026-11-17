@@ -1,9 +1,11 @@
+import { formatPhoneDialogue } from './communication-language.js?v=1.2.88';
 import { displayStoryTime } from './story-clock.js?v=1.2';
 import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.2.57';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { icon } from './icons.js?v=1.2.57';
 import { threadMessages, unreadMessages, messageParticipants } from './messages.js?v=1.2';
 const smsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const smsBody=(value,own=false)=>smsEscape(own?value:formatPhoneDialogue(value));
 const smsTime = displayStoryTime;
 const replyLabels = { sent: '已发送', queued: '未发送', pending: '等待回复…', received: '已发送', failed: '暂时无法接收回复', no_reply: '已发送 · 暂无回复', blocked: '已暂停接收回复' };
 export function renderMessagesScreen(view, selectedContactId, picking, drafts, editing = null) {
@@ -20,7 +22,7 @@ export function renderMessagesScreen(view, selectedContactId, picking, drafts, e
         const thread = threadMessages(messages, contact.id);
         const latestUserId = thread.filter(message => message.role === 'user'&&message.replyStatus!=='queued').at(-1)?.id;
         return '<div class="pp-sms-thread"><div class="pp-sms-heading"><button type="button" class="pp-icon-button" data-sms-back aria-label="返回短信列表">' + icon('back') + '</button><div><strong>' + smsEscape(contact.name) + '</strong>' + (contact.number ? '<small>' + smsEscape(contact.number) + '</small>' : '') + '</div>' + renderBlockButton(view, contact.id, 'messages') + '</div>' +
-            '<div class="pp-sms-bubbles" aria-live="polite">' + (thread.length ? thread.map(message => '<div class="pp-sms-item" data-role="' + (message.role === 'user' ? 'user' : 'assistant') + '" data-press="sms-message" data-sms-message="'+smsEscape(message.id)+'"><p class="pp-sms-bubble">' + smsEscape(message.text) + '</p><small>' + smsTime(message) + (message.role === 'user' ? ' · ' + replyLabels[message.replyStatus] : '') + '</small>' +
+            '<div class="pp-sms-bubbles" aria-live="polite">' + (thread.length ? thread.map(message => '<div class="pp-sms-item" data-role="' + (message.role === 'user' ? 'user' : 'assistant') + '" data-press="sms-message" data-sms-message="'+smsEscape(message.id)+'"><p class="pp-sms-bubble">' + smsBody(message.text,message.role==='user') + '</p><small>' + smsTime(message) + (message.role === 'user' ? ' · ' + replyLabels[message.replyStatus] : '') + '</small>' +
                 (editing?.id===message.id?'<form data-sms-edit-form class="pp-sms-edit-form"><textarea data-sms-edit-text maxlength="6000" aria-label="修改消息">'+smsEscape(editing.text)+'</textarea><button type="submit"'+(busy?' disabled':'')+'>保存</button><button type="button" data-sms-edit-cancel>取消</button></form>':'')+
                 (message.id === latestUserId && message.replyStatus === 'failed' ? '<button type="button" class="pp-text-button" data-sms-retry="' + smsEscape(message.id) + '"' + (busy || blocked || cannotReply ? ' disabled' : '') + '>重试回复</button>' : '') + '</div>').join('') : '<p class="pp-sms-empty-thread">发送第一条短信</p>') + '</div>' +
             (busy ? '<p class="pp-phone-progress" role="status">' + smsEscape(progress || '正在处理，请稍候…') + '</p>' : '') + errorHTML +
