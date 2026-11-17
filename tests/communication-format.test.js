@@ -31,7 +31,7 @@ test('single language, unknown markers and unrelated markup are not fabricated o
         'Hello.'];
     cases.forEach((raw,i)=>assert.equal(formatPhoneDialogue(raw),expected[i]));
     assert.match(COMMUNICATION_LANGUAGE_RULE,/预设要求双语/);
-    assert.match(SOCIAL_LANGUAGE_RULE,/单语原样/);
+    assert.match(SOCIAL_LANGUAGE_RULE,/单语预设保持单语/);
 });
 test('X generated posts and comments show clean bilingual dialogue without rewriting user posts',()=>{
     const raw='<ta_speech_src>Hello.</ta_speech_src>\n<ta_speech_zh>你好。</ta_speech_zh>';
