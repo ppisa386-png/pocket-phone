@@ -1,3 +1,4 @@
+import { formatPhoneDialogue } from './communication-language.js?v=1.2.88';
 import { communicationTime, displayCommunicationTime } from './communication-time.js?v=1.2.66';
 import {visibleXComments,X_COMMENT_LIMIT} from './x-comments.js?v=1.2.55';
 import {xFeedArea,squareFeedPost} from './x-feed.js?v=1.2';
@@ -10,6 +11,7 @@ import { displayStoryTime } from './story-clock.js?v=1.2';
 import { xItems, xProfile, xCounts, xPendingPublicActivities } from './x.js?v=1.2.72';
 import { xAudience } from './x-audience.js?v=1.2';
 const xEscape = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const xDisplay=(value,own=false)=>xEscape(own?value:formatPhoneDialogue(value));
 export function createXPanel({adapter,getView,redraw,notice}) {
     let tab='home',page='',selected=null,replyTarget=null,following=false,results=null,drafts=Object.create(null),status='',working=false,reading=false,epoch=0;
     let editor=null;
@@ -63,11 +65,11 @@ export function createXPanel({adapter,getView,redraw,notice}) {
             const reactions='<div class="pp-snap-actions pp-x-reactions">'+button('comments','回复 '+counts.replies,p.id)+button('repost',(p.reposted?'已转发 ':'转发 ')+counts.reposts,p.id,'aria-pressed="'+!!p.reposted+'"')+button('like',(p.liked?'已赞 ':'赞 ')+counts.likes,p.id,'aria-pressed="'+!!p.liked+'"')+'</div>';
             const detail=page==='post:'+p.id?'<div class="pp-x-comments">'+visibleXComments(comments).map(c=>{
                 const parent=comments.find(other=>other.id===c.replyTo);
-                return '<article class="pp-x-comment" data-x-comment="'+xEscape(c.id)+'" data-press="x-comment" data-x-id="'+xEscape(c.id)+'"><div class="pp-x-comment-row"><span class="pp-x-comment-avatar" aria-hidden="true">'+xEscape(commenter(c).slice(0,1))+'</span><div class="pp-x-comment-main"><div class="pp-x-comment-heading">'+commentAuthor(state,c)+'</div>'+(parent?'<small class="pp-x-comment-parent">回复 @'+xEscape(commenter(parent))+'</small>':'')+'<p class="pp-x-comment-text pp-snap-copy">'+xEscape(c.text)+'</p>'+button('reply-comment','回复',c.id)+'</div></div></article>';
+                return '<article class="pp-x-comment" data-x-comment="'+xEscape(c.id)+'" data-press="x-comment" data-x-id="'+xEscape(c.id)+'"><div class="pp-x-comment-row"><span class="pp-x-comment-avatar" aria-hidden="true">'+xEscape(commenter(c).slice(0,1))+'</span><div class="pp-x-comment-main"><div class="pp-x-comment-heading">'+commentAuthor(state,c)+'</div>'+(parent?'<small class="pp-x-comment-parent">回复 @'+xEscape(commenter(parent))+'</small>':'')+'<p class="pp-x-comment-text pp-snap-copy">'+xDisplay(c.text,c.author==='user')+'</p>'+button('reply-comment','回复',c.id)+'</div></div></article>';
             }).join('')+(comments.length<Math.min(X_COMMENT_LIMIT,counts.replies)?button('complete-comments','补齐评论（'+comments.length+'/'+Math.min(X_COMMENT_LIMIT,counts.replies)+'）',p.id):'')+(target?'<div class="pp-x-reply-target"><span>回复 @'+xEscape(commenter(target))+'</span>'+button('cancel-reply','取消')+'</div>':'')+form('comment',field('comment',target?'回复内容':'回复帖子','',true),'回复')+'</div>':'';
             return '<article class="pp-x-post" data-x-post="'+xEscape(p.id)+'" data-press="x-post" data-x-id="'+xEscape(p.id)+'">'+
                 (page==='profile'&&!self&&p.reposted?'<small class="pp-x-reposted-label">你转发了</small>':'')+
-                author+'<p class="pp-snap-copy">'+xEscape(p.text)+'</p>'+media+reactions+detail+'</article>';
+                author+'<p class="pp-snap-copy">'+xDisplay(p.text,p.author==='user')+'</p>'+media+reactions+detail+'</article>';
         }).join('')||empty('暂无帖子');
     }
     function trendsHTML(state) {
@@ -93,11 +95,11 @@ export function createXPanel({adapter,getView,redraw,notice}) {
         const accounts=xItems(state,'account').filter(a=>xItems(state,'message').some(m=>m.accountId===a.id));
         const mentions=xItems(state,'post').filter(p=>p.outreachMention&&!state.x[p.author]?.blocked);
         const notices=mentions.map(p=>button('comments','公开提及 · '+(state.x[p.author]?.name||'用户'),p.id)).join('');
-        return notices+accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id).sort((x,y)=>x.createdAt-y.createdAt);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&last.kind&&last.kind!=='text'?'[请求中的媒体已隐藏]':last.text)+'</p>'+messageTimestamp(last,'pp-x-inbox-time')+messageDeadline(last)+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
+        return notices+accounts.map(a=>{const thread=xItems(state,'message').filter(m=>m.accountId===a.id).sort((x,y)=>x.createdAt-y.createdAt);const last=thread.at(-1),unread=thread.filter(m=>m.role==='assistant'&&!m.read).length;return '<article class="pp-x-account">'+person(a)+'<p class="pp-snap-copy">'+xDisplay(a.inboundRequest&&!a.dmAccepted&&last.kind&&last.kind!=='text'?'[请求中的媒体已隐藏]':last.text,last.role==='user')+'</p>'+messageTimestamp(last,'pp-x-inbox-time')+messageDeadline(last)+button('thread','查看消息'+(unread?' · '+unread:''),a.id)+'</article>';}).join('')||empty('暂无消息。搜索用户，开始私信。');
     }
     function threadHTML(state,a) {
         const messages=xItems(state,'message').filter(m=>m.accountId===a.id).sort((a,b)=>a.createdAt-b.createdAt);
-        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'" data-press="x-message" data-x-id="'+xEscape(m.id)+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xEscape(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text)+'</p>'+messageTimestamp(m)+messageDeadline(m)+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):m.status==='pending'?'<small>等待回复…</small>':m.status==='failed'?'<small>回复失败</small>'+button('retry','重试回复',m.id):m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
+        return button('inbox','‹ 消息')+person(a)+'<div class="pp-snap-actions">'+button('account','主页',a.id)+(!a.blocked&&!a.identityKnown&&a.dmPolicy!=='closed'?button('reveal','自我介绍',a.id):'')+'</div>'+messages.map(m=>'<article class="pp-snap-message '+(m.role==='user'?'is-user':'')+'" data-press="x-message" data-x-id="'+xEscape(m.id)+'"><small>'+(m.role==='user'?'你':xEscape(a.name))+'</small><p class="pp-snap-copy">'+xDisplay(a.inboundRequest&&!a.dmAccepted&&m.kind&&m.kind!=='text'?'[请求中的媒体已隐藏]':m.text,m.role==='user')+'</p>'+messageTimestamp(m)+messageDeadline(m)+(m.status==='request'?'<small>消息请求已发送</small>'+button('retry','查看回应',m.id):m.status==='pending'?'<small>等待回复…</small>':m.status==='failed'?'<small>回复失败</small>'+button('retry','重试回复',m.id):m.status==='no_reply'?'<small>已发送</small>':'')+'</article>').join('')+
             (a.blocked?empty('已拉黑'):a.inboundRequest==='pending'?button('accept-request','接受私信',a.id)+button('inbox','暂不处理')+button('decline-request','拒绝请求',a.id)+button('block','拉黑',a.id):a.inboundRequest==='declined'?empty('已拒绝'):a.dmPolicy==='closed'?empty('此账号暂不接收私信'):form('message',field('message','消息','',true),'发送'));
     }
     function html() {
