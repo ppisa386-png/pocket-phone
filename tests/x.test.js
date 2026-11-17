@@ -151,7 +151,7 @@ test('X home accepts one complete wrapped result and explains invalid fields wit
   const before=structuredClone(f.state().x);
   f.reply(()=>'{"posts":');const bad=await f.x.refresh();assert.equal(bad.ok,false);assert.match(bad.error,/X 数据返回格式不正确.*不完整/);
   assert.deepEqual(f.state().x,before);assert.equal(f.count(),3);
-  f.reply({posts:'not-array'});const wrong=await f.x.refresh();assert.equal(wrong.ok,false);assert.match(wrong.error,/字段 posts/);assert.equal(f.count(),4);
+  f.reply({posts:'not-array'});const wrong=await f.x.refresh();assert.equal(wrong.ok,false);assert.match(wrong.error,/字段 posts|缺少必需的 posts/);assert.equal(f.count(),5,'wrong type also gets exactly one format retry');
   f.reply(()=>'{"posts":[]}\n{"posts":[]}');assert.equal((await f.x.refresh()).ok,false);assert.deepEqual(f.state().x,before);
  }finally{f.close();}
 });
