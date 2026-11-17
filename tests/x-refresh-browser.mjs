@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const {chromium}=createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/')('playwright');
 const fixture=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="extensions_settings"></div><script>
-const saved=JSON.parse(localStorage.getItem('x-test')||'null');window.calls=0;window.result={initialFollowers:50};
-const handlers={};const ctx={chatId:'x-audience',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:Array.from({length:9},(_,i)=>'Local '+i+' is a band member.').join(' ')}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{},saveSettingsDebounced(){},
+const saved=JSON.parse(localStorage.getItem('x-test')||'null');localStorage.setItem('durian_phone_api_key:'+location.origin+'/v1','qa-only-key');window.calls=0;window.result={initialFollowers:50};
+const handlers={};const ctx={chatId:'x-audience',name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:Array.from({length:9},(_,i)=>'Local '+i+' is a band member.').join(' ')}],mainApi:'openai',onlineStatus:'connected',extensionSettings:{personal_pocket_phone:{api:{mode:'independent',baseUrl:location.origin+'/v1',model:'qa-model',timeout:30,maxTokens:8192}}},getRequestHeaders(){return {'Content-Type':'application/json'};},saveSettingsDebounced(){},
 chat:[{mes:'2026-10-18 00:05',is_user:false}],chatMetadata:saved||{},saveMetadata:async()=>localStorage.setItem('x-test',JSON.stringify(ctx.chatMetadata)),
 event_types:{APP_READY:'APP_READY'},eventSource:{on(n,f){if(n==='APP_READY')queueMicrotask(f);else(handlers[n]||=[]).push(f);},removeListener(){}},
 setExtensionPrompt(){},generateQuietPrompt:async o=>{window.calls++;window.lastPrompt=o.quietPrompt;
@@ -32,6 +32,16 @@ const errors=[],external=[];
 try{
  const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),p=await ctx.newPage();
  p.on('pageerror',e=>errors.push(e.message));await p.route('**/*',r=>{if(r.request().url().startsWith(origin))return r.continue();external.push(r.request().url());return r.abort();});
+ // v1.2.82+ sends model tasks through the isolated ST backend rather than Quiet.
+ // Mock that HTTP envelope, but keep the production X request/response handling.
+ await p.route('**/api/backends/chat-completions/generate',async route=>{
+  const payload=route.request().postDataJSON();
+  const prompt=(payload.messages||[]).map(row=>typeof row.content==='string'?row.content:'').join('\\n');
+  const response=await p.evaluate(text=>window.SillyTavern.getContext().generateQuietPrompt({quietPrompt:text}),prompt);
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   choices:[{message:{content:response},finish_reason:'stop'}],usage:{completion_tokens:128}
+  })});
+ });
  await p.goto(origin);await p.locator('.pp-launcher').tap();await p.locator('[data-app="x"]').tap();
  const longPress=async(locator)=>{await locator.dispatchEvent('pointerdown',{pointerType:'touch',pointerId:11,isPrimary:true,bubbles:true,cancelable:true});await p.waitForTimeout(600);await locator.dispatchEvent('pointerup',{pointerType:'touch',pointerId:11,isPrimary:true,bubbles:true,cancelable:true});await p.locator('.pp-press-bubble').waitFor();};
  await p.locator('[data-x-action="profile"][aria-label="个人主页"]').tap();

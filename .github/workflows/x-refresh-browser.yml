@@ -1,5 +1,12 @@
 name: X refresh browser QA
 on:
+  pull_request:
+    paths:
+      - 'src/x.js'
+      - 'src/x-view.js'
+      - 'style.css'
+      - 'tests/x-refresh-browser.mjs'
+      - '.github/workflows/x-refresh-browser.yml'
   push:
     branches: [main]
     paths:
