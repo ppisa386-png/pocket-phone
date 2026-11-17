@@ -1,7 +1,9 @@
+import { formatPhoneDialogue } from './communication-language.js?v=1.2.88';
 import { displayStoryTime } from './story-clock.js?v=1.2';
 import { renderBlockButton, renderBlockedList } from './block-controls.js?v=1.2.57';
 import { icon } from './icons.js?v=1.2.57';
 const phoneEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const phoneBody=(value,own=false)=>phoneEscape(own?value:formatPhoneDialogue(value));
 const statuses = { dialing: '正在拨号', connected: '通话中', ended: '已结束', interrupted: '已中断', ringing: '来电中', answering: '正在接听', missed: '未接来电', declined: '对方拒接', no_answer: '无人接听' };
 const callStatus = call => call.direction === 'incoming' && call.status === 'declined' ? '已拒接' : statuses[call.status];
 export function renderPhoneScreen(view, tab, selectedCallId, draft) {
@@ -13,7 +15,7 @@ export function renderPhoneScreen(view, tab, selectedCallId, draft) {
         const waitingReply = ['dialing', 'answering'].includes(call.status) || call.turns.at(-1)?.role === 'user';
         return '<div class="pp-call-page"><button type="button" class="pp-text-button" data-phone-list>返回通话记录</button>' +
             '<div class="pp-call-heading"><span class="pp-contact-avatar">' + icon('person') + '</span><h2>' + phoneEscape(call.name) + '</h2>' + (call.number ? '<p>' + phoneEscape(call.number) + '</p>' : '') + '<small role="status">' + (busy && live ? '等待对方回应…' : callStatus(call)) + '</small>' + renderBlockButton(view, call.contactId, 'phone') + '</div>' +
-            '<div class="pp-call-transcript" aria-live="polite">' + call.turns.map(turn => '<div class="pp-call-turn" data-role="' + (turn.role === 'user' ? 'user' : 'assistant') + '"><small>' + phoneEscape(turn.role === 'user' ? '我' : call.name) + '</small><p>' + phoneEscape(turn.text) + '</p></div>').join('') + '</div>' + errorHTML +
+            '<div class="pp-call-transcript" aria-live="polite">' + call.turns.map(turn => '<div class="pp-call-turn" data-role="' + (turn.role === 'user' ? 'user' : 'assistant') + '"><small>' + phoneEscape(turn.role === 'user' ? '我' : call.name) + '</small><p>' + phoneBody(turn.text,turn.role==='user') + '</p></div>').join('') + '</div>' + errorHTML +
             (error && live && waitingReply ? '<button type="button" class="pp-call-retry" data-phone-retry' + (busy ? ' disabled' : '') + '>重试回应</button>' : '') +
             (call.status === 'connected' ? '<form class="pp-call-compose" data-phone-form><label for="pp-call-input">说话内容</label><textarea id="pp-call-input" data-phone-draft rows="2" maxlength="6000" placeholder="你在电话里说…">' + phoneEscape(draft) + '</textarea><button type="submit"' + (busy || waitingReply ? ' disabled' : '') + '>发送</button></form>' : '') +
             (call.status === 'ringing' ? '<div class="pp-incoming-actions"><button type="button" class="pp-answer" data-phone-answer' + (busy ? ' disabled' : '') + '>'+icon('phone')+'<span>接听</span></button><button type="button" class="pp-hangup" data-phone-decline' + (busy ? ' disabled' : '') + '>'+icon('phone')+'<span>拒接</span></button></div>' : '') +
