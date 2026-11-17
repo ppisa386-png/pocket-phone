@@ -990,8 +990,8 @@ test('home and square no longer reject author categories but retain square publi
   assert.equal(xItems(f.state(),'post').length,4);
   f.reply({posts:[]});ok(await f.x.refresh());
   const publicBasis={access:'background',summary:'普通公共背景',involvesCharacters:false};
-  f.reply({posts:[{...org,publicBasis},{name:'慢走',handle:'walking',text:'雨后散步。',publicBasis},
-   {...npc,publicBasis},{name:'KPL 赛事速报',handle:'kpl',text:'本周常规赛赛程。',publicBasis},
+  f.reply({posts:[{...org,text:'校内新增活动公开说明。',publicBasis},{name:'慢走',handle:'walking',text:'雨后散步。',publicBasis},
+   {...npc,text:'摄影师的第二条公开动态。',publicBasis},{name:'KPL 赛事速报',handle:'kpl',text:'本周常规赛赛程。',publicBasis},
    ...squareRows(7,200)]});
   ok(await f.x.refresh('square'));
   const square=xItems(f.state(),'post').filter(p=>p.feed==='square');
