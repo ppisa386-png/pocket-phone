@@ -1210,7 +1210,7 @@ test('NPC home and square posts independently keep optional image descriptions',
   f.reply(home);
   ok(await f.x.refresh());
   assert.match(f.prompt(),/imageDescription/);
-  assert.match(f.prompt(),/可按自身习惯、当下内容与情境发布纯文字或附图帖/);
+  assert.match(f.prompt(),/帖子可按情境附 imageDescription/);
   const alex=xItems(f.state(),'post').find(p=>p.text==='The local record store.');
   const bea=xItems(f.state(),'post').find(p=>p.text==='A text-only update.');
   assert.equal(alex.imageDescription,'木制唱片架前摆着一张老黑胶。');

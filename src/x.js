@@ -11,7 +11,7 @@ import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.66';
 import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.66';
-import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2.86';
+import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
 import { parseAppObject } from './model-json.js?v=1.2.79';
@@ -62,7 +62,7 @@ export function parseXObject(text, {arrayKey = null} = {}) {
         const record=row=>!!row&&typeof row==='object'&&!Array.isArray(row);
         const populated=value=>typeof value==='string'&&!!value.trim();
         const valid={
-            posts:row=>populated(row.text),
+            posts:row=>populated(row.text)&&(populated(row.accountId)||(populated(row.name)&&populated(row.handle))),
             replies:row=>populated(row.text)&&populated(row.postId)&&(populated(row.accountId)||(populated(row.name)&&populated(row.handle))),
             accounts:row=>populated(row.name)&&populated(row.handle),
             comments:row=>populated(row.text)&&(populated(row.accountId)||(populated(row.name)&&populated(row.handle))),
@@ -220,12 +220,13 @@ export function createX({memory,phone,getContext,getSettings}) {
         let count=saved.length;
         for(const row of Array.isArray(rows)?rows:[]){
             if(count>=limit)break;
-            if(!xText(row?.text)||row.accountId==='user'||row.isAuthor===true&&post.author==='user')continue;
+            if(!xText(row?.text)||noAccount(row)||row.accountId==='user'||row.isAuthor===true&&post.author==='user')continue;
             if(sameNamedPerson(row,{name:'user',aliases:[getContext().name1,profile(state).alias]}))continue;
             const parent=row.replyTo?keys.get(String(row.replyTo)):null;
             if(row.replyTo&&!parent)continue;
             // Do not invent a user's reply, or replace an unknown explicit ID by a name match.
-            let a=row.isAuthor===true?state.x[post.author]:resolvePostAuthor(state,row,changes,false,false).account;
+            let a=row.isAuthor===true?state.x[post.author]:row.accountId?state.x[row.accountId]:null;
+            if(!row.accountId&&row.isAuthor!==true)a=register(state,row,changes);
             if(a?.type!=='account'||a.blocked)continue;
             const existing=findComment(state,post.id,a.id,xText(row.text),parent);
             const id=existing?.id||crypto.randomUUID();
@@ -489,8 +490,9 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         if(recommended&&results.posts.length&&!added)throw Error('为你推荐没有可保存的新NPC推文：本批有效新增 0 条'+(breaks?'（'+breaks+'）':'')+'，原首页已保留。');
         for(const item of square?[]:results.replies){
             if(combined&&!userPosts.some(p=>p.id===item?.postId))continue;
-            const post=state.x[item?.postId];if(post?.type!=='post'||post.author!=='user'||!xText(item.text))continue;
-            const a=resolvePostAuthor(state,item,changes,false,false).account;if(!a||a.blocked)continue;
+            const post=state.x[item?.postId];if(post?.type!=='post'||post.author!=='user'||!xText(item.text)||noAccount(item))continue;
+            let a=item.accountId?state.x[item.accountId]:null;if(a?.type!=='account')a=null;
+            if(!a)a=register(state,item,changes);if(!a||a.blocked)continue;
             if(findComment(state,post.id,a.id,xText(item.text)))continue;
             a=known(state,a);state.x[a.id]=a;changes.push(xSet(a));
             const reply=xRecord('comment',{postId:post.id,author:a.id,text:xText(item.text),replyTo:null});state.x[reply.id]=reply;changes.push(xSet(reply));
