@@ -1,4 +1,3 @@
-import { createPhoneContext, freezePhoneContext, hostCompletionPayload } from './api-context.js?v=1.2.82';
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
 import { phoneJsonSchema } from './model-json.js?v=1.2.66';
@@ -119,42 +118,26 @@ export function extractApiText(data, onMetadata = () => {}) {
     return text.trim();
 }
 
-export function createApiClient({ getContext, getSettings, getKey, prepareRequest, buildHostPayload = hostCompletionPayload, fetchImpl = globalThis.fetch }) {
+export function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
     const active = new Set();
     const unsupportedSchemas = new Set();
     let cancelEpoch = 0;
-    const contextReader = prepareRequest ? null : createPhoneContext({ getContext });
-    const prepareContext = prepareRequest || contextReader.prepare;
-    let requestSequence = 0;
-    async function prepareWhileCurrent(work, current, signal, seconds) {
-        if (!current()) throw failure('本次操作已取消。');
-        let timer, watcher, abort;
-        const stopped = new Promise((_resolve,reject) => {
-            abort = () => reject(failure('本次操作已取消。'));
-            signal?.addEventListener('abort',abort,{once:true});
-            watcher = setInterval(() => { if (!current()) abort(); },150);
-            timer = setTimeout(() => reject(failure('整理手机上下文超时，本次未提交模型请求。')),seconds * 1000);
-        });
-        try { return await Promise.race([work(),stopped]); }
-        finally { clearTimeout(timer); clearInterval(watcher); signal?.removeEventListener('abort',abort); }
-    }
-    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}, hostMode = false, signal = null) {
+    let preparation = null;
+    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}) {
         if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
-        const endpoint = hostMode ? null : normalizeApiUrl(config.baseUrl);
+        const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
         if (typeof host?.getRequestHeaders !== 'function') throw failure('当前酒馆缺少请求接口，请更新酒馆后使用独立 API。');
         if (/\r|\n/.test(key)) throw failure('密钥不能包含换行，请重新粘贴。');
-        if (signal?.aborted || !isCurrent()) throw failure('本次操作已取消。');
+        if (!isCurrent()) throw failure('本次操作已取消。');
         const controller = new AbortController(); active.add(controller);
-        const abort = () => controller.abort();
-        signal?.addEventListener('abort', abort, { once:true });
         let timedOut = false;
         const started = Date.now();
         let stage = '提交酒馆转发接口，等待响应', status = null, bodyLength = 0;
         const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, config.timeout * 1000);
         const watcher = setInterval(() => { if (!isCurrent()) controller.abort(); }, 150);
         try {
-            const body = JSON.stringify(hostMode ? extra : { chat_completion_source: 'openai', reverse_proxy: endpoint, proxy_password: key, ...extra });
+            const body = JSON.stringify({ chat_completion_source: 'openai', reverse_proxy: endpoint, proxy_password: key, ...extra });
             bodyLength = body.length;
             onProgress(stage);
             const response = await fetchImpl('/api/backends/chat-completions/' + path, {
@@ -175,17 +158,6 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             if (path === 'generate') {
                 stage = '正在读取模型回复文字';
                 onProgress(stage);
-                // Native Claude/Gemini responses use their own envelope. The
-                // host extractor is read-only and never starts a generation.
-                if (hostMode && !Array.isArray(data?.choices) && typeof host.extractMessageFromData === 'function') {
-                    const reason = data?.stop_reason || data?.candidates?.[0]?.finishReason;
-                    if (reason === 'tool_use' || data?.message?.tool_plan && !data?.message?.content?.length)
-                        return extractApiText({choices:[{message:{},finish_reason:'tool_calls'}]}, onResponseMeta);
-                    const content = host.extractMessageFromData(data, 'openai');
-                    const finish_reason = ['max_tokens','MAX_TOKENS'].includes(reason) ? 'length'
-                        : ['SAFETY','RECITATION','BLOCKLIST','PROHIBITED_CONTENT'].includes(reason) ? 'content_filter' : 'stop';
-                    return extractApiText({choices:[{message:{content},finish_reason}]}, onResponseMeta);
-                }
                 return extractApiText(data, onResponseMeta);
             }
             return data;
@@ -202,7 +174,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 + '；回复上限：' + (extra.max_completion_tokens ?? extra.max_tokens ?? '由服务决定')
                 + '\n此处记录的是浏览器与酒馆接口的往返，不能据此确认上游执行器已收到请求。';
             throw result;
-        } finally { clearTimeout(timeout); clearInterval(watcher); active.delete(controller); signal?.removeEventListener('abort', abort); }
+        } finally { clearTimeout(timeout); clearInterval(watcher); active.delete(controller); }
     }
     async function complete(config, key, messages, isCurrent) {
         if (!config.model?.trim()) throw failure('请先填写或选择模型 ID。');
@@ -214,32 +186,28 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
             const connection = resolveAppConnection(getSettings(), options.app);
             const config = structuredClone(connection.api);
-            const hostMode = config.mode !== 'independent';
-            const source = options.context || freezePhoneContext(getContext());
-            const hostFingerprint = JSON.stringify([source.mainApi,source.chatCompletionSettings]);
-            if (!hostMode) {
-                normalizeApiUrl(config.baseUrl);
-                if (!config.model?.trim()) throw failure('请先在 API 设置或 App 管理中选择模型 ID。');
-            }
-            const key = hostMode ? '' : getKey(config.baseUrl, connection.profileId);
-            const requestId = options.requestId || 'phone-' + (++requestSequence);
+            normalizeApiUrl(config.baseUrl);
+            if (!config.model?.trim()) throw failure('请先在 API 设置或 App 管理中选择模型 ID。');
+            const key = getKey(config.baseUrl, connection.profileId);
             const fingerprint = JSON.stringify(connection), epoch = cancelEpoch;
-            const current = () => epoch === cancelEpoch && !options.signal?.aborted && isCurrent() &&
+            const schemaEndpoint = JSON.stringify([config.baseUrl,config.model]);
+            const current = () => epoch === cancelEpoch && isCurrent() &&
                 fingerprint === JSON.stringify(resolveAppConnection(getSettings(), options.app)) &&
-                (hostMode ? hostFingerprint === JSON.stringify([getContext().mainApi,getContext().chatCompletionSettings])
-                    : key === getKey(config.baseUrl, connection.profileId));
-            onProgress(hostMode ? '正在整理正文、预设与记忆，尚未提交酒馆独立请求' : '正在整理正文、预设与记忆，尚未提交独立 API');
-            if (!current()) throw failure('本次操作已取消。');
-            // Preparation only reads a task-local story/snapshot. No shared
-            // host hooks remain, so phone requests need no preparation queue.
-            const prepared = await prepareWhileCurrent(() => prepareContext(source, prompt, contact, current, { ...options, context:source }), current, options.signal, config.timeout);
+                key === getKey(config.baseUrl, connection.profileId);
+            onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
+            // The host uses shared prompt hooks. Release this queue before the network call.
+            const prepare = async () => {
+                if (!current()) throw failure('本次操作已取消。');
+                return prepareRequest(getContext(), prompt, contact, current);
+            };
+            const handoff = preparation ? preparation.then(prepare) : prepare();
+            const tail = handoff.catch(() => {});
+            preparation = tail;
+            let prepared;
+            try { prepared = await handoff; }
+            finally { if (preparation === tail) preparation = null; }
             if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
-            const payload = hostMode ? await prepareWhileCurrent(() => buildHostPayload(source, prepared.messages), current, options.signal, config.timeout) : independentPayload(prepared, config);
-            if (!current()) throw failure('聊天或 API 配置已变化，本次操作已取消。');
-            payload.stream = false;
-            payload.type = 'quiet';
-            delete payload.n;
-            const schemaEndpoint = JSON.stringify(hostMode ? [payload.chat_completion_source,payload.custom_url,payload.reverse_proxy,payload.model] : [config.baseUrl,config.model]);
+            const payload = independentPayload(prepared, config);
             // A task may need a larger one-shot output than the saved preset
             // provides. This is a per-request ceiling only: saved API settings
             // and the host preset are never rewritten.
@@ -269,9 +237,9 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             }
             try {
                 const metadata = jsonMode => (info, rawText) => options.onResponseMeta?.({ ...info,
-                    jsonMode, model:payload.model, endpointOrigin:hostMode ? 'host' : new URL(config.baseUrl).origin, requestId, contextMode:prepared.contextMode,
+                    jsonMode, model:config.model, endpointOrigin:new URL(config.baseUrl).origin,
                 }, rawText);
-                try { return await post('generate', config, key, payload, current, onProgress, metadata(payload.json_schema ? 'json_schema' : 'none'), hostMode, options.signal); }
+                try { return await post('generate', config, key, payload, current, onProgress, metadata(payload.json_schema ? 'json_schema' : 'none')); }
                 catch (error) {
                     // Some OpenAI-compatible providers reject json_schema rather
                     // than ignoring it. Retry the SAME request without that
@@ -285,7 +253,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                         delete fallback.json_schema;
                         delete fallback.response_format;
                         onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
-                        try { return await post('generate', config, key, fallback, current, onProgress, metadata('unsupported_fallback'), hostMode, options.signal); }
+                        try { return await post('generate', config, key, fallback, current, onProgress, metadata('unsupported_fallback')); }
                         catch (again) {
                             again.diagnostic = (again.diagnostic ? again.diagnostic + '\n' : '') +
                                 'JSON 输出参数不受支持：已使用无此参数的同任务兼容请求一次';
@@ -297,7 +265,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             } catch (error) {
                 if (error.diagnostic) {
                     const sizes=payload.messages.map(m=>JSON.stringify(m).length);
-                    error.diagnostic+='\n请求标识：'+requestId+'；上下文来源：'+(prepared.contextMode||'provided')+'；手机任务提示字符数：'+prompt.length+'；最终各条消息字符数（按发送顺序，含结构）：'+sizes.join('、');
+                    error.diagnostic+='\n手机任务提示字符数：'+prompt.length+'；最终各条消息字符数（按发送顺序，含结构）：'+sizes.join('、');
                 }
                 throw error;
             }
@@ -312,7 +280,6 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 [{ role: 'user', content: 'Connection test. Reply only: OK' }], isCurrent);
         },
         cancel() { cancelEpoch++; for (const controller of active) controller.abort(); },
-        destroy() { this.cancel(); contextReader?.destroy(); },
     };
 }
 
@@ -325,6 +292,5 @@ export function independentPayload(prepared, config) {
         'tools','tool_choice','response_format','json_schema'];
     if (!Array.isArray(prepared?.messages) || !prepared.messages.length) throw failure('酒馆没有提供有效的生成内容。');
     const payload = Object.fromEntries(fields.filter(k => prepared[k] !== undefined).map(k => [k, prepared[k]]));
-    return { ...structuredClone(payload), max_tokens: payload.max_completion_tokens === undefined ? payload.max_tokens ?? config.maxTokens : undefined, model: config.model.trim(), stream: false, type: 'quiet' };
+    return { ...payload, model: config.model.trim(), stream: false, type: 'quiet' };
 }
-
