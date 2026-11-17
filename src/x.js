@@ -444,14 +444,12 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),
             d=>{
                 const posts=d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15);
-                // Validate the generated rows inside phone.request, BEFORE its
+                // Validate NPC post bodies inside phone.request, BEFORE its
                 // one-time format-recovery boundary. Never save empty placeholders.
                 for(let i=0;i<posts.length;i++){
                     const item=posts[i];
                     if(!item||typeof item!=='object'||Array.isArray(item)||!xText(item.text))
                         throw modelProtocolError('phone_x_feed',['posts['+i+'].text'],'X 推文正文未交付或为空');
-                    if(!noAccount(item)&&!xText(item.accountId)&&(!xText(item.name)||!xText(item.handle)))
-                        throw modelProtocolError('phone_x_feed',['posts['+i+'].accountId 或 name/handle'],'X 推文作者信息未交付');
                 }
                 const activityReactions=pendingActivity.length?list(d,'activityReactions',activityReactionLimit):[];
                 if(pendingActivity.length){

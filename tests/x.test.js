@@ -1280,12 +1280,12 @@ test('X feed schema requires per-post text but preserves valid empty arrays',()=
 for(const independent of [false,true])test('X '+(independent?'independent':'host')+' retries empty NPC post objects once before any write',async()=>{
   const f=setup(undefined,independent);
   try{
-    const before=JSON.stringify(f.state().x);let calls=0;
+    const before=JSON.stringify(f.state().x||{});let calls=0;
     f.reply(({quietPrompt})=>{
       calls++;
       if(calls===1)return JSON.stringify({posts:[{}],replies:[]});
-      assert.equal(JSON.stringify(f.state().x),before,'failed batch does not write account or post records');
-      assert.match(quietPrompt,/X 推文数据格式恢复/);
+      assert.equal(JSON.stringify(f.state().x||{}),before,'failed batch does not write account or post records');
+      assert.match(quietPrompt,/X 格式恢复/);
       assert.match(quietPrompt,/不得使用 \[\{\}\]/);
       return JSON.stringify(feedResult());
     });
@@ -1296,20 +1296,20 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   }finally{f.close();}
 });
 
-test('X home allows a genuine zero-NPC feed without recovery, but refuses two malformed replies atomically',async()=>{
+test('X home allows a genuine zero-NPC feed without recovery, but refuses two malformed post batches atomically',async()=>{
   const f=setup();
   try{
     f.reply({posts:[],replies:[]});
     ok(await f.x.refresh());assert.equal(f.count(),1);
     const original=JSON.stringify(f.state().x);
-    const broken=[{name:'Alex',handle:'alex',text:'   '},{text:'orphaned'}];
+    const broken=[{name:'Alex',handle:'alex',text:'   '},{name:'Alex',handle:'alex',text:123}];
     for(const row of broken){
       const before=f.count();
       f.reply(()=>JSON.stringify({posts:[row],replies:[]}));
       const result=await f.x.refresh();
       assert.equal(result.ok,false);
       assert.equal(result.code,'PHONE_DATA_MISSING');
-      assert.match(result.error,/X 推文(正文|作者信息)/);
+      assert.match(result.error,/X 推文正文/);
       assert.equal(f.count(),before+2,'only one format retry, never an unbounded loop');
       assert.equal(JSON.stringify(f.state().x),original);
     }
