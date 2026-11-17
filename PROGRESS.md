@@ -1,3 +1,10 @@
+### v1.2.88（2026-11-17）— 小手机双语文字去预设标签
+- **讨论结论／取代**：用户要求小手机显示统一“原文（中文译文）”，不把酒馆预设中的任意语言标签复制到社交和通信页面；取代旧规则要求直接沿用预设对白排版标签的部分，不取代预设对单语/双语和角色原语言的决定。
+- **基线**：main 上 v1.2.87（天气首次气候缺字段纠正）；仅新增共享显示格式器、手机通信/社交语言指令及相应五类页面调用，不改变 X v1.2.86 作者资格已删除机制、天气、粉丝、独立 API 和旧 Quiet 调用方式。
+- **实现**：src/communication-language.js 更新 COMMUNICATION_LANGUAGE_RULE / SOCIAL_LANGUAGE_RULE 并增加 formatPhoneDialogue；x-view、chat-view、snapchat-view、messages-view、phone-view 对角色文字格式化后安全转义，自己写的内容保持原样；版本和模块查询参数升至 1.2.88。原始存档、剧情文本、上下文和 user 消息不会被回写。包含无标签单语保留与多预设标签兼容。
+- **验证**：新增 tests/communication-format.test.js，覆盖 X、短信、不同标签、双语双行、单语与用户原文保留；原有 tests/communication-language.test.js 的展示断言与新显示合同对齐。GitHub Actions 的 npm test / npm run build:preview 为仓库 CI；本轮未实际调用用户当前的酒馆预设/模型生成链联调。
+- **未解决／提醒**：完全未知且语义无法判定的翻译结构会原样保留而非猜测；非对话字段和正文小说不作全局清洗。无额外模型请求、无模型重新翻译。
+
 ## v1.2.87 · 天气研究缺失12个月档案的定向恢复（2026-11-17）
 **基线**：main `539330ea10d3d8a9fcd8bf4b24bbb400a8e604f4`（v1.2.86）。
 **原因**：首次无已存城市时 Weather Schema 为保留 `{"city":null}`，只把 city 设为顶层必需；模型在用户截图中实际给出了城市、origin 与当前天气，却遗漏整个 climate。业务校验按原标准拒绝，旧配置 `formatRetryOnce:false` 导致没有补全机会。
