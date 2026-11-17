@@ -5,7 +5,7 @@ import { smsExpired, smsForAI, smsClassificationPlan, smsClassificationChanges, 
 import { exactStoryTime } from '../src/story-clock.js';
 import { appendChange, replayJournal, reconcileJournal, revisionsFor, messageSignatures, JOURNAL_KEY } from '../src/journal.js';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { buildContinuityPrompt } from '../src/continuity.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { outreachPrompt } from '../src/outreach.js';
@@ -250,3 +250,4 @@ test('narrative incoming/outgoing annotations classify actual SMS without extra 
   assert.equal(f.service.snapshot().messages[inbound.id],undefined);assert.equal(commRow(f.service.snapshot(),inbound.id),undefined);
  }finally{f.close();}
 });
+

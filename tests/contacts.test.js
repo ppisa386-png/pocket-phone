@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { contactSources, validateContacts, establishedSources, establishedReferences, establishedContactPrompt, validateEstablishedContacts } from '../src/contacts.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 
 const quote='Alex gives Sam his number: +1 212 555 0123.';
 const persona='Sam has a sister named Bea. Their close friend is Casey. Jordan is a coworker.';
@@ -261,3 +261,4 @@ test('reference IDs cannot authorize a late result after setup changes',async()=
   await pending;assert.equal(Object.keys(f.phone.snapshot().contacts).length,0);
  }finally{f.close();}
 });
+

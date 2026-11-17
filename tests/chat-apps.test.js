@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createChatApp,chatItems,chatUnread} from '../src/chat-apps.js';
 import {createChatPanel} from '../src/chat-view.js';
 import {normalizeSettings} from '../src/config.js';
@@ -205,3 +205,4 @@ for(const app of ['wechat','whatsapp'])test(app+': delayed draft stores the actu
   for(const row of chatItems(f.state(),app,'message'))assert.equal(row.storyTime.date,'2026-11-02');
  }finally{f.close();}
 });
+

@@ -1,4 +1,4 @@
-import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.81';
+import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.82';
 import { sceneIcon, metricIcon, weatherWindow } from './weather-art.js?v=1.2.41';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -228,3 +228,4 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
 
     return { html, action, press, reset() { epoch++; working = false; status = ''; } };
 }
+

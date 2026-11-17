@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createAmazon,shopItems} from '../src/amazon.js';
 import {createFood,foodItems} from '../src/food.js';
 import {createPaymentRequest} from '../src/payment-request.js';
@@ -155,3 +155,4 @@ test('付款人名字缺失被拒绝且不请求模型；NPC 代付订单随楼�
   assert.equal(assetRows(f.state(),'cash_transaction').length,0);
  }finally{f.close();}
 });
+

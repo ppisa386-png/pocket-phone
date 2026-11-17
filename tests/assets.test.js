@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { createAssets, applyAssessment, assessmentReferences } from '../src/assets.js';
 import { createSnapchat } from '../src/snapchat.js';
 import { createAmazon } from '../src/amazon.js';
@@ -1107,3 +1107,4 @@ test('Persona Markdown home fields are conservative and do not override explicit
   assert.equal(f.state().assets.wallet.currency,'USD');
  }finally{f.close();}
 });
+

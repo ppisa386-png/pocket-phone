@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { createAssets } from '../src/assets.js';
 import { createSnapchat } from '../src/snapchat.js';
 import { createAmazon } from '../src/amazon.js';
@@ -100,3 +100,4 @@ test('economic rights: partial license payment preserves holding; explicit entir
  assert.match(f.prompt(),/action:amend/);assert.match(f.prompt(),/尚未估值的资产/);
  }finally{f.close();}
 });
+

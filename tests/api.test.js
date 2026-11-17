@@ -3,8 +3,7 @@ import {feedResult,worldTopics,fixtureCast} from './x-fixtures.js';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createApiClient, createKeyStore, normalizeApiUrl, extractApiText } from '../src/api.js';
-import { captureHostRequest } from '../src/api-context.js';
-import { HostEvents, installHostGeneration } from './host-fixture.js';
+import { HostEvents, installHostGeneration, publishStorySnapshot } from './host-fixture.js';
 import { normalizeSettings, VERSION } from '../src/config.js';
 import { readFileSync } from 'node:fs';
 import { createPhoneMemory } from '../src/memory.js';
@@ -504,10 +503,10 @@ function phoneFixture(onError = () => {}) {
     const context={chatId:'A',powerUserSettings:{persona_description:'Sam 常住美国。'},characterId:0,characters:[{name:'Alex',avatar:'alex.png',description:fixtureCast}],name1:'Sam',name2:'Alex',chat:[{mes:quote,name:'Alex'}],chatMetadata:{},saveMetadata:async()=>{},onlineStatus:'no_connection',eventSource:bus,event_types,getRequestHeaders:()=>({'Content-Type':'application/json'})};
     installHostGeneration(context);
     const settings=normalizeSettings({api:apiConfig(),retries:0}); let responder=()=>JSON.stringify({contacts:[{name:'Alex',number:'+1 212 555 0123',user_has_number:true,evidence:quote}]}); let signal;
-    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,fetchImpl:async(_url,options)=>{signal=options.signal;const result=await responder(options);return typeof result==='string'?response(result):result;}});
+    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',fetchImpl:async(_url,options)=>{signal=options.signal;const result=await responder(options);return typeof result==='string'?response(result):result;}});
     const memory=createPhoneMemory({getContext:()=>context});
     const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:client,onError});
-    return {context,settings,phone,memory,bus,signal:()=>signal,reply:fn=>responder=fn,close(){client.cancel();phone.destroy();memory.destroy();}};
+    return {context,settings,phone,memory,bus,signal:()=>signal,reply:fn=>responder=fn,close(){client.destroy();phone.destroy();memory.destroy();}};
 }
 
 test('actual independent social payload does not restore prose excluded by host history',async()=>{
@@ -516,6 +515,7 @@ test('actual independent social payload does not restore prose excluded by host 
         f.context.chat.push({mes:'Alex JUST_FINISHED_THE_TRIP with Sam. This was private.'});
         globalThis.qqj_v3_public_bridge_v1={getPromptSnapshot:()=>({status:'empty'})};
         f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
+        await publishStorySnapshot(f.context);
         f.reply(options=>{calls++;const payload=JSON.parse(options.body);
             assert.ok(payload.messages.every(m=>m.role==='system'),'fixture stripped ordinary story messages');
             assert.doesNotMatch(JSON.stringify(payload.messages),/JUST_FINISHED_THE_TRIP/);
@@ -659,6 +659,7 @@ test('independent trends preserve original publication scene and use trend schem
   f.context.chat.push({mes:'Sam filmed a PUBLIC_BRIDGE_FAILURE. Passengers were evacuated.'});await f.memory.read();assert.equal((await x.publish('刚刚。')).ok,true);
   const post=xItems(f.phone.snapshot(),'post')[0];for(let i=0;i<8;i++)f.context.chat.push({mes:'Later '+i});await f.memory.read();
   f.bus.on('GENERATE_AFTER_DATA',data=>{data.prompt=data.prompt.filter(m=>m.role==='system');});
+        await publishStorySnapshot(f.context);
   f.reply(options=>{calls++;const body=JSON.parse(options.body),last=body.messages.at(-1);
    assert.equal(last.role,'system');assert.match(last.content,/topics 必须10～15条/);assert.match(last.content,/sourcePostIds/);assert.doesNotMatch(last.content,/本次为X刷新/);
    assert.doesNotMatch(JSON.stringify(body.messages),/PUBLIC_BRIDGE_FAILURE/);assert.match(JSON.stringify(body.messages),/local resident/);assert.equal(body.temperature,0.83);
@@ -796,3 +797,4 @@ test('an App profile or model change during prompt preparation cancels the pendi
  await assert.rejects(pending,/配置已变化|取消/);
  assert.equal(requests,0);
 });
+

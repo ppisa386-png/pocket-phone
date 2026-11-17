@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService, validateContacts, parseJSON } from '../src/phone.js';
+import { createPhoneService, validateContacts, parseJSON } from './phone-fixture.js';
 import { normalizeSettings } from '../src/config.js';
 
 const quote = 'Alex gives you his number: +1 212 555 0123.';
@@ -110,3 +110,4 @@ test('offline connection explains the problem without creating fake contacts', a
     assert.equal(f.requests(), 0); assert.equal(Object.keys(f.phone.snapshot().contacts).length, 0);
     f.close();
 });
+

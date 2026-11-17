@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { normalizeSettings } from '../src/config.js';
 
 function fixture() {
@@ -71,3 +71,4 @@ test('follow-host mode can finish another app while the first app is waiting',as
         assert.deepEqual((await f.memory.read()).state.profiles.amazon,{result:'saved'});
     } finally {release();f.destroy();}
 });
+

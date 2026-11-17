@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createFood,foodItems,validateShops,FOOD_SHOP_COUNT,FOOD_MENU_MIN,FOOD_MENU_MAX,FOOD_SPECIAL_COUNT,FOOD_SPECIAL_DISCOUNT} from '../src/food.js';
 import {createFoodPanel} from '../src/food-view.js';
 import {assetRows} from '../src/assets-core.js';
@@ -351,3 +351,4 @@ test('店铺页选菜、紧凑状态栏与两步收件气泡',async()=>{
   assert.doesNotMatch(panel.html(),/pp-shop-bubble/);
  }finally{globalThis.FormData=OriginalFormData;}
 });
+

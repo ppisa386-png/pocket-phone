@@ -40,3 +40,17 @@ export function installHostGeneration(context, options = {}) {
     };
     return host;
 }
+
+
+// One real-story pipeline simulation for passive observers; never a model call.
+export async function publishStorySnapshot(context) {
+    const bus = context.eventSource;
+    await bus.emit('GENERATION_STARTED','normal',{},false);
+    const generated = {prompt:[{role:'system',content:'Host preset and processed lore'},
+        ...(context.chat || []).filter(m=>!m.is_system).map(m=>({role:m.is_user?'user':'assistant',content:m.mes}))]};
+    await bus.emit('GENERATE_AFTER_DATA',generated,false);
+    const data = {type:'normal',messages:generated.prompt,temperature:.83,max_tokens:4321,model:'host-model',proxy_password:'host-secret'};
+    await bus.emit('CHAT_COMPLETION_SETTINGS_READY',data);
+    await bus.emit('GENERATION_ENDED');
+    return data;
+}

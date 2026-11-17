@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { createAssets, applyAssessment, pendingAssessments, assessmentReferences, ASSET_ASSESSMENT_RULES, PENDING_ASSESSMENT_RULES } from '../src/assets.js';
 import { cashBalance, assetRows } from '../src/assets-core.js';
 import { buildAssetPrompt, importStoryAssets } from '../src/assets-story.js';
@@ -149,3 +149,4 @@ test('one-click backfill and pending handling obey the same four-lane scope', ()
     assert.match(PENDING_ASSESSMENT_RULES, /category:"exclude"/);
     assert.match(PENDING_ASSESSMENT_RULES, /不得跳过该事项，也不得把有效收支批量忽略/);
 });
+

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { threadMessages, unreadMessages } from '../src/messages.js';
 import { normalizeSettings } from '../src/config.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
@@ -237,3 +237,4 @@ test('failed erase save leaves message and history intact',async()=>{
   assert.equal((await f.memory.read()).state.messages[id].text,'Got your message.');
  }finally{f.close();}
 });
+

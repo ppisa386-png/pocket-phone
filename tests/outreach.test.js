@@ -107,7 +107,7 @@ test('disabled and blocked or unanswered requests do not reappear on replay',asy
 });
 
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createChatApp} from '../src/chat-apps.js';
 import {createX} from '../src/x.js';
 import {createXPanel} from '../src/x-view.js';
@@ -321,3 +321,4 @@ test('reload and floor rollback recompute the X trigger from the journal',async(
     assert.equal(xTriggerCandidates(wiped,'Sam Lee').length,0,'消息楼回退后资格消失');
     assert.ok(DAY1<DAY2&&DAY2<DAY3,'epoch day anchors stay comparable');
 });
+

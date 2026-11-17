@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { weatherResearchPrompt, validateWeatherResearch, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from '../src/weather-model.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
@@ -1286,3 +1286,4 @@ test('historical climate with southern seasons uses local-calendar monthly tempe
     assert.ok(sample('2026-01-15') > 24);
     assert.ok(sample('2026-07-15') < 19);
 });
+

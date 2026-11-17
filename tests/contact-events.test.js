@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { normalizeSettings } from '../src/config.js';
 import { eventKey, isBlocked } from '../src/contact-events.js';
 
@@ -32,3 +32,4 @@ test('event recognition in a normal SMS reply adds no second model request',asyn
     assert.equal(f.count(),1);assert.equal(f.phone.snapshot().profiles[eventKey('card:alex.png')].active,true);
     await pause();assert.equal(f.count(),1);f.close();
 });
+

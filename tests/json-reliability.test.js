@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { APPS, normalizeSettings } from '../src/config.js';
 import { parseAppObject, parseModelObject, phoneJsonSchema } from '../src/model-json.js';
-import { parseJSON, createPhoneService } from '../src/phone.js';
+import { parseJSON, createPhoneService } from './phone-fixture.js';
 import { parseAmazonResponse } from '../src/amazon.js';
 import { parseCalendarResponse } from '../src/calendar-core.js';
 import { parseAssetResponse } from '../src/assets.js';
@@ -38,6 +38,7 @@ function setup(mode) {
     let reply = () => '{"records":["saved"]}';
     context.generateQuietPrompt = async options => {requests.push(options);return reply(options);};
     const client = createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'fixture-key',
+        buildHostPayload:async(_c,messages)=>({messages,model:'host-model',chat_completion_source:'custom',max_tokens:128,stop:['}'],tools:[{type:'function'}]}),
         prepareRequest:async (_c,prompt)=>({messages:[{role:'system',content:'KEEP_PRESET'},{role:'user',content:prompt}],
             stop:['}'],tools:[{type:'function'}],tool_choice:'required',json_schema:{name:'unrelated',value:{type:'array'}},response_format:{type:'json_schema'},max_tokens:128}),
         fetchImpl:async (_url,options)=>{const body=JSON.parse(options.body);requests.push(body);const answer=await reply(body);
@@ -64,13 +65,12 @@ for (const mode of ['host','independent']) for (const {id} of APPS) test(mode+' 
         assert.equal(result.ok,true,result.error);assert.equal(n,2);
         assert.deepEqual(f.phone.snapshot().profiles[id],{records:['原文\n第二行']});
         for(const request of f.requests) {
-            if(mode==='independent') {
+            {
                 assert.deepEqual(request.json_schema,phoneJsonSchema());assert.equal(request.response_format,undefined);
                 assert.equal(request.stop,undefined);assert.equal(request.tools,undefined);assert.equal(request.tool_choice,undefined);
                 assert.equal(request.messages[0].content,'KEEP_PRESET');
                 assert.match(request.messages.at(-1).content,/完整 JSON 对象/);
-            } else {
-                assert.match(request.quietPrompt,/完整 JSON 对象/);assert.ok(request.responseLength>=8192);
+                assert.ok(request.max_tokens>=8192);
             }
         }
         const before=structuredClone(f.phone.snapshot().profiles[id]);
@@ -192,3 +192,4 @@ test('diagnostic records distinguish schema fallback from subsequent requests wi
         assert.deepEqual(f.errors.at(-1).modelResponses.map(s=>s.metadata.jsonMode),['unsupported_fallback','none']);
     } finally {f.close();}
 });
+

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createChatApp} from '../src/chat-apps.js';
 import {createChatPanel} from '../src/chat-view.js';
 import {normalizeSettings} from '../src/config.js';
@@ -425,3 +425,4 @@ test('narrative Moments reject malformed galleries, drafts and unknown private a
   assert.ok(alex);
  }finally{f.close();}
 });
+

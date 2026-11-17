@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { normalizeSettings } from '../src/config.js';
 import { createCalendar } from '../src/calendar.js';
 import { createCalendarBridge, CALENDAR_KEY } from '../src/calendar-story.js';
@@ -197,3 +197,4 @@ test('calendar independent task schema rejects empty model content even with rea
   assert.deepEqual(f.state().calendar.database.holidays,[]);
  }finally{f.close();}
 });
+

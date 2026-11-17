@@ -8,7 +8,7 @@ import { createDailyBridge, DAILY_KEY } from '../src/daily-story.js';
 import { createDailyPanel } from '../src/daily-view.js';
 import { dailyArticles, dailyExpiry, dailyStatus, buildDailyPrompt, dailyChanges, dailyArchives, dailyEditorialHistory } from '../src/daily-core.js';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { normalizeSettings } from '../src/config.js';
 import { dateDay } from '../src/story-clock.js';
 const background={access:'background',summary:'Public world news without story characters',involvesCharacters:false};
@@ -538,3 +538,4 @@ test('daily App saves nine stories with an external reference tail without rewri
   }
  }finally{f.close();}
 });
+

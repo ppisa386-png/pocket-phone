@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { createAssets } from '../src/assets.js';
 import { createSnapchat } from '../src/snapchat.js';
 import { createAmazon } from '../src/amazon.js';
@@ -161,3 +161,4 @@ test('settling original purchase after an amendment preserves the amended terms 
  f.reply({...evaluation('2026-01-03'),events:[{id:e.id,amount:100,marketValue:1000}]});ok(await f.assets.update());const h=f.state().assets[hid];assert.equal(h.rights.sharePercent,5);assert.equal(h.startDay,dateDay('2026-01-02'));assert.equal(h.valueMinor,null);assert.equal(h.purchaseMinor,10000);assert.equal(h.termsHistory.length,2);
  }finally{f.close();}
 });
+

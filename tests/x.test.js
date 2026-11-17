@@ -3,7 +3,7 @@ import {feedResult,worldTopics,fixtureCast} from './x-fixtures.js';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createX,xItems,xUnread,xCounts} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
 import {buildContinuityPrompt} from '../src/continuity.js';
@@ -1625,3 +1625,4 @@ test('X initial followers reject missing field with one format recovery; an expl
   assert.equal(f.count(),3);
  }finally{f.close();}
 });
+

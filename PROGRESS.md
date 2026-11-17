@@ -1,3 +1,13 @@
+## v1.2.82 · 正文与手机模型请求双向隔离（2026-11-17）
+**基线**：main `c947423843ebc65353627687a31daa29e262fd48`（v1.2.81）。本轮 V2.0 任务书授权直接修复及非强制推送。
+**原因与取代**：独立 API 原 `captureHostRequest` 仍调用 `generateQuietPrompt`，监听共用生成事件并安装抛异常的 `toJSON` 截获；跟随酒馆直接 Quiet。官方源码确认 Quiet 进入 `Generate`，更换共用 abortController、修改生成进度/停止按钮并走共用结束清理；旧截获还用可被另一事件覆盖的 owner 状态。`generateRawData` 也监听全局 GENERATION_STOPPED，且自定义长度使用临时共用设置，故不采用它作为并发替代。可以确认这些耦合路径存在；未在用户实际版本复现，不能断言每次中断具体经过哪一条异常/事件分支。
+**实现**：`api-context` 改成只读正文快照观察器及冷启动构建器；不再启动额外生成或拦截序列化。快照绑定聊天、元数据、卡片/Persona/预设与来源前缀/隐藏状态，保留后续事件监听器对请求的改动；新稳定楼层仅追加到副本，旧楼变化与换聊等使快照失效。冷启动读取现有卡片、Persona、可见剧情、预设顺序/开关、角色/聊天/Persona/全局绑定世界书、扩展记忆与基础宏。`api` 移除共享准备队列，两种连接统一走独立后端 fetch；跟随酒馆采用官方 ChatCompletionService.presetToGeneratePayload 转换当前设置副本，不切预设。每次请求独立控制器、超时、准备阶段取消、任务 ID 与诊断；保留 API 方案路由、密钥隔离与单次 Schema 兼容回退。原生内容解析拒绝截断和工具/推理代替最终回复。`phone` 统一调用 modelClient，任务有独立取消控制器和冻结上下文；`memory.read` 只新增稳定来源索引，原票据/epoch/逐楼保存判定不放宽。入口释放观察器并更新版本与模块缓存引用；业务代码及 UI 不改。
+**源码依据**：SillyTavern 默认分支检查时提交 `06bde939fb1e9c4c8d8641d810f0a916b5bce127`，阅读 public/script.js、scripts/openai.js、custom-request.js、st-context.js、world-info.js、events.js 及后端 chat-completions.js。参考 ST-iPhonie 的 assistant-context.js / host-assistant.js / core/backend.js / core/text-tasks.js，柚月 config/api-manager.js，SillyPhone index.js 实际实现；完整仓库地址登记 RESOURCE_SOURCES。
+**保持与已知限制**：v1.2.77 的正常追加保留旧票据、原楼锚定，以及改楼/删楼/切聊/配置变化的失效规则继续有效。无稳定聊天前缀仍不从流式草稿初始化存档。正文快照是最近可用的处理结果，后续追加楼层不会重新运行动态世界书扫描；设置变化后使用冷启动构建。冷启动不是宿主全套提示流水线的逐字重现：任意有副作用宏不重新执行，递归/概率/向量/定时世界书激活、精确 token 裁剪/深度插入及所有第三方拦截器不保证一致；绑定书读取失败明确失败，不假装完整。非聊天补全或没有官方隔离参数接口的跟随模式明确拒绝并提示独立 API，禁止退回 Quiet/Raw。供应商排队、并发额度及版本差异由实际服务决定。
+**验证**：针对请求/上下文/记忆/语言预设/JSON 的首轮110项通过；进一步增加隐藏快照与原生响应回归。源码检查确认生产路径无 Quiet/Raw/宿主 stop 调用、无 toJSON/fetch 全局修改；独立请求模拟覆盖两种启动顺序、正文停止、单手机取消、两个手机请求并行、准备期间取消、App 路由/密钥变化、原楼保存与旧来源失效。既有业务测试仅改为显式注入模拟模型，不在生产保留 Quiet 测试后门。本地完整可执行回归结果和推送后 CI 见下方发布记录。真实 SillyTavern、多模型供应商、私人 Key、动态世界书与宏端到端：**未运行**。
+**本地发布检查**：现有 Node v24.22.1 执行源码/测试 JS 语法检查及 git diff --check 通过；排除本地未下载资源的6项图片/字体文件检查后，`node --test --test-skip-pattern=… tests/*.test.js` 实际执行 **923/923通过，0失败**。这6项及完整预览构建将由仓库 GitHub Actions 使用完整文件验证；未将未执行项目记为通过。
+**后续实测**：先独立 API 再跟随酒馆聊天补全，执行正文先开始、手机先开始、分别停止两端、追加正文保留原楼结果、旧楼修改与聊天切换六项；同时核对首次无快照与一次正文生成后的上下文表现。若失败，区分上下文来源、请求阶段和保存资格，不恢复旧 Quiet 截获。
+
 ## v1.2.81 · 榴莲日历 Schema 状态数溢出修复（2026-11-17）
 **基线**：main `7938f96ca33fde5089b88ebdaafece2616c7f89e`（v1.2.80）。
 **问题与原因**：用户报告榴莲日历刷新时，上游返回 HTTP 400 `The specified schema produces a constraint that has too many states for serving`，终端同时显示 `region / timezone / years / holidays` 必需字段。核查当前 `phone_calendar` 传输契约发现，`holidays` 以 `maxItems:240` 约束、条目又使用嵌套 `anyOf`（数组元组或对象）；约束解码器可能对每项展开状态导致上游在生成前拒绝整个请求。
@@ -1881,3 +1891,4 @@ API 保存区改为随页面保持可见的操作区；保存成功显示绿色�
 ## 接下来
 
 以顶部最新版本记录为准。电话、短信、Snapchat、X、Amazon 和小榴莲均有实现。优先处理真实酒馆反馈；后续新玩法先向用户讨论确认。旧版本段落中的“尚未实现”和“下一步”仅是当时状态。
+

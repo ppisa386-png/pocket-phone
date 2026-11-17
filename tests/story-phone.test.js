@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createStoryPhoneBridge,STORY_PHONE_KEY,importStoryPhone} from '../src/story-phone.js';
 import {JOURNAL_KEY,messageSignatures,revisionsFor,appendChange,replayJournal,eraseMessageFromJournal,reconcileJournal} from '../src/journal.js';
 import {normalizeSettings} from '../src/config.js';
@@ -482,3 +482,4 @@ test('X-only narrative keeps notification and read boundaries when shared phone 
   assert.doesNotMatch(shared,/只出现通知时正文不透露内容，标记仍保存全文/,'duplicate X wording is replaced by the shared rule');
  }finally{f.close();}
 });
+

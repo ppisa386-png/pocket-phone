@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createSnapchat,snapItems,snapExpired,snapAmount,snapUnread,snapStoryRefreshState} from '../src/snapchat.js';
 import {normalizeSettings} from '../src/config.js';import {buildContinuityPrompt} from '../src/continuity.js';
 import {createSnapPanel} from '../src/snapchat-view.js';
@@ -262,3 +262,4 @@ test('Snapchat story reply distinguishes missing text from explicit silence with
   assert.equal(f.state().snapchat['npc-story'].comments.length,1,'explicit no-reply adds only the user comment');
  }finally{f.close();}
 });
+

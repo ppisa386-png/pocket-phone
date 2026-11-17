@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { storyAnnotations } from '../src/story-phone.js';
 import { dailyUsed } from '../src/daily-core.js';
 import { squareUsed } from '../src/square-core.js';
@@ -110,3 +110,4 @@ test('saved evidence-era default prompts migrate to the cleaned defaults; custom
     const fresh = normalizeSettings({ prompts: { contacts: '我的自定义联系人提示词，引用原文验证获取资格。' } });
     assert.equal(fresh.prompts.contacts, custom.prompts.contacts);
 });
+

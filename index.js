@@ -1,7 +1,7 @@
-import { createCalendar } from './src/calendar.js?v=1.2.81';
+import { createCalendar } from './src/calendar.js?v=1.2.82';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.81';
-import { createWeather } from './src/weather.js?v=1.2.81';
+import { createDaily } from './src/daily.js?v=1.2.82';
+import { createWeather } from './src/weather.js?v=1.2.82';
 import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
 import { createAssets } from './src/assets.js?v=1.2.80';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
@@ -15,16 +15,15 @@ import { createDiagnostics } from './src/diagnostics.js?v=1.2.66';
 import { createX } from './src/x.js?v=1.2.80';
 import { createChatApp } from './src/chat-apps.js?v=1.2.80';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
-import { createApiClient, createKeyStore } from './src/api.js?v=1.2.80';
-import { captureHostRequest } from './src/api-context.js?v=1.2';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.81';
-import { mountPhone } from './src/ui.js?v=1.2.81';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.81';
-import { createPhoneService } from './src/phone.js?v=1.2.81';
+import { createApiClient, createKeyStore } from './src/api.js?v=1.2.82';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.82';
+import { mountPhone } from './src/ui.js?v=1.2.82';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.82';
+import { createPhoneService } from './src/phone.js?v=1.2.82';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
-import { normalizeSettings } from './src/config.js?v=1.2.81';
+import { normalizeSettings } from './src/config.js?v=1.2.82';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.81';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.82';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -52,7 +51,7 @@ let starting = false;
 // Destroying services also invalidates pending writes and prompt hooks.
 function stopRuntime() {
     controller?.destroy(); controller = null;
-    modelClient?.cancel(); modelClient = null;
+    modelClient?.destroy(); modelClient = null;
     for (const service of [incomingWatcher, continuityBridge, deliveryBridge, opinionBridge, assetBridge, dailyBridge, calendarBridge, phoneService, memory]) service?.destroy();
     incomingWatcher = continuityBridge = deliveryBridge = opinionBridge = assetBridge = dailyBridge = calendarBridge = phoneService = memory = null;
 }
@@ -89,7 +88,7 @@ async function start() {
         const generationState=createGenerationReader(hostModule,()=>globalThis.SillyTavern.getContext(),hostGenerationState);
         function mountRuntime(showSettings = false) {
             const enabled = normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).enabled;
-            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId), prepareRequest: captureHostRequest });
+            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId) });
             if (enabled) {
                 memory = createPhoneMemory({
                     assetEnabled: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apps.assets,
@@ -227,3 +226,4 @@ function boot() {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
 else boot();
+

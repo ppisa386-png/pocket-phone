@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createAmazon,shopItems,validateProducts,parseAmazonResponse} from '../src/amazon.js';
 import {createAmazonPanel} from '../src/amazon-view.js';
 import {assetRows} from '../src/assets-core.js';
@@ -285,3 +285,4 @@ test('Amazon rejected empty or incomplete product batches never erase prior cata
   assert.equal(shopItems(f.state(),'product').length,4);
  }finally{f.close();}
 });
+

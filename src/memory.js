@@ -8,7 +8,7 @@ import { importStoryAssets } from './assets-story.js?v=1.2.65';
 import { importStorySquare } from './x-opinion.js?v=1.2.57';
 import { importStoryPhone } from './story-phone.js?v=1.2.79';
 import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.71';
-import { importStoryLocation } from './weather.js?v=1.2.81';
+import { importStoryLocation } from './weather.js?v=1.2.82';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
@@ -199,7 +199,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         refresh, unavailableError,
         epoch: () => generation,
         subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-        read() { return schedule(async () => { const snapshot = await sync(); return { scope: snapshot?.scope ?? null, state: replayJournal(snapshot?.journal), revision: snapshot?.revisions.at(-1) ?? null }; }); },
+        read() { return schedule(async () => { const snapshot = await sync(); return { scope: snapshot?.scope ?? null, state: replayJournal(snapshot?.journal), revision: snapshot?.revisions.at(-1) ?? null, sourceIndex: snapshot ? snapshot.revisions.length - 1 : -1 }; }); },
         begin(view) {
             return schedule(async () => {
                 const snapshot = await sync();
@@ -285,3 +285,4 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         },
     };
 }
+

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createPhoneMemory} from '../src/memory.js';
-import {createPhoneService} from '../src/phone.js';
+import {createPhoneService} from './phone-fixture.js';
 import {createX,xItems} from '../src/x.js';
 import {normalizeSettings} from '../src/config.js';
 import {storyEvidenceRows,squareBasis,squareClock,squareExpiry,squareStatus,buildSquarePrompt} from '../src/square-core.js';
@@ -107,3 +107,4 @@ test('liking or reposting does not bypass manual selection through communication
 test('square comments are local and do not make a second API call',async()=>{
  const f=fixture();try{ok(await f.x.refresh('square'));const p=post(f);ok(await f.x.comment(p.id,'Nice place.'));assert.equal(f.calls(),1);assert.equal(xItems(f.state(),'comment').length,1);assert.equal(xItems(f.state(),'comment')[0].author,'user');}finally{f.close();}
 });
+

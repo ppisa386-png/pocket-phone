@@ -2,7 +2,7 @@ import { createCalendarPanel } from './calendar-view.js?v=1.2.80';
 import {paperDraft} from './daily-core.js?v=1.2.65';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2.65';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.81';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.82';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2.57';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.65';
@@ -17,7 +17,7 @@ import { snapUnread } from './snapchat.js?v=1.2.80';
 import { createApiPanel } from './api-view.js?v=1.2.74';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.57';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.81';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.82';
 import { icon } from './icons.js?v=1.2.57';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.57';
 import { renderMessagesScreen } from './messages-view.js?v=1.2.57';
@@ -1056,3 +1056,4 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         },
     };
 }
+

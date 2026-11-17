@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { createApiClient } from '../src/api.js';
-import { captureHostRequest } from '../src/api-context.js';
 import { normalizeSettings } from '../src/config.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { renderPhoneScreen } from '../src/phone-view.js';
@@ -25,12 +24,13 @@ function fixture(mode, narrativeContact = true) {
     context.generateQuietPrompt=async options=>{await hostGenerate(options);return JSON.stringify(response);};
     const settings=normalizeSettings({retries:0,api:{mode,baseUrl:'https://phone.invalid/v1',model:'test-model'}});
     const requests=[];
-    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',prepareRequest:captureHostRequest,
+    const client=createApiClient({getContext:()=>context,getSettings:()=>settings,getKey:()=> 'test-only-key',
+        buildHostPayload:async(_c,messages)=>({messages,model:'host-model',chat_completion_source:'custom'}),
         fetchImpl:async (_url,options)=>{requests.push(JSON.parse(options.body));return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(response)}}]}),{status:200,headers:{'Content-Type':'application/json'}});}});
     const memory=createPhoneMemory({getContext:()=>context});
     const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings,modelClient:client,narrativeContact});
-    return {context,settings,host,memory,phone,requests:mode==='independent'?requests:host.requests,
-        setPreset:value=>{preset=value;},reply:value=>{response=value;},close(){phone.destroy();memory.destroy();}};
+    return {context,settings,host,memory,phone,requests,
+        setPreset:value=>{preset=value;context.chatCompletionSettings={prompts:[{identifier:'main',role:'system',content:value}]};},reply:value=>{response=value;},close(){client.destroy();phone.destroy();memory.destroy();}};
 }
 
 // Mock outputs verify transport, persistence and rendering, not model comprehension.
@@ -99,3 +99,4 @@ test('narrative incoming SMS keeps the original dialogue and translation',async(
         assert.equal(f.requests.length,0);
     }finally{f.close();}
 });
+

@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { latestMemory, readXMemory, xMemoryPrompt } from '../src/external-memory.js';
 import { normalizeSettings } from '../src/config.js';
 import { createPhoneMemory } from '../src/memory.js';
-import { createPhoneService } from '../src/phone.js';
+import { createPhoneService } from './phone-fixture.js';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, appendChange, reconcileJournal, replayJournal } from '../src/journal.js';
 
 const settings=()=>normalizeSettings({retries:0,proactiveEnabled:false});
@@ -193,3 +193,4 @@ test('X post lookup uses event and entity IDs, scopes pronouns and ambiguous ali
  await postMemoryPrompt(c,settings(),[{id:'q',text:'他在唱歌',sourceIndex:399}],()=>true,bridge);assert.equal(queries.length,0);
  assert.equal(await postMemoryPrompt(c,settings(),[{id:'q',text:'Mason'}],()=>true,{}),'');
 });
+

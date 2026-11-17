@@ -58,3 +58,10 @@ https://github.com/lucide-icons/lucide
 https://github.com/ConardLi/garden-skills
 https://github.com/fontsource/font-files
 - 按用户效果图与明确设计体系实现；四季植物透明图集为本轮生成的新素材；DM Sans 与既有 Noto Sans SC 均本地打包，详细来源、许可与设计记录见 assets/calendar/SOURCES.md。
+
+
+## 模型请求隔离技术参考（2026-11-17）
+- https://github.com/hey8v0/ST-iPhonie — 被动正文上下文快照、请求局部参数、独立取消与旧 Raw 限制。
+- https://github.com/CJ67I/yuzuki-phone-seedream — 自建消息与酒馆后端直接转发。
+- https://github.com/Mimo433/SillyPhone — generateRaw 手机任务；核查后因全局停止耦合未沿用。
+- https://github.com/SillyTavern/SillyTavern — 官方生成链、ChatCompletionService、上下文/世界书与后端实现。
