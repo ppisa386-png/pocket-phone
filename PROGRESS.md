@@ -2,7 +2,7 @@
 **基线**：main `539330ea10d3d8a9fcd8bf4b24bbb400a8e604f4`（v1.2.86）。
 **原因**：首次无已存城市时 Weather Schema 为保留 `{"city":null}`，只把 city 设为顶层必需；模型在用户截图中实际给出了城市、origin 与当前天气，却遗漏整个 climate。业务校验按原标准拒绝，旧配置 `formatRetryOnce:false` 导致没有补全机会。
 **实现**：在 weather-model 中将缺少必要字段和不足12个月数组判定为 `PHONE_DATA_MISSING`，但错误枚举、越界数值、无据迁移保持不可重试；天气通过 phone.request 仅对缺字段启动最多一次格式恢复，携带前一次的有效字段作为参考，仍要求完整校验后同事务保存地点与天气。空对象、错误 JSON、地点不可查、错误气候数值仍按原机制拒绝；4096 输出上限、输入 Token 与上下文、独立/跟随连接方式、UI/模拟和其他 App 不变。
-**验证**：新增 Host Quiet 与独立 API 的“第一次仅返回莫斯科和当前天气，第二次补齐 climate 后成功”模拟回归，以及两次缺字段仍保留旧档、合法一次请求、空对象/错误参数不进入天气定向重试的校验。分支 CI 以实际 Actions 结果为准，未连接用户真实酒馆或中转密钥实测。
+**验证与发布**：新增 Host Quiet 与独立 API 的“第一次仅返回莫斯科和当前天气，第二次补齐 climate 后成功”模拟回归，以及两次缺字段保留旧档、正常单次请求、空对象和错误参数不触发天气定向重试的校验。PR #35 分支 [完整回归 44067643832](https://github.com/ppisa386-png/pocket-phone/actions/runs/44067643832) `npm test` 通过且 `npm run build:preview` 成功；[日报浏览器验收 44067643888](https://github.com/ppisa386-png/pocket-phone/actions/runs/44067643888) 成功。PR #35 已 squash 合并 main，代码发布提交 `4a5a6f5303e9136de0391a2b335b315246742241`，manifest/package/config 均为 v1.2.87。未连接用户真实酒馆或中转密钥实测，上游模型连续遗漏气候数据时仍显示失败并保留旧档。
 
 ## v1.2.86 · 删除 X 推文作者账号资格验证（2026-11-17）
 **基线**：main `e843e064561897961a5b62c646dd5a558c600f15`（v1.2.85）。
