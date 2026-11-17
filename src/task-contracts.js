@@ -4,7 +4,6 @@ const str={type:'string'}, integer={type:'integer'}, bool={type:'boolean'};
 const obj=(required,properties)=>({type:'object',required,properties,additionalProperties:true});
 const arr=(items,minItems=0,maxItems)=>({type:'array',items,minItems,...(maxItems===undefined?{}:{maxItems})});
 const schema=(name,value)=>({name:'phone_'+name,strict:false,value});
-const holiday=obj(['date','name'],{date:str,name:str,note:str});
 const article=obj(['headline','body','summary','section','placement','subject'],{
     headline:str,body:str,summary:str,section:str,placement:{type:'string',enum:['lead','feature','brief']},
     subject:{type:'string',enum:['world','character']},publicBasis:obj(['access','summary'],{access:str,summary:str,sourceIndex:integer}),
@@ -19,7 +18,11 @@ const product=obj(['name','brand','luxury','description','image','price','curren
 export const TASK_SCHEMAS={
     calendar:schema('calendar',obj(['region','timezone','years','holidays'],{
         region:str,timezone:{type:['string','null']},years:arr(integer,2,2),
-        holidays:arr({anyOf:[arr(str,2,3),holiday]},0,240),
+        // Avoid constrained-decoder state explosion from a 240-element array
+        // containing nested anyOf alternatives. Output tuples are guided by
+        // the calendar prompt; the local validator still enforces the 240 cap,
+        // exact year range, real dates and names before saving anything.
+        holidays:{type:'array',items:{type:'array',items:str}},
     })),
     xInitial:schema('x_initial_followers',obj(['initialFollowers'],{initialFollowers:{type:'integer',minimum:0}})),
     assetsInitial:schema('assets_initial',obj(['residence','initial'],{
