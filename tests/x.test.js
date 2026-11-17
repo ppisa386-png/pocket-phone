@@ -1270,11 +1270,50 @@ test('X wrong-shape array is retried once, repeated bad results are not saved or
 });
 
 
+
+for(const independent of [false,true])test('X '+(independent?'independent':'host')+' recovers accounts-only home output without writing invalid data',async()=>{
+ const f=setup(undefined,independent);
+ try{
+  const initial=JSON.stringify(f.state().x||{});let calls=0;
+  f.reply(({quietPrompt})=>{
+   calls++;
+   if(calls===1)return JSON.stringify({accounts:[{name:'Alex',handle:'alex',has_account:true}]});
+   assert.equal(JSON.stringify(f.state().x||{}),initial,'invalid first batch cannot be written');
+   assert.match(quietPrompt,/X 格式恢复/);assert.match(quietPrompt,/缺少必需的 posts 数组/);
+   return JSON.stringify({posts:[],replies:[]});
+  });
+  ok(await f.x.refresh());assert.equal(calls,2);assert.equal(f.count(),2);
+  assert.equal(xItems(f.state(),'post').length,0);
+  assert.equal(JSON.stringify(f.state().x||{}),initial);
+ }finally{f.close();}
+});
+
+test('X home missing posts twice stops after one recovery with original records intact',async()=>{
+ const f=setup();
+ try{
+  const initial=JSON.stringify(f.state().x||{});f.reply({accounts:[]});
+  const result=await f.x.refresh();assert.equal(result.ok,false);
+  assert.equal(result.code,'PHONE_DATA_MISSING');assert.equal(f.count(),2);
+  assert.equal(JSON.stringify(f.state().x||{}),initial);
+ }finally{f.close();}
+});
+
+test('X following-only preserves its earlier accounts-only empty feed compatibility',async()=>{
+ const f=setup();
+ try{
+  const id=await account(f);ok(await f.x.follow(id,true));
+  const before=f.count();f.reply({accounts:[]});ok(await f.x.refresh(true));
+  assert.equal(f.count(),before+1);assert.equal(xItems(f.state(),'post').length,0);
+ }finally{f.close();}
+});
+
 test('X feed schema requires per-post text but preserves valid empty arrays',()=>{
   const posts=TASK_SCHEMAS.xFeed.value.properties.posts;
   assert.deepEqual(posts.items.required,['text']);
   assert.equal(posts.items.properties.text.type,'string');
   assert.equal(posts.minItems,0);
+  assert.deepEqual(TASK_SCHEMAS.xFeedPosts.value.required,['posts']);
+  assert.equal(TASK_SCHEMAS.xFeedPosts.value.properties.posts,posts);
 });
 
 for(const independent of [false,true])test('X '+(independent?'independent':'host')+' retries empty NPC post objects once before any write',async()=>{

@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.83';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.85';
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
@@ -443,6 +443,10 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
         const results=await ask(state,null,request,current,task+reachTask+activityPrompt+(square?'':'\n可附 engagementUpdates:[{postId:"已给出的 user 帖子ID",metrics:{likes:0,reposts:0,replies:0},comments:[]}] 更新所给 user 帖子的累计公开互动，不得替 user 改写发言。名人提及可在新posts附 mentionsUser:true，text中必须明确包含 @user 当前网名，并保持人物知情隔离；')+'已知账号：'+JSON.stringify(xItems(state,'account').filter(a=>!a.blocked).map(a=>accountContext(state,a)))+'。已加载帖子（避免重复；user 最近公开帖子中已有的原文按 id 引用，不重抄）：'+JSON.stringify(loadedPosts.map(p=>({id:p.id,author:p.author,...(catalogIds.has(p.id)?{}:{text:xText(p.text,600),userReplies:xUserReplyContext(state,p.id)})})))+'\n已发生的公开评论（保持线程上下文，不重复首次反应；不是其他账号的私信）：'+JSON.stringify(publicConversation(state,12,6000,providedReplyIds))+
             '\n输出 {"posts":[{"accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"公开帖子内容","imageDescription":"可选：公开可见的图片画面描述；纯文字帖省略"}],"replies":[{"postId":"给出的 user 公开帖子 ID","accountId":"已知账号 ID；新作者留空","name":"新作者名称","handle":"新作者账号","text":"对这条 user 帖子的公开回复"}]}。'+(recommended?'posts 只含不同NPC，最多15条，人数充足时10～15条，可按实际人数减少到0；':'posts 10～15 条不同作者，少于 10 条本次不会保存；')+'replies 最多5条，可为空，不强制回应。广场任务只填 posts，replies 为空。不得替 user 发帖，不泄漏私人剧情。'+engagementRules()+engagementShape+(square?'\n每条广场帖子必须附 publicBasis:{access:"background/public/limited",summary:"公众知情途径及实际可见范围",sourceIndex:已知时填原楼号，未知省略,involvesCharacters:false}。background 仅为无剧情人物的普通背景帖子；public/limited 的 summary 必须说明公众知情途径与实际可见范围，private 内容不得生成。':''),
             d=>{
+                // A home/Square feed requires a posts array, even if empty.
+                // Protocol failure here can use phone.request's one format retry.
+                if(!following&&!Array.isArray(d.posts))
+                    throw modelProtocolError('phone_x_feed_posts',['posts'],'X 首页缺少必需的 posts 数组（可为空数组）');
                 const posts=d.posts===undefined&&following&&Array.isArray(d.accounts)?[]:list(d,'posts',15);
                 // Validate NPC post bodies inside phone.request, BEFORE its
                 // one-time format-recovery boundary. Never save empty placeholders.
@@ -465,7 +469,7 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     for(const [eventId,candidates] of activityCandidates)if(candidates.length&&!perEvent.get(eventId))throw Error('公开动态 '+eventId+' 有相关 NPC，但本次没有生成任何公开回应。请重试首页刷新。');
                 }
                 return {posts,replies:d.replies===undefined?[]:list(d,'replies',5),activityReactions,accounts:!square&&!following&&d.accounts!==undefined?list(d,'accounts',15):[],engagementUpdates:!square&&d.engagementUpdates!==undefined?list(d,'engagementUpdates',15):[],audience:square?null:d.audience};
-            },{outputContract:refreshOutput+reachOutput+activityOutput,finalOutputContract:refreshOutput+reachOutput+activityOutput,combined,reachPostIds:reachPosts.map(p=>p.postId),postQueries:[...(square?[]:userPosts.slice(-10)),...activityQueries],memoryChars:8000,maxTokens:8192,arrayKey:'posts'});
+            },{outputContract:refreshOutput+reachOutput+activityOutput,finalOutputContract:refreshOutput+reachOutput+activityOutput,combined,reachPostIds:reachPosts.map(p=>p.postId),postQueries:[...(square?[]:userPosts.slice(-10)),...activityQueries],memoryChars:8000,maxTokens:8192,arrayKey:'posts',jsonSchema:following?TASK_SCHEMAS.xFeed:TASK_SCHEMAS.xFeedPosts});
         if(square&&!combined&&results.posts.length<10)throw Error('本批广场帖子只有 '+results.posts.length+' 条，广场刷新需要 10～15 条，本次未保存。');
         state=structuredClone(state);const changes=[],authors=new Set();let added=0,repeatedSquare=false;
         if(!square&&!following){

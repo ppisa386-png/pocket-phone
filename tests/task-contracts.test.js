@@ -33,10 +33,13 @@ test('protocol requires delivery without forbidding zero, silence, no changes an
   [TASK_SCHEMAS.assetsInitial,{residence:null,initial:{balance:0,holdings:[],jobs:[]}}],
   [TASK_SCHEMAS.assetsUpdate,{events:[],living:{total:0,bookedIds:[]},business:[]}],
   [TASK_SCHEMAS.xFeed,{posts:[],replies:[]}],
+  [TASK_SCHEMAS.xFeedPosts,{posts:[],replies:[]}],
  ];
  for(const [contract,value] of valid)assert.equal(assertTaskResponse(value,contract,{currentCurrency:'USD'}),value);
  for(const contract of [TASK_SCHEMAS.calendar,TASK_SCHEMAS.xInitial,TASK_SCHEMAS.snapComment,TASK_SCHEMAS.wechatMoments,TASK_SCHEMAS.payment,TASK_SCHEMAS.xFeed])
   assert.throws(()=>assertTaskResponse({},contract),error=>error.code==='PHONE_DATA_MISSING');
+ assert.equal(assertTaskResponse({accounts:[]},TASK_SCHEMAS.xFeed).accounts.length,0);
+ assert.throws(()=>assertTaskResponse({accounts:[]},TASK_SCHEMAS.xFeedPosts),e=>e.code==='PHONE_DATA_MISSING'&&e.missingFields.includes('posts'));
  assert.throws(()=>assertTaskResponse({status:'no_reply'},TASK_SCHEMAS.sms),error=>error.code==='PHONE_DATA_MISSING');
  assert.throws(()=>assertTaskResponse({events:[],business:[]},TASK_SCHEMAS.assetsUpdate,{currentCurrency:'USD'}),error=>error.code==='PHONE_DATA_MISSING'&&error.message.includes('生活开销'));
  const migration={residenceChange:{status:'completed',subject:'user',currency:'JPY'}};
