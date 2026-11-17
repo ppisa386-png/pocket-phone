@@ -2,7 +2,7 @@
 **基线**：main `8b4ad5e22a2030f93d92bde8992cf4757459b655`（v1.2.84），实测报错“X 返回字段 posts 应为最多15条的数组，当前缺失”。
 **原因**：xFeed Schema 原本为“正在关注”兼容 accounts-only，但首页/广场也复用；后续 list() 对缺失 posts 抛普通 Error，phone.request 认定为不可重试的 PHONE_BUSINESS_INVALID。
 **实现**：新增 xFeedPosts 合约仅用于非已关注列表，required posts；X 首页/广场在数据校验阶段抛 PHONE_DATA_MISSING，并为遗漏或错误类型的 posts 补充针对性一次格式重试。保留合法空数组、已关注旧兼容、NPC 身份和知情限制、粉丝原子事务及 v1.2.84 Quiet 调用链。
-**验证与发布**：本轮 GitHub Actions 与发布结果以实际运行状态为准；未使用用户实际模型密钥进行端到端实测。
+**验证与发布**：PR #33 已 squash 合并至 main，提交 `e5d0a505f16653d46b3800eda6c49e7538b1e221`，manifest / config / package 发布版为 v1.2.85。测试分支 [完整回归 44029392007](https://github.com/ppisa386-png/pocket-phone/actions/runs/44029392007) **932/932 通过、0 失败、预览构建成功**，[X 浏览器验收 44029391906](https://github.com/ppisa386-png/pocket-phone/actions/runs/44029391906)、[日历验收 44029391994](https://github.com/ppisa386-png/pocket-phone/actions/runs/44029391994)、[日报验收 44029391891](https://github.com/ppisa386-png/pocket-phone/actions/runs/44029391891) 均成功。主分支回归在发布时再次触发，查看其 Actions 最新结果。未使用用户真实酒馆及模型密钥联调；若模型连续两次不提交 posts，仍将停止刷新并保留原记录，旧 Quiet 生成方式按 v1.2.84 用户决定保留。
 
 ## v1.2.84 · 取消 v1.2.82 双向隔离，恢复 v1.2.81 请求链（2026-11-17）
 **用户决定**：将旧版的模型调用方式覆盖新版隔离实现，其他 App 更新保持不变；REQUIREMENTS.md 当前有效约定已覆盖 v1.2.82 的隔离条款。
