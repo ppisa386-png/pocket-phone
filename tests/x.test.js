@@ -156,15 +156,23 @@ test('X home accepts one complete wrapped result and explains invalid fields wit
  }finally{f.close();}
 });
 
-test('world-related recommendations do not auto-follow and explicit non-users never become authors or commenters',async()=>{
+test('X recommendations do not auto-follow; home posts no longer require account eligibility',async()=>{
  const f=setup();try{
-  f.reply({accounts:[{name:'School',handle:'school',has_account:true},{name:'Hermit',handle:'hermit',has_account:false}],posts:[{name:'Forest',handle:'forest',has_account:false,text:'No account'},{name:'Alex',handle:'alex',has_account:true,text:'Hello',comments:[{name:'Hermit',handle:'hermit',has_account:false,text:'Impossible'}]},...feedResult().posts]});
+  f.reply({accounts:[{name:'School',handle:'school',has_account:true},{name:'Hermit',handle:'hermit',has_account:false}],
+   posts:[{name:'Forest',handle:'forest',has_account:false,text:'No account'},
+    {name:'Alex',handle:'alex',has_account:true,text:'Hello',comments:[{name:'Hermit',handle:'hermit',has_account:false,text:'Impossible'}]},
+    ...feedResult().posts]});
   ok(await f.x.refresh());const list=xItems(f.state(),'account');
-  assert.equal(list.length,11);assert.ok(list.every(a=>a.recommended&&!a.following));assert.equal(xItems(f.state(),'post').length,11);assert.equal(xItems(f.state(),'comment').length,0);
-  assert.match(f.prompt(),/明确身份并适合使用X的NPC/);assert.match(f.prompt(),/不创造人物冒充既有NPC/);assert.match(f.prompt(),/与世隔绝/);
+  assert.equal(list.length,14);assert.ok(list.every(a=>a.recommended&&!a.following));
+  assert.equal(xItems(f.state(),'post').length,12);
+  assert.equal(xItems(f.state(),'comment').length,0,'comment sample import keeps its existing rules');
+  assert.doesNotMatch(f.prompt(),/与世隔绝|发帖身份由程序核对/);
   const id=list.find(a=>a.name==='Alex').id;ok(await f.x.follow(id,true));
-  f.reply({posts:[{accountId:id,has_account:false,text:'Still impossible'}]});ok(await f.x.refresh(true));assert.equal(xItems(f.state(),'post').length,11);
-  f.reply(feedResult({posts:[],accounts:[{name:'Work',handle:'work',has_account:true}]}));ok(await f.x.refresh());assert.equal(xItems(f.state(),'account').some(a=>a.name==='School'||a.name==='Work'),false);
+  f.reply({posts:[{accountId:id,has_account:false,text:'Still possible'}]});
+  ok(await f.x.refresh(true));assert.equal(xItems(f.state(),'post').length,13,'already-followed author status is not an eligibility test');
+  f.reply(feedResult({posts:[],accounts:[{name:'Work',handle:'work',has_account:true}]}));
+  ok(await f.x.refresh());assert.ok(xItems(f.state(),'account').some(a=>a.name==='Work'));
+  assert.equal(f.state().x[id].following,true);
  }finally{f.close();}
 });
 
@@ -668,16 +676,21 @@ for(const size of [10,15])test('recommended feed saves '+size+' distinct establi
  }finally{f.close();}
 });
 
-test('short NPC batches are valid; unsupported, duplicate-only or oversized batches do not commit',async()=>{
- const f=setup();
- try{
+test('short, duplicate and oversized feeds preserve format/duplicate checks without author eligibility',async()=>{
+ const f=setup();try{
   const good=feedResult().posts;
   f.reply({posts:good.slice(0,9)});ok(await f.x.refresh());assert.equal(xItems(f.state(),'post').length,9);
-  for(const posts of [good.map(p=>({...p,name:'Same',handle:'same'})),good.map(p=>({...p,handle:''})),[...good,...good]]){
-   const before=structuredClone((await f.memory.read()).state.x),count=f.count();f.reply({posts});
-   const result=await f.x.refresh();assert.equal(result.ok,false);
-   assert.match(result.error,/有效新增 0 条|最多 15/);assert.equal(f.count(),count+1);assert.deepEqual(f.state().x,before);
-  }
+  const baseline=JSON.stringify(f.state().x);
+  f.reply({posts:good.slice(0,9)});
+  const dupe=await f.x.refresh();assert.equal(dupe.ok,false);assert.match(dupe.error,/重复帖子/);
+  assert.equal(JSON.stringify(f.state().x),baseline);
+  f.reply({posts:[...good,...good]});
+  const large=await f.x.refresh();assert.equal(large.ok,false);assert.match(large.error,/最多 15/);
+  assert.equal(JSON.stringify(f.state().x),baseline);
+  f.reply({posts:[{name:'不用账号证明的新作者',text:'这是我的第一条动态'}]});
+  ok(await f.x.refresh());
+  const fresh=xItems(f.state(),'post').find(p=>p.text==='这是我的第一条动态');
+  assert.ok(fresh&&f.state().x[fresh.author]?.handle,'name-only authors get local handles');
   f.reply({accounts:good});assert.equal((await f.x.refresh()).ok,false);
  }finally{f.close();}
 });
@@ -695,8 +708,8 @@ test('legacy accounts without classification fields keep home posting rights and
   f.reply({posts:[{accountId:'legacy-card',authorKind:'npc',text:'乐队日常'},{accountId:'legacy-prose',authorKind:'npc',text:'摄影师日常'},
    {name:'Nora',handle:'nora',authorKind:'npc',has_account:true,text:'非当前主角色也可以发帖'}]});
   ok(await f.x.refresh());
-  assert.ok(f.prompt().includes('已确立NPC账号直接用 accountId 发帖并附 authorKind:"npc"：[{"id":"legacy-card","name":"Alex"},{"id":"legacy-prose","name":"Bea"}]'),'the prompt hands the model the program-verified identity roster');
-  assert.ok(f.prompt().includes('尚无账号的设定角色可作为新作者附 name/handle/has_account:true/authorKind:"npc"：["Nora"]'));
+  assert.match(f.prompt(),/已有 X 账号/);
+  assert.doesNotMatch(f.prompt(),/发帖身份由程序核对|必须附 has_account:true/);
   const fresh=xItems(f.state(),'post').filter(p=>!p.id.startsWith('legacy-'));
   assert.deepEqual(fresh.map(p=>p.text),['乐队日常','摄影师日常','非当前主角色也可以发帖']);
   assert.ok(fresh.every(p=>p.feed==='home'));
@@ -708,9 +721,8 @@ test('legacy accounts without classification fields keep home posting rights and
  }finally{f.close();}
 });
 
-test('NPC evidence matching tolerates layout drift while paraphrases and missing account fields are still rejected',async()=>{
- const f=setup();
- try{
+test('model authors are accepted without story provenance or has_account flags',async()=>{
+ const f=setup();try{
   f.context.chat.push({mes:'Bea 在后台和 Sam 聊起了新专辑。'});
   f.reply({posts:[
    {name:'Bea',handle:'bea',authorKind:'npc',has_account:'true',npcEvidence:'Ｂｅａ　在后台和 Sam 聊起了新专辑！！',text:'封面定稿。'},
@@ -718,29 +730,22 @@ test('NPC evidence matching tolerates layout drift while paraphrases and missing
    {name:'Dana',handle:'dana',authorKind:'npc',text:'缺少账号字段的帖子。'}]});
   ok(await f.x.refresh());
   const saved=xItems(f.state(),'post');
-  assert.deepEqual(saved.map(p=>p.text),['封面定稿。']);
-  assert.equal(saved[0].feed,'home');assert.equal(f.state().x[saved[0].author].authorKind,'npc');
-  assert.equal(xItems(f.state(),'account').length,1,'rejected authors create no accounts');
+  assert.deepEqual(saved.map(p=>p.text),['封面定稿。','没有依据的帖子。','缺少账号字段的帖子。']);
+  assert.equal(xItems(f.state(),'account').length,3);
+  assert.ok(saved.every(p=>p.feed==='home'));
  }finally{f.close();}
 });
 
-test('known accounts post with accountId, fabricated authors report the reason without post text, and empty batches are normal zero adds',async()=>{
- const f=setup();
- try{
+test('existing X accounts retain their IDs while new unverified authors are accepted',async()=>{
+ const f=setup();try{
   f.context.chat.push({mes:'Bea 在后台和 Sam 聊起了新专辑。'});
   const bea={id:'bea-known',type:'account',name:'Bea',handle:'bea',dmPolicy:'requests'};
   await f.memory.commit(await f.memory.begin(),[{collection:'x',key:bea.id,value:bea}]);
   f.reply({posts:[{accountId:'bea-known',authorKind:'npc',text:'正常的剧情更新'}]});
-  ok(await f.x.refresh());
-  assert.deepEqual(xItems(f.state(),'post').map(p=>p.text),['正常的剧情更新']);
-  assert.equal(f.state().x['bea-known'].authorKind,'npc');
-  assert.ok(f.prompt().includes('其余已知个人账号发帖须用 accountId 并附 authorKind:"npc"：[{"id":"bea-known","name":"Bea"}]'));
+  ok(await f.x.refresh());assert.equal(xItems(f.state(),'post')[0].author,bea.id);
   f.reply({posts:[{name:'陌生人',handle:'stranger',authorKind:'npc',has_account:true,text:'来历不明的帖子'}]});
-  const failed=await f.x.refresh();
-  assert.equal(failed.ok,false);
-  assert.match(failed.error,/有效新增 0 条（身份不符 1 条）/);
-  assert.doesNotMatch(failed.error,/来历不明的帖子/,'diagnostics count reasons only, never quote post text');
-  assert.equal(xItems(f.state(),'post').length,1,'the failed stage keeps existing data');
+  ok(await f.x.refresh());
+  assert.deepEqual(xItems(f.state(),'post').map(p=>p.text),['正常的剧情更新','来历不明的帖子']);
   f.reply({posts:[]});const empty=await f.x.refresh();ok(empty);assert.equal(empty.value.added,0);
  }finally{f.close();}
 });
@@ -759,32 +764,32 @@ test('duplicate-only recommended batches report the duplicate reason and keep th
  }finally{f.close();}
 });
 
-test('home refresh saves recommendations and follower data without touching square or trends',async()=>{
- const f=setup();
- try{
+test('home refresh saves every generated author and independently settles user followers',async()=>{
+ const f=setup();try{
   f.context.chat[0].mes='2026-11-05 10:00';await f.memory.read();
   f.context.chat.push({mes:'2026-11-05 12:00'});ok(await f.x.publish('A plain lunch.'));
-  const post=xItems(f.state(),'post')[0],batch=feedResult(),trends=worldTopics();
-  const notice={name:'学校公告',handle:'news',authorKind:'organization',text:'图书馆周末开放。',publicBasis:{access:'background',summary:'校园资讯',involvesCharacters:false}};
+  const post=xItems(f.state(),'post')[0],batch=feedResult(),notice={name:'学校公告',handle:'news',authorKind:'organization',text:'图书馆周末开放。'};
   batch.posts.push(notice);
   f.reply(({quietPrompt})=>{
-   if(quietPrompt.includes('当前任务：X 广场'))return JSON.stringify({posts:[notice,{name:'Alex',handle:'alex',authorKind:'public',text:'错误分区',publicBasis:notice.publicBasis},...Array.from({length:9},(_,i)=>({name:'路人'+i,handle:'crowd'+i,text:'街区动态 '+i+'。',publicBasis:notice.publicBasis}))]});
-   if(quietPrompt.includes('趋势评估资料'))return JSON.stringify({topics:trends,evaluations:[{postId:post.id,eligible:false}]});
    if(quietPrompt.includes('逐条独立估计'))return JSON.stringify({initialFollowers:20,stats:[{postId:post.id,likes:1,reposts:0,replies:0,gained:0,lost:0}]});
    return JSON.stringify(batch);
   });
-  ok(await f.x.refreshPublic());
-  assert.equal(f.count(),2);
-  const home=xItems(f.state(),'post').filter(p=>p.feed==='home'),square=xItems(f.state(),'post').filter(p=>p.feed==='square');
-  assert.equal(home.length,10);assert.equal(new Set(home.map(p=>p.author)).size,10);
-  assert.equal(square.length,0,'home refresh must not create square posts');
-  assert.equal(f.state().x['trend-edition'],undefined,'home refresh must not create trends');
-  const snapshot=structuredClone(f.state().x);assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(f.count(),2);assert.deepEqual(f.state().x,snapshot);
-  f.context.chat.pop();await f.memory.read();assert.equal(xItems(f.state(),'post').length,0);assert.equal(f.state().x['public-refresh'],undefined);
+  ok(await f.x.refreshPublic());assert.equal(f.count(),2);
+  const home=xItems(f.state(),'post').filter(p=>p.feed==='home');
+  assert.equal(home.length,11);assert.ok(home.some(p=>p.text===notice.text));
+  assert.equal(xItems(f.state(),'post').filter(p=>p.feed==='square').length,0);
+  assert.equal(f.state().x['trend-edition'],undefined);
+  const snapshot=JSON.stringify(f.state().x);
+  assert.equal((await f.x.refreshPublic()).ok,false);assert.equal(JSON.stringify(f.state().x),snapshot);
+  f.context.chat.pop();await f.memory.read();assert.equal(xItems(f.state(),'post').length,0);
   f.context.chat.push({mes:'2026-11-05 12:00 revised'});ok(await f.x.publish('A plain lunch.'));
-  f.reply(()=>JSON.stringify({posts:[{name:'虚构网友',handle:'random',text:'无依据'}]}));const failed=await f.x.refreshPublic();
-  assert.equal(failed.ok,false);assert.match(failed.error,/有效新增 0 条/);assert.equal(f.count(),3);
-  assert.equal(f.state().x['public-refresh'],undefined);assert.equal(xItems(f.state(),'account').length,0);
+  const mine=xItems(f.state(),'post').find(p=>p.author==='user');
+  f.reply(({quietPrompt})=>quietPrompt.includes('逐条独立估计')
+   ?JSON.stringify({initialFollowers:20,stats:[{postId:mine.id,likes:1,reposts:0,replies:0,gained:0,lost:0}]})
+   :JSON.stringify({posts:[{name:'虚构网友',handle:'random',text:'无依据'}]}));
+  ok(await f.x.refreshPublic());
+  assert.equal(xItems(f.state(),'post').length,2,'unverified author is saved alongside the user post');
+  assert.ok(xItems(f.state(),'post').some(p=>p.text==='无依据'));
  }finally{f.close();}
 });
 
@@ -972,25 +977,31 @@ test('new feed accepts fifteen concrete comments and full posts do not collect a
  }finally{f.close();}
 });
 
-test('home validates NPC provenance, allows small and empty feeds, square admits public and institution authors without card conflation',async()=>{
- const f=setup();
- try{
+test('home and square no longer reject author categories but retain square public-basis checking',async()=>{
+ const f=setup();try{
   f.context.characters[0].data={character_book:{entries:[{enabled:true,content:'周宁是学校的同学。'}]}};
-  f.context.characters.push({name:'华京大学',avatar:'location.png'});f.context.chat.push({mes:'小乔是当地的摄影师。'});
-  const npc={name:'小乔',handle:'qiao',has_account:true,authorKind:'npc',npcEvidence:'小乔是当地的摄影师。',text:'今天尝试了一款旧镜头。'};
-  const book={name:'周宁',handle:'ning',has_account:true,authorKind:'npc',npcEvidence:'周宁是学校的同学。',text:'排练结束了。'};
-  const org={name:'华京大学',handle:'university',authorKind:'organization',has_account:true,text:'校内阅览室周五开放。'};
-  f.reply({posts:[npc,book,org,{name:'捏造的同学',handle:'fake',authorKind:'npc',npcEvidence:'不存在的剧情。',text:'hello'}]});ok(await f.x.refresh());
-  assert.deepEqual(xItems(f.state(),'post').map(p=>p.text),[npc.text,book.text]);assert.equal(xItems(f.state(),'account').length,2);
-  f.reply({posts:[]});const empty=await f.x.refresh();ok(empty);assert.equal(empty.value.added,0);
+  f.context.characters.push({name:'华京大学',avatar:'location.png'});
+  f.context.chat.push({mes:'小乔是当地的摄影师。'});
+  const npc={name:'小乔',handle:'qiao',text:'今天尝试了一款旧镜头。'};
+  const book={name:'周宁',handle:'ning',text:'排练结束了。'};
+  const org={name:'华京大学',handle:'university',authorKind:'organization',text:'校内阅览室周五开放。'};
+  f.reply({posts:[npc,book,org,{name:'捏造的同学',handle:'fake',text:'hello'}]});
+  ok(await f.x.refresh());
+  assert.equal(xItems(f.state(),'post').length,4);
+  f.reply({posts:[]});ok(await f.x.refresh());
   const publicBasis={access:'background',summary:'普通公共背景',involvesCharacters:false};
-  f.reply({posts:[{...org,publicBasis},{name:'慢走',handle:'walking',authorKind:'public',text:'雨后散步。',publicBasis},
-   {...npc,authorKind:'public',publicBasis},{name:'KPL 赛事速报',handle:'kpl',authorKind:'organization',text:'本周常规赛赛程。',publicBasis},...squareRows(7,200)]});
-  ok(await f.x.refresh('square'));const square=xItems(f.state(),'post').filter(p=>p.feed==='square');assert.equal(square.length,10);
-  const school=xItems(f.state(),'account').find(a=>a.handle==='university');assert.equal(school.characterId,null);assert.equal(school.authorKind,'organization');
-  const joe=xItems(f.state(),'account').find(a=>a.handle==='qiao');ok(await f.x.follow(school.id,true));ok(await f.x.follow(joe.id,true));
-  f.reply({posts:[{accountId:school.id,text:'Official notice'}, {accountId:joe.id,text:'New photo'}]});ok(await f.x.refresh(true));
-  assert.equal(xItems(f.state(),'post').some(p=>p.text==='Official notice'),false);assert.equal(f.state().x[school.id].following,true);
+  f.reply({posts:[{...org,publicBasis},{name:'慢走',handle:'walking',text:'雨后散步。',publicBasis},
+   {...npc,publicBasis},{name:'KPL 赛事速报',handle:'kpl',text:'本周常规赛赛程。',publicBasis},
+   ...squareRows(7,200)]});
+  ok(await f.x.refresh('square'));
+  const square=xItems(f.state(),'post').filter(p=>p.feed==='square');
+  assert.ok(square.length>=10,'all rows with adequate square public basis can be published');
+  const school=xItems(f.state(),'account').find(a=>a.handle==='university');
+  const joe=xItems(f.state(),'account').find(a=>a.handle==='qiao');
+  ok(await f.x.follow(school.id,true));ok(await f.x.follow(joe.id,true));
+  f.reply({posts:[{accountId:school.id,text:'Official notice'},{accountId:joe.id,text:'New photo'}]});
+  ok(await f.x.refresh(true));
+  assert.ok(xItems(f.state(),'post').some(p=>p.text==='Official notice'));
   assert.equal(xItems(f.state(),'post').at(-1).author,joe.id);
  }finally{f.close();}
 });
@@ -1248,13 +1259,10 @@ for(const independent of [false,true])test('X '+(independent?'independent':'host
   assert.doesNotMatch(f.prompt(),/发帖身份由程序核对|必须附 has_account:true/);
  }finally{f.close();}
 });
-test('X accepts unverified comment authors and retains duplicate-only protection',async()=>{
- const f=setup();
- try{
-  f.reply({posts:[{name:'外地来客',handle:'visitor',text:'到了',has_account:false,
-   comments:[{key:'c1',name:'路人',text:'欢迎',has_account:false}]}]});
+test('X accepts unverified post authors and retains duplicate-only protection',async()=>{
+ const f=setup();try{
+  f.reply({posts:[{name:'外地来客',handle:'visitor',text:'到了',has_account:false}]});
   ok(await f.x.refresh());assert.equal(xItems(f.state(),'post').length,1);
-  assert.equal(xItems(f.state(),'comment').length,1);
   const initial=JSON.stringify(f.state().x);
   assert.equal((await f.x.refresh()).ok,false);
   assert.equal(JSON.stringify(f.state().x),initial);
