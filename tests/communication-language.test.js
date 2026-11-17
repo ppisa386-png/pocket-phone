@@ -7,7 +7,7 @@ import { normalizeSettings } from '../src/config.js';
 import { renderMessagesScreen } from '../src/messages-view.js';
 import { renderPhoneScreen } from '../src/phone-view.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
-import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
+import { COMMUNICATION_LANGUAGE_RULE, formatPhoneDialogue } from '../src/communication-language.js';
 import { HostEvents, installHostGeneration } from './host-fixture.js';
 import { captureHostRequest } from '../src/api-context.js';
 
@@ -57,7 +57,7 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
             assert.ok(payload.messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
             const state=f.phone.snapshot(), message=Object.values(state.messages).at(-1);
             assert.equal(message.text,text);
-            assert.ok(renderMessagesScreen(state,contactId,false,{}).includes('>'+text+'</p>'));
+            assert.ok(renderMessagesScreen(state,contactId,false,{}).includes('>'+formatPhoneDialogue(text)+'</p>'));
         }
         const text='Gute Nacht.\n（晚安。）';
         f.reply({text});const last=Object.values(f.phone.snapshot().messages).at(-1);
@@ -72,7 +72,7 @@ for (const mode of ['host','independent']) test(mode+': active dialogue preset s
         assert.equal(requests.length,before+2);
         const state=f.phone.snapshot(),call=state.calls[state.activeCallId];
         assert.equal(call.turns[0].text,text);assert.equal(call.turns.at(-1).text,text);
-        assert.ok(renderPhoneScreen(state,'calls',call.id,'').includes('>'+text+'</p>'));
+        assert.ok(renderPhoneScreen(state,'calls',call.id,'').includes('>'+formatPhoneDialogue(text)+'</p>'));
         assert.ok(requests.at(-1).messages.some(m=>m.content.includes(COMMUNICATION_LANGUAGE_RULE)));
         const reloaded=createPhoneMemory({getContext:()=>f.context});
         try{const saved=(await reloaded.read()).state;assert.equal(saved.messages[last.id].text,text);assert.equal(saved.calls[call.id].turns.at(-1).text,text);}finally{reloaded.destroy();}
