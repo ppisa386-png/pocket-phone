@@ -9,7 +9,7 @@ import { createOpinionBridge } from './src/x-opinion.js?v=1.2.61';
 import { createAmazon } from './src/amazon.js?v=1.2.80';
 import { createFood } from './src/food.js?v=1.2.89';
 import { createPaymentRequest } from './src/payment-request.js?v=1.2';
-import { createDeliveryBridge } from './src/delivery.js?v=1.2.66';
+import { createDeliveryBridge } from './src/delivery.js?v=1.2.90';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
 import { createDiagnostics } from './src/diagnostics.js?v=1.2.66';
 import { createX } from './src/x.js?v=1.2.87';
@@ -17,12 +17,12 @@ import { createChatApp } from './src/chat-apps.js?v=1.2.80';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.87';
 import { captureHostRequest } from './src/api-context.js?v=1.2.87';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.89';
-import { mountPhone } from './src/ui.js?v=1.2.89';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.90';
+import { mountPhone } from './src/ui.js?v=1.2.90';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.89';
 import { createPhoneService } from './src/phone.js?v=1.2.88';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
-import { normalizeSettings } from './src/config.js?v=1.2.89';
+import { normalizeSettings } from './src/config.js?v=1.2.90';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.89';
 

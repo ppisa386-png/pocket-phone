@@ -38,6 +38,32 @@ test('receipt requires the order id, a real floor and an eligible scene; deletio
  assert.equal(deliveryReceipt(order,[...base(),msg('2026-10-13 23:00'),arrived()]),null);
  const hidden={...arrived(),is_system:true,extra:{qianqianjieAutoHide:{schemaVersion:1,chatId:'story'}}};assert.ok(deliveryReceipt(order,[...chat,hidden]));
 });
+test('Amazon confirmed receipt completes the order even before the estimate or outside daytime',()=>{
+ const afterCheckout=[...base(),msg('日期：2026-10-11 23:00\nSam 接过快递员送来的手机，拿在手里。<!--durian-delivery:{"id":"order-1","received":true}-->')];
+ const done=deliveryReceipt(order,afterCheckout);
+ assert.equal(done?.index,1);
+ assert.equal(done?.received,true);
+ assert.equal(deliveryStatus(order,afterCheckout).label,'已完成');
+ assert.equal(dueOrders({orders:{o:order}},afterCheckout).length,0);
+ afterCheckout.pop();
+ assert.equal(deliveryStatus(order,afterCheckout).label,'待发货');
+});
+test('arrival and actual receipt are separate states; deleted completion reverts to delivered',()=>{
+ const chat=[...base(),msg('2026-10-13 10:00'),arrived()];
+ assert.equal(deliveryStatus(order,chat).label,'已送达');
+ chat.push(msg('2026-10-14 23:00\nSam 拿到了外套。<!--durian-delivery:{"id":"order-1","received":true}-->'));
+ assert.equal(deliveryStatus(order,chat).label,'已完成');
+ chat.pop();
+ assert.equal(deliveryStatus(order,chat).label,'已送达');
+ for(const invalid of [
+   {...msg('已收货 <!--durian-delivery:{"id":"wrong","received":true}-->')},
+   {...msg('已收货 <!--durian-delivery:{"id":"order-1","received":true}-->'),is_user:true},
+   {...msg('已收货 <!--durian-delivery:{"id":"order-1","received":true}-->'),is_system:true},
+   msg('```html\n<!--durian-delivery:{"id":"order-1","received":true}-->\n```'),
+   msg('<think><!--durian-delivery:{"id":"order-1","received":true}--></think>')
+ ])assert.equal(deliveryReceipt(order,[...base(),invalid]),null);
+ assert.equal(deliveryReceipt(order,[msg('<!--durian-delivery:{"id":"order-1","received":true}-->')]),null,'checkout floor is not a receipt');
+});
 async function fixture(){
  const handlers={},prompts={};const bus={on(n,f){(handlers[n]??=[]).push(f);},removeListener(n,f){handlers[n]=(handlers[n]||[]).filter(x=>x!==f);},async emit(n,...args){for(const f of handlers[n]||[])await f(...args);}};
  const context={chat:base(),chatMetadata:{},eventSource:bus,event_types:Object.fromEntries(['GENERATION_STARTED','GENERATION_AFTER_COMMANDS','GENERATION_ENDED','CHAT_CHANGED','MESSAGE_DELETED'].map(n=>[n,n])),setExtensionPrompt(key,value,position,depth,scan,role,filter){prompts[key]={value,position,depth,scan,role,filter};}};
@@ -65,10 +91,28 @@ test('gift orders are addressed to their recipient and marked as gifts in the pa
  }finally{f.bridge.destroy();}
 });
 test('delivered orders do not reinject; regeneration/deletion of arrival makes them pending again',async()=>{
- const f=await fixture();try{f.context.chat.push(arrived());await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');await f.generate('regenerate');assert.match(f.prompts[DELIVERY_KEY].value,/Coat/);f.context.chat.pop();await f.bus.emit('MESSAGE_DELETED');await f.generate();assert.match(f.prompts[DELIVERY_KEY].value,/Coat/);f.context.chat[0].mes='New opening';await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');}finally{f.bridge.destroy();}
+ const f=await fixture();try{f.context.chat.push(arrived());await f.generate();assert.doesNotMatch(f.prompts[DELIVERY_KEY].value,/差不多该到货/);assert.match(f.prompts[DELIVERY_KEY].value,/Amazon 收货状态同步/);await f.generate('regenerate');assert.match(f.prompts[DELIVERY_KEY].value,/Coat/);f.context.chat.pop();await f.bus.emit('MESSAGE_DELETED');await f.generate();assert.match(f.prompts[DELIVERY_KEY].value,/Coat/);f.context.chat[0].mes='New opening';await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');}finally{f.bridge.destroy();}
 });
 test('pending bridge work and prompt filters cannot leak across chats',async()=>{
  const f=await fixture();try{await f.generate();const old=f.prompts[DELIVERY_KEY];f.context.chatMetadata={};assert.equal(old.filter(),false);await f.generate();assert.equal(f.prompts[DELIVERY_KEY].value,'');}finally{f.bridge.destroy();}
+});
+test('Amazon always offers receipt synchronization without forcing an early delivery',async()=>{
+ const f=await fixture();try{
+  f.context.chat.pop();
+  await f.generate();
+  assert.match(f.prompts[DELIVERY_KEY].value,/Amazon 收货状态同步/);
+  assert.match(f.prompts[DELIVERY_KEY].value,/received":true/);
+  assert.doesNotMatch(f.prompts[DELIVERY_KEY].value,/差不多该到货/);
+  assert.equal(deliveryStatus(order,f.context.chat).label,'待发货');
+  f.context.chat.push(msg('2026-10-11 23:00\nSam 确认收到了外套。<!--durian-delivery:{"id":"order-1","received":true}-->'));
+  await f.generate();
+  assert.equal(deliveryStatus(order,f.context.chat).label,'已完成');
+  assert.equal(f.prompts[DELIVERY_KEY].value,'','completed order is not re-injected');
+  f.context.chat.pop();
+  await f.generate();
+  assert.match(f.prompts[DELIVERY_KEY].value,/Amazon 收货状态同步/,'deleting receipt reopens it');
+  assert.equal(f.errors.length,0);
+ }finally{f.bridge.destroy();}
 });
 const foodOrder={id:'food-1',type:'foodOrder',shopId:'foodShop:0',shopName:'Trattoria',cuisine:'意大利菜',sourceIndex:0,createdDay:dateDay('2026-10-11'),createdHour:19,recipient:{id:'other',name:'Alex'},paymentMethod:'npc',payerName:'小美',paymentStatus:'paid',items:[{dishId:'foodShop:0#0',name:'Carbonara',category:'主食',priceMinor:1250,currency:'USD',quantity:2}]};
 const foodArrived=()=>msg('外卖在深夜送达了。<!--durian-delivery:'+JSON.stringify({id:'food-1',arrived:true})+'-->');

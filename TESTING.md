@@ -1,3 +1,6 @@
+### Amazon 收货确认同步（v1.2.90）
+- `node --test tests/delivery.test.js tests/amazon.test.js`：原 arrived:true 预计配送时间窗口保持，received:true 在实际收货时（提前/深夜也可以）更新「已完成」；错误订单 ID、user 楼、系统楼和代码块无效；删楼恢复；收货前只追加事实同步提示、不催送货；外卖收货处理不变。
+
 ## v1.2.81 · 榴莲日历上游 Schema 状态数超限回归（2026-11-17）
 - `tests/calendar.test.js`：`phone_calendar` 的 holidays 传输 Schema 不含 maxItems:240 与嵌套 anyOf，同时仍要求顶层四字段并保留业务存档 240 上限；240 项合法、241 项拒绝。
 - 独立 API 模拟入口检查实际传给生成层的 Schema；空对象仅做一次既有格式恢复而不落盘，`holidays:[]` 仍合法；原有日历提醒/原子存档测试照常执行。
