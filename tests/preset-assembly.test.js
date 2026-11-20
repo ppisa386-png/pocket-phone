@@ -39,7 +39,7 @@ function fixture(options = {}) {
         });
         leaves.splice(1,0,{identifier:'qqj_memory',role:'system',content:'memory and world info'});
         leaves.push({identifier:'history-1',role:'assistant',content:'latest story'}, {identifier:'quietPrompt',role:'system',content:quiet.quietPrompt});
-        manager.messages = { collection:[{identifier:'main-with-extension',collection:leaves.slice(0,2)},...leaves.slice(2)] };
+        manager.messages = { collection:leaves.map(leaf => ({identifier:leaf.identifier === 'history-1' ? 'chatHistory' : leaf.identifier === 'quietPrompt' ? 'controlPrompts' : leaf.identifier, collection:[leaf]})) };
         originals.push(structuredClone(manager.messages));
         const generated = { prompt:leaves.map(project) };
         if (options.beforeSource) options.beforeSource(generated,manager);
@@ -200,4 +200,25 @@ test('detached and disabled entries are never forced on, and a later re-enabled 
     await f.run();assert.equal(f.requests[0].messages.filter(m=>m.content==='同样的文字 Alice').length,1);
     s.prompt_order[0].order.find(e=>e.identifier==='style').enabled=true;
     await f.run();assert.equal(f.requests[1].messages.filter(m=>m.content==='同样的文字 Alice').length,1);f.assembly.destroy();
+});
+
+test('reserved control identifiers cannot remove the phone task, and history leaves are not preset sources', async () => {
+    const f=fixture();const s=f.context.chatCompletionSettings;
+    s.prompts.push(ordinary('quietPrompt','pretends to be normal'));s.prompt_order[0].order.push({identifier:'quietPrompt',enabled:true});
+    assert.equal(f.assembly.read().rows.find(row=>row.id==='quietPrompt').controllable,false);
+    f.settings={...f.settings,presetAssemblies:{x:{[key('A')]:{mode:'custom',choices:{quietPrompt:false}}}}};
+    await assert.rejects(f.run(),/无法独立/);assert.equal(f.quietCalls,0);f.assembly.destroy();
+    const g=fixture({beforeSource:(_data,manager)=>{manager.messages.collection.find(c=>c.identifier==='style').identifier='chatHistory';}});
+    await assert.rejects(g.run(),/来源标识/);assert.equal(g.requests.length,0);g.assembly.destroy();
+});
+
+test('an extension introducing a conflicting identifier during preparation invalidates the plan', async () => {
+    let f;f=fixture({beforePrepare:()=>{f.context.extensionPrompts={style:{value:'late extension'}};}});
+    await assert.rejects(f.run(),/变化|取消/);assert.equal(f.requests.length,0);assert.equal(f.hostRequests.length,0);f.assembly.destroy();
+});
+
+test('variable-writing macros are explicitly locked because their effects can cross source boundaries', async () => {
+    const f=fixture();f.context.chatCompletionSettings.prompts.find(p=>p.identifier==='style').content='{{setvar::style::long prose}}';
+    const row=f.assembly.read().rows.find(row=>row.id==='style');assert.equal(row.controllable,false);assert.match(row.reason,/变量写入宏/);
+    await assert.rejects(f.run(),/无法独立/);assert.equal(f.quietCalls,0);f.assembly.destroy();
 });

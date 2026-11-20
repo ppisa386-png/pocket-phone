@@ -2,9 +2,9 @@
 - **讨论结论／取代**：用户要求真实按 App 过滤当前酒馆预设，入口明确为 App 管理底部第三栏“自定义组装”；随后明确按串行使用，不验收正文/手机并发不中断。以此补充 v1.2.84，保留现有 Quiet 调用链，不恢复旧隔离重写。
 - **基线**：main `4fa9a67db0d9f44933872df99d82194a646b9fa5`（v1.2.90）。
 - **实现**：新增 preset-assembly.js 只读读取真实设置/Prompt Manager 活动顺序，按 App + 预设准确名称保存 identifier 选择；新增 preset-assembly-view.js，ui/style 接入三栏和小屏条目列表；config 兼容旧档并只保存选择。api-context 复用原有请求事件，在原拦截的最终序列化交接内只过滤手机副本；api/phone/index 连接请求计划、在途冻结和内存诊断。联系人识别保留 contacts 队列，按调用页面 phone/messages 路由。更新版本及相关缓存引用。
-- **技术依据**：检查 SillyTavern release `82b64a45c34facbc98ff4b9f33c067d3ccab6a17` 的 public/script.js、scripts/openai.js、PromptManager.js、st-context.js、preset-manager.js、custom-request.js。选方案 B：普通相对提示词的 Message.identifier 在宏展开后仍存在；从 Prompt Manager 来源树投影完整消息，必须与当前手机请求及最后一个设置钩子之后的消息逐项完全一致，再删除指定来源对应的消息。多个相同文字条目靠标识区分，不做字符串删除、不把全部消息拼成 system。官方 squashSystemMessages 会丢失来源，因此开启时拒绝自定义；深度注入、内置动态结构与扩展冲突只读保留。
+- **技术依据**：检查 SillyTavern release `82b64a45c34facbc98ff4b9f33c067d3ccab6a17` 的 public/script.js、scripts/openai.js、PromptManager.js、st-context.js、preset-manager.js、custom-request.js。选方案 B：普通相对提示词的 Message.identifier 在宏展开后仍存在；从 Prompt Manager 来源树投影完整消息，必须与当前手机请求及最后一个设置钩子之后的消息逐项完全一致，再删除指定来源对应的消息。多个相同文字条目靠标识区分，不做字符串删除、不把全部消息拼成 system。官方 squashSystemMessages 会丢失来源，因此开启时拒绝自定义；深度注入、内置动态结构、变量写入宏与扩展冲突只读保留；同时核验来源消息所属集合，保护历史/任务保留标识。
 - **保持不变**：正文原预设和启用状态、其他 App 规则、模型/密钥方案、角色世界书历史及千千结原组装、任务提示与 Schema/单次格式恢复、journal 来源与回退、业务及品牌主题。没有新增全局请求拦截或全局参数覆盖；预设/聊天变化观察器只使自定义手机请求失效。
-- **验证**：Work 可用运行环境执行已有 api/config/settings 回归及新增 preset-assembly 模拟请求检查，76/76 通过；未安装依赖、未启动测试服务器、未使用浏览器自动化、未调用真实模型。检查涵盖最终请求删除、同文不同来源、App 分离、A/B/A、内容/排序/新增/删除、在途选项冻结、宿主开关不变、来源不匹配拒发、特殊结构与旧设置、联系人任务路由。GitHub Actions 完整回归待提交后核对。
+- **验证**：Work 可用运行环境执行已有 api/config/settings 回归及新增 preset-assembly 模拟请求检查，79/79 通过；未安装依赖、未启动测试服务器、未使用浏览器自动化、未调用真实模型。检查涵盖最终请求删除、同文不同来源、App 分离、A/B/A、内容/排序/新增/删除、在途选项冻结、宿主开关不变、来源不匹配拒发、特殊结构与旧设置、联系人任务路由。GitHub Actions 完整回归待提交后核对。
 - **限制／待实测**：仅支持来源可证明的普通相对条目；内置主提示/角色/世界书/历史、深度注入暂不可独立控制；System 合并、缺少必要接口或扩展改写导致来源无法证明时明确拒发。预设名称是宿主提供的标识，重命名按新预设处理，宿主无法区分未被观察到的同名同标识重建与原预设更新，此时仍按宿主提供的名称/标识匹配。没有进入用户真实 SillyTavern，预设读取、独立过滤、App 隔离、A/B/A、串行正文保持原配置和刷新持久化六项仍待用户实测，不声称已通过。
 
 ### 2026-11-18 · v1.2.90 Amazon 收货完成文尾同步

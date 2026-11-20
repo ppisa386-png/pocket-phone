@@ -2,7 +2,9 @@
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= 500;
 const fail = message => Object.assign(new Error(message), { retryable: false, code: 'PHONE_PRESET_ASSEMBLY' });
-const builtins = new Set(['main','nsfw','jailbreak','enhanceDefinitions','worldInfoBefore','worldInfoAfter','charDescription','charPersonality','scenario','personaDescription','dialogueExamples','chatHistory']);
+const builtins = new Set(['main','nsfw','jailbreak','enhanceDefinitions','worldInfoBefore','worldInfoAfter','charDescription','charPersonality','scenario','personaDescription','dialogueExamples','chatHistory',
+    'quietPrompt','impersonate','groupNudge','bias','summary','authorsNote','vectorsMemory','vectorsDataBank','smartContext',
+    'controlPrompts','newMainChat','newChat','continueNudge','continuePrefill','emptyUserMessageReplacement']);
 const stable = value => JSON.stringify(value, (_key, item) => record(item)
     ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 
@@ -44,6 +46,7 @@ export function readCurrentPreset(context, host = {}) {
         else if (prompt.marker || builtins.has(id) || prompt.system_prompt !== false) reason = '内置结构或动态上下文，保留酒馆处理';
         else if (prompt.injection_position != null && prompt.injection_position !== 0) reason = '聊天深度注入可能合并内容，暂不支持独立过滤';
         else if (prompt.extension || Object.keys(context.extensionPrompts || {}).some(key => key.replace(/\W/g, '_') === id)) reason = '扩展注入或来源标识冲突，保留原处理';
+        else if (/{{\s*(?:setvar|setglobalvar|addvar|addglobalvar|incvar|incglobalvar|decvar|decglobalvar)\b/i.test(prompt.content || '')) reason = '含变量写入宏，可能影响其他条目，暂不支持独立过滤';
         else if (typeof prompt.content !== 'string' || !['system','user','assistant'].includes(prompt.role)) reason = '条目结构不受支持';
         return { id: validId(id) ? id : '', name: typeof prompt?.name === 'string' && prompt.name ? prompt.name : validId(id) ? id : '无有效标识的条目',
             enabled: entry?.enabled === true, controllable: !reason, reason };
@@ -54,7 +57,7 @@ export function readCurrentPreset(context, host = {}) {
     }
     return { key: JSON.stringify(['openai', name]), name, rows, support,
         // Private, short-lived comparison only. Never persisted or shown in diagnostics.
-        fingerprint: stable([name, character?.id, settings.prompts, order, !!settings.squash_system_messages]) };
+        fingerprint: stable([name, character?.id, settings.prompts, order, !!settings.squash_system_messages, rows.map(row => [row.id, row.reason])]) };
 }
 
 export function presetRule(settings, app, snapshot) {
@@ -76,10 +79,10 @@ function wireMessage(message) {
 function sourceMessages(root) {
     if (!Array.isArray(root?.collection)) throw fail('酒馆未提供可核对的条目来源，本次没有提交模型。');
     const result = [];
-    const visit = node => {
+    const visit = (node, owner = null) => {
         if (!node) return;
-        if (Array.isArray(node.collection)) { node.collection.forEach(visit); return; }
-        if (node.content || node.tool_calls) result.push({ id: node.identifier, message: wireMessage(node) });
+        if (Array.isArray(node.collection)) { node.collection.forEach(child => visit(child, node.identifier)); return; }
+        if (node.content || node.tool_calls) result.push({ id: node.identifier, owner, message: wireMessage(node) });
     };
     visit(root);
     return structuredClone(result);
@@ -139,7 +142,10 @@ export function createPresetAssembly({ getContext, getSettings, getHost = () => 
                     sources = sourceMessages(getHost().promptManager?.messages);
                     if (stable(sources.map(item => item.message)) !== stable(structuredClone(messages))) throw fail('酒馆消息已合并或被扩展改写，无法证明条目来源，本次没有提交模型。');
                     // Duplicate leaf IDs cannot be safely attributed to one preset entry.
-                    for (const id of excluded) if (sources.filter(item => item.id === id).length > 1) throw fail('组装结果含重复来源标识，本次没有提交模型。');
+                    for (const id of excluded) {
+                        const matches = sources.filter(item => item.id === id);
+                        if (matches.length > 1 || matches.some(item => item.owner !== id)) throw fail('组装结果来源标识重复或不属于该预设条目，本次没有提交模型。');
+                    }
                 },
                 filter(messages) {
                     if (!custom) return messages;
