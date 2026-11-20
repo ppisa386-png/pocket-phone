@@ -1,7 +1,8 @@
+import { createPresetAssembly } from './src/preset-assembly.js?v=1.2.91';
 import { createCalendar } from './src/calendar.js?v=1.2.87';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.90';
-import { createWeather } from './src/weather.js?v=1.2.90';
+import { createDaily } from './src/daily.js?v=1.2.91';
+import { createWeather } from './src/weather.js?v=1.2.91';
 import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
 import { createAssets } from './src/assets.js?v=1.2.80';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
@@ -15,16 +16,16 @@ import { createDiagnostics } from './src/diagnostics.js?v=1.2.66';
 import { createX } from './src/x.js?v=1.2.87';
 import { createChatApp } from './src/chat-apps.js?v=1.2.80';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
-import { createApiClient, createKeyStore } from './src/api.js?v=1.2.87';
-import { captureHostRequest } from './src/api-context.js?v=1.2.87';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.90';
-import { mountPhone } from './src/ui.js?v=1.2.90';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.90';
-import { createPhoneService } from './src/phone.js?v=1.2.88';
+import { createApiClient, createKeyStore } from './src/api.js?v=1.2.91';
+import { captureHostRequest } from './src/api-context.js?v=1.2.91';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.91';
+import { mountPhone } from './src/ui.js?v=1.2.91';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.91';
+import { createPhoneService } from './src/phone.js?v=1.2.91';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
-import { normalizeSettings } from './src/config.js?v=1.2.90';
+import { normalizeSettings } from './src/config.js?v=1.2.91';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.90';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.91';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -34,6 +35,7 @@ window.addEventListener('error',event=>{if(event.filename?.startsWith(extensionU
 window.addEventListener('unhandledrejection',event=>{if(String(event.reason?.stack||'').includes(extensionUrl))diagnostics.add(event.reason,'异步任务');});
 
 let modelClient;
+let presetAssembly;
 let incomingWatcher;
 let controller;
 let memory;
@@ -53,6 +55,7 @@ let starting = false;
 function stopRuntime() {
     controller?.destroy(); controller = null;
     modelClient?.cancel(); modelClient = null;
+    presetAssembly?.destroy(); presetAssembly = null;
     for (const service of [incomingWatcher, continuityBridge, deliveryBridge, opinionBridge, assetBridge, dailyBridge, calendarBridge, phoneService, memory]) service?.destroy();
     incomingWatcher = continuityBridge = deliveryBridge = opinionBridge = assetBridge = dailyBridge = calendarBridge = phoneService = memory = null;
 }
@@ -66,7 +69,7 @@ async function start() {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
         const [response, enamelResponse, foodResponse, wechatResponse, weatherStyleResponse, weatherFontsResponse, dailyStyleResponse, calendarStyleResponse] = await Promise.all([
-            fetch(new URL('./style.css?v=1.2.77', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style.css?v=1.2.91', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.71', import.meta.url), { cache: 'no-cache' }),
@@ -87,9 +90,17 @@ async function start() {
         try { hostModule=await import(new URL('../../../../script.js',import.meta.url).href); }
         catch { /* Keep compatibility with hosts without public generation exports. */ }
         const generationState=createGenerationReader(hostModule,()=>globalThis.SillyTavern.getContext(),hostGenerationState);
+        let completionModule = null;
+        try { completionModule = await import(new URL('../../../../scripts/openai.js', import.meta.url).href); }
+        catch { /* Reading may still work; filtering remains explicitly unavailable. */ }
         function mountRuntime(showSettings = false) {
+            presetAssembly = createPresetAssembly({
+                getContext: () => globalThis.SillyTavern.getContext(),
+                getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]),
+                getHost: () => completionModule || {},
+            });
             const enabled = normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).enabled;
-            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId), prepareRequest: captureHostRequest });
+            modelClient = createApiClient({ getContext: () => globalThis.SillyTavern.getContext(), getSettings: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]), getKey: (url, profileId) => keyStore.get(url, profileId === undefined ? normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apiProfileId : profileId), prepareRequest: captureHostRequest, presetAssembly });
             if (enabled) {
                 memory = createPhoneMemory({
                     assetEnabled: () => normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY]).apps.assets,
@@ -120,6 +131,7 @@ async function start() {
             }
             const paymentRequest = enabled ? createPaymentRequest({getContext:()=>globalThis.SillyTavern.getContext(),getSettings:()=>normalizeSettings(globalThis.SillyTavern.getContext().extensionSettings[MODULE_KEY])}) : null;
             const adapter = {
+                presetAssembly,
                 weatherAssetBase:new URL('./assets/weather/',import.meta.url).href,
                 foodAssetBase:new URL('./assets/food/',import.meta.url).href,
                 wechatAssetBase:new URL('./assets/wechat/',import.meta.url).href,

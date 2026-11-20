@@ -4,7 +4,7 @@ import { commExpired, commMeta, commReplyClassification, commClassificationPlan,
 import { exactStoryTime } from './story-clock.js?v=1.2';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
-import { phoneQuietOptions } from './api-context.js?v=1.2.84';
+import { phoneQuietOptions } from './api-context.js?v=1.2.91';
 import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.79';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
@@ -14,7 +14,7 @@ import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
 import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.85';
-import { resolveAppConnection } from './config.js?v=1.2.79';
+import { resolveAppConnection } from './config.js?v=1.2.91';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -75,11 +75,14 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
     async function request(prompt, validate, isCurrent, contact = null, options = {}, job = isCurrent.job) {
         prompt += CHINESE_NAME_RULE;
         const app = job.kind;
-        const checkEnabled = () => { if (getSettings().apps[app] === false) throw Object.assign(new Error('此 App 已关闭，本次生成已取消。'), {retryable:false}); };
+        const requestApp = job.requestApp || app;
+        const checkEnabled = () => { if (getSettings().apps[requestApp] === false) throw Object.assign(new Error('此 App 已关闭，本次生成已取消。'), {retryable:false}); };
         const context = getContext();
         job.contactId = contact?.id ?? null;
-        const connection = resolveAppConnection(getSettings(), app);
+        const connection = resolveAppConnection(getSettings(), requestApp);
         const independent = connection.api.mode === 'independent';
+        // Freeze choices for this task, including its existing format retry.
+        const assemblyPlan = independent ? modelClient?.assemblyPlan?.(requestApp) : null;
         if (independent && !modelClient) throw new Error('独立 API 尚未初始化，请刷新页面。');
         if (!independent && typeof context.generateQuietPrompt !== 'function') throw new Error('当前酒馆不支持模型调用，请先更新酒馆。');
         if (!independent && context.onlineStatus === 'no_connection') throw new Error('请先在酒馆连接 API，再试一次。');
@@ -154,7 +157,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const taskPrompt = prompt + (!independent && !prompt.includes(outputContract) ? '\n'+outputContract : '') + correction;
                 const contract = outputContract + correction;
                 modelRequests++;
-                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { app, finalOutputContract: contract, maxTokens, requireJsonObject:true,
+                const text = independent ? await modelClient.generate(taskPrompt, contact, isCurrent, report, { app: requestApp, assemblyPlan, finalOutputContract: contract, maxTokens, requireJsonObject:true,
                     jsonSchema: taskSchema || undefined,
                     onCompatibilityRetry: () => { unsupportedParameterRetries++; },
                     onResponseMeta: (metadata, rawText) => { responseMeta = metadata; responseText = rawText; },
@@ -214,7 +217,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     const detail = '连接方式：' + (independent ? '独立 API' : '跟随酒馆') + '；失败阶段：' + stage
                         + '；本次请求次数：' + modelRequests + '；实际模型：' + (responseMeta?.model || connection.api.model || '跟随酒馆当前模型')
                         + '；任务标识：' + (taskSchema?.name||app) + '；Schema：' + (taskSchema?.name||'phone_task')
-                        + '；插件版本：1.2.87；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
+                        + '；插件版本：1.2.91；模型任务次数：' + modelRequests + '；格式恢复次数：' + formatRecoveries
                         + '；不支持参数兼容次数：' + unsupportedParameterRetries
                         + (responseLength === null ? '' : '；返回字符数：' + responseLength)
                         + (responseText?.trim()==='{}'?'；最终为空对象：是':'；最终为空对象：否')
@@ -234,9 +237,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             }
         }
     }
-    async function task(work, kind = 'phone', waitForHost = false) {
+    async function task(work, kind = 'phone', waitForHost = false, requestApp = kind) {
         if (tasks.has(kind)) return { ok: false, skipped: true };
-        const job = { kind, progress: '正在读取当前聊天', cancelled: false };
+        const job = { kind, requestApp, progress: '正在读取当前聊天', cancelled: false };
         tasks.set(kind, job);
         delete failures[kind];
         errorKind = kind; error = ''; emit();
@@ -244,12 +247,12 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         try {
             const view = await memory.read();
             if (!view.scope) throw memory.unavailableError();
-            if (getSettings().apps[kind] === false) throw new Error('此 App 已关闭。');
+            if (getSettings().apps[requestApp] === false) throw new Error('此 App 已关闭。');
             id = operation;
             const epoch = memory.epoch();
-            const apiConfig = JSON.stringify(resolveAppConnection(getSettings(), kind));
+            const apiConfig = JSON.stringify(resolveAppConnection(getSettings(), requestApp));
             const current = () => !destroyed && !job.cancelled && id === operation && epoch === memory.epoch()
-                && apiConfig === JSON.stringify(resolveAppConnection(getSettings(), kind));
+                && apiConfig === JSON.stringify(resolveAppConnection(getSettings(), requestApp));
             current.job = job;
             const value = await work(view, current);
             return { ok: true, value };
@@ -430,7 +433,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             await memory.commit(ticket, changes);
             error = ''; emit();
         },
-        addEstablishedContacts() {
+        addEstablishedContacts(sourceApp = 'phone') {
             contactStatus = '';
             return task(async (view, current) => {
                 const context = getContext(), chat = clone(context.chat), sources = establishedSources(context);
@@ -457,9 +460,9 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 if (!valid()) return;
                 contactStatus = additions.length ? '已新增 ' + additions.length + ' 位联系人。' : renamed.length ? '联系人已更新。' : '没有需要新增的联系人。';
                 return {added:additions.length};
-            }, 'contacts');
+            }, 'contacts', false, sourceApp === 'messages' ? 'messages' : 'phone');
         },
-        scan(query = '') {
+        scan(query = '', sourceApp = 'phone') {
             contactStatus = '';
             return task(async (view, current) => {
                 const context = getContext();
@@ -486,7 +489,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const updated = additions.length - added;
                 contactStatus = added || updated ? '已新增 ' + added + ' 位联系人' + (updated ? '，更新 ' + updated + ' 位' : '') + '。' : (query ? (contacts.length ? '此联系人已在通讯录中。' : '你现在还没有TA的电话号码哦') : '未找到新的联系人。');
                 return { added, updated };
-            }, 'contacts');
+            }, 'contacts', false, sourceApp === 'messages' ? 'messages' : 'phone');
         },
         dial(contactId) {
             return task(async (view, current) => {

@@ -1,8 +1,9 @@
+import { createPresetAssemblyPanel } from './preset-assembly-view.js?v=1.2.91';
 import { createCalendarPanel } from './calendar-view.js?v=1.2.80';
 import {paperDraft} from './daily-core.js?v=1.2.65';
 import { bindInputViewport } from './input-viewport.js?v=1.2';
 import { createDailyPanel } from './daily-view.js?v=1.2.65';
-import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.90';
+import { createWeatherPanel, nextThemeChange } from './weather-view.js?v=1.2.91';
 import { storyTime, displayStoryDate } from './story-clock.js?v=1.2';
 import { createAssetPanel } from './assets-view.js?v=1.2.57';
 import { createAmazonPanel } from './amazon-view.js?v=1.2.90';
@@ -17,7 +18,7 @@ import { snapUnread } from './snapchat.js?v=1.2.80';
 import { createApiPanel } from './api-view.js?v=1.2.87';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { createPressMenu } from './press-menu.js?v=1.2.57';
-import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.90';
+import { APPS, PROMPTS, VERSION, LAUNCHER_SIZE, normalizeSettings, clampPosition, appearanceSettingsPatch } from './config.js?v=1.2.91';
 import { icon } from './icons.js?v=1.2.57';
 import { enamelIcon, enamelLauncherArt, enamelParticles } from './enamel-icons.js?v=1.2.57';
 import { renderMessagesScreen } from './messages-view.js?v=1.2.88';
@@ -435,6 +436,9 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     }
 
     let appSettingsTab = 'switches';
+    const assemblyPanel = createPresetAssemblyPanel({ adapter, getSettings: () => settings, persist,
+        redraw: () => { if (!destroyed && route === 'apps' && appSettingsTab === 'assembly') renderApps(); },
+        active: () => !destroyed && opened && route === 'apps' && appSettingsTab === 'assembly' });
     const appModelState = new Map();
     let appModelSerial = 0;
     async function fetchAppModels(app) {
@@ -485,10 +489,11 @@ export function mountPhone({ adapter, styles, container = document.body }) {
                     '</section>';
             }).join('');
         content.innerHTML = '<div class="pp-page pp-app-settings-page"><div class="pp-app-settings-body">' +
-            (appSettingsTab === 'switches' ? switches : connections) +
+            (appSettingsTab === 'switches' ? switches : appSettingsTab === 'assembly' ? assemblyPanel.html() : connections) +
             '</div><nav class="pp-app-settings-tabs" aria-label="App 管理分页">' +
             '<button type="button" data-app-settings-tab="switches" aria-pressed="' + (appSettingsTab === 'switches') + '">开关</button>' +
             '<button type="button" data-app-settings-tab="connections" aria-pressed="' + (appSettingsTab === 'connections') + '">连接方式</button>' +
+            '<button type="button" data-app-settings-tab="assembly" aria-pressed="' + (appSettingsTab === 'assembly') + '">自定义组装</button>' +
             '</nav></div>';
         content.scrollTop = scroll;
     }
@@ -674,6 +679,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         if (target.dataset.chatAction) { void currentChat()?.action(target.dataset.chatAction,target.dataset.chatId); return; }
         if (target.dataset.snapAction) { void snapPanel.action(target.dataset.snapAction,target.dataset.snapId); return; }
         if (target.dataset.apiAction) { void apiPanel.action(target.dataset.apiAction); return; }
+        if (target.dataset.assemblyAction) { assemblyPanel.action(target.dataset.assemblyAction); return; }
         if (target.dataset.appSettingsTab) { appSettingsTab = target.dataset.appSettingsTab; content.scrollTop = 0; renderApps(); return; }
         if (target.dataset.appGetModels) { void fetchAppModels(target.dataset.appGetModels); return; }
         const action = target.dataset.action;
@@ -707,7 +713,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
         }
         if (target.dataset.phoneTab) { phoneTab = target.dataset.phoneTab; selectedCallId = null; renderPhone(); }
         if (target.hasAttribute('data-phone-sync')) openContactSearch();
-        if (target.hasAttribute('data-contact-bulk')) phoneAction(() => adapter.phone.addEstablishedContacts());
+        if (target.hasAttribute('data-contact-bulk')) phoneAction(() => adapter.phone.addEstablishedContacts(route === 'app:messages' ? 'messages' : 'phone'));
         if (target.dataset.phoneDial) phoneAction(() => adapter.phone.dial(target.dataset.phoneDial));
         if (target.dataset.phoneRecord) { selectedCallId = target.dataset.phoneRecord; callDraft = ''; renderPhone(); }
         if (target.hasAttribute('data-phone-list')) { selectedCallId = null; phoneTab = 'history'; renderPhone(); }
@@ -752,7 +758,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
     shadow.addEventListener('submit', event => {
         if(event.target.hasAttribute('data-contact-search')){
             event.preventDefault();const query=contactQuery.trim();if(!query)return;
-            phoneAction(async()=>{const result=await adapter.phone.scan(query);if(result?.ok){contactSearchOpen=false;render();}});return;
+            const sourceApp = route === 'app:messages' ? 'messages' : 'phone';
+            phoneAction(async()=>{const result=await adapter.phone.scan(query, sourceApp);if(result?.ok){contactSearchOpen=false;render();}});return;
         }
         if(event.target.hasAttribute('data-sms-edit-form')){
             event.preventDefault();const edit=smsEditing;if(!edit)return;
@@ -782,6 +789,8 @@ export function mountPhone({ adapter, styles, container = document.body }) {
 
     shadow.addEventListener('change', event => {
         const target = event.target;
+        if (target.dataset.assemblyField) { assemblyPanel.change(target.dataset.assemblyField, target.value); return; }
+        if (target.hasAttribute('data-assembly-entry')) { assemblyPanel.check(target.dataset.assemblyEntry, target.checked); return; }
         if(target.dataset.shopField){shopPanel.input(target);return;}
         if(target.dataset.foodField){foodPanel.input(target);return;}
         if(target.dataset.xField){xPanel.input(target);return;}
@@ -1047,6 +1056,7 @@ export function mountPhone({ adapter, styles, container = document.body }) {
             destroyed = true;
             clearWeatherThemeTimer();
             apiPanel.destroy();
+            assemblyPanel.destroy();
             lifetime.abort();
             unsubscribeMemory?.();
             unsubscribePhone?.();

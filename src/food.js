@@ -2,7 +2,7 @@ import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { walletCurrency, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
-import { sameWeatherCity } from './weather-model.js?v=1.2.88';
+import { sameWeatherCity } from './weather-model.js?v=1.2.91';
 const foodText=(s,n=200)=>typeof s==='string'?s.trim().slice(0,n):'';
 const GEO_BRANCH_SUFFIX=/^(.+?)\s*[（(]\s*([^（）()]{1,50}店)\s*[）)]$/u;
 const NON_GEO_BRANCH=/^(?:总店|旗舰店|直营店|官方店|专卖店|自营店|体验店|品牌店|网店|本店|老店)$/u;

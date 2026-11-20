@@ -1,7 +1,7 @@
 // Independent OpenAI-compatible requests go through the existing ST backend.
 // Never overwrite the host's connection settings or borrow its provider keys.
 import { phoneJsonSchema } from './model-json.js?v=1.2.66';
-import { resolveAppConnection } from './config.js?v=1.2.76';
+import { resolveAppConnection } from './config.js?v=1.2.91';
 export function normalizeApiUrl(value) {
     let url;
     try { url = new URL(String(value ?? '').trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://example.com/v1'); }
@@ -118,12 +118,12 @@ export function extractApiText(data, onMetadata = () => {}) {
     return text.trim();
 }
 
-export function createApiClient({ getContext, getSettings, getKey, prepareRequest, fetchImpl = globalThis.fetch }) {
+export function createApiClient({ getContext, getSettings, getKey, prepareRequest, presetAssembly = null, fetchImpl = globalThis.fetch }) {
     const active = new Set();
     const unsupportedSchemas = new Set();
     let cancelEpoch = 0;
     let preparation = null;
-    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}) {
+    async function post(path, config, key, extra, isCurrent = () => true, onProgress = () => {}, onResponseMeta = () => {}, onSubmit = () => {}) {
         if (getSettings().enabled === false) throw failure('榴莲手机已停用，请先勾选「启用榴莲手机」。');
         const endpoint = normalizeApiUrl(config.baseUrl);
         const host = getContext();
@@ -140,6 +140,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             const body = JSON.stringify({ chat_completion_source: 'openai', reverse_proxy: endpoint, proxy_password: key, ...extra });
             bodyLength = body.length;
             onProgress(stage);
+            onSubmit();
             const response = await fetchImpl('/api/backends/chat-completions/' + path, {
                 method: 'POST', headers: host.getRequestHeaders(), credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
                 body,
@@ -191,14 +192,16 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
             const key = getKey(config.baseUrl, connection.profileId);
             const fingerprint = JSON.stringify(connection), epoch = cancelEpoch;
             const schemaEndpoint = JSON.stringify([config.baseUrl,config.model]);
+            const assembly = options.assemblyPlan ?? presetAssembly?.plan(options.app);
             const current = () => epoch === cancelEpoch && isCurrent() &&
+                (!assembly || assembly.current()) &&
                 fingerprint === JSON.stringify(resolveAppConnection(getSettings(), options.app)) &&
                 key === getKey(config.baseUrl, connection.profileId);
             onProgress('正在整理正文、预设与记忆，尚未提交独立 API');
             // The host uses shared prompt hooks. Release this queue before the network call.
             const prepare = async () => {
                 if (!current()) throw failure('本次操作已取消。');
-                return prepareRequest(getContext(), prompt, contact, current);
+                return prepareRequest(getContext(), prompt, contact, current, assembly);
             };
             const handoff = preparation ? preparation.then(prepare) : prepare();
             const tail = handoff.catch(() => {});
@@ -239,7 +242,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 const metadata = jsonMode => (info, rawText) => options.onResponseMeta?.({ ...info,
                     jsonMode, model:config.model, endpointOrigin:new URL(config.baseUrl).origin,
                 }, rawText);
-                try { return await post('generate', config, key, payload, current, onProgress, metadata(payload.json_schema ? 'json_schema' : 'none')); }
+                try { return await post('generate', config, key, payload, current, onProgress, metadata(payload.json_schema ? 'json_schema' : 'none'), () => assembly?.submitted()); }
                 catch (error) {
                     // Some OpenAI-compatible providers reject json_schema rather
                     // than ignoring it. Retry the SAME request without that
@@ -253,7 +256,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                         delete fallback.json_schema;
                         delete fallback.response_format;
                         onProgress('接口不支持 JSON 输出参数，使用兼容格式重试一次');
-                        try { return await post('generate', config, key, fallback, current, onProgress, metadata('unsupported_fallback')); }
+                        try { return await post('generate', config, key, fallback, current, onProgress, metadata('unsupported_fallback'), () => assembly?.submitted()); }
                         catch (again) {
                             again.diagnostic = (again.diagnostic ? again.diagnostic + '\n' : '') +
                                 'JSON 输出参数不受支持：已使用无此参数的同任务兼容请求一次';
@@ -270,6 +273,7 @@ export function createApiClient({ getContext, getSettings, getKey, prepareReques
                 throw error;
             }
         },
+        assemblyPlan(app) { return presetAssembly?.plan(app) ?? null; },
         async models(config, key, isCurrent) {
             const data = await post('status', config, key, {}, isCurrent);
             if (!Array.isArray(data?.data)) throw failure('服务没有返回模型列表，请手动填写模型 ID。');

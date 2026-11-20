@@ -196,7 +196,7 @@ h2, p { margin: 0; }
 /* App management: bottom navigation stays reachable while browsing long lists. */
 .pp-app-settings-page { min-height:100%; display:flex; flex-direction:column; padding-bottom:0; }
 .pp-app-settings-body { flex:1 0 auto; padding-bottom:12px; }
-.pp-app-settings-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; position:sticky; bottom:0; z-index:3; padding:11px 4px 13px; background:var(--pp-bg,#171923); border-top:1px solid var(--pp-line); }
+.pp-app-settings-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; position:sticky; bottom:0; z-index:3; padding:11px 4px 13px; background:var(--pp-bg,#171923); border-top:1px solid var(--pp-line); }
 .pp-app-settings-tabs button { min-height:42px; border:1px solid var(--pp-line); border-radius:12px; background:var(--pp-input); color:var(--pp-text); font:inherit; cursor:pointer; }
 .pp-app-settings-tabs button[aria-pressed="true"] { border-color:var(--pp-accent); background:var(--pp-accent); color:#fff; font-weight:700; }
 .pp-app-connection-row { padding:12px 14px; margin-bottom:12px; }
@@ -2295,3 +2295,18 @@ h2, p { margin: 0; }
 
 /* Date labels keep their own width; the conversation preview yields space. */
 .pp-wechat .pp-chat-row-meta,.pp-whatsapp .pp-chat-row-meta{max-width:none;flex-shrink:0}
+
+/* App management: preset assembly uses the existing system theme. */
+.pp-preset-heading { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+.pp-preset-heading strong { min-width:0; overflow-wrap:anywhere; }
+.pp-preset-heading button { flex-shrink:0; }
+.pp-preset-list { min-width:0; }
+.pp-preset-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--pp-line); }
+.pp-preset-row > span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.pp-preset-row strong,.pp-preset-row small { display:block; }
+.pp-preset-row small { color:var(--pp-muted); font-size:11px; margin-top:4px; }
+.pp-preset-row input[type="checkbox"] { flex:0 0 20px; width:20px; height:20px; margin:0; accent-color:var(--pp-accent); }
+.pp-preset-row input:disabled { opacity:.45; }
+.pp-preset-locked { flex:0 0 auto; }
+.pp-preset-diagnostic { font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.pp-preset-panel .pp-api-actions { flex-wrap:wrap; }

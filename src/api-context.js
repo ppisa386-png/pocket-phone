@@ -11,7 +11,7 @@ const cancelled = () => Object.assign(new Error('聊天或 API 配置已变化�
 // A request-local serialization handoff: the host finishes its normal prompt
 // and request hooks, then yields immediately before its network request. No
 // fetch monkey-patch, global settings change, dry run, or paid host-model call.
-export async function captureHostRequest(context, prompt, contact, isCurrent = () => true) {
+export async function captureHostRequest(context, prompt, contact, isCurrent = () => true, assembly = null) {
     const bus = context.eventSource, types = context.event_types ?? context.eventTypes ?? {};
     const names = ['GENERATION_STARTED', 'GENERATE_AFTER_DATA', 'CHAT_COMPLETION_SETTINGS_READY'];
     if (context.mainApi !== 'openai' || typeof context.generateQuietPrompt !== 'function' ||
@@ -39,6 +39,9 @@ export async function captureHostRequest(context, prompt, contact, isCurrent = (
         if (dryRun) return;
         const matches = hasMarker(data?.prompt);
         if (!matches && !owner) return;
+        if (matches && assembly) {
+            try { assembly.capture(data.prompt); } catch (error) { failure = error; }
+        }
         // If the host lacks the final settings hook, or another extension has
         // removed the task, serialization still cannot fall through to its API.
         const preventFallback = () => { throw failure || (isCurrent() ? unsupported() : cancelled()); };
@@ -55,7 +58,9 @@ export async function captureHostRequest(context, prompt, contact, isCurrent = (
             if (!isCurrent()) throw cancelled();
             if (failure) throw failure;
             // Clone after ALL request hooks, without serializing our guards.
-            captured = clean(Object.fromEntries(Object.entries(data)));
+            const local = Object.fromEntries(Object.entries(data));
+            if (assembly) local.messages = assembly.filter(data.messages);
+            captured = clean(local);
             if (!Array.isArray(captured.messages) || !captured.messages.length) throw unsupported();
             throw handoff;
         });
