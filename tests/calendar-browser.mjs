@@ -82,7 +82,7 @@ try {
     await p.getByRole('button',{name:'日历设置',exact:true}).click();await p.getByRole('button',{name:'编辑 相识纪念日',exact:true}).click();p.once('dialog',d=>d.accept());await p.getByRole('button',{name:'删除事件',exact:true}).click();await p.locator('.pp-cal-settings').waitFor();assert.equal(await p.getByRole('button',{name:'编辑 相识纪念日',exact:true}).count(),0);
     await p.emulateMedia({reducedMotion:'reduce'});await p.getByRole('button',{name:'返回月历',exact:true}).click();assert.ok(await p.locator('.pp-cal-number').first().evaluate(el=>getComputedStyle(el).transitionDuration==='0s'));
     // Offline bundle parses and opens the calendar without network/model access.
-    await p.goto(origin+'/preview.html');await p.locator('#preview-open').click();
+    await p.goto(origin+'/preview.html'); // preview bootstraps with the phone already open
     await p.waitForTimeout(250);
     if(!(await p.locator('[data-app="calendar"]').count())) {
         throw new Error('offline preview diagnostic: '+JSON.stringify({
