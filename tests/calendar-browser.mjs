@@ -82,7 +82,18 @@ try {
     await p.getByRole('button',{name:'日历设置',exact:true}).click();await p.getByRole('button',{name:'编辑 相识纪念日',exact:true}).click();p.once('dialog',d=>d.accept());await p.getByRole('button',{name:'删除事件',exact:true}).click();await p.locator('.pp-cal-settings').waitFor();assert.equal(await p.getByRole('button',{name:'编辑 相识纪念日',exact:true}).count(),0);
     await p.emulateMedia({reducedMotion:'reduce'});await p.getByRole('button',{name:'返回月历',exact:true}).click();assert.ok(await p.locator('.pp-cal-number').first().evaluate(el=>getComputedStyle(el).transitionDuration==='0s'));
     // Offline bundle parses and opens the calendar without network/model access.
-    await p.goto(origin+'/preview.html');await p.locator('#preview-open').click();await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();
+    await p.goto(origin+'/preview.html');await p.locator('#preview-open').click();
+    await p.waitForTimeout(250);
+    if(!(await p.locator('[data-app="calendar"]').count())) {
+        throw new Error('offline preview diagnostic: '+JSON.stringify({
+            errors,failedAssets,external,
+            launcher:await p.locator('.pp-launcher').count(),
+            dialog:await p.locator('.pp-phone').count(),
+            buttons:await p.locator('[data-app]').evaluateAll(nodes=>nodes.map(n=>n.dataset.app)),
+            visible:await p.locator('.pp-phone').first().isVisible().catch(()=>false),
+        }));
+    }
+    await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();
     for(const app of ['daily','weather','x','wechat']){await p.getByRole('button',{name:'回到桌面',exact:true}).click();await p.locator('[data-app="'+app+'"]').click();}
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(failedAssets,[]);
     console.log('PASS calendar: 320/360/390/430px; init/loading/failure; CRUD/repeat; persistence; month navigation; countdown; actual narrative dedup; reduced motion; local assets; offline preview.');
