@@ -31,7 +31,18 @@ try {
     p.on('pageerror',e=>errors.push(e.message));p.on('response',r=>{if(r.status()>=400)failedAssets.push(r.url());});
     await p.route('**/*',r=>{if(r.request().url().startsWith(origin))return r.continue();external.push(r.request().url());return r.abort();});
     const open=async()=>{await p.locator('.pp-launcher').click();await p.locator('[data-app="calendar"]').click();};
-    await p.goto(origin);await open();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
+    await p.goto(origin);
+    // The Weather city must be explicitly confirmed by user long-press. A
+    // narrative durian-location marker is no longer a valid location source.
+    await p.locator('.pp-launcher').click();
+    await p.locator('[data-app="weather"]').click();
+    await p.locator('[data-press="weather-location"]').dispatchEvent('contextmenu');
+    await p.getByRole('menuitem',{name:'修改地点'}).click();
+    await p.locator('.pp-weather-location-editor input').fill('东京');
+    await p.locator('.pp-weather-location-editor [type="submit"]').click();
+    await p.locator('.pp-weather-loc b').getByText('东京').waitFor();
+    await p.getByRole('button',{name:'回到桌面',exact:true}).click();
+    await open();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
     await p.screenshot({path:resolve(evidence,'calendar-initialize-390.png')});
     await p.evaluate(()=>window.fail=true);await p.locator('[data-calendar-action="refresh"]').click();await p.getByText(/日历初始化失败/).waitFor();assert.equal(await p.locator('.pp-cal-grid').count(),0);
     await p.evaluate(()=>{window.fail=false;window.delay=400;});await p.locator('[data-calendar-action="refresh"]').click();await p.getByText('正在整理地区节日资料…').waitFor();await p.locator('.pp-cal-grid').waitFor();assert.equal(await p.locator('.pp-cal-day').count(),35);
