@@ -1139,7 +1139,7 @@ test('all refresh categories are decided by the model, never by built-in city or
         assert.match(f.prompt(),/User 使用的面具/);
         assert.match(f.prompt(),/旧世界旅行者/);
         assert.match(f.prompt(),/架空上海是终年冰雪的浮空城/);
-        assert.match(f.prompt(),/已经激活的全局世界书/);
+        assert.match(f.prompt(),/实际激活的全局世界书/);
         assert.doesNotMatch(f.prompt(),/2016-01-01|2025-12-31|Open-Meteo|geocoding-api/);
         assert.equal(record.climate.source,'ai-offline-research');
     } finally { f.close(); }
