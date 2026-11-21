@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { weatherResearchPrompt, validateWeatherResearch, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from '../src/weather-model.js';
 import { createPhoneService } from './phone-fixture.js';
-import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
+import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
@@ -35,22 +35,21 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
         eventSource: bus, event_types: Object.fromEntries(['CHAT_CHANGED', 'GENERATION_STARTED', 'GENERATION_ENDED', 'MESSAGE_EDITED', 'MESSAGE_DELETED'].map(n => [n, n])),
         generateQuietPrompt: async o => {
             calls++; prompt = o.quietPrompt;
-            let city = [...c.chat].reverse().map(row=>/<!--durian-location:{"city":"([^"]+)"}/.exec(row.mes||'')?.[1]).find(Boolean);
-            if (!city && c.chat.some(row=>/位置：东京/.test(row.mes||''))) city = '东京';
-            const requestedCity = /当前确认的地点："([^"]+)"/.exec(prompt)?.[1];
-            const suppliedCity = response && typeof response === 'object' && Object.hasOwn(response,'city') ? response.city : null;
-            city = suppliedCity || city || requestedCity;
+            const city = /手动地点："([^"]+)"/.exec(prompt)?.[1] || null;
+            const suppliedCity = response && typeof response === 'object' && Object.hasOwn(response,'city') ? response.city : city;
             if (typeof response === 'string') return response;
             if (!city) return JSON.stringify({city:null});
+            const chosenRandom = /随机选好的气候类型 "([a-z]+)"/.exec(prompt)?.[1];
             const world = worldClimate(city,c);
-            const template = world || climateFor(city);
+            const template = world || (['云京城','无名小城','雾港城'].includes(city) && chosenRandom
+                ? { archetype:chosenRandom, south:false } : climateFor(city));
             const monthlyTemp = Array.from({length:12},(_,i)=>{
                 const date = '2026-' + String(i+1).padStart(2,'0') + '-15';
                 return initialWeather(template,{day:dateDay(date),hour:14},()=>.5).temp-2;
             });
             const origin = world ? 'fictional_worldbook' :
                 ['云京城','无名小城','雾港城'].includes(city) ? 'fictional_random':'real_knowledge';
-            const generated = {city,origin, climate:{
+            const generated = {city:suppliedCity,origin, climate:{
                 archetype:template.archetype,monthlyTemp,monthlyRainChance:Array(12).fill(.4),
                 typicalWind:2.5,typicalHumidity:70,diurnal:8,south:!!template.south,
                 arid:['bwh','bsh'].includes(template.archetype),typhoon:false,alwaysNight:false},
@@ -68,6 +67,13 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
 }
 
 const marker = (prose, city) => ({ mes: prose + `<!--durian-location:{"city":"${city}"}-->`, is_user: false });
+async function chooseCity(f, city) {
+    const old = (await f.state()).location?.current;
+    const previous = old?.manual === true ? old.city : '';
+    const result = await f.weather.editLocation(city, previous);
+    assert.equal(result.ok, true, result.error);
+}
+
 
 test('weather schema declares all data fields while allowing unknown-city and evidence responses', () => {
     const known=weatherResearchSchema('芝加哥').value, unknown=weatherResearchSchema().value;
@@ -131,6 +137,8 @@ test('first refresh with city and current weather but no climate repairs once an
 test('two incomplete weather replies never overwrite an existing location or forecast', async () => {
     const f=setup([marker('2026-01-01 10:00\nSam is in Chicago.','芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         const before=structuredClone(await f.state());
@@ -147,6 +155,8 @@ test('two incomplete weather replies never overwrite an existing location or for
 test('host weather output contract and empty-object rejection preserve old weather in one request', async () => {
     const f=setup([marker('2026-10-31 16:28\nSam is in Chicago.','芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
+        await chooseCity(f,'芝加哥');
         assert.equal((await f.weather.refresh()).ok,true);
         assert.ok(f.prompt().includes(WEATHER_OUTPUT_CONTRACT));
         const before=structuredClone((await f.state()).weather),calls=f.calls();
@@ -168,6 +178,7 @@ test('manual refresh samples the first weather locally for the marked city with 
         assert.match(f.prompt(), /"city":null/);
         assert.equal(f.state().location?.current, undefined); // 探测无果不写地点
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const pending = f.weather.report(await f.state());
         assert.equal(pending.status, 'pending'); assert.equal(pending.city, '上海');
@@ -222,6 +233,7 @@ test('refresh without a marker probes the recent prose and status bars, saves th
 test('an existing marker path still uses one model request for weather research', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const result = await f.weather.refresh();
         assert.equal(result.ok, true, result.error);
@@ -233,6 +245,7 @@ test('an existing marker path still uses one model request for weather research'
 test('weather location can be edited from the shared location record without a model call',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam has arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         const oldWeather=(await f.state()).weather['上海'],beforeCalls=f.calls();
@@ -263,6 +276,7 @@ test('weather location can be edited from the shared location record without a m
 test('editing the location rejects stale names, invalid inputs and rolls back when the story floor is removed',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam has arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.editLocation('北京','上海')).ok,true);
         const bad=await f.weather.editLocation('<fake>','北京');
@@ -318,6 +332,7 @@ test('fictional places get a stable locally derived climate that the first refre
     assert.ok(weatherType(initialWeather(first, { day: dateDay('2026-04-08'), hour: 15 }, freshRng(3)).type) !== '未知');
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nThe caravan reached 云京城 at last.', '云京城'));
+        await chooseCity(f,'云京城');
         await f.memory.read();
         await f.weather.refresh();
         const record = (await f.state()).weather['云京城'];
@@ -426,10 +441,12 @@ test('a zero-rain climate stays dry hourly, a wet climate rains, and observed ra
 test('moving to another city re-points the app to the new place while the old record survives', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         assert.equal(f.weather.report(await f.state()).status, 'ok');
         f.c.chat.push(marker('2026-01-02 12:00\nSam took the train to Tokyo.', '东京'));
+        await chooseCity(f,'东京');
         await f.memory.read();
         const state = await f.state();
         const info = f.weather.report(state);
@@ -483,6 +500,7 @@ test('story-phone prompt carries the scene block before the language rule and ho
 test('with the weather app switched off the service refuses to refresh and no state is saved', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const settings = normalizeSettings({ retries: 0, apps: { weather: false } });
         const phone = createPhoneService({ memory: f.memory, getContext: () => f.c, getSettings: () => settings });
@@ -498,6 +516,7 @@ test('with the weather app switched off the service refuses to refresh and no st
 test('weather survives archive reload and later clocks evolve it without re-rolling', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const before = await f.state(), info = f.weather.report(before);
@@ -519,6 +538,7 @@ test('weather survives archive reload and later clocks evolve it without re-roll
 test('without a story time the app falls back to the saved weather from the last refresh', async () => {
     const f = setup([{ mes: '开场，本楼没有日期。', is_user: false }]); try {
         f.c.chat.push(marker('Sam settled in Shanghai.<!--durian-location:{"city":"上海"}-->', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const pending = f.weather.report(await f.state());
         assert.equal(pending.status, 'pending');
@@ -539,6 +559,7 @@ test('without a story time the app falls back to the saved weather from the last
 test('the weather panel renders the report and refresh reports success', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         let current = await f.state();
@@ -588,6 +609,7 @@ const forecastChat = date => [{ mes: date + ' 10:00\n在城市里的一天。', 
 test('manual refresh yields the full seven-day window with story dates, weekdays and day stats', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const info = f.weather.report(await f.state());
@@ -612,6 +634,7 @@ test('manual refresh yields the full seven-day window with story dates, weekdays
 test('the forecast is climate-bound and never re-rolls on reopen, reload or re-report', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Harbin.', '哈尔滨'));
+        await chooseCity(f,'哈尔滨');
         await f.memory.read();
         await f.weather.refresh();
         const first = f.weather.report(await f.state());
@@ -631,6 +654,7 @@ test('the forecast is climate-bound and never re-rolls on reopen, reload or re-r
 test('past midnight the forecast slides: tomorrow becomes today and a new seventh day appears', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const before = f.weather.report(await f.state()).forecast;
@@ -649,6 +673,7 @@ test('past midnight the forecast slides: tomorrow becomes today and a new sevent
 test("hourly evolution never breaks today's summary and the current reading sits on the hourly curve", async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const before = f.weather.report(await f.state()).forecast;
@@ -702,6 +727,7 @@ test('an extreme today or tomorrow keeps its full warning detail inside the day 
 test('after one model research call, forecast and warning rendering make zero further calls',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         assert.equal(f.calls(),1);
@@ -717,6 +743,7 @@ test('after one model research call, forecast and warning rendering make zero fu
 test('deleted floors remove the record together with its forecast window', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         assert.equal(f.weather.report(await f.state()).forecast.days.length, 7);
@@ -754,6 +781,7 @@ test('worldbook climate settings drive a fictional city weather profile', async 
     try {
         f.c.characters[0] = { name: 'Alex', avatar: 'alex.png', data: { character_book: { entries: [{ enabled: true, content: '云京城地处热带，全年炎热，夏季多暴雨。' }] } } };
         f.c.chat.push(marker('2026-10-15 10:00\nThe caravan reached 云京城.', '云京城'));
+        await chooseCity(f,'云京城');
         await f.memory.read();
         await f.weather.refresh();
         const record = (await f.state()).weather['云京城'];
@@ -829,6 +857,7 @@ test('all four weather photographs are bundled real WebP files, not embedded pre
 test('24 real forecast hours continue across midnight and seven-day ranges use saved model-free data',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const info=f.weather.report(await f.state()),clock=info.clock;
         assert.equal(info.forecast.days.length,7);
@@ -856,6 +885,7 @@ test('seven-day bars clip one shared temperature gradient instead of restarting 
 test('Window Weather Diary keeps weather actions, story date, forecast structure and five local window scenes',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state();
         const base=f.weather.report(state);
@@ -920,6 +950,7 @@ test('story date label uses the narrative calendar rather than the device date',
 test('all current weather warnings render after the illustration and before the 24-hour forecast',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state(),base=f.weather.report(state);
         const warnings=[
@@ -992,6 +1023,7 @@ test('weather reports expose stable UV/AQI readings and the weather panel render
     const f = setup();
     try {
         f.c.chat.push(marker('2026-01-01 10:00\\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const state = await f.state();
@@ -1053,6 +1085,7 @@ test('continuous heavy-to-light rain has a coherent wet forecast for photography
 test('rain forecast controls header image during a brief cloudy break without changing now icon',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-07-01 07:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state(),info=f.weather.report(state);
         const rainy={...info,report:{...info.report,type:'partly',label:'多云'},
@@ -1087,6 +1120,7 @@ test('partly-cloudy forecast icons display both sun and cloud instead of full su
     assert.match(partly,/M26 74/);
     const f=setup();try{
         f.c.chat.push(marker('2026-07-01 07:00\\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state(),info=f.weather.report(state);
         const mock={...info,forecast:{...info.forecast,days:[{...info.forecast.days[0],
@@ -1104,6 +1138,7 @@ test('all refresh categories are decided by the model, never by built-in city or
             description:'旧世界旅行者',
             character_book:{entries:[{enabled:true,content:'架空上海是终年冰雪的浮空城'}]}}};
         f.c.chat.push(marker('2026-02-01 08:00\nSam is here.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const snow = {city:'上海',origin:'fictional_worldbook',
             climate:{archetype:'et',monthlyTemp:Array(12).fill(-20),
@@ -1133,6 +1168,7 @@ test('AI can freely invent a climate for a fictional place with no worldbook cli
     const f = setup();
     try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived at 雾港城.', '雾港城'));
+        await chooseCity(f,'雾港城');
         await f.memory.read();
         f.reply({origin:'fictional_random',climate:{archetype:'bwh',
             monthlyTemp:[16,17,18,20,22,24,26,25,22,20,18,16],
@@ -1151,6 +1187,7 @@ test('AI can freely invent a climate for a fictional place with no worldbook cli
 test('every manual refresh calls the configured model; errors preserve saved climate', async () => {
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam is in 上海.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         assert.equal(f.calls(),1);
@@ -1202,6 +1239,8 @@ test('model research rejects incomplete climates, invalid types and conflicting 
 test('saved Chicago survives null, missing, blank and translated cities across repeated refreshes', async () => {
     const f = setup([marker('2026-01-01 10:00\nSam has arrived in Chicago.', '芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok, true);
         for (const city of [null, undefined, '  ', 'Chicago, IL', 'Chicago, Illinois', 'CHICAGO']) {
@@ -1223,6 +1262,8 @@ test('saved Chicago survives null, missing, blank and translated cities across r
 test('missing city does not hide a broken climate and failed refresh keeps prior records', async () => {
     const f = setup([marker('2026-01-01 10:00\nSam arrived in Chicago.', '芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok, true);
         const previous = structuredClone(await f.state());
@@ -1265,6 +1306,8 @@ test('scenario city is included in first model research without requiring a mark
 test('planned travel and unsupported model relocation cannot replace a persisted city', async () => {
     const f = setup([marker('2026-01-01 10:00\nSam is staying in Chicago.', '芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok, true);
         f.c.chat.push({mes:'2026-01-02 10:00\nSam plans to visit New York next week.',is_user:false});
@@ -1286,6 +1329,8 @@ test('planned travel and unsupported model relocation cannot replace a persisted
 test('confirmed new-story arrival moves city and weather atomically, with deletion rollback', async () => {
     const f = setup([marker('2026-01-01 10:00\nSam arrived in Chicago.', '芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok, true);
         const old = structuredClone((await f.state()).weather['芝加哥']);
