@@ -2,7 +2,7 @@ import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
 import { walletCurrency, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?v=1.2';
 import { readStoryClock } from './story-clock.js?v=1.2';
-import { sameWeatherCity } from './weather-model.js?v=1.2.91';
+import { sameWeatherCity } from './weather-model.js?v=1.2.92';
 const foodText=(s,n=200)=>typeof s==='string'?s.trim().slice(0,n):'';
 const GEO_BRANCH_SUFFIX=/^(.+?)\s*[（(]\s*([^（）()]{1,50}店)\s*[）)]$/u;
 const NON_GEO_BRANCH=/^(?:总店|旗舰店|直营店|官方店|专卖店|自营店|体验店|品牌店|网店|本店|老店)$/u;
@@ -19,7 +19,7 @@ const branchArea=(value,city='')=>{
 };
 // Only the displayed store name follows Weather location, never delivery.
 export function foodShopName(shop,state){
-    const parsed=splitFoodShopName(shop?.name),city=foodText(state?.location?.current?.city,60);
+    const parsed=splitFoodShopName(shop?.name),city=foodText(state?.location?.current?.manual === true ? state.location.current.city : null,60);
     const hasBranch=shop?.hasLocationBranch===true||parsed.place!==null;
     if(!hasBranch||!city)return parsed.name;
     if(shop?.hasLocationBranch===true){
@@ -136,7 +136,7 @@ export function createFood({memory,phone,getContext,getSettings,paymentRequest})
             const q=foodText(query,300);if(!q)throw Error('请输入想吃的菜系或菜品。');
             const currency=walletCurrency(state);
             const economy={currency,persona:!currency?getContext().powerUserSettings?.persona_description:undefined};
-            const weatherCity=foodText(state.location?.current?.city,60)||null;
+            const weatherCity=foodText(state.location?.current?.manual === true ? state.location.current.city : null,60)||null;
             const prompt=getSettings().prompts.general+'\n'+getSettings().prompts.food+'\n'+getSettings().prompts.foodShopping+
                 '\n当前任务：榴莲外卖店铺搜索。'+(currency?'返回结果的 currency 字段必须是 '+currency+'，所有菜品一律按 '+currency+' 定价，不做汇率换算。':'尚未建立账本，请按剧情所在地和人物背景确定一个合理币种，写入返回结果的 currency 字段；结算前需要先建立账本并重新搜索。')+'想吃的东西：'+JSON.stringify(q)+'。当前资料：'+JSON.stringify(economy)+'。天气 App 当前已确认城市（外卖店名地理信息唯一来源）：'+JSON.stringify(weatherCity)+'。此地点仅供店名和分店标识使用，不是配送目的地，不修改之后选择送给谁、送到哪里的流程。'+
                 '\n一次性返回 '+FOOD_SHOP_COUNT+' 家符合当前世界观、地域、年代的店铺，每家 '+FOOD_MENU_MIN+'—'+FOOD_MENU_MAX+' 道独立菜品，每家覆盖至少 '+FOOD_CATEGORY_MIN+' 个有实际区别的品类；不能用同一种菜的口味、配料或烹饪变化凑数量；同一家店内菜品名称不得重复。每家店有各自的经营特色、菜系和价格档次，符合人物消费水平。菜单描述保持简短，不写买家评价。'+

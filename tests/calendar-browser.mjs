@@ -31,7 +31,32 @@ try {
     p.on('pageerror',e=>errors.push(e.message));p.on('response',r=>{if(r.status()>=400)failedAssets.push(r.url());});
     await p.route('**/*',r=>{if(r.request().url().startsWith(origin))return r.continue();external.push(r.request().url());return r.abort();});
     const open=async()=>{await p.locator('.pp-launcher').click();await p.locator('[data-app="calendar"]').click();};
-    await p.goto(origin);await open();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
+    await p.goto(origin);
+    // The Weather city must be explicitly confirmed by user long-press. A
+    // narrative durian-location marker is no longer a valid location source.
+    await p.locator('.pp-launcher').click();
+    await p.locator('[data-app="weather"]').click();
+    await p.locator('[data-press="weather-location"]').dispatchEvent('contextmenu');
+    await p.getByRole('menuitem',{name:'修改地点'}).click();
+    await p.locator('.pp-weather-location-editor input').fill('东京');
+    // The long-press menu intentionally suppresses stray clicks for 900ms;
+    // a fast headless form submission must happen after that guard expires.
+    await p.waitForTimeout(1000);
+    await p.locator('.pp-weather-location-editor [type="submit"]').click();
+    try { await p.locator('.pp-weather-loc b').getByText('东京').waitFor({timeout:2500}); }
+    catch (error) {
+        const diagnostic={
+            city:await p.locator('.pp-weather-loc b').allTextContents(),
+            status:await p.locator('.pp-weather-location-editor [role="status"]').allTextContents(),
+            dialogOpen:await p.locator('.pp-weather-location-editor[open]').count(),
+            journal:await p.evaluate(()=>c.chatMetadata?.durian_phone_history?.events?.at(-1)?.changes),
+            calls:await p.evaluate(()=>window.calls),
+        };
+        throw new Error('weather manual edit diagnostic: '+JSON.stringify(diagnostic),{cause:error});
+    }
+    await p.getByRole('button',{name:'回到桌面',exact:true}).click();
+    // Already on the phone home screen: clicking the launcher would be intercepted by the open phone.
+    await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
     await p.screenshot({path:resolve(evidence,'calendar-initialize-390.png')});
     await p.evaluate(()=>window.fail=true);await p.locator('[data-calendar-action="refresh"]').click();await p.getByText(/日历初始化失败/).waitFor();assert.equal(await p.locator('.pp-cal-grid').count(),0);
     await p.evaluate(()=>{window.fail=false;window.delay=400;});await p.locator('[data-calendar-action="refresh"]').click();await p.getByText('正在整理地区节日资料…').waitFor();await p.locator('.pp-cal-grid').waitFor();assert.equal(await p.locator('.pp-cal-day').count(),35);
@@ -57,8 +82,22 @@ try {
     await p.getByRole('button',{name:'日历设置',exact:true}).click();await p.getByRole('button',{name:'编辑 相识纪念日',exact:true}).click();p.once('dialog',d=>d.accept());await p.getByRole('button',{name:'删除事件',exact:true}).click();await p.locator('.pp-cal-settings').waitFor();assert.equal(await p.getByRole('button',{name:'编辑 相识纪念日',exact:true}).count(),0);
     await p.emulateMedia({reducedMotion:'reduce'});await p.getByRole('button',{name:'返回月历',exact:true}).click();assert.ok(await p.locator('.pp-cal-number').first().evaluate(el=>getComputedStyle(el).transitionDuration==='0s'));
     // Offline bundle parses and opens the calendar without network/model access.
-    await p.goto(origin+'/preview.html');await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();
+    await p.goto(origin+'/preview.html'); // preview bootstraps with the phone already open
+    await p.waitForTimeout(250);
+    if(!(await p.locator('[data-app="calendar"]').count())) {
+        throw new Error('offline preview diagnostic: '+JSON.stringify({
+            errors,failedAssets,external,
+            launcher:await p.locator('.pp-launcher').count(),
+            dialog:await p.locator('.pp-phone').count(),
+            buttons:await p.locator('[data-app]').evaluateAll(nodes=>nodes.map(n=>n.dataset.app)),
+            visible:await p.locator('.pp-phone').first().isVisible().catch(()=>false),
+        }));
+    }
+    await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();
     for(const app of ['daily','weather','x','wechat']){await p.getByRole('button',{name:'回到桌面',exact:true}).click();await p.locator('[data-app="'+app+'"]').click();}
-    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(failedAssets,[]);
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    // The offline preview has no SillyTavern host /scripts/openai.js module;
+    // its optional local probe may 404 without affecting any bundled asset.
+    assert.deepEqual(failedAssets.filter(url=>new URL(url).pathname!=='/scripts/openai.js'),[]);
     console.log('PASS calendar: 320/360/390/430px; init/loading/failure; CRUD/repeat; persistence; month navigation; countdown; actual narrative dedup; reduced motion; local assets; offline preview.');
 } finally {await browser.close();server.close();}

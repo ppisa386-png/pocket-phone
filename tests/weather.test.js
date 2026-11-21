@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { createPhoneMemory } from '../src/memory.js';
 import { weatherResearchPrompt, validateWeatherResearch, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from '../src/weather-model.js';
 import { createPhoneService } from './phone-fixture.js';
-import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate, WEATHER_LOCATION_RULE } from '../src/weather.js';
+import { createWeather, climateFor, initialWeather, advanceWeather, weatherAt, weatherType, weatherExtreme, weatherScene, weatherWarning, environmentMetrics, weatherBackground, sceneBackground, buildForecast, weatherDayPhases, precipitationPlan, monthDayOf, locationKind, worldClimate } from '../src/weather.js';
 import { buildStoryPhonePrompt } from '../src/story-phone.js';
 import { COMMUNICATION_LANGUAGE_RULE } from '../src/communication-language.js';
 import { normalizeSettings } from '../src/config.js';
@@ -35,22 +35,21 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
         eventSource: bus, event_types: Object.fromEntries(['CHAT_CHANGED', 'GENERATION_STARTED', 'GENERATION_ENDED', 'MESSAGE_EDITED', 'MESSAGE_DELETED'].map(n => [n, n])),
         generateQuietPrompt: async o => {
             calls++; prompt = o.quietPrompt;
-            let city = [...c.chat].reverse().map(row=>/<!--durian-location:{"city":"([^"]+)"}/.exec(row.mes||'')?.[1]).find(Boolean);
-            if (!city && c.chat.some(row=>/位置：东京/.test(row.mes||''))) city = '东京';
-            const requestedCity = /当前确认的地点："([^"]+)"/.exec(prompt)?.[1];
-            const suppliedCity = response && typeof response === 'object' && Object.hasOwn(response,'city') ? response.city : null;
-            city = suppliedCity || city || requestedCity;
+            const city = /手动地点："([^"]+)"/.exec(prompt)?.[1] || null;
+            const suppliedCity = response && typeof response === 'object' && Object.hasOwn(response,'city') ? response.city : city;
             if (typeof response === 'string') return response;
             if (!city) return JSON.stringify({city:null});
+            const chosenRandom = /随机选好的气候类型 "([a-z]+)"/.exec(prompt)?.[1];
             const world = worldClimate(city,c);
-            const template = world || climateFor(city);
+            const template = world || (['云京城','无名小城','雾港城'].includes(city) && chosenRandom
+                ? { archetype:chosenRandom, south:false } : climateFor(city));
             const monthlyTemp = Array.from({length:12},(_,i)=>{
                 const date = '2026-' + String(i+1).padStart(2,'0') + '-15';
                 return initialWeather(template,{day:dateDay(date),hour:14},()=>.5).temp-2;
             });
             const origin = world ? 'fictional_worldbook' :
                 ['云京城','无名小城','雾港城'].includes(city) ? 'fictional_random':'real_knowledge';
-            const generated = {city,origin, climate:{
+            const generated = {city:suppliedCity,origin, climate:{
                 archetype:template.archetype,monthlyTemp,monthlyRainChance:Array(12).fill(.4),
                 typicalWind:2.5,typicalHumidity:70,diurnal:8,south:!!template.south,
                 arid:['bwh','bsh'].includes(template.archetype),typhoon:false,alwaysNight:false},
@@ -68,45 +67,52 @@ function setup(chat = [{ mes: '2026-01-01 10:00\n开场，暂未提及城市。'
 }
 
 const marker = (prose, city) => ({ mes: prose + `<!--durian-location:{"city":"${city}"}-->`, is_user: false });
+async function chooseCity(f, city) {
+    const old = (await f.state()).location?.current;
+    const previous = old?.manual === true ? old.city : '';
+    const result = await f.weather.editLocation(city, previous);
+    assert.equal(result.ok, true, result.error);
+}
 
-test('weather schema declares all data fields while allowing unknown-city and evidence responses', () => {
+
+test('weather schema requires an exact manually entered city and has no migration field', () => {
     const known=weatherResearchSchema('芝加哥').value, unknown=weatherResearchSchema().value;
     assert.deepEqual(known.required,['city','origin','climate','weather']);
-    assert.deepEqual(unknown.required,['city']);
-    assert.deepEqual(known.properties.city.type,['string','null']);
-    for(const name of ['climate','weather','locationChange']) {
+    assert.deepEqual(unknown.required,known.required);
+    assert.equal(known.properties.city.type,'string');
+    assert.deepEqual(known.properties.city.enum,['芝加哥']);
+    assert.equal(Object.hasOwn(known.properties,'locationChange'),false);
+    for(const name of ['climate','weather'])
         assert.deepEqual(known.properties[name].required,Object.keys(known.properties[name].properties));
-    }
     for(const name of ['monthlyTemp','monthlyRainChance']) {
         const field=known.properties.climate.properties[name];
         assert.equal(field.minItems,12);assert.equal(field.maxItems,12);assert.equal(field.items.type,'number');
     }
-    for(const city of [null,'芝加哥']) assert.throws(()=>validateWeatherResearch({},city),e=>e.code==='WEATHER_EMPTY_RESULT');
-    assert.deepEqual(validateWeatherResearch({city:null}),{city:null});
+    assert.throws(()=>validateWeatherResearch({},'芝加哥'),e=>e.code==='WEATHER_EMPTY_RESULT');
+    assert.throws(()=>validateWeatherResearch({city:null},null),/长按天气地点/);
 });
-
-
 test('weather missing fields are repairable, while invalid values and conflicting cities remain hard failures', () => {
     const sample = {city:'莫斯科',origin:'real_knowledge',
         climate:{archetype:'dfb',monthlyTemp:Array(12).fill(4),monthlyRainChance:Array(12).fill(.3),
             typicalWind:3,typicalHumidity:70,diurnal:8,south:false,arid:false,typhoon:false,alwaysNight:false},
         weather:{type:'overcast',temp:4,wind:2,humidity:86}};
     const missingClimate = {...sample}; delete missingClimate.climate;
-    assert.throws(() => validateWeatherResearch(missingClimate), error =>
+    assert.throws(() => validateWeatherResearch(missingClimate,'莫斯科'), error =>
         error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('climate'));
-    assert.throws(() => validateWeatherResearch({...sample, climate:{...sample.climate,monthlyTemp:[4]}}), error =>
+    assert.throws(() => validateWeatherResearch({...sample, climate:{...sample.climate,monthlyTemp:[4]}},'莫斯科'), error =>
         error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('climate.monthlyTemp'));
-    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,humidity:null}}), error =>
+    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,humidity:null}},'莫斯科'), error =>
         error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('weather.humidity'));
-    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,temp:100}}), error =>
+    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,temp:100}},'莫斯科'), error =>
         error.code === 'WEATHER_RESEARCH_INVALID');
-    assert.throws(() => validateWeatherResearch({...sample,origin:'not_a_kind'}), error =>
+    assert.throws(() => validateWeatherResearch({...sample,origin:'not_a_kind'},'莫斯科'), error =>
         error.code === 'WEATHER_RESEARCH_INVALID');
 });
 
 test('first refresh with city and current weather but no climate repairs once and saves atomically', async () => {
     const f = setup([{mes:'2026-01-01 10:00\n【状态栏】位置：莫斯科',is_user:false}]);
     try {
+        await chooseCity(f,'莫斯科');
         const partial={city:'莫斯科',origin:'real_knowledge',weather:{type:'overcast',temp:4,wind:2,humidity:86}};
         const complete={...partial,climate:{archetype:'dfb',monthlyTemp:[-9,-8,-2,6,14,18,21,19,13,6,-1,-6],
             monthlyRainChance:[.3,.3,.3,.35,.4,.4,.45,.45,.4,.4,.35,.3],
@@ -131,6 +137,7 @@ test('first refresh with city and current weather but no climate repairs once an
 test('two incomplete weather replies never overwrite an existing location or forecast', async () => {
     const f=setup([marker('2026-01-01 10:00\nSam is in Chicago.','芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         const before=structuredClone(await f.state());
@@ -147,6 +154,7 @@ test('two incomplete weather replies never overwrite an existing location or for
 test('host weather output contract and empty-object rejection preserve old weather in one request', async () => {
     const f=setup([marker('2026-10-31 16:28\nSam is in Chicago.','芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
         assert.equal((await f.weather.refresh()).ok,true);
         assert.ok(f.prompt().includes(WEATHER_OUTPUT_CONTRACT));
         const before=structuredClone((await f.state()).weather),calls=f.calls();
@@ -157,23 +165,24 @@ test('host weather output contract and empty-object rejection preserve old weath
     } finally {f.close();}
 });
 
-test('manual refresh samples the first weather locally for the marked city with its real climate and saved seed', async () => {
+test('weather refuses automatic detection and researches only a user-entered city', async () => {
     const f = setup(); try {
         assert.equal(f.weather.report(await f.state()).status, 'no-location');
         const refused = await f.weather.refresh();
         assert.equal(refused.ok, false);
-        assert.match(refused.error, /你太神秘了/); // 探测无果才失败，提示保持剧情内口吻
-        assert.equal(f.calls(), 1);
-        assert.match(f.prompt(), /目前实际所在的地点/);
-        assert.match(f.prompt(), /"city":null/);
-        assert.equal(f.state().location?.current, undefined); // 探测无果不写地点
+        assert.match(refused.error, /长按天气地点/);
+        assert.equal(f.calls(), 0, 'no manual city: no model request');
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
         await f.memory.read();
+        assert.equal(f.weather.report(await f.state()).status,'no-location', 'narrative marker must not locate');
+        await chooseCity(f,'上海');
         const pending = f.weather.report(await f.state());
         assert.equal(pending.status, 'pending'); assert.equal(pending.city, '上海');
         const result = await f.weather.refresh();
-        assert.equal(result.ok, true);
+        assert.equal(result.ok, true,result.error);
         assert.deepEqual(result.value, { refreshed: true });
+        assert.match(f.prompt(),/唯一有效地点是 user 在天气 App 长按输入并保存的："上海"/);
+        assert.doesNotMatch(f.prompt(),/判断 user 目前实际所在/);
         const state = await f.state();
         const record = state.weather['上海'];
         assert.equal(record.city, '上海');
@@ -185,54 +194,49 @@ test('manual refresh samples the first weather locally for the marked city with 
         const info = f.weather.report(state);
         assert.equal(info.status, 'ok');
         assert.equal(info.report.date, '2026-01-01'); assert.equal(info.report.time, '10:00');
-        assert.equal(info.report.label, weatherType(record.state.type));
         assert.equal(info.report.temp, record.state.temp);
-        assert.ok(info.report.wind >= 0 && info.report.wind <= 12);
-        assert.ok(info.report.humidity >= 12 && info.report.humidity <= 99);
     } finally { f.close(); }
 });
-
-test('refresh without a marker probes the recent prose and status bars, saves the found city and rolls back with its floor', async () => {
-    const f = setup([
-        { mes: '2026-01-01 10:00\n【状态栏】位置：东京·新宿 ｜ 时间 10:00\n开场。', is_user: false },
-        { mes: '2026-01-02 09:00\nSam 提到计划下周去大阪旅行。', is_user: false },
+test('story status bars and model cannot set an unset manual weather location', async () => {
+    const f=setup([
+        { mes:'2026-01-01 10:00\n【状态栏】位置：东京·新宿', is_user:false },
+        marker('2026-01-01 11:00\nSam visited Osaka.', '大阪'),
     ]); try {
-        f.reply({ city: '东京' });
-        const result = await f.weather.refresh();
-        assert.equal(result.ok, true, result.error);
-        assert.equal(f.calls(), 1); // 一次探测请求；天气采样仍是本地随机
-        assert.match(f.prompt(), /目前实际所在的地点/);
-        assert.match(f.prompt(), /近期剧情及状态栏/);
-        assert.match(f.prompt(), /"user":"Sam"/);
-        assert.match(f.prompt(), /位置：东京·新宿/); // 历史正文与状态栏进入探测上下文
-        assert.match(f.prompt(), /计划下周去大阪/); // 干扰项也在上下文里，由提示词排除
-        assert.match(f.prompt(), /"city":"城市"/);
-        const state = await f.state();
-        assert.equal(state.location.current.city, '东京'); // 与标记路径写同一条位置记录
-        assert.equal(state.location.current.sourceIndex, 1);
-        assert.equal(state.weather['东京'].city, '东京'); // 同一次提交顺带完成天气采样
-        assert.equal(f.weather.report(state).status, 'ok');
-        // 探测到的地点锚定在当时的最新楼层，删除楼层随剧情回退
-        f.c.chat.pop(); f.c.eventSource.emit('MESSAGE_DELETED'); await f.memory.read();
-        const rolled = await f.state();
-        assert.equal(rolled.location?.current, undefined);
-        assert.equal(rolled.weather?.['东京'], undefined);
+        f.reply({city:'东京'});
+        const failure=await f.weather.refresh();
+        assert.equal(failure.ok,false);
+        assert.equal(f.calls(),0);
+        assert.equal((await f.state()).location?.current,undefined);
+        await chooseCity(f,'伦敦');
+        const rejected=await f.weather.refresh();
+        assert.equal(rejected.ok,false);
+        assert.match(rejected.error,/手动输入的天气地点不一致/);
+        assert.equal((await f.state()).location.current.city,'伦敦');
+        assert.equal((await f.state()).weather?.['东京'],undefined);
+        f.reply(undefined);
+        assert.equal((await f.weather.refresh()).ok,true);
+        assert.equal((await f.state()).weather['伦敦'].city,'伦敦');
     } finally { f.close(); }
 });
-test('an existing marker path still uses one model request for weather research', async () => {
-    const f = setup(); try {
+test('narrative markers never override the saved manual city', async () => {
+    const f=setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
         await f.memory.read();
-        const result = await f.weather.refresh();
-        assert.equal(result.ok, true, result.error);
-        assert.equal(f.calls(), 1); // 已识别地点仍调用同一次模型天气研究请求
-        assert.equal((await f.state()).location.current.city, '上海');
+        await chooseCity(f,'巴黎');
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,true,result.error);
+        assert.equal(f.calls(),1);
+        assert.equal((await f.state()).location.current.city,'巴黎');
+        assert.equal((await f.state()).weather?.['上海'],undefined);
+        f.c.chat.push(marker('2026-01-01 11:00\nSam arrived in Tokyo.','东京'));
+        await f.memory.read();
+        assert.equal((await f.state()).location.current.city,'巴黎');
     } finally { f.close(); }
 });
-
 test('weather location can be edited from the shared location record without a model call',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam has arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         const oldWeather=(await f.state()).weather['上海'],beforeCalls=f.calls();
@@ -263,6 +267,7 @@ test('weather location can be edited from the shared location record without a m
 test('editing the location rejects stale names, invalid inputs and rolls back when the story floor is removed',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam has arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.editLocation('北京','上海')).ok,true);
         const bad=await f.weather.editLocation('<fake>','北京');
@@ -318,6 +323,7 @@ test('fictional places get a stable locally derived climate that the first refre
     assert.ok(weatherType(initialWeather(first, { day: dateDay('2026-04-08'), hour: 15 }, freshRng(3)).type) !== '未知');
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nThe caravan reached 云京城 at last.', '云京城'));
+        await chooseCity(f,'云京城');
         await f.memory.read();
         await f.weather.refresh();
         const record = (await f.state()).weather['云京城'];
@@ -423,66 +429,59 @@ test('a zero-rain climate stays dry hourly, a wet climate rains, and observed ra
         'observed rain does not make the next day wet when its climate rate is zero');
 });
 
-test('moving to another city re-points the app to the new place while the old record survives', async () => {
+test('only another manual edit changes the weather city; old records survive', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
-        await f.memory.read();
-        await f.weather.refresh();
-        assert.equal(f.weather.report(await f.state()).status, 'ok');
+        await chooseCity(f,'上海');
+        assert.equal((await f.weather.refresh()).ok,true);
         f.c.chat.push(marker('2026-01-02 12:00\nSam took the train to Tokyo.', '东京'));
         await f.memory.read();
-        const state = await f.state();
-        const info = f.weather.report(state);
-        assert.equal(info.status, 'pending'); assert.equal(info.city, '东京');
-        assert.equal(weatherBackground(state, f.c.chat), '');
-        assert.ok(state.weather['上海'], 'the previous city keeps its record');
-        await f.weather.refresh();
-        const next = await f.state();
-        assert.ok(next.weather['东京']);
-        assert.equal(f.weather.report(next).status, 'ok');
-        assert.equal(f.weather.report(next).report.time, '12:00');
+        assert.equal(f.weather.report(await f.state()).city,'上海','story arrival must not relocate');
+        await chooseCity(f,'东京');
+        const pending=await f.state();
+        assert.equal(f.weather.report(pending).status,'pending');
+        assert.ok(pending.weather['上海']);
+        assert.equal((await f.weather.refresh()).ok,true);
+        assert.equal(f.weather.report(await f.state()).city,'东京');
     } finally { f.close(); }
 });
-
-test('every narrative generation receives the scene rule and current weather, gated by the four consumer apps', () => {
-    const day = dateDay('2026-01-01');
-    const chat = [{ mes: '2026-01-01 10:00\n在上海的一天。', is_user: false }];
-    const state = { location: { current: { city: '上海' } }, weather: { 上海: { city: '上海', climate: climateFor('上海'), seed: 's', hour: day * 24 + 10, date: '2026-01-01', state: { type: 'rain', temp: 8, wind: 3, humidity: 80 } } } };
-    const background = weatherBackground(state, chat);
-    assert.match(background, /当前位置：上海；当前剧情时间：2026-01-01 10:00。/);
-    assert.match(background, /今天（1月1日）：/);
-    assert.match(background, /明天（1月2日）：/);
-    assert.equal(weatherBackground({ ...state, weather: {} }, chat), '');
-    assert.equal(weatherBackground(null, chat), '');
-    const all = sceneBackground(state, chat, { apps: { weather: true, daily: true, assets: true } });
-    assert.ok(all.startsWith(WEATHER_LOCATION_RULE));
-    assert.match(all, /今天（1月1日）：/);
-    assert.equal(sceneBackground(state, chat, { apps: { weather: false, daily: true, assets: false } }), WEATHER_LOCATION_RULE);
-    assert.equal(sceneBackground(state, chat, { apps: { weather: false, daily: false, assets: false } }), '');
-    assert.ok(sceneBackground(state, chat, undefined).startsWith(WEATHER_LOCATION_RULE), 'missing settings default to the shared rule');
-    assert.equal(sceneBackground({ ...state, location: {} }, chat, { apps: { weather: true } }), WEATHER_LOCATION_RULE);
-    assert.equal(sceneBackground(state, [{ mes: '没有日期的一天。', is_user: false }], { apps: { weather: true } }), WEATHER_LOCATION_RULE, 'unknown story time still injects only the rule');
+test('narrative weather background uses only manual saved weather, not marker instructions', () => {
+    const day=dateDay('2026-01-01');
+    const chat=[{mes:'2026-01-01 10:00\n在上海的一天。',is_user:false}];
+    const state={location:{current:{city:'上海',manual:true}},weather:{上海:{
+        city:'上海',climate:climateFor('上海'),seed:'s',hour:day*24+10,date:'2026-01-01',
+        state:{type:'rain',temp:8,wind:3,humidity:80}}}};
+    assert.match(weatherBackground(state,chat),/当前位置：上海/);
+    assert.match(weatherBackground(state,chat),/今天（1月1日）/);
+    assert.match(weatherBackground(state,chat),/明天（1月2日）/);
+    assert.equal(weatherBackground({...state,location:{current:{city:'上海'}}},chat),'');
+    assert.equal(weatherBackground({...state,weather:{}},chat),'');
+    assert.match(sceneBackground(state,chat,{apps:{weather:true,daily:true,assets:true}}),/当前位置：上海/);
+    assert.doesNotMatch(sceneBackground(state,chat,{apps:{weather:true}}),/durian-location/);
+    assert.equal(sceneBackground(state,chat,{apps:{weather:false,daily:true}}),'');
+    assert.equal(sceneBackground({location:{}},chat,undefined),'');
+    assert.equal(sceneBackground(state,[{mes:'没有日期的一天。',is_user:false}],{apps:{weather:true}}),'');
 });
-
-test('story-phone prompt carries the scene block before the language rule and honours the app switches', () => {
-    const day = dateDay('2026-01-01');
-    const chat = [{ mes: '2026-01-01 10:00\n在上海的一天。', is_user: false }];
-    const state = { contacts: {}, calls: {}, messages: {}, profiles: {}, location: { current: { city: '上海' } }, weather: { 上海: { city: '上海', climate: climateFor('上海'), seed: 's', hour: day * 24 + 10, date: '2026-01-01', state: { type: 'rain', temp: 8, wind: 3, humidity: 80 } } } };
-    const context = { name1: 'Sam', characterId: 0, characters: [{ name: 'Alex', avatar: 'alex.png' }] };
-    const prompt = buildStoryPhonePrompt(state, context, normalizeSettings({}), chat);
-    assert.match(prompt, /durian-location/);
-    assert.match(prompt, /当前位置：上海；当前剧情时间：/);
+test('story-phone prompt carries weather but never asks for location markers', () => {
+    const day=dateDay('2026-01-01');
+    const chat=[{mes:'2026-01-01 10:00\n在上海的一天。',is_user:false}];
+    const state={contacts:{},calls:{},messages:{},profiles:{},location:{current:{city:'上海',manual:true}},
+        weather:{上海:{city:'上海',climate:climateFor('上海'),seed:'s',hour:day*24+10,
+            date:'2026-01-01',state:{type:'rain',temp:8,wind:3,humidity:80}}}};
+    const context={name1:'Sam',characterId:0,characters:[{name:'Alex',avatar:'alex.png'}]};
+    const prompt=buildStoryPhonePrompt(state,context,normalizeSettings({}),chat);
+    assert.doesNotMatch(prompt,/durian-location/);
+    assert.match(prompt,/当前位置：上海；当前剧情时间：/);
     assert.ok(prompt.endsWith(COMMUNICATION_LANGUAGE_RULE));
-    const noWeather = buildStoryPhonePrompt(state, context, normalizeSettings({ apps: { weather: false } }), chat);
-    assert.match(noWeather, /durian-location/);
-    assert.doesNotMatch(noWeather, /当前位置：上海/);
-    const allOff = buildStoryPhonePrompt(state, context, normalizeSettings({ apps: { weather: false, daily: false, assets: false, calendar: false } }), chat);
-    assert.doesNotMatch(allOff, /durian-location/);
+    const noWeather=buildStoryPhonePrompt(state,context,normalizeSettings({apps:{weather:false}}),chat);
+    assert.doesNotMatch(noWeather,/durian-location|当前位置：上海/);
+    const allOff=buildStoryPhonePrompt(state,context,normalizeSettings({apps:{weather:false,daily:false,assets:false,calendar:false}}),chat);
+    assert.doesNotMatch(allOff,/durian-location/);
 });
-
 test('with the weather app switched off the service refuses to refresh and no state is saved', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const settings = normalizeSettings({ retries: 0, apps: { weather: false } });
         const phone = createPhoneService({ memory: f.memory, getContext: () => f.c, getSettings: () => settings });
@@ -498,6 +497,7 @@ test('with the weather app switched off the service refuses to refresh and no st
 test('weather survives archive reload and later clocks evolve it without re-rolling', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const before = await f.state(), info = f.weather.report(before);
@@ -519,6 +519,7 @@ test('weather survives archive reload and later clocks evolve it without re-roll
 test('without a story time the app falls back to the saved weather from the last refresh', async () => {
     const f = setup([{ mes: '开场，本楼没有日期。', is_user: false }]); try {
         f.c.chat.push(marker('Sam settled in Shanghai.<!--durian-location:{"city":"上海"}-->', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const pending = f.weather.report(await f.state());
         assert.equal(pending.status, 'pending');
@@ -539,6 +540,7 @@ test('without a story time the app falls back to the saved weather from the last
 test('the weather panel renders the report and refresh reports success', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         let current = await f.state();
@@ -582,12 +584,13 @@ const findSeed = pred => {
     }
     throw new Error('no deterministic seed matched the layout');
 };
-const forecastState = record => ({ location: { current: { city: record.city } }, weather: { [record.city]: record } });
+const forecastState = record => ({ location: { current: { city: record.city, manual: true } }, weather: { [record.city]: record } });
 const forecastChat = date => [{ mes: date + ' 10:00\n在城市里的一天。', is_user: false }];
 
 test('manual refresh yields the full seven-day window with story dates, weekdays and day stats', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const info = f.weather.report(await f.state());
@@ -612,6 +615,7 @@ test('manual refresh yields the full seven-day window with story dates, weekdays
 test('the forecast is climate-bound and never re-rolls on reopen, reload or re-report', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Harbin.', '哈尔滨'));
+        await chooseCity(f,'哈尔滨');
         await f.memory.read();
         await f.weather.refresh();
         const first = f.weather.report(await f.state());
@@ -631,6 +635,7 @@ test('the forecast is climate-bound and never re-rolls on reopen, reload or re-r
 test('past midnight the forecast slides: tomorrow becomes today and a new seventh day appears', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const before = f.weather.report(await f.state()).forecast;
@@ -649,6 +654,7 @@ test('past midnight the forecast slides: tomorrow becomes today and a new sevent
 test("hourly evolution never breaks today's summary and the current reading sits on the hourly curve", async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const before = f.weather.report(await f.state()).forecast;
@@ -702,6 +708,7 @@ test('an extreme today or tomorrow keeps its full warning detail inside the day 
 test('after one model research call, forecast and warning rendering make zero further calls',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         assert.equal(f.calls(),1);
@@ -717,6 +724,7 @@ test('after one model research call, forecast and warning rendering make zero fu
 test('deleted floors remove the record together with its forecast window', async () => {
     const f = setup(); try {
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         assert.equal(f.weather.report(await f.state()).forecast.days.length, 7);
@@ -754,6 +762,7 @@ test('worldbook climate settings drive a fictional city weather profile', async 
     try {
         f.c.characters[0] = { name: 'Alex', avatar: 'alex.png', data: { character_book: { entries: [{ enabled: true, content: '云京城地处热带，全年炎热，夏季多暴雨。' }] } } };
         f.c.chat.push(marker('2026-10-15 10:00\nThe caravan reached 云京城.', '云京城'));
+        await chooseCity(f,'云京城');
         await f.memory.read();
         await f.weather.refresh();
         const record = (await f.state()).weather['云京城'];
@@ -829,6 +838,7 @@ test('all four weather photographs are bundled real WebP files, not embedded pre
 test('24 real forecast hours continue across midnight and seven-day ranges use saved model-free data',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const info=f.weather.report(await f.state()),clock=info.clock;
         assert.equal(info.forecast.days.length,7);
@@ -856,6 +866,7 @@ test('seven-day bars clip one shared temperature gradient instead of restarting 
 test('Window Weather Diary keeps weather actions, story date, forecast structure and five local window scenes',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state();
         const base=f.weather.report(state);
@@ -894,7 +905,7 @@ test('Window Weather Diary keeps weather actions, story date, forecast structure
         }
         assert.equal(sceneBackdrop('rain','night').includes('rain.webp'),true);
         const unavailable=createWeatherPanel({adapter:{weather:f.weather},getView:()=>({...state,location:null,busy:false}),redraw(){},now:()=>new Date(2026,4,1,9)});
-        assert.match(unavailable.html(),/尚未标记位置/);
+        assert.match(unavailable.html(),/尚未设置地点/);
         assert.match(unavailable.html(),/data-weather-action="refresh"/);
     }finally{f.close();}
 });
@@ -920,6 +931,7 @@ test('story date label uses the narrative calendar rather than the device date',
 test('all current weather warnings render after the illustration and before the 24-hour forecast',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state(),base=f.weather.report(state);
         const warnings=[
@@ -992,6 +1004,7 @@ test('weather reports expose stable UV/AQI readings and the weather panel render
     const f = setup();
     try {
         f.c.chat.push(marker('2026-01-01 10:00\\nSam arrived in Shanghai.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         await f.weather.refresh();
         const state = await f.state();
@@ -1053,6 +1066,7 @@ test('continuous heavy-to-light rain has a coherent wet forecast for photography
 test('rain forecast controls header image during a brief cloudy break without changing now icon',async()=>{
     const f=setup();try{
         f.c.chat.push(marker('2026-07-01 07:00\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state(),info=f.weather.report(state);
         const rainy={...info,report:{...info.report,type:'partly',label:'多云'},
@@ -1087,6 +1101,7 @@ test('partly-cloudy forecast icons display both sun and cloud instead of full su
     assert.match(partly,/M26 74/);
     const f=setup();try{
         f.c.chat.push(marker('2026-07-01 07:00\\nSam arrived in Shanghai.','上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();await f.weather.refresh();
         const state=await f.state(),info=f.weather.report(state);
         const mock={...info,forecast:{...info.forecast,days:[{...info.forecast.days[0],
@@ -1104,6 +1119,7 @@ test('all refresh categories are decided by the model, never by built-in city or
             description:'旧世界旅行者',
             character_book:{entries:[{enabled:true,content:'架空上海是终年冰雪的浮空城'}]}}};
         f.c.chat.push(marker('2026-02-01 08:00\nSam is here.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         const snow = {city:'上海',origin:'fictional_worldbook',
             climate:{archetype:'et',monthlyTemp:Array(12).fill(-20),
@@ -1119,38 +1135,38 @@ test('all refresh categories are decided by the model, never by built-in city or
         assert.equal(record.climate.monthlyTemp[0],-20);
         assert.equal(record.state.type,'heavysnow');
         assert.equal(record.state.temp,-22,'model-supplied current weather is saved, not locally re-rolled');
-        assert.match(f.prompt(),/当前确认的地点："上海"/);
+        assert.match(f.prompt(),/手动地点："上海"/);
         assert.match(f.prompt(),/User 使用的面具/);
         assert.match(f.prompt(),/旧世界旅行者/);
         assert.match(f.prompt(),/架空上海是终年冰雪的浮空城/);
-        assert.match(f.prompt(),/已经激活的全局世界书/);
+        assert.match(f.prompt(),/实际激活的全局世界书/);
         assert.doesNotMatch(f.prompt(),/2016-01-01|2025-12-31|Open-Meteo|geocoding-api/);
         assert.equal(record.climate.source,'ai-offline-research');
     } finally { f.close(); }
 });
 
-test('AI can freely invent a climate for a fictional place with no worldbook climate', async () => {
-    const f = setup();
-    try {
-        f.c.chat.push(marker('2026-01-01 10:00\nSam arrived at 雾港城.', '雾港城'));
-        await f.memory.read();
-        f.reply({origin:'fictional_random',climate:{archetype:'bwh',
-            monthlyTemp:[16,17,18,20,22,24,26,25,22,20,18,16],
-            monthlyRainChance:Array(12).fill(.03),typicalWind:5,typicalHumidity:25,
-            diurnal:15,south:false,arid:true,typhoon:false,alwaysNight:false},
-            weather:{type:'dust',temp:22,wind:6,humidity:25}});
-        assert.equal((await f.weather.refresh()).ok,true);
+test('unconfigured fictional location adopts the climate type randomly assigned by phone',async()=>{
+    const f=setup();try{
+        f.c.chat.push(marker('2026-01-01 10:00\nSam reached 雾港城.','雾港城'));
+        await chooseCity(f,'雾港城');
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,true,result.error);
+        const selected=/随机选好的气候类型 "([a-z]+)"/.exec(f.prompt())?.[1];
         const saved=(await f.state()).weather['雾港城'];
+        assert.ok(selected);
         assert.equal(saved.climate.origin,'fictional_random');
-        assert.equal(saved.climate.archetype,'bwh');
-        assert.equal(saved.state.type,'dust');
+        assert.equal(saved.climate.archetype,selected);
         assert.equal(f.calls(),1);
+        const previous=selected;
+        assert.equal((await f.weather.refresh()).ok,true);
+        assert.equal(/随机选好的气候类型 "([a-z]+)"/.exec(f.prompt())?.[1],previous,
+            'same fictional location reuses its saved randomly selected climate');
     } finally { f.close(); }
 });
-
 test('every manual refresh calls the configured model; errors preserve saved climate', async () => {
     const f=setup();try{
         f.c.chat.push(marker('2026-01-01 10:00\nSam is in 上海.', '上海'));
+        await chooseCity(f,'上海');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         assert.equal(f.calls(),1);
@@ -1171,19 +1187,23 @@ test('every manual refresh calls the configured model; errors preserve saved cli
     } finally{f.close();}
 });
 
-test('one model response discovers city and generates climate without a separate probe', async () => {
-    const f=setup([{mes:'2026-01-01 10:00\n【状态栏】位置：东京·新宿\n旅行已经开始。',is_user:false}]);
+test('status bar and model-proposed city are ignored until the user manually sets the location',async()=>{
+    const f=setup([{mes:'2026-01-01 10:00\n【状态栏】位置：东京·新宿',is_user:false}]);
     try{
         f.reply({city:'东京'});
-        const result=await f.weather.refresh();
-        assert.equal(result.ok,true,result.error);
-        assert.equal(f.calls(),1);
-        assert.equal((await f.state()).location.current.city,'东京');
-        assert.equal((await f.state()).weather['东京'].climate.source,'ai-offline-research');
-        assert.match(f.prompt(),/位置：东京·新宿/);
-    } finally { f.close(); }
+        const noInput=await f.weather.refresh();
+        assert.equal(noInput.ok,false);
+        assert.equal(f.calls(),0);
+        await chooseCity(f,'芝加哥');
+        const wrongCity=await f.weather.refresh();
+        assert.equal(wrongCity.ok,false);
+        assert.equal((await f.state()).location.current.city,'芝加哥');
+        f.reply(undefined);
+        assert.equal((await f.weather.refresh()).ok,true);
+        assert.equal((await f.state()).weather['芝加哥'].city,'芝加哥');
+        assert.match(f.prompt(),/手动地点："芝加哥"/);
+    }finally{f.close();}
 });
-
 test('model research rejects incomplete climates, invalid types and conflicting location',()=>{
     const valid={city:'上海',origin:'real_knowledge',
         climate:{archetype:'cfa',monthlyTemp:Array(12).fill(18),
@@ -1195,41 +1215,44 @@ test('model research rejects incomplete climates, invalid types and conflicting 
     assert.throws(()=>validateWeatherResearch({...valid,origin:'unconfirmed'},'上海'),/分类/);
     assert.throws(()=>validateWeatherResearch({...valid,climate:{...valid.climate,monthlyTemp:[20]}},'上海'),/气候档案/);
     assert.throws(()=>validateWeatherResearch({...valid,weather:{...valid.weather,type:'unknown'}},'上海'),/当前天气/);
-    assert.deepEqual(validateWeatherResearch({city:null}),{city:null});
+    assert.throws(()=>validateWeatherResearch({city:null},'上海'),/手动输入/);
 });
 
 
-test('saved Chicago survives null, missing, blank and translated cities across repeated refreshes', async () => {
-    const f = setup([marker('2026-01-01 10:00\nSam has arrived in Chicago.', '芝加哥')]);
-    try {
-        await f.memory.read();
-        assert.equal((await f.weather.refresh()).ok, true);
-        for (const city of [null, undefined, '  ', 'Chicago, IL', 'Chicago, Illinois', 'CHICAGO']) {
-            f.reply({ city });
-            const prior = (await f.state()).weather['芝加哥'].seed;
-            const result = await f.weather.refresh();
-            assert.equal(result.ok, true, result.error);
-            const state = await f.state();
-            assert.equal(state.location.current.city, '芝加哥');
-            assert.ok(state.weather['芝加哥']);
-            assert.notEqual(state.weather['芝加哥'].seed, prior);
-            assert.equal(f.weather.report(state).status, 'ok');
+test('model location aliases are normalized only for validation; missing or null city cannot relocate',async()=>{
+    const f=setup([marker('2026-01-01 10:00\nSam is in Chicago.','芝加哥')]);
+    try{
+        await chooseCity(f,'芝加哥');
+        assert.equal((await f.weather.refresh()).ok,true);
+        for(const city of ['Chicago, IL','Chicago, Illinois','CHICAGO','芝加哥']){
+            f.reply({city});
+            const before=(await f.state()).weather['芝加哥'].seed;
+            const result=await f.weather.refresh();
+            assert.equal(result.ok,true,result.error);
+            assert.equal((await f.state()).location.current.city,'芝加哥');
+            assert.notEqual((await f.state()).weather['芝加哥'].seed,before);
         }
-        assert.equal(f.calls(), 7, 'each click makes exactly one research request');
-        assert.match(f.prompt(), /已保存城市是持续有效的剧情事实/);
-    } finally { f.close(); }
+        for(const city of [null,undefined,'  ']){
+            f.reply({city});
+            const before=structuredClone(await f.state());
+            const result=await f.weather.refresh();
+            assert.equal(result.ok,false);
+            assert.deepEqual(await f.state(),before);
+        }
+        assert.match(f.prompt(),/手动地点："芝加哥"/);
+    }finally{f.close();}
 });
-
 test('missing city does not hide a broken climate and failed refresh keeps prior records', async () => {
     const f = setup([marker('2026-01-01 10:00\nSam arrived in Chicago.', '芝加哥')]);
     try {
+        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok, true);
         const previous = structuredClone(await f.state());
         f.reply({ city: null, climate: { archetype: 'dfa', monthlyTemp: [1] } });
         const badClimate = await f.weather.refresh();
         assert.equal(badClimate.ok, false);
-        assert.match(badClimate.error, /气候档案/);
+        assert.match(badClimate.error, /手动输入的天气地点不一致/);
         assert.deepEqual(await f.state(), previous);
         f.reply('invalid json response !!!');
         const badJson = await f.weather.refresh();
@@ -1242,96 +1265,82 @@ test('missing city does not hide a broken climate and failed refresh keeps prior
     } finally { f.close(); }
 });
 
-test('scenario city is included in first model research without requiring a marker', async () => {
-    const f = setup([{ mes: '2026-01-01 10:00\n开场。', is_user: false }]);
-    try {
-        f.c.characters[0].data = {
-            description: 'Ordinary modern-day setting.',
-            scenario: 'Chicago, IL. Present day.',
-            character_book: { entries: [{ enabled: true, content: '生活在芝加哥。' }] },
+test('scenario location only supplies climate context after manual selection of same city',async()=>{
+    const f=setup([{mes:'2026-01-01 10:00\n开场。',is_user:false}]);
+    try{
+        f.c.characters[0].data={
+            description:'Ordinary modern-day setting.',
+            scenario:'Chicago, IL. Present day.',
+            character_book:{entries:[{enabled:true,content:'生活在芝加哥。'}]},
         };
-        f.c.powerUserSettings.persona_description = 'Sam is a university student.';
-        f.reply({ city: 'Chicago' });
-        const result = await f.weather.refresh();
-        assert.equal(result.ok, true, result.error);
-        assert.equal((await f.state()).location.current.city, 'Chicago');
-        assert.match(f.prompt(), /Chicago, IL. Present day./);
-        assert.match(f.prompt(), /university student/);
-        assert.match(f.prompt(), /生活在芝加哥/);
-        assert.equal(f.calls(), 1);
-    } finally { f.close(); }
+        f.c.powerUserSettings.persona_description='Sam is a university student.';
+        f.reply({city:'Chicago'});
+        assert.equal((await f.weather.refresh()).ok,false);
+        assert.equal(f.calls(),0);
+        await chooseCity(f,'Chicago');
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,true,result.error);
+        assert.equal((await f.state()).location.current.city,'Chicago');
+        assert.match(f.prompt(),/Chicago, IL. Present day./);
+        assert.match(f.prompt(),/university student/);
+        assert.match(f.prompt(),/生活在芝加哥/);
+    }finally{f.close();}
 });
-
-test('planned travel and unsupported model relocation cannot replace a persisted city', async () => {
-    const f = setup([marker('2026-01-01 10:00\nSam is staying in Chicago.', '芝加哥')]);
-    try {
-        await f.memory.read();
-        assert.equal((await f.weather.refresh()).ok, true);
+test('planned travel and false AI arrival evidence never move a manual weather city',async()=>{
+    const f=setup([marker('2026-01-01 10:00\nSam is in Chicago.','芝加哥')]);
+    try{
+        await chooseCity(f,'芝加哥');
+        assert.equal((await f.weather.refresh()).ok,true);
         f.c.chat.push({mes:'2026-01-02 10:00\nSam plans to visit New York next week.',is_user:false});
         await f.memory.read();
-        const previous = structuredClone(await f.state());
-        f.reply({ city: '纽约' });
-        const unsupported = await f.weather.refresh();
-        assert.equal(unsupported.ok, false);
-        assert.match(unsupported.error, /迁移证据/);
-        assert.deepEqual(await f.state(), previous);
-        f.reply({city:'纽约',locationChange:{arrived:true,sourceIndex:1,quote:'Sam plans to visit New York next week.'}});
-        const falseClaim = await f.weather.refresh();
-        assert.equal(falseClaim.ok, false);
-        assert.deepEqual(await f.state(), previous);
-        assert.equal(f.calls(), 3);
-    } finally { f.close(); }
+        const before=structuredClone(await f.state());
+        f.reply({city:'纽约'});
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,false);
+        assert.equal(f.calls(),2);
+        assert.deepEqual(await f.state(),before);
+        f.reply({city:'纽约',locationChange:{arrived:true,sourceIndex:1,quote:'Sam arrived in New York City.'}});
+        assert.equal((await f.weather.refresh()).ok,false);
+        assert.deepEqual(await f.state(),before);
+    }finally{f.close();}
 });
-
-test('confirmed new-story arrival moves city and weather atomically, with deletion rollback', async () => {
-    const f = setup([marker('2026-01-01 10:00\nSam arrived in Chicago.', '芝加哥')]);
-    try {
-        await f.memory.read();
-        assert.equal((await f.weather.refresh()).ok, true);
-        const old = structuredClone((await f.state()).weather['芝加哥']);
+test('real narrative relocation alone cannot switch city; explicit manual edit can',async()=>{
+    const f=setup([marker('2026-01-01 10:00\nSam arrived in Chicago.','芝加哥')]);
+    try{
+        await chooseCity(f,'芝加哥');
+        assert.equal((await f.weather.refresh()).ok,true);
+        const old=structuredClone((await f.state()).weather['芝加哥']);
         f.c.chat.push({mes:'2026-01-02 10:00\nSam arrived in New York City.',is_user:false});
         await f.memory.read();
         f.reply({city:'纽约',locationChange:{arrived:true,sourceIndex:1,quote:'Sam arrived in New York City.'}});
-        const result = await f.weather.refresh();
-        assert.equal(result.ok, true, result.error);
-        const moved = await f.state();
-        assert.equal(moved.location.current.city, '纽约');
-        assert.equal(moved.location.current.sourceIndex, 1);
-        assert.equal(moved.weather['纽约'].city, '纽约');
-        assert.deepEqual(moved.weather['芝加哥'], old);
-        assert.equal(f.weather.report(moved).status, 'ok');
-        f.reply({city:null});
-        assert.equal((await f.weather.refresh()).ok, true, 'new city remains fixed on subsequent refresh');
-        // Even if subsequent floors and another refresh exist, removing the
-        // actual arrival floor must also invalidate that floor's journal entry.
-        f.c.chat.push({mes:'2026-01-03 10:00\nAnother day passed after the move.',is_user:false});
-        await f.memory.read();
-        f.reply({city:'纽约'});
-        assert.equal((await f.weather.refresh()).ok, true);
-        f.c.chat.splice(1,1);
-        f.c.eventSource.emit('MESSAGE_DELETED');
-        await f.memory.read();
-        const rolled = await f.state();
-        assert.equal(rolled.location.current.city, '芝加哥');
-        assert.deepEqual(rolled.weather['芝加哥'], old);
-        assert.equal(rolled.weather?.['纽约'], undefined);
-        assert.equal(f.weather.report(rolled).status, 'ok');
-    } finally { f.close(); }
+        assert.equal((await f.weather.refresh()).ok,false);
+        assert.equal((await f.state()).location.current.city,'芝加哥');
+        assert.deepEqual((await f.state()).weather['芝加哥'],old);
+        await chooseCity(f,'纽约');
+        f.reply(undefined);
+        assert.equal((await f.weather.refresh()).ok,true);
+        const moved=await f.state();
+        assert.equal(moved.location.current.city,'纽约');
+        assert.equal(moved.location.current.manual,true);
+        assert.deepEqual(moved.weather['芝加哥'],old);
+        assert.equal(f.weather.report(moved).city,'纽约');
+        f.c.chat.pop();f.c.eventSource.emit('MESSAGE_DELETED');await f.memory.read();
+        const rolled=await f.state();
+        assert.equal(rolled.location.current.city,'芝加哥');
+        assert.deepEqual(rolled.weather['芝加哥'],old);
+        assert.equal(rolled.weather?.['纽约'],undefined);
+    }finally{f.close();}
 });
-
-test('mismatched or stale arrival quotes cannot authorize a city change', () => {
-    const profile = {city:'纽约',origin:'real_knowledge',climate:{
+test('weather validation rejects unapproved city changes even when arrival quote looks plausible',()=>{
+    const profile={city:'纽约',origin:'real_knowledge',climate:{
         archetype:'dfa',monthlyTemp:Array(12).fill(15),monthlyRainChance:Array(12).fill(.3),
         typicalWind:2,typicalHumidity:75,diurnal:7,south:false,arid:false,typhoon:false,alwaysNight:false},
-        weather:{type:'rain',temp:19,wind:2,humidity:83}};
-    const chat = [{mes:'Sam arrived in New York City.'},{mes:'2026-01-02 Sam remains in Chicago.'}];
-    const proposal = { ...profile, locationChange:{arrived:true,sourceIndex:0,quote:'Sam arrived in New York City.'} };
-    assert.throws(()=>validateWeatherResearch(proposal,'芝加哥',{chat,locationSourceIndex:0}),/迁移证据/);
-    assert.throws(()=>validateWeatherResearch({...proposal,locationChange:{...proposal.locationChange,quote:'invented arrival in New York City'}},'芝加哥',{chat,locationSourceIndex:-1}),/迁移证据/);
-    assert.equal(validateWeatherResearch({...profile,city:null},'芝加哥').city,'芝加哥');
+        weather:{type:'rain',temp:19,wind:2,humidity:83},
+        locationChange:{arrived:true,sourceIndex:0,quote:'Sam arrived in New York City.'}};
+    assert.throws(()=>validateWeatherResearch(profile,'芝加哥'),/手动输入/);
+    assert.throws(()=>validateWeatherResearch({...profile,city:'东京'},'芝加哥'),/手动输入/);
     assert.equal(validateWeatherResearch({...profile,city:'Chicago, IL'},'芝加哥').city,'芝加哥');
 });
-
 test('historical climate with southern seasons uses local-calendar monthly temperatures', () => {
     const climate = { archetype: 'cfb', offset: 0, south: true,
         monthlyTemp: [29, 28, 25, 22, 18, 15, 13, 15, 18, 23, 26, 28],

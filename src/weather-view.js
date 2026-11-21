@@ -1,4 +1,4 @@
-import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.91';
+import { weatherScene, weatherType, weatherWarning } from './weather.js?v=1.2.92';
 import { sceneIcon, metricIcon, weatherWindow } from './weather-art.js?v=1.2.41';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -121,7 +121,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
         const info = adapter.weather?.report(view);
         const theme = themeForStory(info?.clock, now());
         if (!info) return emptyPage(theme, '天气', busy, '天气待更新', '暂时无法读取天气。');
-        if (info.status === 'no-location') return emptyPage(theme, '尚未标记位置', busy, '等待定位', '请刷新天气或长按地点手动修改。');
+        if (info.status === 'no-location') return emptyPage(theme, '尚未设置地点', busy, '等待输入地点', '请长按上方地点手动输入，再点击刷新天气。');
         if (info.status === 'pending') return emptyPage(theme, info.city || '天气', busy, '天气待更新', '为 ' + (info.city || '当前位置') + ' 更新天气。');
 
         const city = info.city || '天气';
@@ -207,7 +207,7 @@ export function createWeatherPanel({ adapter, getView, redraw, notice, editLocat
     function press(target) {
         if (target?.dataset?.press !== 'weather-location') return [];
         const view = getView(), busy = working || !!view?.busy;
-        const city = view?.location?.current?.city || '';
+        const city = view?.location?.current?.manual === true ? view.location.current.city : '';
         return [{ icon: 'edit', label: '修改地点', disabled: busy, run: () => editLocation?.(city) }];
     }
     async function action(name) {

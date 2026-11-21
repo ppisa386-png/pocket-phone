@@ -20,11 +20,10 @@ import { cashBalance, assetRows } from '../src/assets-core.js';
 
 test('published version cache-busts all changed weather and story importers', () => {
  const files = {
-  'index.js': ['weather.js','daily.js','story-phone.js','memory.js','ui.js','config.js'],
+  'index.js': ['weather.js','daily.js','calendar.js','food.js','assets.js','story-phone.js','memory.js','ui.js','config.js'],
   'src/weather.js': ['weather-model.js'],
   'src/weather-view.js': ['weather.js'],
   'src/ui.js': ['weather-view.js','config.js'],
-  'src/memory.js': ['weather.js'],
   'src/story-phone.js': ['weather.js'],
   'src/daily.js': ['weather.js'],
  };
@@ -55,6 +54,7 @@ test('weather sends its complete schema through the real phone/API chain and pre
    assert.equal(body.stop,undefined);
    return JSON.stringify(sample);
   });
+  const located=await weather.editLocation('芝加哥','');assert.equal(located.ok,true,located.error);
   const result=await weather.refresh();assert.equal(result.ok,true,result.error);assert.equal(seen.length,1);
   const before=structuredClone(f.phone.snapshot());
   assert.equal(before.weather['芝加哥'].state.temp,12);
@@ -80,11 +80,12 @@ test('independent weather repairs missing climate for an identified city through
   f.context.chat=[{mes:'2026-01-01 10:00\n【状态栏】位置：莫斯科'}];
   f.reply(options=>{
    const payload=JSON.parse(options.body);seen.push(payload);
-   assert.deepEqual(payload.json_schema,weatherResearchSchema());
+   assert.deepEqual(payload.json_schema,weatherResearchSchema('莫斯科'));
    assert.equal(payload.max_tokens,4096);
    if(seen.length===2) assert.match(payload.messages.at(-1).content,/天气字段补全/);
    return JSON.stringify(seen.length===1 ? partial : complete);
   });
+  const located=await weather.editLocation('莫斯科','');assert.equal(located.ok,true,located.error);
   const result=await weather.refresh();
   assert.equal(result.ok,true,result.error);
   assert.equal(seen.length,2);

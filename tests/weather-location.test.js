@@ -1,66 +1,65 @@
-// Location import contract: importStoryLocation must return {journal, changed}
-// like every other importer, whether or not the city actually changed.
+// Weather locations come only from explicit user editing, never from story tags.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { messageSignatures, revisionsFor, replayJournal, readJournal } from '../src/journal.js';
-import { importStoryLocation } from '../src/weather.js';
+import { EventEmitter } from 'node:events';
+import { createPhoneMemory } from '../src/memory.js';
+import { createPhoneService } from './phone-fixture.js';
+import { createWeather } from '../src/weather.js';
+import { normalizeSettings } from '../src/config.js';
 
-const marker = (prose, city) => ({ mes: prose + (city ? `<!--durian-location:{"city":"${city}"}-->` : ''), is_user: false, name: 'Alex' });
-const revisionsOf = async chat => await revisionsFor(messageSignatures(chat));
+function fixture() {
+    const bus=new EventEmitter();
+    const context={chatId:'manual-weather',name1:'Sam',name2:'Alex',
+        characterId:0,characters:[{name:'Alex'}],
+        chat:[{mes:'2026-11-21 10:00\n【状态栏】位置：东京。',is_user:false}],
+        chatMetadata:{},saveMetadata:async()=>{},eventSource:bus,
+        event_types:Object.fromEntries(['MESSAGE_DELETED','MESSAGE_EDITED','CHAT_CHANGED','GENERATION_STARTED','GENERATION_ENDED'].map(x=>[x,x])),
+        generateQuietPrompt:async()=>'{ }'};
+    const settings=normalizeSettings({retries:0});
+    const memory=createPhoneMemory({getContext:()=>context});
+    const phone=createPhoneService({memory,getContext:()=>context,getSettings:()=>settings});
+    const weather=createWeather({memory,phone,getContext:()=>context});
+    return {context,bus,memory,phone,weather,
+        state:async()=>(await memory.read()).state,
+        close(){phone.destroy();memory.destroy();}};
+}
 
-test('a newly marked city imports location events, replays to the latest city, and re-importing the same chat changes nothing', async () => {
-    const chat = [
-        { mes: '用户开场白，尚未提及城市。', is_user: true },
-        marker('Sam arrived in Shanghai and checked into a small hotel.', '上海'),
-        { mes: '用户问起下一步的安排。', is_user: true },
-        marker('After a long train ride Sam reached Beijing at dusk.', '北京'),
-    ];
-    const revisions = await revisionsOf(chat);
-    const first = importStoryLocation(readJournal(undefined), revisions, chat);
-    assert.equal(first.changed, true);
-    assert.equal(first.journal.events.length, 2);
-    assert.deepEqual(first.journal.events[0].changes[0].value, { city: '上海', sourceIndex: 1 });
-    assert.equal(first.journal.events[0].source.index, 1);
-    assert.equal(first.journal.events[0].id, 'story-location:' + revisions[1]);
-    assert.equal(first.journal.events[1].source.index, 3);
-    assert.equal(replayJournal(first.journal).location.current.city, '北京');
-    const second = importStoryLocation(first.journal, revisions, chat);
-    assert.deepEqual(second, { journal: first.journal, changed: false });
+test('narrative location markers and status bars do not populate the location record',async()=>{
+    const f=fixture();try{
+        f.context.chat.push({mes:'2026-11-21 11:00 Sam reached Paris.<!--durian-location:{"city":"巴黎"}-->',is_user:false});
+        const state=await f.state();
+        assert.equal(state.location?.current,undefined);
+        assert.equal(f.weather.report(state).status,'no-location');
+        const result=await f.weather.refresh();
+        assert.equal(result.ok,false);
+        assert.match(result.error,/长按天气地点/);
+    }finally{f.close();}
 });
 
-test('a chat without markers (including user-authored markers) returns the same journal unchanged', async () => {
-    const chat = [
-        { mes: '只是普通的一天，没有提到任何地点。', is_user: false, name: 'Alex' },
-        { mes: '<!--durian-location:{"city":"上海"}-->用户消息里的标记不算数。', is_user: true },
-        marker('An ordinary evening at home, no city mentioned.', null),
-    ];
-    const revisions = await revisionsOf(chat);
-    const raw = readJournal(undefined);
-    const result = importStoryLocation(raw, revisions, chat);
-    assert.deepEqual(result, { journal: raw, changed: false });
-    assert.equal(result.journal.events.length, 0);
+test('historical auto-detected city is ignored and replaced only by user location edit',async()=>{
+    const f=fixture();try{
+        const ticket=await f.memory.begin();
+        await f.memory.commit(ticket,[{collection:'location',key:'current',value:{city:'圣保罗',sourceIndex:0}}]);
+        assert.equal(f.weather.report(await f.state()).status,'no-location');
+        const noCity=await f.weather.refresh();
+        assert.equal(noCity.ok,false);
+        const edited=await f.weather.editLocation('云京城','');
+        assert.equal(edited.ok,true,edited.error);
+        assert.deepEqual((await f.state()).location.current,
+            {city:'云京城',sourceIndex:0,manual:true});
+        f.context.chat.push({mes:'2026-11-21 12:00 user 到达伦敦。<!--durian-location:{"city":"伦敦"}-->',is_user:false});
+        assert.equal((await f.state()).location.current.city,'云京城');
+    }finally{f.close();}
 });
 
-test('re-marking the current city adds no event and the result stays a valid {journal, changed} pair', async () => {
-    const chat = [marker('Sam settled into the Shanghai apartment.', '上海'), marker('Another quiet day in Shanghai.', '上海')];
-    const revisions = await revisionsOf(chat);
-    const first = importStoryLocation(readJournal(undefined), revisions, chat);
-    assert.equal(first.changed, true);
-    assert.equal(first.journal.events.length, 1);
-    const second = importStoryLocation(first.journal, revisions, chat);
-    assert.equal(second.changed, false);
-    assert.equal(typeof second.changed, 'boolean');
-    assert.ok(second.journal && Array.isArray(second.journal.events));
-    assert.equal(second.journal.events.length, 1);
-});
-
-test('a translated city marker is not a new location event and does not rename the display city', async () => {
-    const chat = [
-        marker('Sam arrived in Chicago.', '芝加哥'),
-        marker('Sam is still in Chicago, Illinois.', 'Chicago, IL'),
-    ];
-    const revisions = await revisionsOf(chat);
-    const result = importStoryLocation(readJournal(undefined), revisions, chat);
-    assert.equal(result.journal.events.length, 1);
-    assert.equal(replayJournal(result.journal).location.current.city, '芝加哥');
+test('manual location survives a weather refresh failure and an untrusted story marker',async()=>{
+    const f=fixture();try{
+        const selected=await f.weather.editLocation('纽约','');
+        assert.equal(selected.ok,true,selected.error);
+        f.context.chat.push({mes:'2026-11-21 12:00 到达东京<!--durian-location:{"city":"东京"}-->',is_user:false});
+        const failed=await f.weather.refresh();
+        assert.equal(failed.ok,false);
+        assert.equal((await f.state()).location.current.city,'纽约');
+        assert.equal((await f.state()).location.current.manual,true);
+    }finally{f.close();}
 });
