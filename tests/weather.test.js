@@ -97,21 +97,22 @@ test('weather missing fields are repairable, while invalid values and conflictin
             typicalWind:3,typicalHumidity:70,diurnal:8,south:false,arid:false,typhoon:false,alwaysNight:false},
         weather:{type:'overcast',temp:4,wind:2,humidity:86}};
     const missingClimate = {...sample}; delete missingClimate.climate;
-    assert.throws(() => validateWeatherResearch(missingClimate), error =>
+    assert.throws(() => validateWeatherResearch(missingClimate,'莫斯科'), error =>
         error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('climate'));
-    assert.throws(() => validateWeatherResearch({...sample, climate:{...sample.climate,monthlyTemp:[4]}}), error =>
+    assert.throws(() => validateWeatherResearch({...sample, climate:{...sample.climate,monthlyTemp:[4]}},'莫斯科'), error =>
         error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('climate.monthlyTemp'));
-    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,humidity:null}}), error =>
+    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,humidity:null}},'莫斯科'), error =>
         error.code === 'PHONE_DATA_MISSING' && error.missingFields.includes('weather.humidity'));
-    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,temp:100}}), error =>
+    assert.throws(() => validateWeatherResearch({...sample,weather:{...sample.weather,temp:100}},'莫斯科'), error =>
         error.code === 'WEATHER_RESEARCH_INVALID');
-    assert.throws(() => validateWeatherResearch({...sample,origin:'not_a_kind'}), error =>
+    assert.throws(() => validateWeatherResearch({...sample,origin:'not_a_kind'},'莫斯科'), error =>
         error.code === 'WEATHER_RESEARCH_INVALID');
 });
 
 test('first refresh with city and current weather but no climate repairs once and saves atomically', async () => {
     const f = setup([{mes:'2026-01-01 10:00\n【状态栏】位置：莫斯科',is_user:false}]);
     try {
+        await chooseCity(f,'莫斯科');
         const partial={city:'莫斯科',origin:'real_knowledge',weather:{type:'overcast',temp:4,wind:2,humidity:86}};
         const complete={...partial,climate:{archetype:'dfb',monthlyTemp:[-9,-8,-2,6,14,18,21,19,13,6,-1,-6],
             monthlyRainChance:[.3,.3,.3,.35,.4,.4,.45,.45,.4,.4,.35,.3],
@@ -137,7 +138,6 @@ test('two incomplete weather replies never overwrite an existing location or for
     const f=setup([marker('2026-01-01 10:00\nSam is in Chicago.','芝加哥')]);
     try {
         await chooseCity(f,'芝加哥');
-        await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok,true);
         const before=structuredClone(await f.state());
@@ -154,7 +154,6 @@ test('two incomplete weather replies never overwrite an existing location or for
 test('host weather output contract and empty-object rejection preserve old weather in one request', async () => {
     const f=setup([marker('2026-10-31 16:28\nSam is in Chicago.','芝加哥')]);
     try {
-        await chooseCity(f,'芝加哥');
         await chooseCity(f,'芝加哥');
         assert.equal((await f.weather.refresh()).ok,true);
         assert.ok(f.prompt().includes(WEATHER_OUTPUT_CONTRACT));
@@ -1246,7 +1245,6 @@ test('model location aliases are normalized only for validation; missing or null
 test('missing city does not hide a broken climate and failed refresh keeps prior records', async () => {
     const f = setup([marker('2026-01-01 10:00\nSam arrived in Chicago.', '芝加哥')]);
     try {
-        await chooseCity(f,'芝加哥');
         await chooseCity(f,'芝加哥');
         await f.memory.read();
         assert.equal((await f.weather.refresh()).ok, true);
