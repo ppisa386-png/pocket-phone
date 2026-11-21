@@ -926,6 +926,7 @@ test('shared currentLocation ships with the assessment payload as background onl
   assert.match(f.prompt(),/旅行、出差、短期停留不改变常住地，不据此换币/);
   f.c.chat.push({mes:'2026-01-02 10:00\nSam is traveling in Tokyo.<!--durian-location:{"city":"东京"}-->',is_user:false});
   await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[{collection:'location',key:'current',value:{city:'东京',manual:true,sourceIndex:1}}]);
   f.reply(evaluation('2026-01-02'));ok(await f.assets.update());
   payload=JSON.parse(f.prompt().split('账本与待核对资料：')[1].split('\n')[0]);
   assert.equal(payload.currentLocation,'东京');
