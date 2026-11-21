@@ -1,5 +1,5 @@
 import { createPresetAssembly } from './src/preset-assembly.js?v=1.2.92';
-import { createCalendar } from './src/calendar.js?v=1.2.87';
+import { createCalendar } from './src/calendar.js?v=1.2.92';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
 import { createDaily } from './src/daily.js?v=1.2.92';
 import { createWeather } from './src/weather.js?v=1.2.92';
@@ -8,7 +8,7 @@ import { createAssets } from './src/assets.js?v=1.2.92';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
 import { createOpinionBridge } from './src/x-opinion.js?v=1.2.61';
 import { createAmazon } from './src/amazon.js?v=1.2.80';
-import { createFood } from './src/food.js?v=1.2.89';
+import { createFood } from './src/food.js?v=1.2.92';
 import { createPaymentRequest } from './src/payment-request.js?v=1.2';
 import { createDeliveryBridge } from './src/delivery.js?v=1.2.90';
 import { createGenerationReader } from './src/host-state.js?v=1.2';
