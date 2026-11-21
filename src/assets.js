@@ -437,7 +437,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             const pending=wallet?pendingAssessments(view.state):[];
             const pendingSalaries=wallet?assetRows(view.state,'job').filter(j=>j.monthlyMinor==null).map(({id,name})=>({id,name})):[];
             const pendingContract=WAGE_ASSESSMENT_RULES+(wallet?PENDING_ASSESSMENT_RULES+'本次必须处理的事项：'+JSON.stringify(pending.map(({id,ref,kind,name,needs})=>({id,ref,kind,name,needs})))+'另外pendingSalaries中的每个工作必须估算固定月薪并在salaries按id返回：'+JSON.stringify(pendingSalaries):'首次建账用initial快照吸收已有事实，未知余额和已确认固定工作的月薪合理估算，不单独重复结算开场前事件。');
-            const payload = { persona, currency, pendingAssessments:pending, pendingSalaries, previousResidence:wallet?.region||null, currentLocation:view.state.location?.current?.city||null,
+            const payload = { persona, currency, pendingAssessments:pending, pendingSalaries, previousResidence:wallet?.region||null, currentLocation:view.state.location?.current?.manual === true ? view.state.location.current.city : null,
                 expenseSummaryIndices:residenceSummaries.map(f=>f.messageIndex),
                 currencyChanges:wallet?.currencyChanges||[], ...recoveryPayload, initialized: !!wallet, from: wallet ? dayDate(wallet.lastDay) : null,
                 assessmentDate: assessmentDate || null, elapsedDays, clock: { ...clock, date: assessmentDate || null }, balance: cashBalance(view.state) === null ? null : majorAmount(cashBalance(view.state),currency), ledger: {
