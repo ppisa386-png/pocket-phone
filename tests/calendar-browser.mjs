@@ -95,6 +95,9 @@ try {
     }
     await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();
     for(const app of ['daily','weather','x','wechat']){await p.getByRole('button',{name:'回到桌面',exact:true}).click();await p.locator('[data-app="'+app+'"]').click();}
-    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(failedAssets,[]);
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    // The offline preview has no SillyTavern host /scripts/openai.js module;
+    // its optional local probe may 404 without affecting any bundled asset.
+    assert.deepEqual(failedAssets.filter(url=>new URL(url).pathname!=='/scripts/openai.js'),[]);
     console.log('PASS calendar: 320/360/390/430px; init/loading/failure; CRUD/repeat; persistence; month navigation; countdown; actual narrative dedup; reduced motion; local assets; offline preview.');
 } finally {await browser.close();server.close();}
