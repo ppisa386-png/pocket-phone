@@ -55,7 +55,8 @@ try {
         throw new Error('weather manual edit diagnostic: '+JSON.stringify(diagnostic),{cause:error});
     }
     await p.getByRole('button',{name:'回到桌面',exact:true}).click();
-    await open();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
+    // Already on the phone home screen: clicking the launcher would be intercepted by the open phone.
+    await p.locator('[data-app="calendar"]').click();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
     await p.screenshot({path:resolve(evidence,'calendar-initialize-390.png')});
     await p.evaluate(()=>window.fail=true);await p.locator('[data-calendar-action="refresh"]').click();await p.getByText(/日历初始化失败/).waitFor();assert.equal(await p.locator('.pp-cal-grid').count(),0);
     await p.evaluate(()=>{window.fail=false;window.delay=400;});await p.locator('[data-calendar-action="refresh"]').click();await p.getByText('正在整理地区节日资料…').waitFor();await p.locator('.pp-cal-grid').waitFor();assert.equal(await p.locator('.pp-cal-day').count(),35);
