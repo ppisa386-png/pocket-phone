@@ -8,7 +8,6 @@ import { importStoryAssets } from './assets-story.js?v=1.2.65';
 import { importStorySquare } from './x-opinion.js?v=1.2.57';
 import { importStoryPhone } from './story-phone.js?v=1.2.91';
 import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.71';
-import { importStoryLocation } from './weather.js?v=1.2.91';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 
 const EVENTS = ['CHAT_CHANGED', 'CHAT_LOADED', 'CHAT_RENAMED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
@@ -127,8 +126,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         const reconciled = reconcileJournal(snapshot.metadata[JOURNAL_KEY], snapshot.revisions, legacyRevisions);
         const imported=importStoryPhone(reconciled.journal,snapshot.revisions,current.chat,current);
         const moments=importStoryWechatMoments(imported.journal,snapshot.revisions,current.chat,current);
-        const located=importStoryLocation(moments.journal,snapshot.revisions,current.chat,current);
-        const square=importStorySquare(located.journal,snapshot.revisions,current.chat,current);
+        const square=importStorySquare(moments.journal,snapshot.revisions,current.chat,current);
         const finances=assetEnabled()?importStoryAssets(square.journal,snapshot.revisions,current.chat):{journal:square.journal,changed:false};
         const archive=migrateDailyArchives(finances.journal,snapshot.revisions);
         const comm=syncCommContext(archive.journal,snapshot.revisions,current.chat);
@@ -138,7 +136,7 @@ export function createPhoneMemory({ getContext, onError = () => {}, onRollback =
         for(const r of privilegeRows(state))if(r.status==='active'&&day!==null&&day>r.end)
             timed.push({collection:'x',key:r.id,value:{...r,status:'expired'}});
         if(timed.length)journal=appendChange(journal,snapshot.revisions,timed);
-        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || moments.changed || located.changed || square.changed || finances.changed || archive.changed || comm.changed) await save(snapshot, journal);
+        if (timed.length || reconciled.removed || reconciled.migrated || imported.changed || moments.changed || square.changed || finances.changed || archive.changed || comm.changed) await save(snapshot, journal);
         if (!sameChat(snapshot)) {unavailable='CHANGED';return null;}
         snapshot.journal = journal;
         active = snapshot;unavailable=snapshot.revisions.length?null:'EMPTY_CHAT';
