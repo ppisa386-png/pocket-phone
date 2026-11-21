@@ -48,7 +48,7 @@ test('店名分店地点只跟随天气城市，已有订单收件人和历史�
  try{
   await seedWallet(f);
   const ticket=await f.memory.begin();
-  await f.memory.commit(ticket,[{collection:'location',key:'current',value:{city:'北京',sourceIndex:0}}]);
+  await f.memory.commit(ticket,[{collection:'location',key:'current',value:{city:'北京',sourceIndex:0,manual:true}}]);
   ok(await f.food.search('晚餐'));
   assert.match(f.prompt(),/天气 App 当前已确认城市.*北京/);
   const [wrong,branch,brand,matching]=foodItems(f.state(),'foodShop');
