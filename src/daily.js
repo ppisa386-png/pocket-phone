@@ -50,7 +50,7 @@ export function createDaily({memory, phone, getContext, getSettings}) {
             if (!current()) throw Error('日报功能已停用或聊天已变化。');
             const ticket = await memory.begin(), chat = structuredClone(getContext().chat || []), day = readStoryClock(chat).day;
             const previous = dailyEditorialHistory(view.state, chat);
-            const sharedCity = view.state.location?.current?.city || null;
+            const sharedCity = (view.state.location?.current?.manual === true ? view.state.location.current.city : null);
             const locationType = sharedCity ? locationKind(sharedCity, getContext()) : 'unconfirmed';
             const prompt = getSettings().prompts.general + '\n' + (getSettings().prompts.daily === DAILY_EDITORIAL_PROMPT ? '' : '自定义报刊偏好（服从以下新闻事实边界和事件优先选题流程）：' + getSettings().prompts.daily + '\n') + DAILY_RULES_CORE + dailyHistoryRules(sharedCity ? locationType : 'real') + '\n' + DAILY_EDITORIAL_PROMPT + '\n旧报纸adoption：adopted仅表示正文采用过这篇报道，不证明报道的每个主张；selected_pending是选中未采用，unselected是未选，unknown不可确定。后两类及待采用候选不得当作已发生事实。报道语言遵循当前预设的叙述语言，引语遵循其对白语言与翻译格式；不因真实外文刊名或人物国籍只输出外文，不翻译JSON协议键。\n' + DAILY_OUTPUT
                 + '\n剧情资料：' + JSON.stringify({date:dayDate(day)||null,currentLocation:sharedCity,locationKind:locationType,columns:DAILY_SECTIONS,recentSections:dailySectionCounts(view.state),history:historicalSources(view.state),...(locationType==='fictional'?{worldSetting:worldSettingMaterial(sharedCity,getContext())}:{}),previousEditions:previous});
