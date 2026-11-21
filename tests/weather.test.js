@@ -584,7 +584,7 @@ const findSeed = pred => {
     }
     throw new Error('no deterministic seed matched the layout');
 };
-const forecastState = record => ({ location: { current: { city: record.city } }, weather: { [record.city]: record } });
+const forecastState = record => ({ location: { current: { city: record.city, manual: true } }, weather: { [record.city]: record } });
 const forecastChat = date => [{ mes: date + ' 10:00\n在城市里的一天。', is_user: false }];
 
 test('manual refresh yields the full seven-day window with story dates, weekdays and day stats', async () => {
@@ -905,7 +905,7 @@ test('Window Weather Diary keeps weather actions, story date, forecast structure
         }
         assert.equal(sceneBackdrop('rain','night').includes('rain.webp'),true);
         const unavailable=createWeatherPanel({adapter:{weather:f.weather},getView:()=>({...state,location:null,busy:false}),redraw(){},now:()=>new Date(2026,4,1,9)});
-        assert.match(unavailable.html(),/尚未标记位置/);
+        assert.match(unavailable.html(),/尚未设置地点/);
         assert.match(unavailable.html(),/data-weather-action="refresh"/);
     }finally{f.close();}
 });
@@ -1135,7 +1135,7 @@ test('all refresh categories are decided by the model, never by built-in city or
         assert.equal(record.climate.monthlyTemp[0],-20);
         assert.equal(record.state.type,'heavysnow');
         assert.equal(record.state.temp,-22,'model-supplied current weather is saved, not locally re-rolled');
-        assert.match(f.prompt(),/当前确认的地点："上海"/);
+        assert.match(f.prompt(),/手动地点："上海"/);
         assert.match(f.prompt(),/User 使用的面具/);
         assert.match(f.prompt(),/旧世界旅行者/);
         assert.match(f.prompt(),/架空上海是终年冰雪的浮空城/);
@@ -1252,7 +1252,7 @@ test('missing city does not hide a broken climate and failed refresh keeps prior
         f.reply({ city: null, climate: { archetype: 'dfa', monthlyTemp: [1] } });
         const badClimate = await f.weather.refresh();
         assert.equal(badClimate.ok, false);
-        assert.match(badClimate.error, /气候档案/);
+        assert.match(badClimate.error, /手动输入的天气地点不一致/);
         assert.deepEqual(await f.state(), previous);
         f.reply('invalid json response !!!');
         const badJson = await f.weather.refresh();
