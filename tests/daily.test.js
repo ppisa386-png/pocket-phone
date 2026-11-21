@@ -458,6 +458,7 @@ test('fictional worlds switch the editorial contract and carry the world setting
   f.c.chat[0].mes='2008-10-15\n本地剧情。';
   f.c.chat.push({mes:'The party arrives in 云京城.<!--durian-location:{"city":"云京城"}-->',is_user:false});
   await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[{collection:'location',key:'current',value:{city:'云京城',manual:true,sourceIndex:1}}]);
   ok(await f.daily.update());
   const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split(String.fromCharCode(10))[0]);
   assert.equal(payload.locationKind,'fictional');
@@ -477,6 +478,7 @@ test('real locations keep the real-history editorial contract',async()=>{
   f.c.chat[0].mes='2008-10-15\n本地剧情。';
   f.c.chat.push({mes:'Sam arrives in Shanghai.<!--durian-location:{"city":"上海"}-->',is_user:false});
   await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[{collection:'location',key:'current',value:{city:'上海',manual:true,sourceIndex:1}}]);
   ok(await f.daily.update());
   const payload=JSON.parse(f.prompt().split('剧情资料：')[1].split(String.fromCharCode(10))[0]);
   assert.equal(payload.locationKind,'real');
@@ -489,6 +491,7 @@ test('2024 Los Angeles date and location select the real-history editorial branc
   f.c.chat[0].mes='2024-10-07\n综合性报纸。';
   f.c.chat.push({mes:'Sam 抵达 Los Ángeles, CA。<!--durian-location:{"city":"Los Ángeles, CA"}-->',is_user:false});
   await f.memory.read();
+  await f.memory.commit(await f.memory.begin(),[{collection:'location',key:'current',value:{city:'Los Ángeles, CA',manual:true,sourceIndex:1}}]);
   ok(await f.daily.update());
   const prompt=f.prompt(),payload=JSON.parse(prompt.split('剧情资料：')[1].split('\n')[0]);
   assert.equal(payload.currentLocation,'Los Ángeles, CA');
