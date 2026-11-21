@@ -40,7 +40,17 @@ try {
     await p.getByRole('menuitem',{name:'修改地点'}).click();
     await p.locator('.pp-weather-location-editor input').fill('东京');
     await p.locator('.pp-weather-location-editor [type="submit"]').click();
-    await p.locator('.pp-weather-loc b').getByText('东京').waitFor();
+    try { await p.locator('.pp-weather-loc b').getByText('东京').waitFor({timeout:2500}); }
+    catch (error) {
+        const diagnostic=await p.evaluate(()=>({
+            city:document.querySelector('.pp-weather-loc b')?.textContent,
+            status:document.querySelector('.pp-weather-location-editor [role="status"]')?.textContent,
+            dialogOpen:!!document.querySelector('.pp-weather-location-editor[open]'),
+            journal:c.chatMetadata?.durian_phone_history?.events?.at(-1)?.changes,
+            calls:window.calls,
+        }));
+        throw new Error('weather manual edit diagnostic: '+JSON.stringify(diagnostic),{cause:error});
+    }
     await p.getByRole('button',{name:'回到桌面',exact:true}).click();
     await open();await p.locator('.pp-cal-welcome').waitFor();assert.equal(await p.evaluate(()=>window.calls),0);
     await p.screenshot({path:resolve(evidence,'calendar-initialize-390.png')});
