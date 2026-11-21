@@ -39,6 +39,9 @@ try {
     await p.locator('[data-press="weather-location"]').dispatchEvent('contextmenu');
     await p.getByRole('menuitem',{name:'修改地点'}).click();
     await p.locator('.pp-weather-location-editor input').fill('东京');
+    // The long-press menu intentionally suppresses stray clicks for 900ms;
+    // a fast headless form submission must happen after that guard expires.
+    await p.waitForTimeout(1000);
     await p.locator('.pp-weather-location-editor [type="submit"]').click();
     try { await p.locator('.pp-weather-loc b').getByText('东京').waitFor({timeout:2500}); }
     catch (error) {
