@@ -42,13 +42,13 @@ try {
     await p.locator('.pp-weather-location-editor [type="submit"]').click();
     try { await p.locator('.pp-weather-loc b').getByText('东京').waitFor({timeout:2500}); }
     catch (error) {
-        const diagnostic=await p.evaluate(()=>({
-            city:document.querySelector('.pp-weather-loc b')?.textContent,
-            status:document.querySelector('.pp-weather-location-editor [role="status"]')?.textContent,
-            dialogOpen:!!document.querySelector('.pp-weather-location-editor[open]'),
-            journal:c.chatMetadata?.durian_phone_history?.events?.at(-1)?.changes,
-            calls:window.calls,
-        }));
+        const diagnostic={
+            city:await p.locator('.pp-weather-loc b').allTextContents(),
+            status:await p.locator('.pp-weather-location-editor [role="status"]').allTextContents(),
+            dialogOpen:await p.locator('.pp-weather-location-editor[open]').count(),
+            journal:await p.evaluate(()=>c.chatMetadata?.durian_phone_history?.events?.at(-1)?.changes),
+            calls:await p.evaluate(()=>window.calls),
+        };
         throw new Error('weather manual edit diagnostic: '+JSON.stringify(diagnostic),{cause:error});
     }
     await p.getByRole('button',{name:'回到桌面',exact:true}).click();
