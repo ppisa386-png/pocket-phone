@@ -1,8 +1,8 @@
 import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from './daily-prompts.js?v=1.2.43';
-import { normalizePresetAssemblies } from './preset-assembly.js?v=1.2.91';
+import { normalizePresetAssemblies } from './preset-assembly.js?v=1.2.92';
 export const MODULE_KEY = 'personal_pocket_phone';
 export const LAUNCHER_SIZE = 36;
-export const VERSION = '1.2.91';
+export const VERSION = '1.2.92';
 export const APPS = [
     { id: 'phone', name: '电话', color: '#25ad75', dock: true },
     { id: 'messages', name: '短信', color: '#3289d9', dock: true },

@@ -1,8 +1,8 @@
-import { createPresetAssembly } from './src/preset-assembly.js?v=1.2.91';
+import { createPresetAssembly } from './src/preset-assembly.js?v=1.2.92';
 import { createCalendar } from './src/calendar.js?v=1.2.87';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.91';
-import { createWeather } from './src/weather.js?v=1.2.91';
+import { createDaily } from './src/daily.js?v=1.2.92';
+import { createWeather } from './src/weather.js?v=1.2.92';
 import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
 import { createAssets } from './src/assets.js?v=1.2.80';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
@@ -16,16 +16,16 @@ import { createDiagnostics } from './src/diagnostics.js?v=1.2.66';
 import { createX } from './src/x.js?v=1.2.87';
 import { createChatApp } from './src/chat-apps.js?v=1.2.80';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
-import { createApiClient, createKeyStore } from './src/api.js?v=1.2.91';
-import { captureHostRequest } from './src/api-context.js?v=1.2.91';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.91';
-import { mountPhone } from './src/ui.js?v=1.2.91';
-import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.91';
-import { createPhoneService } from './src/phone.js?v=1.2.91';
+import { createApiClient, createKeyStore } from './src/api.js?v=1.2.92';
+import { captureHostRequest } from './src/api-context.js?v=1.2.92';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.92';
+import { mountPhone } from './src/ui.js?v=1.2.92';
+import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.92';
+import { createPhoneService } from './src/phone.js?v=1.2.92';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
-import { normalizeSettings } from './src/config.js?v=1.2.91';
+import { normalizeSettings } from './src/config.js?v=1.2.92';
 
-import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.91';
+import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.92';
 
 const keyStore = createKeyStore();
 const diagnostics = createDiagnostics({version:VERSION,getSecrets:()=>keyStore.secrets()});
@@ -69,7 +69,7 @@ async function start() {
             throw new Error('当前酒馆未提供扩展设置接口，请更新酒馆后重试。');
         }
         const [response, enamelResponse, foodResponse, wechatResponse, weatherStyleResponse, weatherFontsResponse, dailyStyleResponse, calendarStyleResponse] = await Promise.all([
-            fetch(new URL('./style.css?v=1.2.91', import.meta.url), { cache: 'no-cache' }),
+            fetch(new URL('./style.css?v=1.2.92', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-enamel.css?v=1.2.31', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-food.css?v=1.2.34', import.meta.url), { cache: 'no-cache' }),
             fetch(new URL('./style-wechat.css?v=1.2.71', import.meta.url), { cache: 'no-cache' }),
