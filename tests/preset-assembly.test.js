@@ -122,13 +122,20 @@ test('squashed messages, unavailable hooks, ambiguous IDs and changed injection 
     }
 });
 
-test('unattributable source changes and later extension rewrites fail closed at serialization, with cleanup', async () => {
+test('host rewrites or extra messages do not block requests or disable recognizable preset exclusions', async () => {
     for (const options of [
         {beforeSource:(_data,manager)=>manager.messages.collection.push({identifier:'wrong',role:'system',content:'unrelated'})},
         {afterReady:data=>data.messages[0].content+=' altered after capture'},
+        {afterReady:data=>data.messages[0].role='user'},
+        {afterReady:data=>data.messages.unshift({role:'system',content:'injected by host hook'})},
     ]) {
-        const f=fixture(options);await assert.rejects(f.run(),/来源|一致/);assert.equal(f.requests.length,0);assert.equal(f.hostRequests.length,0);
-        assert.equal(f.assembly.diagnostic('x'),null);assert.equal(f.bus.listenerCount('CHAT_COMPLETION_SETTINGS_READY'),0);f.assembly.destroy();
+        const f=fixture(options);await f.run();
+        assert.equal(f.requests.length,1);assert.equal(f.hostRequests.length,0);
+        const sent=f.requests[0].messages;
+        assert.equal(sent.filter(message=>message.content==='同样的文字 Alice'&&message.role==='system').length,0);
+        assert.equal(sent.filter(message=>message.content==='同样的文字 Alice'&&message.role==='user').length,1);
+        assert.equal(f.assembly.diagnostic('x')?.excluded.some(item=>item.id==='style'),true);
+        assert.equal(f.bus.listenerCount('CHAT_COMPLETION_SETTINGS_READY'),0);f.assembly.destroy();
     }
 });
 
