@@ -1,5 +1,5 @@
-import { APPS, resolveAppConnection } from './config.js?v=1.2.92';
-import { presetRule, presetRowSelected } from './preset-assembly.js?v=1.2.92';
+import { APPS, resolveAppConnection } from './config.js?v=1.2.93';
+import { presetRule, presetRowSelected } from './preset-assembly.js?v=1.2.93';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
 
 export function createPresetAssemblyPanel({ adapter, getSettings, persist, redraw, active }) {
