@@ -88,6 +88,39 @@ function sourceMessages(root) {
     return structuredClone(result);
 }
 
+// Host request hooks may rewrite roles, append messages or adjust text after the
+// Prompt Manager has assembled it. Match sources where possible; a global
+// byte-for-byte comparison must not stop an otherwise valid phone task.
+function finalSourceIds(sources, messages) {
+    const key = message => stable([message?.content ?? null, message?.tool_calls ?? null, message?.tool_call_id ?? null]);
+    const before = sources.map(item => key(item.message));
+    const after = messages.map(key);
+    if (before.length === after.length) {
+        if (stable(before) === stable(after)) return { ids: sources.map(item => item.id), quality: 'exact' };
+        // A content-only permutation is attributable even if role fields changed.
+        const sorted = items => [...items].sort();
+        if (stable(sorted(before)) === stable(sorted(after))) {
+            const queues = new Map();
+            sources.forEach((item, i) => {
+                if (!queues.has(before[i])) queues.set(before[i], []);
+                queues.get(before[i]).push(item.id);
+            });
+            return { ids: after.map(signature => queues.get(signature).shift()), quality: 'reordered' };
+        }
+        // Normal host hooks modify individual messages in place. Preserve their
+        // original slots instead of rejecting the entire request.
+        return { ids: sources.map(item => item.id), quality: 'position' };
+    }
+    // For inserted/deleted messages, only remove source entries which can still
+    // be identified by matching content. Unmatched new text always stays.
+    const queues = new Map();
+    sources.forEach((item, i) => {
+        if (!queues.has(before[i])) queues.set(before[i], []);
+        queues.get(before[i]).push(item.id);
+    });
+    return { ids: after.map(signature => queues.get(signature)?.shift() ?? null), quality: 'content' };
+}
+
 export function createPresetAssembly({ getContext, getSettings, getHost = () => ({}) }) {
     const diagnostics = new Map();
     let revision = 0, switching = false, disposed = false;
@@ -140,7 +173,8 @@ export function createPresetAssembly({ getContext, getSettings, getHost = () => 
                     if (!custom) return;
                     if (!current()) throw fail('请求期间酒馆预设发生变化，本次没有提交模型。');
                     sources = sourceMessages(getHost().promptManager?.messages);
-                    if (stable(sources.map(item => item.message)) !== stable(structuredClone(messages))) throw fail('酒馆消息已合并或被扩展改写，无法证明条目来源，本次没有提交模型。');
+                    // Later SillyTavern/extension hooks can legitimately transform the
+                    // serialized messages; the source tree remains our exclusion map.
                     // Duplicate leaf IDs cannot be safely attributed to one preset entry.
                     for (const id of excluded) {
                         const matches = sources.filter(item => item.id === id);
@@ -149,16 +183,20 @@ export function createPresetAssembly({ getContext, getSettings, getHost = () => 
                 },
                 filter(messages) {
                     if (!custom) return messages;
-                    if (!current() || !sources || stable(structuredClone(messages)) !== stable(sources.map(item => item.message)))
-                        throw fail('最终请求与可核对的条目来源不一致，本次没有提交模型。');
-                    const present = new Set(sources.map(item => item.id));
+                    if (!current() || !sources) throw fail('当前预设来源已失效，本次没有提交模型。');
+                    const mapping = finalSourceIds(sources, messages);
+                    const present = new Set(mapping.ids.filter(Boolean));
                     diagnostic.included = []; diagnostic.excluded = []; diagnostic.absent = [];
                     for (const row of snapshot.rows.filter(item => item.controllable)) {
                         const list = !present.has(row.id) ? diagnostic.absent : excluded.has(row.id) ? diagnostic.excluded : diagnostic.included;
                         list.push({ id: row.id, name: row.name });
                     }
+                    const missed = [...excluded].filter(id => sources.some(item => item.id === id) && !present.has(id));
+                    if (mapping.quality !== 'exact') diagnostic.note = missed.length
+                        ? '最终请求经过额外处理；已尽量识别并排除条目，' + missed.length + ' 项无法对应的内容保留，未因此拦截本次请求。'
+                        : '最终请求经过酒馆或扩展处理；已按来源定位并排除选定条目，不因其他消息变化取消请求。';
                     assembled = true;
-                    return messages.filter((_message, index) => !excluded.has(sources[index].id));
+                    return messages.filter((_message, index) => !excluded.has(mapping.ids[index]));
                 },
                 submitted() {
                     if (custom && !assembled) throw fail('自定义组装未完成来源校验，本次没有提交模型。');
