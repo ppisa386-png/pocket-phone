@@ -1,3 +1,9 @@
+## v1.2.97 · X 双空 stats 恢复与字符串 ID 契约
+- 本地完整 `npm test`：979/979 通过、0 失败；`npm run build:preview` 成功。
+- `tests/api.test.js`：真实独立 API 请求组装链使用 `stats:[{},{}]`、`initialFollowers:382` 模拟截图，检查最终 system 输出指令携带准确字符串 ID、六字段 Schema、仅重做影响评估一次，补全后两帖各自正确保存。
+- `tests/x.test.js`：跟随酒馆分别覆盖双空项、重复/错误 ID、缺失/非法数字、缺初始粉丝的恢复；合法结果可逆序、按 ID 匹配。连续重复 ID 只恢复一次且整批原数据不变；空候选与显式 0 粉丝正常成功。
+- 不使用真实用户密钥；未进行 Gemini 中转在线模型验收。
+
 ### Amazon 收货确认同步（v1.2.90）
 - `node --test tests/delivery.test.js tests/amazon.test.js`：原 arrived:true 预计配送时间窗口保持，received:true 在实际收货时（提前/深夜也可以）更新「已完成」；错误订单 ID、user 楼、系统楼和代码块无效；删楼恢复；收货前只追加事实同步提示、不催送货；外卖收货处理不变。
 

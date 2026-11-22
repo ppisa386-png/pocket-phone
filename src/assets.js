@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.96';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.97';
 import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.2.79';
 import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.2';
 import { changeWalletCurrency } from './assets-currency.js?v=1.2';

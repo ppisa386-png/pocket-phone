@@ -125,25 +125,30 @@ test('independent X Home refresh submits a Gemini-compatible post schema in one 
  }finally{f.close();}
 });
 
-test('X initial post impact repairs an empty Gemini stats object with exact post ID once',async()=>{
+test('X initial post impact repairs two empty Gemini stats objects with exact string IDs once',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let feed=0,impact=0;
  try{
   f.context.chat=[{mes:'2026-06-01 10:00\nSam made a public post.'}];
   const published=await x.publish('A public note.');assert.equal(published.ok,true,published.error);
-  const post=xItems(f.phone.snapshot(),'post').find(row=>row.author==='user');assert.ok(post);
+  assert.equal((await x.publish('Another public note.')).ok,true);
+  const posts=xItems(f.phone.snapshot(),'post').filter(row=>row.author==='user');assert.equal(posts.length,2);
   f.reply(options=>{
    const body=JSON.parse(options.body),name=body.json_schema?.name;
    if(name==='phone_x_feed_posts'){feed++;return JSON.stringify({posts:[],replies:[]});}
    assert.equal(name,'phone_x_post_impact');impact++;
    assert.deepEqual(body.json_schema.value.properties.stats.items.required,['postId','likes','reposts','replies','gained','lost']);
-   if(impact===1)return JSON.stringify({stats:[{}],initialFollowers:1240});
+   const contract=body.messages.at(-1).content;
+   assert.match(contract,/postId 必须是原样复制的字符串/);
+   assert.ok(contract.includes(JSON.stringify(posts.map(post=>post.id))),'final output contract repeats this batch’s exact IDs');
+   assert.match(contract,/后五项均为非负整数/);
+   if(impact===1)return JSON.stringify({stats:[{},{}],initialFollowers:382});
    assert.match(body.messages.at(-1).content,/X 推文评估格式恢复/);
-   return JSON.stringify({stats:[{postId:post.id,likes:8,reposts:2,replies:1,gained:3,lost:0}],initialFollowers:1240});
+   return JSON.stringify({stats:posts.map(post=>({postId:post.id,likes:8,reposts:2,replies:1,gained:3,lost:0})),initialFollowers:382});
   });
   const refreshed=await x.refreshPublic();assert.equal(refreshed.ok,true,refreshed.error);
   assert.equal(feed,1,'only the impact stage is retried, not the feed');assert.equal(impact,2);
-  const state=f.phone.snapshot();assert.equal(state.x['impact:post:'+post.id].gained,3);
-  assert.equal(state.x[post.id].metrics.likes,8);assert.equal(state.x.audience.initialFollowers,1240);
+  const state=f.phone.snapshot();assert.equal(state.x.audience.initialFollowers,382);
+  for(const post of posts){assert.equal(state.x['impact:post:'+post.id].gained,3);assert.equal(state.x[post.id].metrics.likes,8);}
  }finally{f.close();}
 });
 

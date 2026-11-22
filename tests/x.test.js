@@ -594,6 +594,67 @@ test('atomic refresh saves the five numbers without review, never asks for other
  }finally{f.close();}
 });
 
+test('host X impact repairs malformed two-post batches once and associates out-of-order results by ID',async t=>{
+ const malformed={
+  'two empty objects':()=>({stats:[{},{}],initialFollowers:382}),
+  'duplicate ID':stats=>({stats:[stats[0],stats[0]],initialFollowers:382}),
+  'unknown ID':stats=>({stats:[stats[0],{...stats[1],postId:'unknown-post'}],initialFollowers:382}),
+  'missing metric':stats=>({stats:[stats[0],{...stats[1],lost:undefined}],initialFollowers:382}),
+  'invalid metric':stats=>({stats:[stats[0],{...stats[1],likes:-1}],initialFollowers:382}),
+  'missing initial followers':stats=>({stats}),
+ };
+ for(const [name,invalid] of Object.entries(malformed))await t.test(name,async()=>{
+  const f=setup();try{
+   f.context.chat[0].mes='2026-06-01 10:00';
+   ok(await f.x.publish('First post'));ok(await f.x.publish('Second post'));
+   const posts=xItems(f.state(),'post').filter(p=>p.author==='user');
+   const stats=posts.map((p,i)=>({postId:p.id,likes:i+1,reposts:0,replies:0,gained:0,lost:0}));
+   const before=structuredClone(f.state().x);let feeds=0,impacts=0;
+   f.reply(({quietPrompt})=>{
+    if(!quietPrompt.includes('逐条独立估计')){feeds++;return JSON.stringify(feedResult());}
+    impacts++;assert.deepEqual(f.state().x,before,'no partial feed or influence changes before validation');
+    assert.ok(quietPrompt.includes(JSON.stringify(posts.map(p=>p.id))));
+    assert.match(quietPrompt,/postId 必须是原样复制的字符串/);
+    if(impacts===1)return JSON.stringify(invalid(stats));
+    assert.match(quietPrompt,/X 推文评估格式恢复/);
+    return JSON.stringify({stats:[...stats].reverse(),initialFollowers:382});
+   });
+   ok(await f.x.refreshPublic());assert.equal(feeds,1);assert.equal(impacts,2);
+   for(const stat of stats)assert.equal(f.state().x[stat.postId].metrics.likes,stat.likes);
+   assert.equal(f.state().x.audience.followers,382);
+  }finally{f.close();}
+ });
+});
+
+test('host X impact rejects repeated duplicate IDs atomically after one recovery',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01 10:00';
+  ok(await f.x.publish('First post'));ok(await f.x.publish('Second post'));
+  const post=xItems(f.state(),'post').find(p=>p.author==='user'),before=structuredClone(f.state().x);
+  let impacts=0;
+  f.reply(({quietPrompt})=>{
+   if(!quietPrompt.includes('逐条独立估计'))return JSON.stringify(feedResult());
+   impacts++;
+   const stat={postId:post.id,likes:1,reposts:0,replies:0,gained:0,lost:0};
+   return JSON.stringify({stats:[stat,stat],initialFollowers:382});
+  });
+  const result=await f.x.refreshPublic();assert.equal(result.ok,false);assert.equal(result.code,'PHONE_DATA_MISSING');
+  assert.equal(impacts,2);assert.deepEqual(f.state().x,before);
+ }finally{f.close();}
+});
+
+test('X impact allows no pending posts and explicit zero initial followers',async()=>{
+ const f=setup();try{
+  f.context.chat[0].mes='2026-06-01 10:00';let impacts=0;
+  f.reply(({quietPrompt})=>{
+   if(!quietPrompt.includes('逐条独立估计'))return JSON.stringify(feedResult());
+   impacts++;assert.match(quietPrompt,/本次 postId 列表：\[\]/);assert.match(quietPrompt,/stats 必须恰好有 0 项/);
+   return JSON.stringify({stats:[],initialFollowers:0});
+  });
+  ok(await f.x.refreshPublic());assert.equal(impacts,1);assert.equal(f.state().x.audience.followers,0);
+ }finally{f.close();}
+});
+
 test('privilege is classified when publishing, levels are frozen, opposite stances replace and expire with the source timeline',async()=>{
  const {privilegeLevel,privilegePrompt}=await import('../src/x-privilege.js');
  assert.deepEqual([99999,100000,499999,500000,1000000,1000001].map(privilegeLevel),[null,'low','low','medium','medium','high']);

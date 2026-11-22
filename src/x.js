@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.96';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.97';
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
@@ -585,8 +585,14 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
             const home=await refreshFeedStage(staged,valid,refreshRequest,collect,false,true);
             const pending=xItems(staged,'post').filter(p=>p.author==='user'&&!staged.x['impact:post:'+p.id]);
             if(pending.length||!xAudience(staged)){
-                const contract='只返回一个 JSON 对象，stats 数组必须恰好覆盖列出的每个 postId，各一次。每项只填 postId、likes、reposts、replies、gained、lost，均为非负整数。初始粉丝未知时另填 initialFollowers。无需理由、等级、传播预测或分类。';
                 const inputs=pending.map(p=>({postId:p.id,text:p.text,imageDescription:p.imageDescription,sourceIndex:p.sourceIndex,userReplies:xUserReplyContext(staged,p.id)}));
+                // This contract is also the final system message for independent
+                // APIs: keep exact IDs and their string type next to the output rules.
+                const contract='只返回一个 JSON 对象，stats 数组必须恰好覆盖列出的每个 postId，各一次。'+
+                    '本次 postId 列表：'+JSON.stringify(inputs.map(p=>p.postId))+'。stats 必须恰好有 '+inputs.length+' 项；列表为空时返回 stats:[]。'+
+                    '每项只填 postId、likes、reposts、replies、gained、lost；postId 必须是原样复制的字符串，后五项均为非负整数，允许为0，不得返回空对象或占位项。'+
+                    (xAudience(staged)?'初始粉丝已知，无需另填 initialFollowers。':'初始粉丝未知，必须另填非负整数 initialFollowers，允许为0。')+
+                    '无需理由、等级、传播预测或分类。';
                 const sources=new Set(inputs.map(p=>p.sourceIndex).filter(Number.isInteger));
                 const prose=storyEvidenceRows(chat).filter(r=>r.index<=floor);
                 const visible=[...new Map([...prose.filter(r=>sources.has(r.index)),...prose.slice(-12)]
