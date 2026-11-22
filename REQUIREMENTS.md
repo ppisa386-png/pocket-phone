@@ -1,3 +1,8 @@
+### Gemini 结构化输出 required-only anyOf 兼容修复（2026-11-22，v1.2.95）
+- 独立 API 的 X 信息流 Schema 曾包含只有 required 而缺少 type/properties 的 anyOf 分支；Gemini 中转将其转为 response_schema 后返回 400（response_schema.any_of[0].required only allowed for OBJECT）。删除 X 信息流的这种无效上游约束；资产更新与好友响应 Schema 中相同的 required-only anyOf 一并移除，防止同类拒绝。
+- 保留 X 首页/广场必须交付 posts 数组（允许空数组），已关注可交付 posts 或 accounts 的行为；资产普通更新必须有 events、living、business，变更币种的早返回只需 residenceChange；好友判断须有 accepted 或 ambiguous。这些条件继续由 assertTaskResponse 及 App 本地业务校验执行，模型未交付时拒绝写入并沿用已有格式纠错，不让 API Schema 的简化放宽存档。
+- 不改模型、密钥、酒馆转发链、输入上下文、输出 token 限额、重试次数、提示词、UI 和既有存档/删楼机制。修复手机日志中的旧硬编码插件版本号，并提升模块缓存版本；真实用户的 Gemini/酒馆端到端仍需要实测。
+
 ### 榴莲日报正文注入去除具体读报方式引导（2026-11-22，v1.2.94）
 - 已选报道以可选的故事世界背景和公共事件线索提供给正文模型，事件可自然影响环境、公共事务、行业与生活，也可暂不进入当前场景；按剧情判断是否、何时、如何融入。
 - 从实际正文注入的默认规则和硬编码规则中删除“阅读报纸、听到转述、拿起报纸、谈论新闻”等正面示例及对应否定式反复提示。不禁止人物看报、听闻或讨论；只是注入协议不再引导任何特定接触方式，保持叙事自由。

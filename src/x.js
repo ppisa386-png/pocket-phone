@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.85';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.95';
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';

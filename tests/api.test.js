@@ -107,6 +107,24 @@ test('weather schema fallback preserves the task and does not mutate the caller 
  assert.equal(seen.length,2);
 });
 
+test('independent X Home refresh submits a Gemini-compatible post schema in one request',async()=>{
+ const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
+ try{
+  f.reply(options=>{
+   const body=JSON.parse(options.body),contract=body.json_schema;calls++;
+   const invalid=(contract?.value?.anyOf||[]).some(branch=>Array.isArray(branch.required)&&(!branch.type||!branch.properties));
+   if(invalid)return {ok:true,status:200,json:async()=>({error:{message:'response_schema.any_of[0].required: only allowed for OBJECT type',status:400,type:'invalid_request_error'}})};
+   assert.equal(contract.name,'phone_x_feed_posts');
+   assert.deepEqual(contract.value.required,['posts']);
+   assert.equal(contract.value.anyOf,undefined);
+   return JSON.stringify(feedResult({posts:[{name:'Alex',handle:'alex',text:'Morning update.'}]}));
+  });
+  const result=await x.refresh();
+  assert.equal(result.ok,true,result.error);
+  assert.equal(calls,1,'a valid schema needs no failed compatibility retry');
+ }finally{f.close();}
+});
+
 test('all X refresh routes preserve old posts after one failed syntax recovery',async()=>{
  const f=phoneFixture(),x=createX({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
  try{

@@ -1,7 +1,7 @@
 // A weather location is set only by user long-press; refresh researches that exact place.
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { establishedSources } from './contacts.js?v=1.2';
-import { weatherResearchPrompt, validateWeatherResearch, sameWeatherCity, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from './weather-model.js?v=1.2.94';
+import { weatherResearchPrompt, validateWeatherResearch, sameWeatherCity, weatherResearchSchema, WEATHER_OUTPUT_CONTRACT } from './weather-model.js?v=1.2.95';
 
 const norm = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
 export const normCity = city => norm(city);

@@ -3,9 +3,9 @@
   "loading_order": 100,
   "requires": [],
   "optional": [],
-  "js": "index.js?v=1.2.94",
+  "js": "index.js?v=1.2.95",
   "author": "Personal project",
-  "version": "1.2.94",
+  "version": "1.2.95",
   "auto_update": false
 }
 

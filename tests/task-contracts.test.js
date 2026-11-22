@@ -49,3 +49,27 @@ test('protocol requires delivery without forbidding zero, silence, no changes an
  assert.equal(assertTaskResponse(legacy,TASK_SCHEMAS.assetsInitial,{optionalMissing:['residence']}),legacy);
  assert.throws(()=>validateProducts({products:[]},'USD'));
 });
+
+test('Gemini response_schema avoids required-only anyOf and retains local task contracts',()=>{
+ const check=(node,path)=>{
+  if(!node||typeof node!=='object')return;
+  if(Array.isArray(node.anyOf))for(const [i,branch] of node.anyOf.entries()){
+   if(Array.isArray(branch.required)){
+    assert.equal(branch.type,'object',path+'.anyOf['+i+'] requires OBJECT');
+    assert.ok(branch.properties&&typeof branch.properties==='object',path+'.anyOf['+i+'] defines properties');
+    for(const key of branch.required)assert.ok(Object.hasOwn(branch.properties,key),path+'.anyOf['+i+'] defines '+key);
+   }
+  }
+  for(const [key,value] of Object.entries(node))if(value&&typeof value==='object')check(value,path+'.'+key);
+ };
+ for(const contract of Object.values(TASK_SCHEMAS))check(contract.value,contract.name);
+ assert.equal(TASK_SCHEMAS.xFeed.value.anyOf,undefined);
+ assert.deepEqual(TASK_SCHEMAS.xFeedPosts.value.required,['posts']);
+ assert.equal(TASK_SCHEMAS.assetsUpdate.value.anyOf,undefined);
+ assert.equal(TASK_SCHEMAS.friends.value.anyOf,undefined);
+ assert.equal(assertTaskResponse({accounts:[]},TASK_SCHEMAS.xFeed).accounts.length,0);
+ assert.throws(()=>assertTaskResponse({accounts:[]},TASK_SCHEMAS.xFeedPosts),e=>e.code==='PHONE_DATA_MISSING');
+ assert.throws(()=>assertTaskResponse({},TASK_SCHEMAS.friends),e=>e.code==='PHONE_DATA_MISSING');
+ assert.equal(assertTaskResponse({ambiguous:true},TASK_SCHEMAS.friends).ambiguous,true);
+ assert.throws(()=>assertTaskResponse({events:[],business:[]},TASK_SCHEMAS.assetsUpdate,{currentCurrency:'USD'}),e=>e.code==='PHONE_DATA_MISSING');
+});

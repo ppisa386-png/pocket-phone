@@ -6,7 +6,7 @@ import { syncCommContext, COMM_RECORD_COLLECTIONS } from './comm-context.js?v=1.
 import { exactStoryTime,readStoryClock } from './story-clock.js?v=1.2';
 import { importStoryAssets } from './assets-story.js?v=1.2.65';
 import { importStorySquare } from './x-opinion.js?v=1.2.57';
-import { importStoryPhone } from './story-phone.js?v=1.2.92';
+import { importStoryPhone } from './story-phone.js?v=1.2.95';
 import { importStoryWechatMoments } from './wechat-moments-story.js?v=1.2.71';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, appendChange, replayJournal, eraseMessageFromJournal, eraseRecordFromJournal, isMemoryHidden } from './journal.js?v=1.2.57';
 

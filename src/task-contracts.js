@@ -15,7 +15,8 @@ const product=obj(['name','brand','luxury','description','image','price','curren
     name:str,brand:str,luxury:bool,description:str,image:str,price:{type:['number','string']},currency:str,
     variants:arr(str),reviews:arr(obj(['name','rating','text'],{name:str,rating:integer,text:str})),
 });
-const xFeedShape={...obj([],{posts:arr(obj(['text'],{text:str,accountId:str,name:str,handle:str})),replies:arr({type:'object'}),accounts:arr({type:'object'}),activityReactions:arr({type:'object'}),engagementUpdates:arr({type:'object'})}),anyOf:[{required:['posts']},{required:['accounts']}]};
+// The provider schema only describes field shapes; either/or is checked locally.
+const xFeedShape=obj([],{posts:arr(obj(['text'],{text:str,accountId:str,name:str,handle:str})),replies:arr({type:'object'}),accounts:arr({type:'object'}),activityReactions:arr({type:'object'}),engagementUpdates:arr({type:'object'})});
 export const TASK_SCHEMAS={
     calendar:schema('calendar',obj(['region','timezone','years','holidays'],{
         region:str,timezone:{type:['string','null']},years:arr(integer,2,2),
@@ -37,9 +38,8 @@ export const TASK_SCHEMAS={
         living:obj(['total','bookedIds'],{total:{type:['number','string']},bookedIds:arr(str)}),
         business:arr({type:'object'}),ownership:arr({type:'object'}),classifications:arr({type:'object'}),recoveredAssets:arr({type:'object'}),note:str,
         }),
-        // Migration to another currency is a deliberate early-return task:
-        // it only proposes the new residence until the user supplies a rate.
-        anyOf:[{required:['events','living','business']},{required:['residenceChange']}],
+        // Migration is an early-return task; required fields vary by outcome.
+        // assertTaskResponse enforces these branches without provider-incompatible anyOf.
     }),
     assetsRecovery:schema('assets_recovery',obj(['recoveredAssets'],{recoveredAssets:arr({type:'object'})})),
     assetsResidence:schema('assets_residence_repair',obj(['residence'],{residence:{anyOf:[{type:'null'},residence]},date:str,currency:str})),
@@ -68,7 +68,7 @@ export const TASK_SCHEMAS={
     snapCall:schema('social_call',obj(['status'],{status:{type:'string',enum:['answered','no_answer']},text:str,category:str})),
     snapTransfer:schema('social_transfer',obj(['status'],{status:{type:'string',enum:['accepted','declined','pending']}})),
     textRewrite:schema('message_rewrite',obj(['text'],{text:str})),
-    friends:schema('friends_response',{...obj([],{accepted:bool,name:str,aliases:arr(str),ambiguous:bool}),anyOf:[{required:['accepted']},{required:['ambiguous']}]}),
+    friends:schema('friends_response',obj([],{accepted:bool,name:str,aliases:arr(str),ambiguous:bool})),
     contacts:schema('contacts',obj(['contacts'],{contacts:arr({type:'object'})})),
     food:schema('food_search',obj(['currency','shops'],{currency:str,shops:arr({type:'object'})})),
 

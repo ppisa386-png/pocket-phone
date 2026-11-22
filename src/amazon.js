@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.95';
 import { walletCurrency, majorAmount, formatMoney, validCurrency } from './currency.js?v=1.2';
 import { requireCash, moneyMinor, assetSet, cashRecord, cashBalance, reservedCash, assetRows } from './assets-core.js?v=1.2';
 import { dateDay, readStoryClock } from './story-clock.js?v=1.2';

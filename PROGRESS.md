@@ -1,3 +1,9 @@
+### 2026-11-22 · v1.2.95 修复 Gemini JSON Schema anyOf 400 拒绝
+- **现象／根因**：用户提供酒馆终端请求截图，X 刷新上游 Bad Request 明确指向 generation_config.response_schema.any_of[0].required：仅允许 OBJECT 且 required property 未定义。代码定位 src/task-contracts.js 的 xFeedShape 中两个仅含 required 的 anyOf 分支；这不是请求字符数或 token 超限错误。
+- **基线**：main `33366f47c94899fbb3f062aac7f47c69574df5b4`（v1.2.94）。**实现**：移除 X feed 的 required-only anyOf，xFeedPosts 继续强制顶层 posts；已关注 accounts-only 继续由 assertTaskResponse 校验。检查并移除 assetsUpdate、friends 中同类 required-only anyOf，本地迁移/好友判断校验保留。src/phone.js 诊断中的插件版本号由硬编码 1.2.92 改为 VERSION。相关 import 查询参数、manifest/package/config 均升级 v1.2.95 避免加载旧的 Schema 模块。
+- **保持不变**：X 推文与账号保存规则、正文/预设组装、JSON 回复语义校验、上下文/输出上限、API 转发方法、网络重试、天气/日报/资产业务及旧存档与回退规则均不改。不添加丢弃 Schema 后的无条件重发，以免误触重复请求。
+- **验证**：新增 task-contracts 对所有契约 required-only anyOf 的结构审查及 X/资产/好友缺字段规则测试；新增模拟 Gemini 400 条件的独立 X 首页真实请求链回归。发布后检查 GitHub Actions 的 npm test / npm run build:preview；目前尚无用户实际 Gemini 中转端到端成功验证。
+
 ### 2026-11-22 · v1.2.94 榴莲日报正文注入去读报引导
 - **讨论结论**：用户指出即使提示词说“不要让人物读报”，反复提及读报、转述也会诱导模型机械安排人物接触新闻；决定直接删除具体接触方式示例与否定式重复，不禁止小说里自然出现读报，保留模型决定叙事方式的自由。
 - **基线**：main 78ccdf404598fe850a2f0c905845f580469e6b06（v1.2.93）。**实现**：更新 DAILY_NARRATIVE_PROMPT 及 buildDailyPrompt 硬编码文字，叙事规则仅描述可选世界背景、事件影响、事实边界及自然采用；已采用标记改为记录正文自然呈现的事件、影响或相关变化，未体现不标记。旧 v1.2.93 内置默认文本加入设置迁移列表，保留自定义文本。入口与相关模块缓存版本更新至 1.2.94。
