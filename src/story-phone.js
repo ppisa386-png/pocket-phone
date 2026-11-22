@@ -3,7 +3,7 @@ import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.66';
 import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.66';
 import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.79';
-import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.93';
+import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.94';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.66';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
 import { smsReplyClassification } from './sms-context.js?v=1.2.66';
@@ -15,7 +15,7 @@ import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?
 import { effectiveReply, narrativeReplyCount } from './contact-policy.js?v=1.2.58';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { financialEvidenceMatches } from './assets-policy.js?v=1.2';
-import { sceneBackground } from './weather.js?v=1.2.93';
+import { sceneBackground } from './weather.js?v=1.2.94';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});

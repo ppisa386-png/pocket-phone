@@ -53,7 +53,7 @@ test('selected stories remain world background, and environmental adoption marks
   const evidence='市区部分道路已经封闭，公交通行路线随之调整。';
   f.c.chat.push({mes:evidence+'<!--durian-daily-used:'+JSON.stringify({id:firstArticle.id,used:true,evidence})+'-->'});
   await f.memory.read();
-  assert.equal(dailyStatus(firstArticle,f.state(),f.c.chat),'used');
+  assert.equal(dailyStatus(f.state().daily[firstArticle.id],f.state(),f.c.chat),'used');
   const remaining=buildDailyPrompt(f.state(),f.c.chat);
   assert.doesNotMatch(remaining,/市区交通调整/);assert.match(remaining,/本地行业变动/);
  }finally{f.close();}
