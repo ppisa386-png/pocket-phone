@@ -1,9 +1,9 @@
 import { createPresetAssembly } from './src/preset-assembly.js?v=1.2.93';
 import { createCalendar } from './src/calendar.js?v=1.2.93';
 import { createCalendarBridge } from './src/calendar-story.js?v=1.2.66';
-import { createDaily } from './src/daily.js?v=1.2.93';
+import { createDaily } from './src/daily.js?v=1.2.94';
 import { createWeather } from './src/weather.js?v=1.2.93';
-import { createDailyBridge } from './src/daily-story.js?v=1.2.66';
+import { createDailyBridge } from './src/daily-story.js?v=1.2.94';
 import { createAssets } from './src/assets.js?v=1.2.93';
 import { createAssetBridge } from './src/assets-story.js?v=1.2.66';
 import { createOpinionBridge } from './src/x-opinion.js?v=1.2.61';
@@ -18,12 +18,12 @@ import { createChatApp } from './src/chat-apps.js?v=1.2.80';
 import { latestMemory } from './src/external-memory.js?v=1.2.53';
 import { createApiClient, createKeyStore } from './src/api.js?v=1.2.93';
 import { captureHostRequest } from './src/api-context.js?v=1.2.93';
-import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.93';
-import { mountPhone } from './src/ui.js?v=1.2.93';
+import { MODULE_KEY, VERSION } from './src/config.js?v=1.2.94';
+import { mountPhone } from './src/ui.js?v=1.2.94';
 import { createPhoneMemory, hostGenerationState } from './src/memory.js?v=1.2.93';
 import { createPhoneService } from './src/phone.js?v=1.2.93';
 import { createContinuityBridge } from './src/continuity.js?v=1.2.71';
-import { normalizeSettings } from './src/config.js?v=1.2.93';
+import { normalizeSettings } from './src/config.js?v=1.2.94';
 
 import { createStoryPhoneBridge } from './src/story-phone.js?v=1.2.93';
 

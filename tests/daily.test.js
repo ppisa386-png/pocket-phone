@@ -1,5 +1,5 @@
 import {paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources} from '../src/daily-core.js';
-import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT } from '../src/daily-prompts.js';
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT, PREVIOUS_DAILY_NARRATIVE_DEFAULT } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -37,10 +37,28 @@ const first=f=>dailyArticles(f.state())[0];
 test('open/read/select are local, one click one request; empty selections create no normal prose burden',async()=>{
  const f=setup();try{await f.daily.open();assert.equal(f.calls(),0);await f.bridge.prepare();assert.equal(f.c.extensionPrompts[DAILY_KEY].value,'');
   ok(await f.daily.update());assert.equal(f.calls(),1);assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');
-  const a=first(f);ok(await f.daily.toggle(a.id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);assert.match(buildDailyPrompt(f.state(),f.c.chat),/完全由当前剧情决定/);assert.match(buildDailyPrompt(f.state(),f.c.chat),/整轮完全不提/);assert.doesNotMatch(buildDailyPrompt(f.state(),f.c.chat),/不强制下一回合回应/);ok(await f.daily.toggle(a.id));assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.equal(f.calls(),1);
+  const a=first(f);ok(await f.daily.toggle(a.id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);assert.match(buildDailyPrompt(f.state(),f.c.chat),/依据现有剧情自然决定/);assert.doesNotMatch(buildDailyPrompt(f.state(),f.c.chat),/阅读报纸|听到转述|拿起报纸|谈论新闻|讨论时事|阅读场景/);ok(await f.daily.toggle(a.id));assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.equal(f.calls(),1);
   assert.doesNotMatch(f.prompt(),/最近二十条/);assert.match(f.prompt(),/普通 user 不强行上报/);assert.match(f.prompt(),/小歌手/);assert.match(f.prompt(),/不预知未来/);
  }finally{f.close();}
 });
+test('selected stories remain world background, and environmental adoption marks only the applied story',async()=>{
+ const f=setup();try{
+  f.reply({articles:[article('市区交通调整'),article('本地行业变动')]});ok(await f.daily.update());
+  const [firstArticle,secondArticle]=dailyArticles(f.state());
+  ok(await f.daily.toggle(firstArticle.id));ok(await f.daily.toggle(secondArticle.id));
+  const injected=buildDailyPrompt(f.state(),f.c.chat);
+  assert.match(injected,/市区交通调整/);assert.match(injected,/本地行业变动/);
+  assert.match(injected,/故事世界背景/);
+  assert.doesNotMatch(injected,/阅读报纸|听到转述|拿起报纸|谈论新闻|讨论时事|阅读场景|经阅读/);
+  const evidence='市区部分道路已经封闭，公交通行路线随之调整。';
+  f.c.chat.push({mes:evidence+'<!--durian-daily-used:'+JSON.stringify({id:firstArticle.id,used:true,evidence})+'-->'});
+  await f.memory.read();
+  assert.equal(dailyStatus(firstArticle,f.state(),f.c.chat),'used');
+  const remaining=buildDailyPrompt(f.state(),f.c.chat);
+  assert.doesNotMatch(remaining,/市区交通调整/);assert.match(remaining,/本地行业变动/);
+ }finally{f.close();}
+});
+
 test('story midnight expires the whole edition without needing an hour or wall clock',async()=>{
  const f=setup();try{ok(await f.daily.update());ok(await f.daily.toggle(first(f).id));f.c.chat.push({mes:'2003-07-24 23:59'});await f.memory.read();assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);
   f.c.chat.push({mes:'2003-07-25 00:00'});await f.memory.read();assert.equal(dailyExpiry(f.state().daily.edition,f.c.chat),'expired');assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.equal((await f.daily.toggle(first(f).id)).ok,false);assert.equal(f.calls(),1);
@@ -329,6 +347,7 @@ test('failed replacement leaves complete folder untouched; unknown dates never l
 test('old built-in daily prompts migrate, customized and blank prompts remain intact',()=>{
  const migrated=normalizeSettings({prompts:PREVIOUS_DAILY_PROMPTS});assert.equal(migrated.prompts.daily,DAILY_EDITORIAL_PROMPT);assert.equal(migrated.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
  const outgoing=normalizeSettings({prompts:{dailyStory:PREVIOUS_DAILY_STORY_DEFAULT}});assert.equal(outgoing.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
+ const currentOld=normalizeSettings({prompts:{dailyStory:PREVIOUS_DAILY_NARRATIVE_DEFAULT}});assert.equal(currentOld.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
  const custom=normalizeSettings({prompts:{daily:'我的自定义选题',dailyStory:''}});assert.equal(custom.prompts.daily,'我的自定义选题');assert.equal(custom.prompts.dailyStory,'');
 });
 

@@ -1,8 +1,8 @@
 import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.79';
-import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.43';
+import { DAILY_EDITORIAL_PROMPT } from './daily-prompts.js?v=1.2.94';
 import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
 import { storyEvidenceRows } from './square-core.js?v=1.2.66';
-import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.66';
+import { dailyChanges, dailyStatus, dailyEditorialHistory, dailyArticles, dailyArchives, dailyExpiry, paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources } from './daily-core.js?v=1.2.94';
 import { parseAppObject } from './model-json.js?v=1.2.79';
 import { locationKind } from './weather.js?v=1.2.93';
 import { establishedSources } from './contacts.js?v=1.2';
