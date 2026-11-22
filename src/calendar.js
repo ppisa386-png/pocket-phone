@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.95';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.96';
 import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
 import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from './calendar-core.js?v=1.2.66';
 

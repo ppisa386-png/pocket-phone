@@ -57,7 +57,10 @@ export const TASK_SCHEMAS={
     xComments:schema('x_comments',obj(['comments'],{comments:arr({type:'object'})})),
     xPublic:schema('x_public_comment',obj(['text'],{text:str,reactions:arr({type:'object'})})),
     xTrends:schema('x_trends',obj(['topics'],{topics:arr({type:'object'})})),
-    xStats:schema('x_post_impact',obj(['stats'],{stats:arr({type:'object'}),initialFollowers:integer})),
+    xStats:schema('x_post_impact',obj(['stats'],{stats:arr(obj(['postId','likes','reposts','replies','gained','lost'],{
+        postId:str,likes:{type:'integer',minimum:0},reposts:{type:'integer',minimum:0},
+        replies:{type:'integer',minimum:0},gained:{type:'integer',minimum:0},lost:{type:'integer',minimum:0},
+    })),initialFollowers:integer})),
     xFloor:schema('x_floor_impact',obj(['effects'],{effects:arr({type:'object'}),noGrowthReview:arr({type:'object'})})),
     xPrivilege:schema('x_privilege',obj(['stance'],{stance:{type:'string',enum:['none','praise','attack']},target:str,identity:str,targetId:str})),
     snapChat:schema('social_chat',obj(['status'],{status:{type:'string',enum:['reply','no_reply']},messages:arr({type:'object'}),text:str,kind:str,transfer:{anyOf:[{type:'null'},{type:'object'}]}})),

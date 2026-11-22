@@ -73,3 +73,16 @@ test('Gemini response_schema avoids required-only anyOf and retains local task c
  assert.equal(assertTaskResponse({ambiguous:true},TASK_SCHEMAS.friends).ambiguous,true);
  assert.throws(()=>assertTaskResponse({events:[],business:[]},TASK_SCHEMAS.assetsUpdate,{currentCurrency:'USD'}),e=>e.code==='PHONE_DATA_MISSING');
 });
+
+test('post impact schema requires each metric and an addressable post ID',()=>{
+ const contract=TASK_SCHEMAS.xStats.value;
+ assert.deepEqual(contract.required,['stats']);
+ assert.deepEqual(contract.properties.stats.items.required,['postId','likes','reposts','replies','gained','lost']);
+ assert.equal(contract.properties.stats.items.type,'object');
+ for(const key of contract.properties.stats.items.required)assert.ok(Object.hasOwn(contract.properties.stats.items.properties,key));
+ assert.equal(contract.properties.stats.items.properties.postId.type,'string');
+ for(const name of ['likes','reposts','replies','gained','lost']){
+  const property=contract.properties.stats.items.properties[name];
+  assert.equal(property.type,'integer');assert.equal(property.minimum,0);
+ }
+});

@@ -13,8 +13,8 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
-import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.95';
-import { resolveAppConnection, VERSION } from './config.js?v=1.2.95';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.96';
+import { resolveAppConnection, VERSION } from './config.js?v=1.2.96';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -149,6 +149,8 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                     ? '\nAmazon 搜索格式恢复：上一份回复未提供可用的完整商品 JSON 或商品必要资料不合法。重新执行相同购物搜索，须生成完整的 4—6 件商品；最终只返回一个 JSON 对象，顶层为 products 数组，每项包含 name、brand、luxury、description、image、price、currency、variants、reviews；币种沿用本次购物要求，价格有效，不新增购买、付款或配送记录。不输出分析、解释、Markdown、代码块或其他对象。'
                     : app === 'x' && ['phone_x_feed','phone_x_feed_posts'].includes(taskSchema?.name)
                     ? '\nX 格式恢复：上一份回复缺少必需的 posts 数组，或 posts 数组包含缺失、空白、非字符串的推文 text。本次仍按原任务和人物知情限制生成；posts 中每个对象必须含非空字符串 text，并使用有效的已有 accountId 或新作者的 name 与 handle。若本次任务允许零条新推文，必须返回 posts:[]，不得使用 [{}] 这类占位对象。最终只输出同一 JSON 对象，保留该任务要求的 replies 等字段。'
+                    : app === 'x' && taskSchema?.name === 'phone_x_post_impact'
+                    ? '\nX 推文评估格式恢复：上一份 stats 中有空对象、缺失或重复的帖子 ID，或缺失数值。根据本次任务资料逐一填写原有 postId，每个恰好一条；每项必须完整包含 postId、likes、reposts、replies、gained、lost，后五项均为非负整数，允许为0；不得使用 {} 或替换、杜撰 ID。无待评估帖子时 stats:[]；首次粉丝未知时补充非负整数 initialFollowers。只输出完整 JSON 对象。'
                     : app === 'weather'
                     ? '\n榴莲天气字段补全：上一份 JSON 没有交付全部必需字段（缺少：' + weatherMissingFields.join('、') +
                         '）。仍执行同一次地点的天气研究；city 必须与手机手动输入的地点完全一致，不依据剧情、状态栏或历史提示自行重新定位；保留已有合法的 origin 和 weather。必须同时返回 city、origin、climate、weather 四个顶层字段；climate 内含完整的12项 monthlyTemp、12项 monthlyRainChance、archetype、typicalWind、typicalHumidity、diurnal、south、arid、typhoon、alwaysNight；weather 内含 type、temp、wind、humidity。最终只输出一个完整 JSON 对象。' +

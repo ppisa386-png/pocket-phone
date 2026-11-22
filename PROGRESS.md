@@ -1,3 +1,9 @@
+### 2026-11-22 · v1.2.96 修复 X post-impact 返回空 stats 项及缺字段不重试
+- **证据**：用户真实 Gemini/SillyTavern 终端已返回模型回复，phone_x_post_impact 输出 {"stats":[{}],"initialFollowers":1240}（31 输出 token）；X 报“推文评估缺少、重复或错用了帖子ID”，v1.2.95 格式恢复 0 次。前一版 Schema 400 已消除，但 stats 子结构仍未约束字段。
+- **基线**：main `61eee519f3261be74528dc1dad175e1f881a5fe9`（v1.2.95）。**实现**：src/task-contracts.js 将 xStats.stats.items 改为明确 object + required 六字段/类型 + 非负整数；src/x.js 对无效 ID/字段和初始粉丝缺失发出 PHONE_DATA_MISSING 以启用既有一次格式恢复；src/phone.js 为 X post-impact 增加专门补全文字，正常任务不变。版本与缓存更新到 1.2.96。
+- **回归**：tests/task-contracts.test.js 覆盖六字段 Schema；tests/api.test.js 通过独立 API + X refreshPublic 链测试首次 stats:[{}] 后补齐真实 postId，以及连续两次错误整批不提交。GitHub CI 结果以本版提交后实际结果为准，用户真实 Gemini 中转仍需实际验证。
+- **不变**：X 首页/广场/关注保存规则、粉丝/七日传播算法、角色知情、正文/酒馆组装、API 路由与 token 上限、其他 App 和存档回退。
+
 ### 2026-11-22 · v1.2.95 修复 Gemini JSON Schema anyOf 400 拒绝
 - **现象／根因**：用户提供酒馆终端请求截图，X 刷新上游 Bad Request 明确指向 generation_config.response_schema.any_of[0].required：仅允许 OBJECT 且 required property 未定义。代码定位 src/task-contracts.js 的 xFeedShape 中两个仅含 required 的 anyOf 分支；这不是请求字符数或 token 超限错误。
 - **基线**：main `33366f47c94899fbb3f062aac7f47c69574df5b4`（v1.2.94）。**实现**：移除 X feed 的 required-only anyOf，xFeedPosts 继续强制顶层 posts；已关注 accounts-only 继续由 assertTaskResponse 校验。检查并移除 assetsUpdate、friends 中同类 required-only anyOf，本地迁移/好友判断校验保留。src/phone.js 诊断中的插件版本号由硬编码 1.2.92 改为 VERSION。相关 import 查询参数、manifest/package/config 均升级 v1.2.95 避免加载旧的 Schema 模块。

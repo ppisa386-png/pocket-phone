@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.95';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.96';
 import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
 import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
@@ -596,8 +596,16 @@ user 自身也可以成为热度来源。 如果推文展示了出色的歌唱�
                     '\n资料：'+JSON.stringify({posts:inputs,alias:profile(staged).alias,bio:profile(staged).bio,followers:xAudience(staged)?.followers??null})+
                     '\n当前可见正文：'+JSON.stringify(visible)+'\n'+contract;
                 const impactChanges=await refreshRequest(task,d=>{
-                    if(!Array.isArray(d.stats)||d.stats.length!==pending.length||new Set(d.stats.map(r=>r?.postId)).size!==pending.length||
-                        !d.stats.every(r=>pending.some(p=>p.id===r?.postId)))throw Error('推文评估缺少、重复或错用了帖子ID。');
+                    const ids=new Set(pending.map(p=>p.id));
+                    if(!Array.isArray(d.stats)||d.stats.length!==ids.size||
+                        new Set(d.stats.map(r=>r?.postId)).size!==ids.size||
+                        !d.stats.every(r=>ids.has(r?.postId)))
+                        throw modelProtocolError('phone_x_post_impact',['stats.postId'],'推文评估缺少、重复或错用了帖子ID');
+                    const fields=['likes','reposts','replies','gained','lost'];
+                    if(!d.stats.every(row=>fields.every(key=>Number.isSafeInteger(row[key])&&row[key]>=0)))
+                        throw modelProtocolError('phone_x_post_impact',['stats 数值'],'推文评估缺少有效的非负整数');
+                    if(!xAudience(staged)&&(!Number.isSafeInteger(d.initialFollowers)||d.initialFollowers<0))
+                        throw modelProtocolError('phone_x_post_impact',['initialFollowers'],'首次推文评估缺少有效的初始粉丝数');
                     return settleInfluence(staged,chat,d.stats,d.initialFollowers);
                 },valid,null,{combined:true,postQueries:pending,retries:0,parseResponse:parseXObject,finalOutputContract:contract});
                 collect(impactChanges);

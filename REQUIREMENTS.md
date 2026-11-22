@@ -1,3 +1,8 @@
+### X 首次推文影响力评估空 stats 项修复（2026-11-22，v1.2.96）
+- v1.2.95 修复 X 首页 Gemini 400 后，用户实测首次影响力评估（phone_x_post_impact）返回 stats:[{}]、initialFollowers:1240。旧 Schema 仅将 stats.items 声明为 object，允许缺失 postId 和五项数字；客户端的普通 Error 阻止格式恢复，因此刷新始终报“推文评估缺少、重复或错用了帖子ID”。
+- 把影响评估每条 stats 的 postId、likes、reposts、replies、gained、lost 定义为必需字段，数值限定非负整数，保留初始粉丝按需提供和 stats:[] 空候选的语义。客户端在缺失/重复/错误 ID、缺失或无效数字、首次初始粉丝缺失时触发 PHONE_DATA_MISSING，最多一次定向格式补全；成功校验后才结算，连续失败保留原帖子、粉丝和整批刷新状态。
+- 不修改关注算法、传播数值估算规则、请求上下文/token、模型选择、正文、X UI、其他 App 或重试设置。修复只提高上游结构约束并激活现有格式恢复；不自动吞掉业务矛盾或绕过数据原子保存。
+
 ### Gemini 结构化输出 required-only anyOf 兼容修复（2026-11-22，v1.2.95）
 - 独立 API 的 X 信息流 Schema 曾包含只有 required 而缺少 type/properties 的 anyOf 分支；Gemini 中转将其转为 response_schema 后返回 400（response_schema.any_of[0].required only allowed for OBJECT）。删除 X 信息流的这种无效上游约束；资产更新与好友响应 Schema 中相同的 required-only anyOf 一并移除，防止同类拒绝。
 - 保留 X 首页/广场必须交付 posts 数组（允许空数组），已关注可交付 posts 或 accounts 的行为；资产普通更新必须有 events、living、business，变更币种的早返回只需 residenceChange；好友判断须有 accepted 或 ambiguous。这些条件继续由 assertTaskResponse 及 App 本地业务校验执行，模型未交付时拒绝写入并沿用已有格式纠错，不让 API Schema 的简化放宽存档。
