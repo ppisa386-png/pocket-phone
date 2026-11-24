@@ -1,9 +1,9 @@
 import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.70';
 import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
 import {businessPrompt,importBusiness} from './x-business.js?v=1.2.66';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.98';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.99';
 import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.79';
-import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.98';
+import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.99';
 import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.66';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
 import { smsReplyClassification } from './sms-context.js?v=1.2.66';
@@ -15,7 +15,7 @@ import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?
 import { effectiveReply, narrativeReplyCount } from './contact-policy.js?v=1.2.58';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { financialEvidenceMatches } from './assets-policy.js?v=1.2';
-import { sceneBackground } from './weather.js?v=1.2.98';
+import { sceneBackground } from './weather.js?v=1.2.99';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});
@@ -362,6 +362,9 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const platforms=[...(channels.messages?['sms']:[]),...['whatsapp','wechat','x'].filter(app=>settings.apps[app])];
     const messageLabels=platforms.map(p=>({sms:'短信',whatsapp:'WhatsApp',wechat:'微信',x:'X私信'}[p])).join('、');
     const platformCodes=platforms.join('/');
+    const allCommApps=['phone','messages','whatsapp','wechat','x'].every(app=>settings.apps[app]);
+    const nameRule=allCommApps?CHINESE_NAME_RULE:CHINESE_NAME_RULE.replace('电话簿、短信联系人、好友、关注列表及账号显示姓名','已开启渠道中的联系人及账号显示姓名').replace('短信、帖子、对白等内容','角色表达内容');
+    const languageRule=channels.phone&&channels.messages?COMMUNICATION_LANGUAGE_RULE:COMMUNICATION_LANGUAGE_RULE.replace('短信、电话说话内容和语音转写',[...(channels.messages?['短信']:[]),...(channels.phone?['电话说话内容']:[]),'角色表达'].join('、'));
     const hasChannels=availableChannels(settings,state,context.name1).length>0;
     const business=businessPrompt(state,settings,chat,context.name1,context.chatMetadata?.[JOURNAL_KEY]?.businessDraws);
     const x=settings.apps.x?xStoryPrompt(state,exactStoryTime(chat)):'';
@@ -381,16 +384,16 @@ export function buildStoryPhonePrompt(state,context,settings,chat){
     const calls=recentPerConversation(Object.values(channels.phone?state.calls:{}).filter(c=>['ringing','connected'].includes(c.status)).sort((a,b)=>a.createdAt-b.createdAt),c=>c.contactId).slice(-10).map(c=>({id:c.id,name:c.name,status:c.status}));
     const whatsapp=settings.apps.whatsapp?'\nWhatsApp普通正文通信只记录实际发生的新发送或接收，不必制造剧情或回应。无论第几楼、是否开启主动联系，按本楼发生顺序逐条附 <!--durian-message:{"platform":"whatsapp","action":"sent或received（相对user）","sender":"user或对方姓名","recipient":"对方姓名或user","accountId":"已知账号ID，未知省略","kind":"text/image/video/voice","text":"完整已发送内容或实际媒体描述","category":"可选A或B：日常闲聊为A，约定/待办/持续请求/情感纠纷或仍在发展的具体事件为B","read":false}-->。user实际发出的消息可在正文呈现或忠实概述；收到消息的阅读、通知与全文保存遵循下方共用规则。user发出的内容必须是user实际发出的消息，不能借标记补写user没发过的消息。回忆、引用、输入中、打算发送、手机里已有的消息都不重记。主动邀约已用durian-outreach标记的同一条消息不再标记。记录不触发自动回复。':'';
     // Built-in notification guidance is already included in full below.
-    const outreachInstruction=settings.prompts.outreach===PROMPTS.outreach.text
+    const outreachInstruction=!allCommApps||settings.prompts.outreach===PROMPTS.outreach.text
         ?'根据近期剧情与人物性格选择合适渠道，允许零人或多人。不为通知创造动机。不替 user 回复。':settings.prompts.outreach;
-    return x+xDm+moments+whatsapp+(business?business+'\n':'')+CHINESE_NAME_RULE+outreachInstruction+'\n'+'\n仅在本楼实际新收到'+(messageLabels?messageLabels+'等':'')+'消息时，正文才可以自然写手机铃声、震动、亮屏等通知。手机原有未读消息即使 read=false，只要之前的正文提到过它存在（noticeMentioned=true），就绝不能再次写同一批旧消息的铃声、震动、红点、未读数量或任何“还有未读消息”的提醒。没有新消息时不要为了提醒而打断原剧情。对现有消息，未读或尚未在正文提及，都不构成必须出场的理由；即便剧情自然提到，也只需如「某人发来了一条消息」这样的简短表述，不列举每条消息，更不逐字重贴旧聊天。角色记得本人发过、读过和知道的事实，不等于读者必须重看一遍。通知只表示存在，不能仅凭消息抵达就写出完整消息、摘要、主题、隐含意思或user的理解与反应。对于未读消息，只有剧情实际描写user打开手机并看到/听到内容，才可在正文呈现内容；不要为了交代通知擅自替user查看手机或打断原本情节。新消息的全文及必要译文完整写入本楼末尾的隐藏标记；仅有通知时标记 read:false，user 实际阅读后才 read:true。看到通知或发送者名字不等于已阅读内容。'+(channels.phone?'来电铃响不等于已接听。':'')+(channels.messages?'短信和私信':'消息')+'只使用已读／未读状态：read=true 表示 user 已经看过这条消息，除非剧情需要，否则不用主动提起，不要求一定展示；不得称为未读、刚收到，或要求 user 再次打开阅读。read=false 表示 user 尚未阅读，不自动代表刚刚到达，也不要求正文展示。noticeMentioned 仅用于避免重播旧通知，不代表阅读状态。此规则同样适用于本轮主动联系和普通新消息。'+outreachPrompt(settings,state,context.name1,due,exactStoryTime(chat))+
+    return x+xDm+moments+whatsapp+(business?business+'\n':'') +nameRule+outreachInstruction+'\n'+'\n仅在本楼实际新收到'+(messageLabels?messageLabels+'等':'')+'消息时，正文才可以自然写手机铃声、震动、亮屏等通知。手机原有未读消息即使 read=false，只要之前的正文提到过它存在（noticeMentioned=true），就绝不能再次写同一批旧消息的铃声、震动、红点、未读数量或任何“还有未读消息”的提醒。没有新消息时不要为了提醒而打断原剧情。对现有消息，未读或尚未在正文提及，都不构成必须出场的理由；即便剧情自然提到，也只需如「某人发来了一条消息」这样的简短表述，不列举每条消息，更不逐字重贴旧聊天。角色记得本人发过、读过和知道的事实，不等于读者必须重看一遍。通知只表示存在，不能仅凭消息抵达就写出完整消息、摘要、主题、隐含意思或user的理解与反应。对于未读消息，只有剧情实际描写user打开手机并看到/听到内容，才可在正文呈现内容；不要为了交代通知擅自替user查看手机或打断原本情节。新消息的全文及必要译文完整写入本楼末尾的隐藏标记；仅有通知时标记 read:false，user 实际阅读后才 read:true。看到通知或发送者名字不等于已阅读内容。'+(channels.phone?'来电铃响不等于已接听。':'')+(channels.messages&&settings.apps.x?'短信和私信':'消息')+'只使用已读／未读状态：read=true 表示 user 已经看过这条消息，除非剧情需要，否则不用主动提起，不要求一定展示；不得称为未读、刚收到，或要求 user 再次打开阅读。read=false 表示 user 尚未阅读，不自动代表刚刚到达，也不要求正文展示。noticeMentioned 仅用于避免重播旧通知，不代表阅读状态。此规则同样适用于本轮主动联系和普通新消息。'+outreachPrompt(settings,state,context.name1,due,exactStoryTime(chat))+
         (contactEnabled?'\n近期'+(channels.phone?'电话':'')+(channels.messages?'短信':'')+'活动：'+safe(recentContactActivity({...state,messages:channels.messages?state.messages:{},calls:channels.phone?state.calls:{}},chat))+
         '\n这是 user 个人的手机。只记录本轮正文中 user 实际发生的通信。完全忽略其他人物之间的通信：即使 user 目睹、听说或叙述视角切换到 char，也不能存进 user 手机。sender/recipient 必须如实填写实际双方，不能为了导入把第三方改成 user。不记录想象、回忆、未来打算、草稿或已在手机发生的旧消息。无通信不输出标签。号码数字未写出则省略，不能编造。拉黑渠道不可收到新联系。'+
         '\n当前身份及状态（数据）：'+safe({user:context.name1,characters:actors.map(c=>({name:c.name,id:'card:'+c.avatar})),contacts,blocked,...(channels.phone?{calls}:{})})+
         (channels.messages?'\n短信仅记录 user 实际发出或收到的新短信，user 发出的短信也要逐条记录，不能只保存对方回复。user 发出的短信必须实际发送且正文已写出（完整原文或忠实概述），标记的 text 保存该消息完整内容，不能借标记补写 user 没发过的消息。按实际发生顺序逐条在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"sms","text":"实际发送或收到的完整短信原文；通知未读时只放在此标记里","read":false,"category":"A或B","replyable":true}-->。仅有声音、震动、亮屏等通知时 read:false；user 实际阅读到内容才 read:true。短信一条一注释，不抄回旧记录。':'')+
         (channels.phone?'\n电话仅记录 user 实际拨出或接到的电话。按实际发生顺序逐条在正文末尾附不可见 HTML 注释（不是代码块）：<!--durian-contact:{"sender":"实际发送者：user 或对方真实姓名","recipient":"实际接收者：user 或对方真实姓名","name":"与 user 通信的对方真实姓名","kind":"call","status":"ringing/missed/declined/connected/ended","call_id":"仅更新上述既有通话时填该 id；新来电省略","turns":[{"role":"user 或 assistant","text":"仅接通电话：正文中实际说出的逐字对白，可为空"}],"category":"A或B","replyable":true}-->。接通通话后的真实对白才可写入turns；仅响铃记录ringing。隐藏号码不可回拨时 replyable:false。':'')+
         '\ncategory：A=日常问候/闲聊/生活分享/即时状态，B=约定/待办/持续请求/情感纠纷或仍在发展的具体事件；按语义和上下文，同一具体事项尽量同类，不按长短、问号或回复状态判断。不要输出来源校验、手机规则等技术说明给读者。内容语言遵循酒馆预设。':'')+
-        (platforms.length?'\n正文首次描写已存在手机消息的未读通知、屏幕红点、提示音、震动，但 user 尚未阅读内容时，在正文末尾附 <!--durian-message-noticed:{"platform":"渠道 '+platformCodes+'","ids":["此次通知所涉及的已有准确消息ID"],"evidence":"正文确实写出的通知短句"}-->；一条标记可登记同一渠道的多条消息，不得编造ID。小手机只记录通知已经提过，不更改消息已读状态。只有本楼实际写出 user 阅读手机里已有消息后，才附 <!--durian-message-read:{"platform":"渠道代码 '+platformCodes+'","id":"通信历史资料中给出的准确记录ID"}-->，每条一条；仅提到通知、回忆或讨论已知内容不加该标记。已读消息不重复标记，不确定记录ID就省略，不要编造ID。':'')+(scene?'\n'+scene:'')+COMMUNICATION_LANGUAGE_RULE.replace('短信、电话说话内容和语音转写', [ ...(channels.messages?['短信']:[]), ...(channels.phone?['电话说话内容']:[]), '角色消息与语音转写'].join('、'));
+        (platforms.length?'\n正文首次描写已存在手机消息的未读通知、屏幕红点、提示音、震动，但 user 尚未阅读内容时，在正文末尾附 <!--durian-message-noticed:{"platform":"渠道 '+platformCodes+'","ids":["此次通知所涉及的已有准确消息ID"],"evidence":"正文确实写出的通知短句"}-->；一条标记可登记同一渠道的多条消息，不得编造ID。小手机只记录通知已经提过，不更改消息已读状态。只有本楼实际写出 user 阅读手机里已有消息后，才附 <!--durian-message-read:{"platform":"渠道代码 '+platformCodes+'","id":"通信历史资料中给出的准确记录ID"}-->，每条一条；仅提到通知、回忆或讨论已知内容不加该标记。已读消息不重复标记，不确定记录ID就省略，不要编造ID。':'')+(scene?'\n'+scene:'')+languageRule;
 }
 export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
     const first=getContext(),bus=first?.eventSource,types=first?.event_types??first?.eventTypes??{},hooks=[];
@@ -402,8 +405,8 @@ export function createStoryPhoneBridge({getContext,getSettings,onError=()=>{}}){
         if(dryRun)return;clear();if(disposed||['quiet','impersonate'].includes(type))return;
         const c=getContext(),metadata=c.chatMetadata;if(!metadata||!c.chat?.length||!c.setExtensionPrompt)return;
         const chat=['swipe','regenerate','continue'].includes(type)&&!c.chat.at(-1).is_user?c.chat.slice(0,-1):c.chat;
-        const signatures=messageSignatures(chat),token=generation;
-        const current=()=>!disposed&&token===generation&&getContext().chatMetadata===metadata&&JSON.stringify(messageSignatures(getContext().chat||[]).slice(0,signatures.length))===JSON.stringify(signatures);
+        const signatures=messageSignatures(chat),token=generation,appState=JSON.stringify(getSettings().apps);
+        const current=()=>!disposed&&token===generation&&JSON.stringify(getSettings().apps)===appState&&getContext().chatMetadata===metadata&&JSON.stringify(messageSignatures(getContext().chat||[]).slice(0,signatures.length))===JSON.stringify(signatures);
         try{
             const revisions=await revisionsFor(signatures),legacy=chat.some(isMemoryHidden)?await revisionsFor(messageSignatures(chat,true)):null;
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],revisions,legacy).journal);

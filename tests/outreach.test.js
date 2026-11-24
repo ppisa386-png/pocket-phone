@@ -322,3 +322,12 @@ test('reload and floor rollback recompute the X trigger from the journal',async(
     assert.ok(DAY1<DAY2&&DAY2<DAY3,'epoch day anchors stay comparable');
 });
 
+
+test('turning X off removes its activity trigger, data and instructions despite other enabled channels',()=>{
+ const state=xState();state.x.p1=userPost('DISABLED_X_POST',DAY2);state.messages.m1=sms('m1','assistant',1000,stamp('2026-11-01'));
+ const settings=normalizeSettings({apps:{x:false}});
+ const prompt=buildStoryPhonePrompt(state,context,settings,four);
+ assert.doesNotMatch(prompt,/DISABLED_X_POST|特殊再次联系契机|xRequestsOpen|公开@|x_dm|x_mention|X 私信|X私信|durian-x:|durian-business:/);
+ settings.apps.x=true;
+ assert.match(buildStoryPhonePrompt(state,context,settings,four),/DISABLED_X_POST/);
+});

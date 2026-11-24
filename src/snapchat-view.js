@@ -2,7 +2,7 @@ import { formatPhoneDialogue } from './communication-language.js?v=1.2.88';
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
 import { displayCommunicationTime } from './communication-time.js?v=1.2.66';
 import { icon } from './icons.js?v=1.2.57';
-import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=1.2.98';
+import { snapItems, snapProfile, snapExpired, snapStoryRefreshState } from './snapchat.js?v=1.2.99';
 
 const snapEsc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const snapBody=(value,own=false)=>snapEsc(own?value:formatPhoneDialogue(value));

@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.98';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.99';
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
 import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.79';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';

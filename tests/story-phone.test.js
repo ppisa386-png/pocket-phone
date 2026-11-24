@@ -494,12 +494,28 @@ test('story prompt independently gates SMS and phone instructions, records, and 
   const chat=[{mes:'2026-10-26 10:00',is_user:false},...Array.from({length:3},()=>({mes:'A reply.',is_user:false}))];
   const prompt=()=>buildStoryPhonePrompt(state,f.context,f.settings,chat);
   Object.assign(f.settings.apps,{messages:false,phone:true});
-  let p=prompt();assert.doesNotMatch(p,/SMS_ONLY|"kind":"sms"|"medium":"sms"|"messages":true|渠道代码 sms/);assert.match(p,/"kind":"call"/);assert.match(p,/CALL_ONLY/);
+  let p=prompt();assert.doesNotMatch(p,/短信|SMS_ONLY|"kind":"sms"|"medium":"sms"|"messages":true|渠道代码 sms/);assert.match(p,/"kind":"call"/);assert.match(p,/CALL_ONLY/);
   Object.assign(f.settings.apps,{messages:true,phone:false});
   p=prompt();assert.match(p,/"kind":"sms"/);assert.doesNotMatch(p,/"kind":"call"|"medium":"call"|CALL_ONLY|"call_id"|来电铃响|主动来电/);
   Object.assign(f.settings.apps,{messages:false,phone:false});
-  p=prompt();assert.doesNotMatch(p,/<!--durian-contact:|SMS_ONLY|CALL_ONLY/);assert.match(p,/"platform":"whatsapp"/);
+  p=prompt();assert.doesNotMatch(p,/<!--durian-contact:|短信|电话簿|SMS_ONLY|CALL_ONLY/);assert.match(p,/"platform":"whatsapp"/);
   Object.assign(f.settings.apps,{messages:true,phone:true});
   p=prompt();assert.match(p,/"kind":"sms"/);assert.match(p,/"kind":"call"/);
+ }finally{f.close();}
+});
+
+test('all disabled apps produce no story phone prompt and shared custom text is scoped safely',async()=>{
+ const {buildStoryPhonePrompt}=await import('../src/story-phone.js');
+ const f=setup();try{
+  const state=replayJournal();
+  f.settings.prompts.outreach='CUSTOM_SHARED_X_SMS';
+  assert.match(buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat),/CUSTOM_SHARED_X_SMS/);
+  f.settings.apps.x=false;
+  assert.doesNotMatch(buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat),/CUSTOM_SHARED_X_SMS|X 私信|X私信|durian-x:|durian-business:|xRequestsOpen|公开@/);
+  for(const key of Object.keys(f.settings.apps))f.settings.apps[key]=false;
+  assert.equal(buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat),'');
+  f.settings.apps.wechat=true;
+  const p=buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat);
+  assert.match(p,/durian-wechat-moment:/);assert.doesNotMatch(p,/短信|电话簿|WhatsApp|X私信|X 私信|durian-contact:|durian-x:|xRequestsOpen/);
  }finally{f.close();}
 });

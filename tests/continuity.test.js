@@ -421,3 +421,20 @@ test('default continuity preface is deduplicated without removing custom text or
  const custom='自定义衔接：特别保留未完成的约定。';assert.ok(build(custom).startsWith(custom+'\n'));
  assert.deepEqual(JSON.parse(prompt.split('\n').at(-2)),JSON.parse(build(custom).split('\n').at(-2)),'only redundant instruction text changes, not the records');
 });
+
+test('shared history excludes disabled app rules, records and unscoped custom text in the actual outgoing array',async()=>{
+ const f=await fixture();try{
+  const custom='CUSTOM_X_OR_SMS_RULE';
+  f.settings.prompts.continuity=custom;
+  await f.generate();assert.match(f.prompts[CONTINUITY_KEY].value,/CUSTOM_X_OR_SMS_RULE/);
+  Object.assign(f.settings.apps,{messages:false,x:false,whatsapp:false,wechat:false});
+  await f.generate();
+  const data={chat:[{role:'user',content:'continue'}]};await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',data);
+  const prompt=data.chat.find(m=>m.role==='system')?.content||'';
+  assert.match(prompt,/A_CALL_PROMISE/);
+  assert.doesNotMatch(prompt,/A_PRIVATE_MEETING|B_PRIVATE_PLAN|CUSTOM_X_OR_SMS_RULE|短信|WhatsApp|微信|X 私信|X 公开|匿名 X/);
+  f.settings.apps.phone=false;await f.generate();
+  const empty={chat:[{role:'user',content:'continue'}]};await f.bus.emit('CHAT_COMPLETION_PROMPT_READY',empty);
+  assert.equal(empty.chat.length,1);
+ }finally{f.close();}
+});

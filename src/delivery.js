@@ -79,11 +79,11 @@ export function createDeliveryBridge({getContext,getSettings,onError=()=>{}}){
     async function prepare(type='normal',_options,dryRun){
         if(dryRun)return;
         clear();if(!supported||disposed||['quiet','impersonate'].includes(type)||!appEnabled())return;
-        const token=generation,context=getContext(),metadata=context.chatMetadata;
+        const token=generation,context=getContext(),metadata=context.chatMetadata,appState=JSON.stringify(getSettings().apps);
         if(!metadata?.[JOURNAL_KEY]||!context.chat?.length)return;
         const chat=['swipe','regenerate'].includes(type)&&context.chat.at(-1)?.is_user===false?context.chat.slice(0,-1):context.chat;
         const signatures=messageSignatures(chat);
-        const current=()=>!disposed&&token===generation&&appEnabled()&&getContext().chatMetadata===metadata&&JSON.stringify(messageSignatures(getContext().chat||[]).slice(0,signatures.length))===JSON.stringify(signatures);
+        const current=()=>!disposed&&token===generation&&appEnabled()&&JSON.stringify(getSettings().apps)===appState&&getContext().chatMetadata===metadata&&JSON.stringify(messageSignatures(getContext().chat||[]).slice(0,signatures.length))===JSON.stringify(signatures);
         try{
             const revisions=await revisionsFor(signatures),legacy=chat.some(isMemoryHidden)?await revisionsFor(messageSignatures(chat,true)):null;
             const state=replayJournal(reconcileJournal(metadata[JOURNAL_KEY],revisions,legacy).journal);
