@@ -1,3 +1,7 @@
+## v1.2.98 · 电话／短信正文开关隔离
+- `tests/story-phone.test.js` 覆盖独立关闭短信、独立关闭电话、同时关闭、重新开启时的实际正文组装。关闭渠道的标记格式、历史活动与状态不注入；保留开启渠道及共享通知。原有导入与回退回归保持。
+- 当前尚未运行完整回归；以 GitHub Actions 的 `npm test` 和预览构建实际结果为准。
+
 ## v1.2.97 · X 双空 stats 恢复与字符串 ID 契约
 - 本地完整 `npm test`：979/979 通过、0 失败；`npm run build:preview` 成功。
 - `tests/api.test.js`：真实独立 API 请求组装链使用 `stats:[{},{}]`、`initialFollowers:382` 模拟截图，检查最终 system 输出指令携带准确字符串 ID、六字段 Schema、仅重做影响评估一次，补全后两帖各自正确保存。

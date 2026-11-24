@@ -1,4 +1,4 @@
-import { foodItems, foodShopName } from './food.js?v=1.2.97';
+import { foodItems, foodShopName } from './food.js?v=1.2.98';
 import { formatMoney } from './currency.js?v=1.2';
 import { dayDate } from './story-clock.js?v=1.2';
 import { foodDeliveryStatus } from './delivery.js?v=1.2.65';

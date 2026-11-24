@@ -1,4 +1,4 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.97';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.98';
 import { exactStoryTime } from './story-clock.js?v=1.2';
 import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';

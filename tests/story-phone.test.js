@@ -476,10 +476,30 @@ test('X-only narrative keeps notification and read boundaries when shared phone 
   assert.match(isolated,/durian-message:/);
   f.settings.apps.whatsapp=true;
   const shared=buildStoryPhonePrompt(state,f.context,f.settings,f.context.chat);
-  assert.match(shared,/短信和私信只使用已读／未读状态/);
+  assert.match(shared,/消息只使用已读／未读状态/);
   assert.match(shared,/不能仅凭消息抵达就写出完整消息、摘要/);
   assert.match(shared,/新消息的全文及必要译文完整写入/);
   assert.doesNotMatch(shared,/只出现通知时正文不透露内容，标记仍保存全文/,'duplicate X wording is replaced by the shared rule');
  }finally{f.close();}
 });
 
+
+test('story prompt independently gates SMS and phone instructions, records, and marker fields',async()=>{
+ const {buildStoryPhonePrompt}=await import('../src/story-phone.js');
+ const f=setup();try{
+  const state=replayJournal();
+  state.messages.sms={id:'sms',name:'SMS_ONLY',contactId:'sms',role:'assistant',text:'old',storyTime:{date:'2026-10-26',time:'10:00'}};
+  state.calls.call={id:'call',name:'CALL_ONLY',contactId:'call',status:'connected',storyTime:{date:'2026-10-26',time:'10:00'}};
+  state.profiles['blocked:sms']={messages:true};
+  const chat=[{mes:'2026-10-26 10:00',is_user:false},...Array.from({length:3},()=>({mes:'A reply.',is_user:false}))];
+  const prompt=()=>buildStoryPhonePrompt(state,f.context,f.settings,chat);
+  Object.assign(f.settings.apps,{messages:false,phone:true});
+  let p=prompt();assert.doesNotMatch(p,/SMS_ONLY|"kind":"sms"|"medium":"sms"|"messages":true|渠道代码 sms/);assert.match(p,/"kind":"call"/);assert.match(p,/CALL_ONLY/);
+  Object.assign(f.settings.apps,{messages:true,phone:false});
+  p=prompt();assert.match(p,/"kind":"sms"/);assert.doesNotMatch(p,/"kind":"call"|"medium":"call"|CALL_ONLY|"call_id"|来电铃响|主动来电/);
+  Object.assign(f.settings.apps,{messages:false,phone:false});
+  p=prompt();assert.doesNotMatch(p,/<!--durian-contact:|SMS_ONLY|CALL_ONLY/);assert.match(p,/"platform":"whatsapp"/);
+  Object.assign(f.settings.apps,{messages:true,phone:true});
+  p=prompt();assert.match(p,/"kind":"sms"/);assert.match(p,/"kind":"call"/);
+ }finally{f.close();}
+});
