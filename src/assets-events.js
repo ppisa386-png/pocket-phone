@@ -1,7 +1,7 @@
 import { walletCurrency, majorAmount, validCurrency } from './currency.js?v=1.2';
-import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=1.2.100';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=1.2.100';
-import { dateDay, dayDate } from './story-clock.js?v=1.2.100';
+import { validateRights, rightsHistory, holdingEnd } from './assets-rights.js?v=1.2.101';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord } from './assets-core.js?v=1.2.101';
+import { dateDay, dayDate } from './story-clock.js?v=1.2.101';
 
 export const ASSET_CATEGORIES = ['fixed', 'luxury', 'investment'];
 // 'exclude' is not a category: it is the one-shot verdict that a pending asset

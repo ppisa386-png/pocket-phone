@@ -1,5 +1,5 @@
 import { walletCurrency, currencyDigits, unitScale, validCurrency } from './currency.js?v=1.2';
-import { dateDay, dayDate } from './story-clock.js?v=1.2.100';
+import { dateDay, dayDate } from './story-clock.js?v=1.2.101';
 
 export const assetRows = (state, type) => Object.values(state.assets || {}).filter(x => x.type === type);
 export const assetSet = value => ({ collection: 'assets', key: value.id, value });

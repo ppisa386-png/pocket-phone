@@ -1,5 +1,5 @@
 import {paperDraft, DAILY_SECTIONS, dailySectionCounts, historicalSources} from '../src/daily-core.js';
-import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT, PREVIOUS_DAILY_NARRATIVE_DEFAULT } from '../src/daily-prompts.js';
+import { DAILY_EDITORIAL_PROMPT, DAILY_NARRATIVE_PROMPT, PREVIOUS_DAILY_PROMPTS, PREVIOUS_DAILY_EDITORIAL_PROMPT, PREVIOUS_DAILY_EDITORIAL_DEFAULT, PREVIOUS_DAILY_STORY_DEFAULT, PREVIOUS_DAILY_NARRATIVE_DEFAULT, PREVIOUS_DAILY_BACKGROUND_DEFAULT } from '../src/daily-prompts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -63,6 +63,34 @@ test('story midnight expires the whole edition without needing an hour or wall c
  const f=setup();try{ok(await f.daily.update());ok(await f.daily.toggle(first(f).id));f.c.chat.push({mes:'2003-07-24 23:59'});await f.memory.read();assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);
   f.c.chat.push({mes:'2003-07-25 00:00'});await f.memory.read();assert.equal(dailyExpiry(f.state().daily.edition,f.c.chat),'expired');assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.equal((await f.daily.toggle(first(f).id)).ok,false);assert.equal(f.calls(),1);
   f.c.chat.pop();f.bus.emit('MESSAGE_DELETED');await f.memory.read();assert.match(buildDailyPrompt(f.state(),f.c.chat),/城市音乐节开幕/);
+ }finally{f.close();}
+});
+test('event projection preserves uncertainty and character knowledge limits without changing the paper or requesting a rewrite',async()=>{
+ const f=setup();try {
+  const details='工程可能在下周启动，日期尚未确定；“全线停运”仅为传闻。{{char}}尚未确认参与。';
+  f.reply({articles:[{...article('工程计划'),body:details},{...article('公开演出'),subject:'character',
+   publicBasis:{access:'public',summary:'仅公开舞台活动，私人安排未公开。',sourceIndex:0}}]});
+  ok(await f.daily.update());
+  const [world,character]=dailyArticles(f.state());
+  ok(await f.daily.toggle(world.id));ok(await f.daily.toggle(character.id));
+  const before=structuredClone(f.state().daily);
+  const prompt=buildDailyPrompt(f.state(),f.c.chat);
+  const material=JSON.parse(prompt.split('\n').find(line=>line.startsWith('[{')));
+  assert.equal(material.length,2);
+  assert.equal(material[0].details,details,'uncertainty and original wording must not be stripped');
+  assert.equal(material[0].worldCandidate,true);
+  assert.equal(material[0].publicKnowledge,undefined,'world editorial explanation is not a source-acquisition prompt');
+  assert.deepEqual(material[1].publicKnowledge,{access:'public',scope:'仅公开舞台活动，私人安排未公开。'});
+  assert.equal(material[1].worldCandidate,false);
+  assert.doesNotMatch(prompt,/城中日报|依据故事地域、年代与行业背景创作的世界新闻候选|\{\{char\}\}/);
+  assert.deepEqual(f.state().daily,before);
+  assert.equal(first(f).outlet,'城中日报');assert.equal(first(f).body,details);
+  ok(await f.daily.edit(world.id,{headline:'工程延期',summary:'日期仍待确定。',body:'工程已延期，恢复日期待定。'}));
+  const edited=JSON.parse(buildDailyPrompt(f.state(),f.c.chat).split('\n').find(line=>line.startsWith('[{')));
+  assert.equal(edited[0].id,world.id);assert.equal(edited[0].event,'工程延期');assert.equal(edited[0].details,'工程已延期，恢复日期待定。');
+  ok(await f.daily.toggle(character.id));
+  assert.doesNotMatch(buildDailyPrompt(f.state(),f.c.chat),/公开演出|私人安排未公开/);
+  assert.equal(f.calls(),1,'selection, projection and editing are local');
  }finally{f.close();}
 });
 test('missing date stays unknown, future article dates cannot be invented by model',async()=>{
@@ -167,7 +195,7 @@ test('creative world news only needs a genuine context keyword, not a previously
   assert.equal(f.state().daily.edition.publication,'Los Angeles Times');
   assert.equal(first(f).publicBasis.fictional,true);
   assert.equal(buildDailyPrompt(f.state(),f.c.chat),'');assert.deepEqual(f.state().assets,{});
-  ok(await f.daily.toggle(first(f).id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/"fictionalWorldNews":true/);
+  ok(await f.daily.toggle(first(f).id));assert.match(buildDailyPrompt(f.state(),f.c.chat),/"worldCandidate":true/);
   assert.match(f.prompt(),/不能凭空说 user/);assert.match(f.prompt(),/不是只能报道/);
   const panel=createDailyPanel({adapter:{storyChat:()=>f.c.chat},getView:f.state,redraw(){},notice(){}});
    assert.match(panel.html(),/<h2>榴莲日报<\/h2>/);assert.match(panel.html(),/class="pp-daily-publication-name"[^>]*>Los Angeles Times<\/strong>/);
@@ -348,6 +376,10 @@ test('old built-in daily prompts migrate, customized and blank prompts remain in
  const migrated=normalizeSettings({prompts:PREVIOUS_DAILY_PROMPTS});assert.equal(migrated.prompts.daily,DAILY_EDITORIAL_PROMPT);assert.equal(migrated.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
  const outgoing=normalizeSettings({prompts:{dailyStory:PREVIOUS_DAILY_STORY_DEFAULT}});assert.equal(outgoing.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
  const currentOld=normalizeSettings({prompts:{dailyStory:PREVIOUS_DAILY_NARRATIVE_DEFAULT}});assert.equal(currentOld.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
+ const backgroundOld=normalizeSettings({prompts:{dailyStory:PREVIOUS_DAILY_BACKGROUND_DEFAULT}});assert.equal(backgroundOld.prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
+ assert.equal(normalizeSettings(backgroundOld).prompts.dailyStory,DAILY_NARRATIVE_PROMPT);
+ const customized=PREVIOUS_DAILY_BACKGROUND_DEFAULT+'保留我自己的叙事偏好。';
+ assert.equal(normalizeSettings({prompts:{dailyStory:customized}}).prompts.dailyStory,customized);
  const custom=normalizeSettings({prompts:{daily:'我的自定义选题',dailyStory:''}});assert.equal(custom.prompts.daily,'我的自定义选题');assert.equal(custom.prompts.dailyStory,'');
 });
 

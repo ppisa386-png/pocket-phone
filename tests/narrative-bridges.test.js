@@ -57,6 +57,33 @@ for (const [name, factory, key] of [['daily',createDailyBridge,DAILY_KEY],['bala
     });
 }
 
+test('daily sends event material without publisher framing through both real request hooks',async()=>{
+ const f=await fixture(createDailyBridge);try {
+  const saved=structuredClone(f.c.chatMetadata);
+  await f.bridge.prepare();
+  for(const [hook,field] of [['CHAT_COMPLETION_PROMPT_READY','chat'],['CHAT_COMPLETION_SETTINGS_READY','messages']]) {
+   const messages=[{role:'user',content:'Continue the scene'}];
+   await f.bus.emit(hook,{[field]:messages});
+   const prompt=messages.find(m=>m.content.includes('durian-daily-used'))?.content;
+   assert.ok(prompt);
+   assert.doesNotMatch(prompt,/Local Press|榴莲日报报道|模拟媒体内容|"outlet"|"headline"|"body"|"publicBasis"/);
+   const material=JSON.parse(prompt.split('\n').find(line=>line.startsWith('[{')));
+   assert.equal(material.length,1);
+   assert.equal(material[0].id,'article');
+   assert.equal(material[0].event,'Park opening');
+   assert.equal(material[0].details,'A public park opens.');
+   assert.match(prompt,/正文直接从事件本身/);
+   assert.match(prompt,/省略素材来源与信息获取过程/);
+   assert.match(prompt,/事件对环境的影响与人物是否知情分开处理/);
+  }
+  assert.deepEqual(f.c.chatMetadata,saved,'projection must not rewrite the saved newspaper');
+  f.settings.apps.daily=false;
+  for(const [hook,field] of [['CHAT_COMPLETION_PROMPT_READY','chat'],['CHAT_COMPLETION_SETTINGS_READY','messages']]) {
+   const messages=[];await f.bus.emit(hook,{[field]:messages});assert.equal(messages.length,0);
+  }
+ }finally{f.bridge.destroy();}
+});
+
 
 test('X opinion bridge leaves selected square and trends out of outgoing narrative messages',async()=>{
  const f=await fixture(createOpinionBridge);

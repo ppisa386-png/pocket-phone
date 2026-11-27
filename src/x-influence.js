@@ -1,6 +1,6 @@
 // Only public, addressable sources get an impact. A later development has to
 // identify a different public record or an evidenced narrative floor.
-import {dateDay,readStoryClock} from './story-clock.js?v=1.2.100';
+import {dateDay,readStoryClock} from './story-clock.js?v=1.2.101';
 import {effectiveReply} from './contact-policy.js?v=1.2.57';
 import {xComments} from './x-comments.js?v=1.2.55';
 import {xAudience} from './x-audience.js?v=1.2';

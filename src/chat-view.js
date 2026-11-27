@@ -1,9 +1,9 @@
 import { formatPhoneDialogue } from './communication-language.js?v=1.2.88';
 import { walletCurrency, majorAmount, unitScale } from './currency.js?v=1.2';
-import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.100';
-import { displayCommunicationTime } from './communication-time.js?v=1.2.100';
+import { CHAT_APPS, chatItems } from './chat-apps.js?v=1.2.101';
+import { displayCommunicationTime } from './communication-time.js?v=1.2.101';
 import { icon } from './icons.js?v=1.2.57';
-import { wxMoments,wxFriends,canViewWxMoment,momentImages } from './wechat-moments.js?v=1.2.100';
+import { wxMoments,wxFriends,canViewWxMoment,momentImages } from './wechat-moments.js?v=1.2.101';
 
 const chatEsc = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const chatBody=(value,own=false)=>chatEsc(own?value:formatPhoneDialogue(value));
