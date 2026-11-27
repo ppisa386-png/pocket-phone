@@ -1,21 +1,21 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.99';
-import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.100';
+import {privilegeLevel,privilegeRows,privilegeChanges,privilegeContract} from './x-privilege.js?v=1.2.100';
 import {pageEdits,objectEdits} from './x-edit.js?v=1.2';
-import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.57';
+import {refreshFloor,settleInfluence,REACH_CONTEXT} from './x-influence.js?v=1.2.100';
 import {X_FLOOR_LEDGER,X_FLOOR_VERSION,coveredFloors,pendingFloorBatch,coverThrough,floorAudienceChanges,strongReachFloors,requireReachResolution} from './x-floor.js?v=1.2.72';
 import {readXMemory} from './external-memory.js?v=1.2.53';
-import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.66';
+import {dmDealTask,dealDecision,businessLateReplyOutcome,isLateBusinessReply} from './x-business.js?v=1.2.100';
 import {JOURNAL_KEY} from './journal.js?v=1.2.57';
-import {readStoryClock,exactStoryTime} from './story-clock.js?v=1.2';
+import {readStoryClock,exactStoryTime} from './story-clock.js?v=1.2.100';
 import { X_TRENDS_RULES, X_TRENDS_OUTPUT, validateTrends } from './x-trends.js?v=1.2';
 import { publicationScenePrompt } from './social-context.js?v=1.2';
 import { xCommentKey, xComments, X_COMMENT_LIMIT, xUserReplyContext } from './x-comments.js?v=1.2.66';
-import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.66';
+import { SQUARE_RULES, squareClock, storyEvidenceRows, squareBasis, squareStatus } from './square-core.js?v=1.2.100';
 import {xAccountKind,institutionName,xFeedArea} from './x-feed.js?v=1.2';
 import {establishedSources} from './contacts.js?v=1.2';
 import { localizedPerson, sameNamedPerson, nameAliases } from './names.js?v=1.2';
 import { parseAppObject } from './model-json.js?v=1.2.79';
-import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.66';
+import { smsCategory, commReplyClassification } from './comm-context.js?v=1.2.100';
 import { xAudience, audienceChanges, AUDIENCE_RULES } from './x-audience.js?v=1.2';
 // Story-local X simulation. No real social-network API or account is used.
 export const xItems = (state,type) => type==='comment' ? xComments(state) : Object.values(state.x || {}).filter(item=>item.type===type);

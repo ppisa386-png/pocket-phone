@@ -70,3 +70,31 @@ test('X opinion bridge leaves selected square and trends out of outgoing narrati
   assert.doesNotMatch(JSON.stringify(data.chat),/Local park opens/);
  }finally{f.bridge.destroy();}
 });
+
+for(const [app,source] of [['amazon','amazon'],['snapchat','snapcash'],['whatsapp','whatsapp'],['wechat','wechat'],['food','food']]) {
+ test('asset bridge invalidates prepared '+app+' payments in both request hooks and extension slot',async()=>{
+  const f=await fixture(createAssetBridge);try {
+   const rev=await revisionsFor(messageSignatures(f.c.chat));
+   f.c.chatMetadata[JOURNAL_KEY]=appendChange(f.c.chatMetadata[JOURNAL_KEY],rev,[
+    {collection:'assets',key:'paid',value:{id:'paid',type:'cash_transaction',source,orderId:'payment-audit',memo:'paid item',deltaMinor:-2000,currency:'USD'}},
+    {collection:'assets',key:'holding',value:{id:'holding',type:'holding',name:'Kept holding',category:'investment'}}
+   ]);
+   await f.bridge.prepare();const slot=f.c.extensionPrompts[ASSETS_KEY];
+   assert.match(slot.value,/payment-audit/);assert.equal(slot.filter(),true);
+   const unchanged=[];await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',{messages:unchanged});assert.equal(unchanged.length,1);
+   f.settings.apps[app]=false;assert.equal(slot.filter(),false);
+   for(const [event,field] of [['CHAT_COMPLETION_PROMPT_READY','chat'],['CHAT_COMPLETION_SETTINGS_READY','messages']]) {
+    const messages=[{role:'user',content:'Continue'}];await f.bus.emit(event,{[field]:messages});assert.equal(messages.length,1);
+   }
+   await f.bridge.prepare();const fresh=[];await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',{messages:fresh});
+   assert.equal(fresh.length,1);assert.doesNotMatch(fresh[0].content,/payment-audit/);assert.match(fresh[0].content,/Kept holding/);
+   const before=JSON.parse(slot.value.split('经济资料只供叙事参考，不表示其他人物知道私人余额：')[1].split('\n')[0]);
+   const after=JSON.parse(fresh[0].content.split('经济资料只供叙事参考，不表示其他人物知道私人余额：')[1].split('\n')[0]);
+   assert.equal(after.balance,before.balance);
+   f.settings.apps[app]=true;await f.bridge.prepare();assert.match(f.c.extensionPrompts[ASSETS_KEY].value,/payment-audit/);
+   f.settings.apps.assets=false;assert.equal(f.c.extensionPrompts[ASSETS_KEY].filter(),false);
+   const disabled=[];await f.bus.emit('CHAT_COMPLETION_SETTINGS_READY',{messages:disabled});assert.equal(disabled.length,0);
+   assert.deepEqual(f.errors,[]);
+  }finally{f.bridge.destroy();}
+ });
+}

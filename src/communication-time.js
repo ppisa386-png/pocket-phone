@@ -1,4 +1,4 @@
-import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
+import { dateDay, exactStoryTime } from './story-clock.js?v=1.2.100';
 
 const validTime = value => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value||'');
 const minutes = value => validTime(value) ? Number(value.slice(0,2))*60+Number(value.slice(3)) : null;

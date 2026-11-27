@@ -5,6 +5,19 @@ export function dateDay(value) {
     return d.getUTCFullYear()===+m[1]&&d.getUTCMonth()===+m[2]-1&&d.getUTCDate()===+m[3]?Math.floor(d.getTime()/86400000):null;
 }
 export const dayDate = day => Number.isInteger(day)?new Date(day*86400000).toISOString().slice(0,10):'';
+// Accept decimal day counts and Chinese units/tens, not mixed digits or
+// arbitrary sequences such as 一一/十十. No inferred or wall-clock date.
+function relativeDays(value) {
+    if (!value) return 1;
+    const digits = {一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
+    if (/^\d+$/.test(value)) {
+        const count = Number(value);
+        return Number.isSafeInteger(count) && count > 0 ? count : null;
+    }
+    if (Object.hasOwn(digits, value)) return digits[value];
+    const tens = value.match(/^([一二三四五六七八九]?)十([一二三四五六七八九]?)$/);
+    return tens ? (digits[tens[1]] || 1) * 10 + (digits[tens[2]] || 0) : null;
+}
 // SDC is explicit scene metadata, even when a preset wraps prose in a code
 // fence. Read it before stripping presentation wrappers; never use wall time.
 function lastSDC(source) {
@@ -55,8 +68,9 @@ export function readStoryClock(chat, seed=null, { exact = false } = {}) {
             if(md)next=dateDay(`${dayDate(day).slice(0,4)}-${md[1].padStart(2,'0')}-${md[2].padStart(2,'0')}`);
             if(next!==null){if(next!==day)hour=null;day=next;}
             // Only scene-opening relative transitions, never mentions in dialogue.
-            const relative=line===lines[0]?line.match(/^(?:第二天|次日|翌日|隔天|the next day|the following morning)|^([一二两三四五六七八九十\d]+)天后|^(\d+) days? later/i):null;
-            if(relative&&day!==null){const n=relative[1]||relative[2];const count=n?(/^\d+$/.test(n)?+n:{一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10}[n]):1;if(count){day+=count;hour=null;}}
+            const relativeMatch=line===lines[0]?line.match(/^(?:第二天|次日|翌日|隔天|the next day|the following morning)|^([一二两三四五六七八九十\d]+)天后|^(\d+) days? later/i):null;
+            const relative=relativeMatch ? relativeDays(relativeMatch[1] || relativeMatch[2]) : null;
+            if(relative!==null&&day!==null){day+=relative;hour=null;}
             const sceneLine=!!t||!!md||!!relative||/^(?:(?:当前|剧情|故事)?时间|Time|Scene time)\s*[:：]/i.test(line);
             if(sceneLine){
                 const tm=line.match(/(?:\b|[T\s：:])(\d{1,2})[:：](\d{2})(?:\s*(AM|PM))?/i);

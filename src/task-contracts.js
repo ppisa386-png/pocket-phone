@@ -117,9 +117,9 @@ export function commonTaskSchema(app,prompt) {
     if(String(prompt).includes('当前任务：NPC 代付判断。'))return TASK_SCHEMAS.payment;
     if(app==='messages') {
         if(prompt.includes('仅基于此前交流重写'))return TASK_SCHEMAS.textRewrite;
-        if(/只输出 JSON：[\\s\\S]*?\\{"status":"reply 或 no_reply"/.test(prompt))return TASK_SCHEMAS.sms;
+        if(/只输出 JSON：[\s\S]*?\{"status":"reply 或 no_reply"/.test(prompt))return TASK_SCHEMAS.sms;
     }
-    if((app==='phone'||app==='incoming')&&/只输出 JSON：[\\s\\S]*?\\{"status":"answered 或 no_answer 或 declined"/.test(prompt))return TASK_SCHEMAS.call;
+    if((app==='phone'||app==='incoming')&&/只输出 JSON：[\s\S]*?\{"status":"answered 或 no_answer 或 declined"/.test(prompt))return TASK_SCHEMAS.call;
     if(app==='x') {
         if(prompt.includes('当前任务：X 私信。'))return TASK_SCHEMAS.xDm;
         if(prompt.includes('当前任务：X 公开评论区互动。'))return TASK_SCHEMAS.xPublic;

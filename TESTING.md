@@ -1,3 +1,23 @@
+## v1.2.100 · T1—T6 修复验收（2026-11-27）
+
+基线 `2c659cc39360e26a8f6d433dd05899e70e10634d`（1.2.99），本地 Node v24.22.3。模型回复由测试提供，不使用真实用户密钥。新增 41 项回归；完整套件从任务书基线 983 项增至 1024 项。
+
+| 实际执行命令 | 通过 | 失败 | 结果 |
+| --- | ---: | ---: | --- |
+| `node --test --test-reporter=tap tests/task-contracts.test.js tests/messages.test.js tests/phone.test.js tests/api.test.js tests/phone-contract-recovery.test.js` | 83 | 0 | 两种连接模式、实际独立 API 专属 Schema、一次恢复、双失败、接听/继续通话、重写、可重试状态与缓存引用 |
+| `node --test --test-reporter=tap tests/calendar.test.js tests/narrative-bridges.test.js tests/weather-location.test.js` | 36 | 0 | 手动地点、个人提醒、实际请求数组、凭证去重与删楼恢复 |
+| `node --test --test-reporter=tap tests/assets.test.js tests/food.test.js tests/payment-request.test.js tests/narrative-bridges.test.js` | 117 | 0 | 开关快照、付款引用、真实外卖结算/导入、重复读档及 NPC 代付 |
+| `node --test --test-reporter=tap tests/story-clock.test.js tests/delivery.test.js tests/communication-time.test.js` | 41 | 0 | 中文天数、跨月年/闰日/未知日期、无效数字、时分及隐藏/对白排除 |
+| `npm test` | 1024 | 0 | 全量回归，0 跳过、0 取消 |
+| `npm run build:preview` | — | — | 退出码 0，预览构建成功 |
+| `git diff --check` | — | — | 恢复构建生成的旧 preview.html 后退出码 0 |
+
+修复前证据：T1 在原 task-contracts.js 上执行同组测试（缓存新增断言之前）为 73 通过/9 失败，失败分别命中双模式短信、拨出/继续、接听、失败拨号恢复与实际 API 专属 Schema。日历新增后为 17 通过/6 失败，命中切城个人提醒及无效手动地点。资产桥新增后为 5 通过/5 失败，其中四项为 Amazon/Snapchat/WhatsApp/微信准备后关闭仍有效，一项为 food 引用遗漏；修复快照后外卖/代付/桥组合为 32 通过/2 失败，仅剩外卖提示词和外卖桥引用遗漏。时钟新增后为 11 通过/10 失败，命中中文多字跳日及无效组合错误更新时分。以上故障在最终状态全部通过。
+
+连续失败不会伪造 NPC 回复或重复保存 user 内容，业务非法状态只请求一次；个人提醒分别验证 before3/today 的成功凭证、重复生成去重与删除对应楼层后恢复。资产关闭渠道后重新 prepare 仍保留相同余额与持仓。真实自付外卖 100 美元减至 80 美元，准确 ref 的正文确认及重复读档保持 80 美元，另一笔无关 20 美元支出正常减至 60 美元；NPC 代付无 user 现金流水或付款引用。既有开关重新开启不补录测试保留在全量回归中。
+
+构建会自动改写历史预览文件；首次差异检查发现 preview.html 的生成 CRLF/尾空白，按已有发布习惯恢复该文件，不提交生成预览，随后差异检查通过。本轮必选验收不依赖浏览器、实体手机或真实模型；本地浏览器及供应商联调未执行，不能由这些模拟成功推断其实际行为。
+
 ## v1.2.99 · 全 App 正文注入开关隔离
 - `tests/story-phone.test.js`：关闭短信/电话、关闭 X、仅开启微信及全关，检查实际生成文本中关闭渠道的模板和规则消失；共享自定义指令全开时保留。
 - `tests/outreach.test.js`：关闭 X 后，即使已存推文符合再次联系条件，其他渠道仍运行而不注入该推文、X 状态及公开@指令；重新开启恢复。

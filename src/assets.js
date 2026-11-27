@@ -1,15 +1,15 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.99';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.100';
 import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.2.79';
 import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.2';
-import { changeWalletCurrency } from './assets-currency.js?v=1.2';
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2.57';
+import { changeWalletCurrency } from './assets-currency.js?v=1.2.100';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2.100';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES } from './assets-policy.js?v=1.2';
-import { validateRights, rightsHistory, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2';
+import { validateRights, rightsHistory, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2.100';
 import { parseAppObject } from './model-json.js?v=1.2.79';
-import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.2';
+import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.2.100';
 import { latestMemory } from './external-memory.js?v=1.2';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.2';
-import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.2';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.2.100';
+import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.2.100';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 
 // Assessment values are never guessed or repaired. Only a redundant JSON

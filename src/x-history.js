@@ -1,5 +1,5 @@
-import { dateDay, dayDate } from './story-clock.js?v=1.2';
-import { communicationTime, withinCommunicationWeek } from './communication-time.js?v=1.2.66';
+import { dateDay, dayDate } from './story-clock.js?v=1.2.100';
+import { communicationTime, withinCommunicationWeek } from './communication-time.js?v=1.2.100';
 import { xComments, xUserReplyChain } from './x-comments.js?v=1.2.66';
 
 // All dates here are narrative dates. createdAt is only a stable tie breaker,

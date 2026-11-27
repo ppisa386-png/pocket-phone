@@ -1,12 +1,12 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.99';
-import { readStoryClock, dayDate } from './story-clock.js?v=1.2';
-import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent } from './calendar-core.js?v=1.2.66';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.100';
+import { readStoryClock, dayDate } from './story-clock.js?v=1.2.100';
+import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent, calendarCurrentCity } from './calendar-core.js?v=1.2.100';
 
 export function createCalendar({ memory, phone, getContext }) {
     return {
         open: () => memory.read(),
         refresh: () => phone.appTask(async (view, current, request) => {
-            const city = view.state.location?.current?.manual === true ? view.state.location.current.city : null;
+            const city = calendarCurrentCity(view.state);
             if (!city) throw Error('请先在天气 App 确定当前地点，再刷新日历。');
             const day = readStoryClock(getContext().chat).day;
             if (day === null) throw Error('当前剧情日期尚未明确，请先明确日期再刷新日历。');
@@ -30,7 +30,7 @@ export function createCalendar({ memory, phone, getContext }) {
             });
             if (!current()) throw Error('聊天或地点已变化，本次刷新未保存。');
             const latest = await memory.read();
-            if ((latest.state.location?.current?.manual === true ? latest.state.location.current.city : null) !== city) throw Error('天气地点已变化，请重新刷新日历。');
+            if (calendarCurrentCity(latest.state) !== city) throw Error('天气地点已变化，请重新刷新日历。');
             await memory.commit(await memory.begin(view), [calendarSet('database', database)]);
             return database;
         }, 'calendar'),

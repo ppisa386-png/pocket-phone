@@ -1,11 +1,11 @@
 import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.2.88';
-import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.66';
-import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.66';
-import { exactStoryTime } from './story-clock.js?v=1.2';
+import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.100';
+import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.100';
+import { exactStoryTime } from './story-clock.js?v=1.2.100';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
 import { phoneQuietOptions } from './api-context.js?v=1.2.92';
-import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.79';
+import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.100';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
 import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2.53';
@@ -13,8 +13,8 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
-import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.99';
-import { resolveAppConnection, VERSION } from './config.js?v=1.2.99';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.100';
+import { resolveAppConnection, VERSION } from './config.js?v=1.2.100';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.

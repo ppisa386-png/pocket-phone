@@ -4,7 +4,7 @@
 // where the record first appeared, expiry, shown/unshown state and the phone
 // read state for incoming WhatsApp/WeChat/X private messages. Message read state is
 // mirrored from the owning app record; the app record remains authoritative.
-import { dateDay, exactStoryTime } from './story-clock.js?v=1.2';
+import { dateDay, exactStoryTime } from './story-clock.js?v=1.2.100';
 import { appendChange, replayJournal } from './journal.js?v=1.2.57';
 import { xFeedArea } from './x-feed.js?v=1.2';
 

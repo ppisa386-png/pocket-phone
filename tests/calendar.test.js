@@ -198,3 +198,45 @@ test('calendar independent task schema rejects empty model content even with rea
  }finally{f.close();}
 });
 
+
+for(const refresh of ['none','success','failure']) {
+ test('city change preserves personal before3/today receipts and rollback after '+refresh+' refresh',async()=>{
+  const f=await setup();try {
+   ok(await f.calendar.refresh());ok(await f.calendar.saveEvent({name:'个人纪念日',date:'2020-11-16',kind:'anniversary',repeat:'yearly'}));
+   await f.memory.commit(await f.memory.begin(),[{collection:'location',key:'current',value:{city:'巴黎',manual:true}}]);
+   if(refresh==='success'){f.reply({...data(),region:'法国 · 巴黎',timezone:'Europe/Paris',holidays:[]});ok(await f.calendar.refresh());}
+   if(refresh==='failure'){f.reply(()=>{throw Error('offline');});assert.equal((await f.calendar.refresh()).ok,false);}
+   for(const stage of ['before3','today']) {
+    if(stage==='today'){f.c.chat.push({mes:'2026-11-16 09:00',is_user:false});await f.memory.read();}
+    let messages=await f.prepare();assert.match(JSON.stringify(messages),/个人纪念日/);assert.doesNotMatch(JSON.stringify(messages),/节日甲|节日乙/);
+    await f.finish();assert.equal(receipts(f.state()).filter(r=>r.stage===stage).length,1);
+    messages=await f.prepare();assert.doesNotMatch(JSON.stringify(messages),/个人纪念日/);
+    f.c.chat.pop();await f.bus.emit('MESSAGE_DELETED');await f.memory.read();
+    assert.equal(receipts(f.state()).filter(r=>r.stage===stage).length,0);
+    assert.match(JSON.stringify(await f.prepare()),/个人纪念日/);await f.finish();
+    assert.equal(receipts(f.state()).filter(r=>r.stage===stage).length,1);
+   }
+   assert.equal(receipts(f.state()).length,2);assert.deepEqual(f.errors,[]);
+  }finally{f.close();}
+ });
+}
+for(const [label,location,regional] of [
+ ['automatic',{city:'东京',manual:false},false],['legacy',{city:'东京'},false],['missing',null,false],
+ ['manual same city',{city:'东京',manual:true},true],['manual other city',{city:'巴黎',manual:true},false],
+]) {
+ test('calendar current place and outgoing regional background respect '+label,async()=>{
+  const f=await setup();try {
+   ok(await f.calendar.refresh());ok(await f.calendar.saveEvent({name:'个人事件',date:'2026-11-16',kind:'event',repeat:'none'}));
+   const db=structuredClone(f.state().calendar.database);
+   await f.memory.commit(await f.memory.begin(),[{collection:'location',key:'current',value:location}]);
+   const messages=JSON.stringify(await f.prepare());assert.equal(messages.includes('节日甲'),regional);assert.match(messages,/个人事件/);
+   const panel=createCalendarPanel({adapter:{calendar:f.calendar,storyChat:()=>f.c.chat},getView:f.state,redraw(){}});
+   await panel.action('settings');
+   const city=location?.manual===true?location.city:'地点尚未确定';
+   assert.ok(panel.html().includes('<dt>天气当前地点</dt><dd>'+city+'</dd>'));
+   assert.deepEqual(f.state().calendar.database,db);
+   if(!location?.manual){const before=f.calls();assert.equal((await f.calendar.refresh()).ok,false);assert.equal(f.calls(),before);}
+   if(location?.city==='巴黎'){await panel.action('month');assert.match(panel.html(),/刷新后将切换/);}
+  }finally{f.close();}
+ });
+}

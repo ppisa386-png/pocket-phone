@@ -6,7 +6,7 @@ import { createApiClient, createKeyStore, normalizeApiUrl, extractApiText } from
 import { captureHostRequest } from '../src/api-context.js';
 import { HostEvents, installHostGeneration } from './host-fixture.js';
 import { normalizeSettings, VERSION } from '../src/config.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createPhoneMemory } from '../src/memory.js';
 import { phoneJsonSchema } from '../src/model-json.js';
 import { TASK_SCHEMAS } from '../src/task-contracts.js';
@@ -885,4 +885,29 @@ test('an App profile or model change during prompt preparation cancels the pendi
  finish({messages:[{role:'user',content:'something'}]});
  await assert.rejects(pending,/配置已变化|取消/);
  assert.equal(requests,0);
+});
+
+test('SMS and calls forward task-specific schemas through the independent API during field recovery',async()=>{
+ const f=phoneFixture();try {
+  await f.phone.scan();const seen=[];
+  for(const [schema,run,result] of [
+   [TASK_SCHEMAS.sms,()=>f.phone.sendMessage('card:alex.png','Hello'),{status:'reply',text:'Hi'}],
+   [TASK_SCHEMAS.call,()=>f.phone.dial('card:alex.png'),{status:'answered',text:'Hello?'}],
+  ]) {
+   let count=0;f.reply(options=>{const body=JSON.parse(options.body);seen.push(body);assert.deepEqual(body.json_schema,schema);return JSON.stringify(++count===1?{}:result);});
+   assert.equal((await run()).ok,true);assert.equal(count,2);
+  }
+  assert.equal(Object.keys(f.phone.snapshot().messages).length,2);
+  assert.equal(Object.values(f.phone.snapshot().calls)[0].turns.length,1);
+ } finally {f.close();}
+});
+
+test('residual bug release loads updated contracts, clock, calendar and asset bridge from every importer',()=>{
+ const names=['task-contracts.js','story-clock.js','calendar-core.js','calendar-view.js','calendar-story.js','assets-story.js'];
+ for(const file of ['index.js',...readdirSync(new URL('../src/',import.meta.url)).filter(n=>n.endsWith('.js')).map(n=>'src/'+n)]) {
+  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+  for(const name of names) for(const match of source.matchAll(new RegExp('/'+name.replaceAll('.','\\.')+'\\?v=([\\d.]+)','g'))) {
+   assert.equal(match[1],VERSION,file+' must refresh '+name);
+  }
+ }
 });

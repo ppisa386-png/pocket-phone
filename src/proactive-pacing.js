@@ -1,6 +1,6 @@
-import { exactStoryTime } from './story-clock.js?v=1.2';
-import { smsForAI } from './sms-context.js?v=1.2.66';
-import { commExpired, commMeta } from './comm-context.js?v=1.2.66';
+import { exactStoryTime } from './story-clock.js?v=1.2.100';
+import { smsForAI } from './sms-context.js?v=1.2.100';
+import { commExpired, commMeta } from './comm-context.js?v=1.2.100';
 
 // Input is oldest-first. Apply the same per-thread cap to communication
 // facts and to the lighter timing metadata sent to the narrative model.

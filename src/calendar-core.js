@@ -1,4 +1,4 @@
-import { dateDay, dayDate } from './story-clock.js?v=1.2';
+import { dateDay, dayDate } from './story-clock.js?v=1.2.100';
 import { parseAppObject } from './model-json.js?v=1.2.79';
 
 // A calendar response must contain exactly one complete JSON object. Allow
@@ -21,6 +21,7 @@ export function parseCalendarResponse(raw) {
 
 
 export const calendarRegionKey = city => String(city || '').trim().normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+export const calendarCurrentCity = state => state?.location?.current?.manual === true ? state.location.current.city || null : null;
 export const calendarSet = (key, value) => ({ collection: 'calendar', key, value });
 export const calendarPersonal = state => Object.values(state?.calendar || {}).filter(row => row.type === 'personal');
 const calendarText = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -92,8 +93,8 @@ export function calendarMonth(year, month) {
 export function calendarDue(state, day) {
     if (!Number.isInteger(day) || !state?.calendar?.database) return [];
     const db = state.calendar.database;
-    if (state.location?.current?.city && calendarRegionKey(state.location.current.city) !== db.regionKey) return [];
-    return calendarOccurrences(state, day, day + 3).filter(row => row.day === day || row.day === day + 3).map(row => {
+    const city = calendarCurrentCity(state), regional = !!city && calendarRegionKey(city) === db.regionKey;
+    return calendarOccurrences(state, day, day + 3).filter(row => (row.type !== 'holiday' || regional) && (row.day === day || row.day === day + 3)).map(row => {
         const stage = row.day === day ? 'today' : 'before3';
         // Regional holidays on the same date form one receipt. A model's spelling
         // changes on refresh must not resurface an already delivered reminder.

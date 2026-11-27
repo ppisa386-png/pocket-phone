@@ -55,3 +55,26 @@ test('SDC validates dates and times atomically, ignores user examples and though
   assert.equal(storyTime([...chat,{mes:invalid}]).time,'23:59');assert.equal(storyTime([...chat,{mes:invalid}]).date,'2026-03-02');
  }
 });
+
+for(const [text,days] of [['十天后',10],['11天后',11],['十一天后',11],['十九天后',19],['二十天后',20],['二十一天后',21],['九十九天后',99],['两天后',2],['一天后',1],['一十天后',10],['2 days later',2]]) {
+ test('scene-opening relative transition '+text+' advances date and clears old time',()=>{
+  const seed={mes:'2026-01-01 10:00'};
+  assert.deepEqual(readStoryClock([seed,{mes:text+'\n新的场景。'}]),{day:dateDay('2026-01-01')+days,hour:null});
+  assert.deepEqual(readStoryClock([seed,{mes:text+' 16:35\n新的场景。'}]),{day:dateDay('2026-01-01')+days,hour:16+35/60});
+ });
+}
+for(const [base,jump,date] of [['2026-01-25','十一天后','2026-02-05'],['2026-12-25','二十天后','2027-01-14'],['2024-02-18','十一天后','2024-02-29'],['2024-02-29','两天后','2024-03-02']]) {
+ test('Chinese relative date arithmetic '+base+' '+jump,()=>{
+  assert.deepEqual(readStoryClock([{mes:base+' 10:00'},{mes:jump}]),{day:dateDay(date),hour:null});
+ });
+}
+test('relative transitions require a known base and valid numerals; dialogue, plans and hidden text do not advance time',()=>{
+ assert.deepEqual(readStoryClock([{mes:'十一天后'}]),{day:null,hour:null});
+ const base={mes:'2026-01-01 10:00'},expected={day:dateDay('2026-01-01'),hour:10};
+ for(const value of ['一一','十十','二十三四','两十','一2','2十','零十一','零','0']) {
+  assert.deepEqual(readStoryClock([base,{mes:value+'天后 16:35'}]),expected,value);
+ }
+ for(const text of ['“十一天后见。”','她打算十一天后离开。','正文。\n十一天后再谈。','<!-- 十一天后 -->','```\n十一天后\n```','<think>十一天后</think>']) {
+  assert.deepEqual(readStoryClock([base,{mes:text}]),expected,text);
+ }
+});

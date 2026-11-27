@@ -392,3 +392,27 @@ test('店铺页选菜、紧凑状态栏与两步收件气泡',async()=>{
  }finally{globalThis.FormData=OriginalFormData;}
 });
 
+
+test('paid food order exposes its exact reference and prose confirmation never charges twice',async()=>{
+ const {buildAssetPrompt}=await import('../src/assets-story.js');
+ const {cashBalance}=await import('../src/assets-core.js');
+ const f=setup();try {
+  await f.memory.commit(await f.memory.begin(),[
+   {collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',currency:'USD',openingMinor:10000,included:[],lastIndex:0}},
+   {collection:'orders',key:'foodSearch',value:{id:'foodSearch',type:'foodSearch',currency:'USD'}},
+   {collection:'orders',key:'foodShop:0',value:{id:'foodShop:0',type:'foodShop',name:'Audit Kitchen',currency:'USD',menu:[]}},
+   {collection:'orders',key:'foodCart',value:{id:'foodCart',type:'foodCart',items:[{dishId:'foodShop:0#0',shopId:'foodShop:0',shopName:'Audit Kitchen',name:'面条',category:'主食',priceMinor:2000,currency:'USD',quantity:1}]}}
+  ]);
+  const paid=await f.food.checkout('foodShop:0');ok(paid);assert.equal(cashBalance(f.state()),8000);
+  const prompt=buildAssetPrompt(f.state(),f.settings);assert.ok(prompt.includes(paid.value.id));
+  assert.match(prompt,/"amount":-20,"currency":"USD"/);
+  f.settings.apps.food=false;assert.ok(!buildAssetPrompt(f.state(),f.settings).includes(paid.value.id));assert.equal(cashBalance(f.state()),8000);
+  f.settings.apps.food=true;
+  const marker={kind:'expense',name:'外卖订单已支付',amount:20,currency:'USD',date:'2026-10-11',ref:paid.value.id};
+  f.context.chat.push({is_user:false,mes:'2026-10-11 14:00\nSam 的外卖订单已经支付了20美元。<!--durian-money:'+JSON.stringify(marker)+'-->'});
+  for(let i=0;i<3;i++) {await f.memory.read();assert.equal(cashBalance(f.state()),8000);assert.equal(assetRows(f.state(),'cash_transaction').length,1);}
+  const reload=createPhoneMemory({getContext:()=>f.context});try {const state=(await reload.read()).state;assert.equal(cashBalance(state),8000);assert.equal(assetRows(state,'cash_transaction').length,1);}finally{reload.destroy();}
+  f.context.chat.push({is_user:false,mes:'Sam 又花了20美元买车票。<!--durian-money:'+JSON.stringify({...marker,name:'车票',ref:undefined})+'-->'});
+  await f.memory.read();assert.equal(cashBalance(f.state()),6000);assert.equal(assetRows(f.state(),'cash_transaction').length,2);
+ }finally{f.close();}
+});

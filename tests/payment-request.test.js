@@ -156,3 +156,15 @@ test('付款人名字缺失被拒绝且不请求模型；NPC 代付订单随楼�
  }finally{f.close();}
 });
 
+
+test('NPC-paid food does not invent a user payment reference in asset context',async()=>{
+ const {buildAssetPrompt}=await import('../src/assets-story.js');
+ const {cashBalance}=await import('../src/assets-core.js');
+ const f=setup();try {
+  await seedWallet(f);ok(await f.food.search('午餐'));const shop=foodItems(f.state(),'foodShop')[0];
+  ok(await f.food.add(shop.id,shop.menu[0].id));const before=cashBalance(f.state());
+  const result=await f.food.checkout(shop.id,'self','','npc','小美');ok(result);
+  assert.equal(cashBalance(f.state()),before);assert.equal(assetRows(f.state(),'cash_transaction').length,0);
+  assert.ok(!buildAssetPrompt(f.state(),f.settings).includes(result.value.id));
+ }finally{f.close();}
+});

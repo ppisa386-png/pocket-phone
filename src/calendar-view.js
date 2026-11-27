@@ -1,5 +1,5 @@
-import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2';
-import { calendarMonth, calendarOccurrences, calendarPersonal, calendarRegionKey } from './calendar-core.js?v=1.2.66';
+import { readStoryClock, dayDate, dateDay } from './story-clock.js?v=1.2.100';
+import { calendarMonth, calendarOccurrences, calendarPersonal, calendarRegionKey, calendarCurrentCity } from './calendar-core.js?v=1.2.100';
 import { icon } from './icons.js?v=1.2.57';
 
 const calendarEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -14,7 +14,7 @@ export function createCalendarPanel({ adapter, getView, redraw, notice }) {
         if (clock.day !== lastDay && page === 'month') { if (!selected || selected === dayDate(lastDay)) { selected = today; month = today.slice(0, 7); } lastDay = clock.day; }
         if (!selected) selected = today || (db ? `${String(db.years[0]).padStart(4, '0')}-01-01` : '');
         if (!month) month = selected.slice(0, 7);
-        const busy = working || state.busy, disabled = busy ? 'disabled' : '', currentCity = state.location?.current?.city || '地点尚未确定';
+        const busy = working || state.busy, disabled = busy ? 'disabled' : '', currentCity = calendarCurrentCity(state) || '地点尚未确定';
         const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][Number(month.slice(5)) - 1] || 'spring';
         const sprig = `<span class="pp-cal-sprig" data-season="${season}" aria-hidden="true"></span>`;
         const feedback = `<p class="pp-cal-status${status ? ' has-message' : ''}" role="status" aria-live="polite">${calendarEscape(working ? (page === 'editor' ? '正在保存事件…' : '正在整理地区节日资料…') : status)}</p>`;
