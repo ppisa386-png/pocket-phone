@@ -32,14 +32,15 @@ export const TASK_SCHEMAS={
         initial:obj(['balance','holdings','jobs'],{balance:{type:['string','number']},holdings:arr(holding),jobs:arr(job)}),note:str,
     })),
     assetsUpdate:schema('assets_update',{
-        ...obj([],{
+        ...obj(['events','living','business'],{
         date:str,currency:str,residenceChange:{anyOf:[{type:'null'},obj(['sourceIndex','subject','status','region','currency'],{sourceIndex:integer,subject:str,status:str,region:str,currency:str,place:str})]},
         events:arr({type:'object'}),salaries:arr({type:'object'}),valuations:arr({type:'object'}),
         living:obj(['total','bookedIds'],{total:{type:['number','string']},bookedIds:arr(str)}),
         business:arr({type:'object'}),ownership:arr({type:'object'}),classifications:arr({type:'object'}),recoveredAssets:arr({type:'object'}),note:str,
         }),
-        // Migration is an early-return task; required fields vary by outcome.
-        // assertTaskResponse enforces these branches without provider-incompatible anyOf.
+        // For provider compatibility require a normal envelope, including empty
+        // placeholders on migration. The local early return still accepts old
+        // migration-only replies; no provider-incompatible required-only anyOf.
     }),
     assetsRecovery:schema('assets_recovery',obj(['recoveredAssets'],{recoveredAssets:arr({type:'object'})})),
     assetsResidence:schema('assets_residence_repair',obj(['residence'],{residence:{anyOf:[{type:'null'},residence]},date:str,currency:str})),
@@ -98,6 +99,16 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
         throw modelProtocolError(contract.name,['accepted 或 ambiguous']);
     const missing=required.filter(key=>!optionalMissing.includes(key)&&
         (!data||typeof data!=='object'||Array.isArray(data)||!Object.hasOwn(data,key)||data[key]===undefined));
+    if(contract.name==='phone_assets_update'&&!migration&&data&&typeof data==='object'){
+        for(const key of ['events','business'])if(!missing.includes(key)&&!Array.isArray(data[key]))missing.push(key);
+        if(!missing.includes('living')){
+            if(!data.living||typeof data.living!=='object'||Array.isArray(data.living))missing.push('living');
+            else {
+                if(data.living.total==null)missing.push('living.total');
+                if(!Array.isArray(data.living.bookedIds))missing.push('living.bookedIds');
+            }
+        }
+    }
     if(missing.length) {
         const specific={
             phone_calendar:'模型未返回完整日历资料',
@@ -107,7 +118,7 @@ export function assertTaskResponse(data,contract,{optionalMissing=[],currentCurr
             phone_amazon_search:'Amazon 商品资料未交付',
             phone_contacts:'模型未返回完整联系人资料',
         };
-        const reason=contract.name==='phone_assets_update' && missing.includes('living')
+        const reason=contract.name==='phone_assets_update' && missing.some(key=>key==='living'||key.startsWith('living.'))
             ? '缺少本期生活开销' : specific[contract.name] || '模型未返回完整任务数据';
         throw modelProtocolError(contract.name,missing,reason);
     }

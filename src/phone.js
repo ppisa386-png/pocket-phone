@@ -1,11 +1,11 @@
 import { COMMUNICATION_LANGUAGE_RULE, SOCIAL_LANGUAGE_RULE } from './communication-language.js?v=1.2.88';
-import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.101';
-import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.101';
-import { exactStoryTime } from './story-clock.js?v=1.2.101';
+import { smsForAI, smsAIRecords, smsReplyClassification } from './sms-context.js?v=1.2.102';
+import { commExpired, commMeta, commReplyClassification, commClassificationPlan, commClassificationChanges } from './comm-context.js?v=1.2.102';
+import { exactStoryTime } from './story-clock.js?v=1.2.102';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 import { CHINESE_NAME_RULE } from './names.js?v=1.2';
 import { phoneQuietOptions } from './api-context.js?v=1.2.92';
-import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.101';
+import { wechatMomentsAccountPrompt } from './wechat-moments.js?v=1.2.102';
 import { contactSources, contactPrompt, validateContacts, establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
 export { validateContacts } from './contacts.js?v=1.2';
 import { postMemoryPrompt, latestMemory, readXMemory, xMemoryPrompt, readActorMemory, actorMemoryPrompt } from './external-memory.js?v=1.2.53';
@@ -13,8 +13,8 @@ import { eventKey, isBlocked, communicationEvent } from './contact-events.js?v=1
 import { narrativeTurn } from './contact-policy.js?v=1.2.57';
 import { validateSMS, threadMessages, messageParticipants } from './messages.js?v=1.2';
 import { parseAppObject, MODEL_JSON_CONTRACT } from './model-json.js?v=1.2.79';
-import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.101';
-import { resolveAppConnection, VERSION } from './config.js?v=1.2.101';
+import { TASK_SCHEMAS, commonTaskSchema, assertTaskResponse } from './task-contracts.js?v=1.2.102';
+import { resolveAppConnection, VERSION } from './config.js?v=1.2.102';
 
 
 // Phone and SMS share a queue and rollback tickets across both model transports.
@@ -128,7 +128,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
         const modelResponses = [];
         let normalRetriesLeft = retries, formatRetried = false;
         let modelRequests = 0, formatRecoveries = 0, unsupportedParameterRetries = 0;
-        let weatherPartialResponse = null, weatherMissingFields = [];
+        let weatherPartialResponse = null, weatherMissingFields = [], assetMissingFields = [];
         let maxTokens = options.maxTokens ?? (app === 'daily' ? 16384 : 8192);
         const outputContract = options.finalOutputContract || options.outputContract || MODEL_JSON_CONTRACT;
         const label = {assets:'资产',calendar:'日历',amazon:'Amazon',x:'X'}[app] || '手机任务';
@@ -142,7 +142,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
                 const report = value => { if (isCurrent()) { stage = '请求模型（' + value + '）'; job.progress = value; emit(); } };
                 report(independent ? '正在准备独立 API 请求' : '正在等待酒馆生成回复');
                 const correction = formatRetried ? (app === 'assets'
-                    ? '\n小榴莲格式恢复：上一份账本数据未形成完整且合法的 JSON。严格按照本次任务已有账本状态、日期、币种、待处理事项和财产估值规则重新计算并返回一个完整 JSON 对象。不得修改已有金额、补造无依据事件或丢失待处理事项。只返回 JSON，不输出解释、Markdown、思考、代码块或角色扮演。'
+                    ? '\n小榴莲格式恢复：上一份账本数据未形成完整且合法的 JSON。严格按照本次任务已有账本状态、日期、币种、待处理事项和财产估值规则重新计算并返回一个完整 JSON 对象。不得修改已有金额、补造无依据事件或丢失待处理事项。只返回 JSON，不输出解释、Markdown、思考、代码块或角色扮演。' + (taskSchema?.name==='phone_assets_update' ? '\n上一份缺少：'+(assetMissingFields.join('、')||'完整账本结构')+'。正常结算必须完整返回 events 数组、living:{total:本期生活费数值,bookedIds:数组}、business 数组；没有对应事项时用空数组，只有确实无生活开销才填 total:0。按已有日期、币种和待处理事项重做；不要只返回缺失片段。跨币区迁居仅提议换币并附空占位字段。' : '')
                     : app === 'calendar'
                     ? '\n榴莲日历格式恢复：上一份回复未提供完整且合法的节日 JSON。只重新完成原地点、原年份的同一任务，按任务给出的 region、timezone、years、holidays 结构返回唯一完整 JSON 对象；节日使用紧凑数组，不输出 Markdown、推理、剧情或其他说明。不得捏造无依据的日期。'
                     : app === 'amazon'
@@ -191,6 +191,7 @@ export function createPhoneService({ memory, getContext, getSettings, modelClien
             } catch (failure) {
                 // Invalid business facts cannot become network retries.
                 if (stage === '校验业务数据' && !failure.code) { failure.code='PHONE_BUSINESS_INVALID'; failure.retryable=false; }
+                if (app === 'assets' && failure.code === 'PHONE_DATA_MISSING') assetMissingFields = failure.missingFields || [];
                 if (app === 'weather' && failure.code === 'PHONE_DATA_MISSING')
                     weatherMissingFields = failure.missingFields || [];
                 const summary = '第' + (attempt + 1) + '次：' + (responseLength === null ? '请求模型' : stage) + (responseLength === null ? '' : '，返回' + responseLength + '字符');

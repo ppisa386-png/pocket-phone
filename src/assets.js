@@ -1,15 +1,15 @@
-import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.101';
+import { TASK_SCHEMAS, modelProtocolError } from './task-contracts.js?v=1.2.102';
 import { hasResidence, residenceContract, expenseFloorSummaries, assessmentResidence } from './assets-residence.js?v=1.2.79';
 import { walletCurrency, majorAmount, unitScale, personaStamp } from './currency.js?v=1.2';
-import { changeWalletCurrency } from './assets-currency.js?v=1.2.101';
-import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2.101';
+import { changeWalletCurrency } from './assets-currency.js?v=1.2.102';
+import { needsOwnershipRecovery, ownershipRecoveryProse, OWNERSHIP_RECOVERY_RULES, applyOwnershipRecovery, applyOwnershipRepair } from './assets-recovery.js?v=1.2.102';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES } from './assets-policy.js?v=1.2';
-import { validateRights, rightsHistory, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2.101';
+import { validateRights, rightsHistory, expiryChanges, businessPeriods, validateBusinessPeriod } from './assets-rights.js?v=1.2.102';
 import { parseAppObject } from './model-json.js?v=1.2.79';
-import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.2.101';
+import { dateDay, dayDate, readStoryClock } from './story-clock.js?v=1.2.102';
 import { latestMemory } from './external-memory.js?v=1.2';
-import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.2.101';
-import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.2.101';
+import { assetRows, assetSet, assetText, moneyMinor, cashRecord, cashBalance, salaryPayments } from './assets-core.js?v=1.2.102';
+import { ASSET_CATEGORIES, validateFinancialEvent, applyFinancialEvent, applyAssetChanges, financialEventKey } from './assets-events.js?v=1.2.102';
 import { isMemoryHidden } from './journal.js?v=1.2.57';
 
 // Assessment values are never guessed or repaired. Only a redundant JSON
@@ -434,6 +434,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
             const currency=walletCurrency(view.state);
             const residenceSummaries=expenseFloorSummaries(view.state,floors);
             const homeContract=residenceContract(wallet);
+            const updateEnvelope='已有账本正常结算必须返回顶层 events 数组、living 对象（total 为本期生活费数值、bookedIds 为数组）、business 数组；无新增事项用 events:[]，无经营结算用 business:[]，确实无生活开销才用 living:{"total":0,"bookedIds":[]}。不得省略字段、以空对象代替或重置initial。只有明确跨币区迁居的换币提议不结算，按常住地规则附空占位。';
             const pending=wallet?pendingAssessments(view.state):[];
             const pendingSalaries=wallet?assetRows(view.state,'job').filter(j=>j.monthlyMinor==null).map(({id,name})=>({id,name})):[];
             const pendingContract=WAGE_ASSESSMENT_RULES+(wallet?PENDING_ASSESSMENT_RULES+'本次必须处理的事项：'+JSON.stringify(pending.map(({id,ref,kind,name,needs})=>({id,ref,kind,name,needs})))+'另外pendingSalaries中的每个工作必须估算固定月薪并在salaries按id返回：'+JSON.stringify(pendingSalaries):'首次建账用initial快照吸收已有事实，未知余额和已确认固定工作的月薪合理估算，不单独重复结算开场前事件。');
@@ -470,7 +471,7 @@ export function createAssets({ memory, phone, getContext, getSettings }) {
                 return applyAssessment(view.state,data,{chat,index,revision:view.revision,memoryText,persona,residenceSummaries,userName:context.name1});
             }, current, null, { summarySnapshot:prepared, retries: 0, parseResponse: parseAssetResponse, formatRetryOnce:true, requireJsonObject:true, maxTokens:8192,
                 jsonSchema:wallet && !hasResidence(wallet) ? TASK_SCHEMAS.assetsResidence : wallet ? TASK_SCHEMAS.assetsUpdate : TASK_SCHEMAS.assetsInitial,
-                optionalMissingFields:wallet ? [] : ['residence'], finalOutputContract: ASSET_OUTPUT_CONTRACT + homeContract + dateContract + pendingContract + (wallet ? '已有账本，返回events/salaries/valuations/living/business，不得重置initial。' : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? '本次已有账本：只使用后续格式，禁止 initial。' : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + (hasResidence(wallet)?'沿用已确认常住地；无明确迁居返回residenceChange:null。':'首次必须与initial并列返回顶层residence:{region,currency,place,inferred}。明确的User人设常驻城市足以判断地区与当地币种；确实无法确定才用residence:null。') + '金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
+                optionalMissingFields:wallet ? [] : ['residence'], finalOutputContract: ASSET_OUTPUT_CONTRACT + homeContract + dateContract + pendingContract + (wallet ? (currencyOnly?'本次仅修复常住地资料，返回residence。':updateEnvelope+' 同时按需返回salaries/valuations。') : '首次建账，返回initial:{balance,holdings,jobs}。') + (recovery ? OWNERSHIP_RECOVERY_RULES : ''), outputContract: '\n当前是手机资产评估任务，不续写正文、不输出状态栏、HTML 或剧情注释。沿用预设的人设、世界观和背景，但最终只返回一个合法 JSON 对象。' + (wallet ? (currencyOnly?'本次仅修复常住地资料，返回residence。':updateEnvelope) : '本次首次建账：只使用首次格式，必须含 initial.balance、initial.holdings、initial.jobs，不混入后续示例。') + dateContract + (recovery ? '本次还必须返回recoveredAssets数组完成限定旧楼财产补查，确无遗漏返回[]，不重新结算旧收支。' : '') + (hasResidence(wallet)?'沿用已确认常住地；无明确迁居返回residenceChange:null。':'首次必须与initial并列返回顶层residence:{region,currency,place,inferred}。明确的User人设常驻城市足以判断地区与当地币种；确实无法确定才用residence:null。') + '金额保留当地本币数值，不加货币符号或千位逗号；无项目用空数组；不要复述示例，不能有多个候选结果。' });
             if (!current()) throw Error('剧情或设置已变化，本次评估未保存。');
             if (persona!==(getContext().powerUserSettings?.persona_description||'')) throw Error('user 人设已变化，请重新一键更新。');
             if(changes.home) {

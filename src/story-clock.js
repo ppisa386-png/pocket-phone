@@ -18,11 +18,11 @@ function relativeDays(value) {
     const tens = value.match(/^([一二三四五六七八九]?)十([一二三四五六七八九]?)$/);
     return tens ? (digits[tens[1]] || 1) * 10 + (digits[tens[2]] || 0) : null;
 }
-// SDC is explicit scene metadata, even when a preset wraps prose in a code
+// SDC and QQJ are explicit scene metadata, even when a preset wraps prose in a code
 // fence. Read it before stripping presentation wrappers; never use wall time.
 function lastSDC(source) {
     let result=null;
-    for(const match of source.matchAll(/<!--\s*SDC-(?:start|end)\s*\|([\s\S]*?)-->/gi)) {
+    for(const match of source.matchAll(/<!--\s*(?:SDC|QQJ)-(?:start|end)\s*\|([\s\S]*?)-->/gi)) {
         const fields={};let duplicate=false;
         for(const part of match[1].split('|')) {
             const field=part.match(/^\s*(date|time)\s*=\s*(.*?)\s*$/i);

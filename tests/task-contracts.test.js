@@ -66,6 +66,7 @@ test('Gemini response_schema avoids required-only anyOf and retains local task c
  assert.equal(TASK_SCHEMAS.xFeed.value.anyOf,undefined);
  assert.deepEqual(TASK_SCHEMAS.xFeedPosts.value.required,['posts']);
  assert.equal(TASK_SCHEMAS.assetsUpdate.value.anyOf,undefined);
+ assert.deepEqual(TASK_SCHEMAS.assetsUpdate.value.required,['events','living','business']);
  assert.equal(TASK_SCHEMAS.friends.value.anyOf,undefined);
  assert.equal(assertTaskResponse({accounts:[]},TASK_SCHEMAS.xFeed).accounts.length,0);
  assert.throws(()=>assertTaskResponse({accounts:[]},TASK_SCHEMAS.xFeedPosts),e=>e.code==='PHONE_DATA_MISSING');
@@ -85,4 +86,9 @@ test('post impact schema requires each metric and an addressable post ID',()=>{
   const property=contract.properties.stats.items.properties[name];
   assert.equal(property.type,'integer');assert.equal(property.minimum,0);
  }
+});
+
+test('asset update flags missing nested living fields for one format recovery',()=>{
+ for(const living of [{},{total:0},{bookedIds:[]}])assert.throws(()=>assertTaskResponse({events:[],living,business:[]},TASK_SCHEMAS.assetsUpdate),e=>e.code==='PHONE_DATA_MISSING'&&e.missingFields.some(k=>k.startsWith('living.')));
+ assert.throws(()=>assertTaskResponse({events:null,living:{total:0,bookedIds:[]},business:[]},TASK_SCHEMAS.assetsUpdate),e=>e.code==='PHONE_DATA_MISSING'&&e.missingFields.includes('events'));
 });

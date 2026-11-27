@@ -45,14 +45,14 @@ test('narrative SMS markers import without evidence quotes; same-floor items kee
     } finally { f.close(); }
 });
 
-test('archival markers with evidence keep strict verification: a mismatched quote is still dropped', () => {
+test('archival contact quotes retain verification; financial quotes no longer gate admission', () => {
     const message = { mes: '完全无关的正文。' + marker('durian-contact', { sender: 'Alex', recipient: 'user', name: 'Alex', kind: 'sms', text: '晚上见', evidence: '这是一段并不存在的原句。' }), is_user: false };
     assert.deepEqual(storyAnnotations(message, 'durian-contact'), []);
     const messageMoney = { mes: '没有这笔消费的一天。' + marker('durian-money', { kind: 'expense', name: '咖啡', amount: 5, evidence: '虚构的结账原句。' }), is_user: false };
-    assert.deepEqual(storyAnnotations(messageMoney, 'durian-money'), []);
+    assert.equal(storyAnnotations(messageMoney, 'durian-money').length,1);
 });
 
-test('durian-money without evidence imports with a position-based id and amount-in-prose grounding', async () => {
+test('durian-money without evidence imports with a position-based id even without an amount in prose', async () => {
     const f = fixture([
         { mes: '日期：2026-01-01\n开场。', is_user: false },
         { mes: 'Sam 花5美元买了咖啡。' + marker('durian-money', { kind: 'expense', name: '咖啡', amount: 5 }), is_user: false },
@@ -64,11 +64,11 @@ test('durian-money without evidence imports with a position-based id and amount-
         assert.equal(events[0].name, '咖啡');
         const money = f.c.chatMetadata[JOURNAL_KEY].events.flatMap(e => e.changes.filter(ch => ch.collection === 'assets' && ch.value?.type === 'story_event').map(ch => ch.key));
         assert.ok(money.some(id => /^money:.+:pos0:/.test(id)), 'evidence-free markers are identified by revision plus floor position');
-        // A declared amount that the prose never wrote is still refused.
+        // A declared amount needs no duplicate prose numeral.
         const f2 = fixture([{ mes: '日期：2026-01-01\n开场。', is_user: false }, { mes: '安静的一天。' + marker('durian-money', { kind: 'expense', name: '咖啡', amount: 5 }), is_user: false }]);
         try {
             await f2.memory.read();
-            assert.equal(Object.values((await f2.state()).assets).filter(e => e.type === 'story_event').length, 0);
+            assert.equal(Object.values((await f2.state()).assets).filter(e => e.type === 'story_event').length, 1);
         } finally { f2.close(); }
     } finally { f.close(); }
 });

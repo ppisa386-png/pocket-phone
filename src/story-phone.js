@@ -1,21 +1,21 @@
-import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.101';
+import {xStoryPrompt,xStoryChanges} from './x-story.js?v=1.2.102';
 import { narratedXSentDms } from './x-narrative-dm.js?v=1.2.46';
-import {businessPrompt,importBusiness} from './x-business.js?v=1.2.101';
-import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.101';
-import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.101';
-import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.101';
-import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.101';
+import {businessPrompt,importBusiness} from './x-business.js?v=1.2.102';
+import {availableChannels,outreachPrompt,socialContact} from './outreach.js?v=1.2.102';
+import {wechatMomentsStoryPrompt} from './wechat-moments.js?v=1.2.102';
+import {normalizeSettings,MODULE_KEY,PROMPTS} from './config.js?v=1.2.102';
+import { recentContactActivity,recentPerConversation } from './proactive-pacing.js?v=1.2.102';
 import { COMMUNICATION_LANGUAGE_RULE } from './communication-language.js?v=1.2';
-import { smsReplyClassification } from './sms-context.js?v=1.2.101';
-import { COMM_PLATFORMS, commKey, commEntries, commCanNotify, commHasPhoneRead, commNotificationChange, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.101';
-import { exactStoryTime } from './story-clock.js?v=1.2.101';
+import { smsReplyClassification } from './sms-context.js?v=1.2.102';
+import { COMM_PLATFORMS, commKey, commEntries, commCanNotify, commHasPhoneRead, commNotificationChange, commRecordExists, commRecordPatch, commShownChange } from './comm-context.js?v=1.2.102';
+import { exactStoryTime } from './story-clock.js?v=1.2.102';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2.58';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.2.58';
 import { CHINESE_NAME_RULE, localizedPerson, sameNamedPerson } from './names.js?v=1.2';
 import { effectiveReply, narrativeReplyCount } from './contact-policy.js?v=1.2.58';
 import { isBlocked } from './contact-events.js?v=1.2';
 import { financialEvidenceMatches } from './assets-policy.js?v=1.2';
-import { sceneBackground } from './weather.js?v=1.2.101';
+import { sceneBackground } from './weather.js?v=1.2.102';
 export const STORY_PHONE_KEY='durian_phone_story_events';
 const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase();
 const set=(collection,key,value)=>({collection,key,value});
@@ -32,6 +32,11 @@ export function storyAnnotations(message,tag){
         const position=tagIndex++;
         try{
             const row=JSON.parse(m[1]),quote=row?.evidence;
+            // Finance markers are authoritative structured output, not prose excerpts.
+            if(tag==='durian-money'||tag==='durian-debt'){
+                if(row&&typeof row==='object'&&!Array.isArray(row))result.push({...row,prose});
+                continue;
+            }
             // Evidence is optional: archival markers always carry it, so old floors
             // gate exactly as before and their per-floor ordinals never shift. New
             // markers may omit it and are trusted directly.
@@ -43,7 +48,7 @@ export function storyAnnotations(message,tag){
                 // intact when recovering a formerly skipped tag before a saved one.
                 if(!hasQuote||exact||financialEvidenceMatches(prose,quote))
                     result.push({...row,prose,outreachKey:exact?String(exactIndex++):'excerpt:'+position});
-            }else if(!hasQuote||exact||(['durian-money','durian-message'].includes(tag)&&financialEvidenceMatches(prose,quote))||
+            }else if(!hasQuote||exact||(tag==='durian-message'&&financialEvidenceMatches(prose,quote))||
                 (tag==='durian-contact'&&hasQuote&&evidenceText(prose).includes(evidenceText(quote)))){
                 result.push({...row,prose});
             }

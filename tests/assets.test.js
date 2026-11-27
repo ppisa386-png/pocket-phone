@@ -438,11 +438,11 @@ test('narrative prompt is each normal turn, absent for quiet/impersonate/disable
     } finally { bridge.destroy(); f.close(); }
 });
 
-test('user/system/thinking/code annotations and invented amounts cannot alter balance; only six cash rows are exposed', async () => {
+test('user/system/thinking/code annotations and invalid amounts are rejected, model amounts are trusted; only six cash rows are exposed', async () => {
     const f = setup(); try {
         ok(await f.assets.update()); const row = { kind: 'expense', name: '消费', amount: 5, evidence: 'Sam 花了5美元。' }, text = row.evidence + marker(row);
         f.c.chat.push({ mes: text, is_user: true }, { mes: text, is_system: true }, { mes: '<think>' + text + '</think>' }, { mes: '```\n' + text + '\n```' }); await f.memory.read(); assert.equal(cashBalance(f.state()), 100000);
-        await f.append('Sam 花了50美元。' + marker({ ...row, evidence: 'Sam 花了50美元。' })); assert.equal(cashBalance(f.state()), 100000);
+        await f.append('没有逐字金额的正文。' + marker({ ...row, amount:-5, evidence: '不同原句。' })); assert.equal(cashBalance(f.state()), 100000);
         for (let i = 0; i < 8; i++) await f.append(text + i);
         assert.equal(recentCash(f.state()).length, 6); assert.equal(assetRows(f.state(), 'cash_transaction').length, 8);
     } finally { f.close(); }
@@ -1109,3 +1109,34 @@ test('Persona Markdown home fields are conservative and do not override explicit
  }finally{f.close();}
 });
 
+
+test('QQJ next-day financial tags are authoritative and settle without another model call; reload and rollback are safe',async()=>{
+ const f=setup('2025-10-16');try{
+  f.reply({...initial('2025-10-16',85000),initial:{balance:85000,holdings:[],jobs:[]}});ok(await f.assets.update());
+  const calls=f.count();
+  await f.append('正文没有具体金额。'+marker({kind:'income',name:'临时报酬',amount:200,currency:'USD',date:'2025-10-17',evidence:'原文没有这句。'})+
+   marker({kind:'expense',name:'外卖',amount:80,currency:'USD',date:'2025-10-17'})+
+   '<!-- QQJ-end | date=2025年10月17日 | weekday=周五 | time=12:55 -->');
+  assert.equal(cashBalance(f.state()),8512000);assert.equal(f.count(),calls);
+  assert.equal(assetRows(f.state(),'cash_transaction').length,2);
+  await f.memory.read();assert.equal(cashBalance(f.state()),8512000);
+  const expense=assessmentReferences(f.state()).find(r=>r.name==='外卖');
+  let attempts=0;f.reply(()=>JSON.stringify(++attempts===1?{note:'缺字段'}:{...evaluation('2025-10-17'),living:{total:80,bookedIds:[expense.ref]}}));
+  ok(await f.assets.update());assert.equal(attempts,2);assert.match(f.prompt(),/缺少：events、living、business/);
+  assert.equal(cashBalance(f.state()),8512000);assert.equal(f.state().assets.wallet.lastDay,day('2025-10-17'));
+  f.c.chat.pop();await f.memory.read();assert.equal(cashBalance(f.state()),8500000);
+ }finally{f.close();}
+});
+test('a newly trusted archival quote before an already booked position cannot duplicate that saved transaction',async()=>{
+ const quoted={kind:'expense',name:'补同步',amount:7,currency:'USD',evidence:'不同的原句'};
+ const saved={kind:'expense',name:'咖啡',amount:5,currency:'USD'};
+ const chat=[{mes:'2026-01-01'},{mes:'2026-01-02\n正文。'+marker(quoted)+marker(saved)}];
+ const rev=await revisionsFor(messageSignatures(chat));
+ let journal=appendChange(undefined,rev.slice(0,1),[{collection:'assets',key:'wallet',value:{id:'wallet',type:'wallet',currency:'USD',openingMinor:100000,included:[],lastIndex:0}}]);
+ const id='money:'+rev[1]+':pos0:'+JSON.stringify(['expense','咖啡','acquire']);
+ journal=appendChange(journal,rev,applyFinancialEvent(replayJournal(journal),validateFinancialEvent(saved,id,1,day('2026-01-02'))),id);
+ const result=importStoryAssets(journal,rev,chat);
+ assert.equal(cashBalance(replayJournal(result.journal)),98800);
+ assert.equal(assetRows(replayJournal(result.journal),'cash_transaction').length,2);
+ assert.equal(importStoryAssets(result.journal,rev,chat).changed,false);
+});

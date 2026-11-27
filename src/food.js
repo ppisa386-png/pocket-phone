@@ -1,7 +1,7 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.101';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.102';
 import { walletCurrency, validCurrency } from './currency.js?v=1.2';
-import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?v=1.2.101';
-import { readStoryClock } from './story-clock.js?v=1.2.101';
+import { requireCash, moneyMinor, cashRecord, assetSet } from './assets-core.js?v=1.2.102';
+import { readStoryClock } from './story-clock.js?v=1.2.102';
 import { sameWeatherCity } from './weather-model.js?v=1.2.92';
 const foodText=(s,n=200)=>typeof s==='string'?s.trim().slice(0,n):'';
 const GEO_BRANCH_SUFFIX=/^(.+?)\s*[（(]\s*([^（）()]{1,50}店)\s*[）)]$/u;

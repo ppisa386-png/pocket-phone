@@ -1,8 +1,8 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.101';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.102';
 import {localizedPerson,sameNamedPerson,nameAliases,CHINESE_NAME_RULE} from './names.js?v=1.2';
-import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.101';
+import { createSnapchat, parseSnapObject } from './snapchat.js?v=1.2.102';
 import { establishedSources, establishedContactPrompt, validateEstablishedContacts } from './contacts.js?v=1.2';
-import { createWechatMoments } from './wechat-moments.js?v=1.2.101';
+import { createWechatMoments } from './wechat-moments.js?v=1.2.102';
 
 export const CHAT_APPS = {whatsapp:'WhatsApp',wechat:'微信'};
 export const chatItems = (state,app,type) => Object.values(state[app]||{}).filter(i=>i.type===type);

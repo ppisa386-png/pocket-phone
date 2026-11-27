@@ -1,3 +1,8 @@
+## v1.2.102 · 小榴莲财务同步（2026-11-28）
+- 新增/调整 tests/assets.test.js、assets-evidence.test.js、evidence-cleanup.test.js：正文模型标记直接采信，QQJ 跨日两笔立即入账、无需额外模型、重复读档及删楼恢复；历史被过滤引文插在已有无引文标记之前时不重复入账；非法金额和原有非正文来源排除仍有效。
+- tests/story-clock.test.js：QQJ start/end 与 SDC 兼容，最新有效时间、非法日期、user 示例与思考过滤；tests/task-contracts.test.js、api.test.js：上游 normal envelope required、嵌套生活费缺字段恢复、独立 API 实际请求末尾合约，保持缺字段恢复上限一次及结算原子性。
+- 此处记录新增测试范围，非通过结果。当前容器无法直接访问 GitHub git，实际全量测试及预览构建以本次 GitHub Actions 记录为准；用户酒馆及真实模型未测试。
+
 ## v1.2.101 · 日报事件直接融入正文（2026-11-27）
 
 基线 `a13cbd3caa62c8bceb66add73c28c6d6702f9237`，Node v24.22.3。新增正文请求载荷回归在旧实现上失败，实际载荷仍含 Local Press 刊名、榴莲日报报道／模拟媒体内容与 outlet/headline/body/publicBasis；修复后两个实际请求钩子均验证事件素材、直接呈现契约和关闭即停用，保存的报纸不被改写。

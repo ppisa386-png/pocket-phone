@@ -78,3 +78,13 @@ test('relative transitions require a known base and valid numerals; dialogue, pl
   assert.deepEqual(readStoryClock([base,{mes:text}]),expected,text);
  }
 });
+
+test('QQJ start/end shares the SDC clock and latest valid marker wins across midnight',()=>{
+ const first={mes:'<!-- SDC-end | date=2025年10月16日 | time=12:35 -->'};
+ const next={mes:'<!-- QQJ-start | date=2025年10月17日 | time=12:35 -->正文<!-- QQJ-end | date=2025年10月17日 | weekday=周五 | time=12:55 -->'};
+ assert.deepEqual(readStoryClock([first,next]),{day:dateDay('2025-10-17'),hour:12+55/60});
+ assert.equal(storyTime([first,next,{mes:'<think><!-- QQJ-end | date=2099-01-01 | time=08:00 --></think>'}]).time,'12:55');
+ assert.equal(storyTime([first,{...next,is_user:true}]).date,'2025-10-16');
+ assert.equal(storyTime([first,{mes:'<!-- QQJ-end | date=2025-02-30 | time=12:55 -->'}]).date,'2025-10-16');
+ assert.equal(storyTime([first]).time,'12:35');
+});

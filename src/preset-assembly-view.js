@@ -1,4 +1,4 @@
-import { APPS, resolveAppConnection } from './config.js?v=1.2.101';
+import { APPS, resolveAppConnection } from './config.js?v=1.2.102';
 import { presetRule, presetRowSelected } from './preset-assembly.js?v=1.2.93';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
 

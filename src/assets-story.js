@@ -1,11 +1,11 @@
 import { walletCurrency, majorAmount, formatMoney } from './currency.js?v=1.2';
 import { ASSET_ITEM_RULES, ASSET_CATEGORY_RULES } from './assets-policy.js?v=1.2';
-import { expiryChanges } from './assets-rights.js?v=1.2.101';
+import { expiryChanges } from './assets-rights.js?v=1.2.102';
 import { JOURNAL_KEY, messageSignatures, revisionsFor, reconcileJournal, replayJournal, appendChange, isMemoryHidden } from './journal.js?v=1.2.57';
-import { storyAnnotations } from './story-phone.js?v=1.2.101';
-import { readStoryClock } from './story-clock.js?v=1.2.101';
-import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode } from './assets-core.js?v=1.2.101';
-import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=1.2.101';
+import { storyAnnotations } from './story-phone.js?v=1.2.102';
+import { readStoryClock } from './story-clock.js?v=1.2.102';
+import { assetRows, assetSet, assetText, cashBalance, reservedCash, debtEpisode, moneyMinor } from './assets-core.js?v=1.2.102';
+import { validateFinancialEvent, applyFinancialEvent, financialEventKey } from './assets-events.js?v=1.2.102';
 import { createNarrativePrompt } from './narrative-prompt.js?v=1.2.57';
 
 export const ASSETS_KEY = 'durian_phone_finances';
@@ -14,28 +14,51 @@ export const ASSET_RIGHTS_STORY_RULES = '经济权益不按职业或行业推断
     + '部分授权不等于全部转让；仅当该资产所代表的全部权利已转出/到期/终止时，才用 asset + action:dispose + holdingId 结束该资产，付款另按原规则登记一次。仍持有的部分不能注销；修改或部分转让用 kind:asset、action:amend、holdingId、date及修改后的完整details，不用acquire覆盖；只更新条款，不直接收钱，实际付款另记一次。可附rights:{sharePercent:user保留比例,expiresOn:已知到期日YYYY-MM-DD（含当日）}，未知省略；完整终止用dispose。有新事实才写注释，正文不估算收益。';
 
 const safe = x => JSON.stringify(x).replace(/\{\{/g, '\\u007b\\u007b');
+const archivalQuote = row => typeof row.evidence === 'string' && row.evidence.trim().length >= 4;
+// Older versions counted only accepted markers when assigning positional IDs.
+// Relaxing admission must not rebook a saved evidence-free marker whose ordinal
+// moved. Match existing records within this exact revision, once each, without
+// looking at narrative prose. Explicit amounts take precedence over unknown ones.
+function existingPositions(state, rows, prefix) {
+    const prior = assetRows(state,'story_event').filter(e=>e.id.startsWith(prefix)&&/^pos\d+:/.test(e.id.slice(prefix.length)));
+    const used=new Set(), matched=new Set();
+    const items=rows.map((row,n)=>({row,n})).filter(({row})=>!archivalQuote(row));
+    items.sort((a,b)=>Number(b.row.amount!=null)-Number(a.row.amount!=null));
+    for(const {row,n} of items){
+        const key=financialEventKey(row), code=walletCurrency(state)||row.currency||null;
+        try {
+            const amounts=code?Object.entries({amount:'amountMinor',monthlySalary:'monthlyMinor',marketValue:'marketMinor'})
+                .filter(([field])=>row[field]!=null).map(([field,target])=>[target,moneyMinor(row[field],false,code)]):[];
+            const candidates=prior.filter(e=>!used.has(e.id)&&financialEventKey(e)===key&&
+                amounts.every(([field,value])=>e[field]===value));
+            const match=candidates.find(e=>e.id===prefix+'pos'+n+':'+key)||candidates[0];
+            if(match){used.add(match.id);matched.add(n);}
+        }catch{/* An invalid amount is still rejected by the event validator. */}
+    }
+    return matched;
+}
 export function importStoryAssets(journal, revisions, chat) {
     let state = replayJournal(journal), changed = false;
     let clock = { day: null, hour: null };
     for (let index = 0; index < chat.length; index++) {
         clock = readStoryClock([chat[index]], clock);
-        for (const [n, row] of storyAnnotations(chat[index], 'durian-money').entries()) {
-            // Archival markers were identified by their evidence quote; new
-            // markers without evidence use their position within the floor.
-            const hasQuote = typeof row.evidence === 'string' && row.evidence.trim().length >= 4;
-            const baseId = 'money:' + revisions[index] + ':' + (hasQuote ? row.evidence.trim() : 'pos' + n);
-            const id = baseId + ':' + financialEventKey(row);
-            const legacy = state.assets[baseId];
-            if (state.assets[id] || (legacy && legacy.kind === row.kind && legacy.name === assetText(row.name)) || state.assets.wallet?.lastIndex >= index) continue;
+        const rows=storyAnnotations(chat[index], 'durian-money'), prefix='money:' + revisions[index] + ':';
+        const matched=existingPositions(state,rows,prefix);
+        for (const [n, row] of rows.entries()) {
+            // Optional archival evidence survives only as a legacy ID, never as proof.
+            const hasQuote=archivalQuote(row), key=financialEventKey(row);
+            const baseId=prefix+(hasQuote?row.evidence.trim():'pos'+n);
+            let id=baseId+':'+key;
+            const legacy=state.assets[baseId];
+            if (state.assets.wallet?.lastIndex >= index || matched.has(n)) continue;
+            if(hasQuote&&(state.assets[id]||(legacy&&legacy.kind===row.kind&&legacy.name===assetText(row.name))))continue;
+            // A legacy position can belong to a different marker after migration.
+            if(!hasQuote&&state.assets[id])id=baseId+':v2:'+key;
+            if(state.assets[id])continue;
             // Existing app orders/transfers are already booked; prose must not
             // charge again when it merely acknowledges them.
             if (row.ref && (state.orders?.[row.ref] || state.snapchat?.[row.ref] || state.whatsapp?.[row.ref] || state.wechat?.[row.ref] || state.assets?.[row.ref])) continue;
             try {
-                for (const key of ['amount', 'monthlySalary', 'marketValue']) if (row[key] != null) {
-                    const normalized = row.prose.replace(/[,，]/g, '');
-                    const amounts = [...normalized.matchAll(/(?<![\d.])-?\d+(?:\.\d+)?(?![\d.])/g)].map(m => Number(m[0]));
-                    if (!amounts.includes(Number(row[key]))) throw Error('正文没有这个金额');
-                }
                 const code=walletCurrency(state) || row.currency || null;
                 const entry=code?row:{...row,amount:null,monthlySalary:null,marketValue:null};
                 const event = validateFinancialEvent(entry, id, index, clock.day, code);
@@ -67,7 +90,7 @@ export function buildAssetPrompt(state, settings) {
         pending: assetRows(state, 'story_event').some(e => !e.processed), holdings, jobs,
         recentAppPayments: assetRows(state, 'cash_transaction').filter(t => (['amazon', 'snapcash', 'whatsapp', 'wechat', 'food', 'salary'].includes(t.source) && (t.source==='salary'||settings.apps[t.source==='snapcash'?'snapchat':t.source]!==false))).slice(-6).map(t => ({ id: t.orderId || t.transferId || t.id, name: t.memo, amount: majorAmount(t.deltaMinor,t.currency),currency:t.currency, payDate: t.payDate })),
     }) + '\n现金收入与支出包括工资、报酬、购物付款、转账、退款、经营到账等；财产范围按下方四栏目规则执行。' +
-        '\n商业邀约报价、询价、签约或收到索赔本身不记收支；只有实际付款、退款、赔付或已有合同明确满足结算条件才按原规则登记一次。仅本次实际发生的 user 收支/资产/工作变化附隐藏注释，无事不写，不估价、不算盈亏：<!--durian-money:{"kind":"income/expense/asset/job","name":"事项或物品/工作名","amount":null,"date":"已知剧情日期 YYYY-MM-DD，未知省略"}-->。金额仅填原文明示数值，并附 currency 三位原币代码。已有账本时仅直接登记同币种金额；未知币种或无法换算时留 null。财产增加可附 category:fixed/luxury/investment 和 details（已知规格/权益合同摘要），正文明确正常价值才填 marketValue；全部出售/权利终止附 action:dispose 与 holdingId；工作附 action:start/change/end、变动旧 jobId，明确月薪才填 monthlySalary。已到账的兼职日结、临时劳务及一次性报酬用income、salaryMode:one_off，按实际日期和金额记录，不要求工作档案、不编造月薪；已有固定月薪到账才附salaryMode:scheduled、salaryEmployer和对应工资周期payDate匹配上述工作。手机已支付的订单、转账和已发工资不要重复记录，必要时用 ref 引用其 id。他人付款但已送给user的、符合固定资产/奢侈品/投资三类范围的财产仍须记 asset，amount:null，不记user支出；不得因付款人是他人而漏记；普通物品即使是礼物也不登记。给他人买的物品、计划、试穿试背但尚未买下、回忆旧物和他人自有财产不记。普通零食、饮料、日用购物按实际现金支付记 expense 即可，不建资产。保持合法JSON，正文引号须转义。不要代码块。' + ASSET_CATEGORY_RULES + ASSET_ITEM_RULES + '\n正文完成后只核对上述四类变化，在文尾为每项追加独立的durian-money隐藏注释；不属于四类的取得行为（普通零食、一般纪念品、普通耐用品等）不产生任何durian-money标记，直接留给生活开销与现金结算规则。此记账规则适用于本轮全部正文，独立于通信主动联系的判定节奏。' +
+        '\n商业邀约报价、询价、签约或收到索赔本身不记收支；只有实际付款、退款、赔付或已有合同明确满足结算条件才按原规则登记一次。仅本次实际发生的 user 收支/资产/工作变化附隐藏注释，无事不写，不估价、不算盈亏：<!--durian-money:{"kind":"income/expense/asset/job","name":"事项或物品/工作名","amount":null,"date":"已知剧情日期 YYYY-MM-DD，未知省略"}-->。金额填本轮已确定的实际数值（无须正文逐字复述金额或提供引文），未知留null，并附 currency 三位原币代码。程序直接采信本标记，无须 evidence。已有账本时仅直接登记同币种金额；未知币种或无法换算时留 null。财产增加可附 category:fixed/luxury/investment 和 details（已知规格/权益合同摘要），正文明确正常价值才填 marketValue；全部出售/权利终止附 action:dispose 与 holdingId；工作附 action:start/change/end、变动旧 jobId，明确月薪才填 monthlySalary。已到账的兼职日结、临时劳务及一次性报酬用income、salaryMode:one_off，按实际日期和金额记录，不要求工作档案、不编造月薪；已有固定月薪到账才附salaryMode:scheduled、salaryEmployer和对应工资周期payDate匹配上述工作。手机已支付的订单、转账和已发工资不要重复记录，必要时用 ref 引用其 id。他人付款但已送给user的、符合固定资产/奢侈品/投资三类范围的财产仍须记 asset，amount:null，不记user支出；不得因付款人是他人而漏记；普通物品即使是礼物也不登记。给他人买的物品、计划、试穿试背但尚未买下、回忆旧物和他人自有财产不记。普通零食、饮料、日用购物按实际现金支付记 expense 即可，不建资产。保持合法JSON，正文引号须转义。不要代码块。' + ASSET_CATEGORY_RULES + ASSET_ITEM_RULES + '\n正文完成后只核对上述四类变化，在文尾为每项追加独立的durian-money隐藏注释；不属于四类的取得行为（普通零食、一般纪念品、普通耐用品等）不产生任何durian-money标记，直接留给生活开销与现金结算规则。此记账规则适用于本轮全部正文，独立于通信主动联系的判定节奏。' +
         (debt && !state.assets['handled:' + debt] ? '\n当前资金不足，可在符合居住/经营设定的适当时机写一次相关催款；没有自住房不代表一定租房，不强制新债务或重复扣钱。实际写出后附 <!--durian-debt:{"id":' + safe(debt) + '}-->，未发生不标记。' : '');
 }
 

@@ -911,3 +911,18 @@ test('residual bug release loads updated contracts, clock, calendar and asset br
   }
  }
 });
+
+test('independent asset settlement requires the full provider envelope and retries missing fields once',async()=>{
+ const f=phoneFixture(),assets=createAssets({memory:f.memory,phone:f.phone,getContext:()=>f.context,getSettings:()=>f.settings});let calls=0;
+ try{
+  f.context.chat=[{mes:'日期：2025-10-16\nSam生活在美国。'}];
+  f.reply(()=>JSON.stringify({residence:{region:'US',currency:'USD'},initial:{balance:85000,holdings:[],jobs:[]}}));assert.equal((await assets.update()).ok,true);
+  f.context.chat.push({mes:'正文。<!--durian-money:{"kind":"expense","name":"外卖","amount":80,"currency":"USD","date":"2025-10-17"}--><!-- QQJ-end | date=2025年10月17日 | time=12:55 -->'});await f.memory.read();
+  assert.equal(cashBalance(f.phone.snapshot()),8492000);
+  f.reply(options=>{calls++;const body=JSON.parse(options.body);assert.deepEqual(body.json_schema.value.required,['events','living','business']);assert.match(body.messages.at(-1).content,/正常结算必须返回顶层 events/);
+   if(calls===1)return JSON.stringify({note:'incomplete'});
+   assert.match(body.messages.at(-1).content,/缺少：events、living、business/);
+   return JSON.stringify({events:[],living:{total:80,bookedIds:['C1']},business:[]});});
+  const result=await assets.update();assert.equal(result.ok,true,result.error);assert.equal(calls,2);assert.equal(cashBalance(f.phone.snapshot()),8492000);
+ }finally{f.close();}
+});

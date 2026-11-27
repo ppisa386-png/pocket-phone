@@ -1,6 +1,6 @@
-import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.101';
-import { readStoryClock, dayDate } from './story-clock.js?v=1.2.101';
-import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent, calendarCurrentCity } from './calendar-core.js?v=1.2.101';
+import { TASK_SCHEMAS } from './task-contracts.js?v=1.2.102';
+import { readStoryClock, dayDate } from './story-clock.js?v=1.2.102';
+import { calendarSet, parseCalendarResponse, validateCalendarDatabase, validateCalendarEvent, calendarCurrentCity } from './calendar-core.js?v=1.2.102';
 
 export function createCalendar({ memory, phone, getContext }) {
     return {

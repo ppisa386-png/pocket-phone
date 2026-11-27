@@ -1,4 +1,4 @@
-import { dateDay, dayDate } from './story-clock.js?v=1.2.101';
+import { dateDay, dayDate } from './story-clock.js?v=1.2.102';
 import { parseAppObject } from './model-json.js?v=1.2.79';
 
 // A calendar response must contain exactly one complete JSON object. Allow
